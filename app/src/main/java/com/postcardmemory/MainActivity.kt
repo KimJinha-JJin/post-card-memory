@@ -5,13 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.postcardmemory.ui.camera.CameraScreen
-import com.postcardmemory.ui.detail.PhotoStickerDetailScreen
+import com.postcardmemory.ui.detail.DetailScreen
 import com.postcardmemory.ui.gallery.GalleryScreen
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.PostCardMemoryTheme
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         setContent {
             PostCardMemoryTheme {
                 Surface(
@@ -29,9 +31,11 @@ class MainActivity : ComponentActivity() {
                     color = BrutalWhite
                 ) {
                     val navController = rememberNavController()
+
                     NavHost(
                         navController = navController,
-                        startDestination = "gallery"
+                        startDestination = "gallery",
+                        modifier = Modifier.safeDrawingPadding()
                     ) {
                         composable("gallery") {
                             GalleryScreen(
@@ -59,7 +63,7 @@ class MainActivity : ComponentActivity() {
                                     ?.toLongOrNull()
                                     ?: 0L
 
-                            PhotoStickerDetailScreen(
+                            DetailScreen(
                                 postcardId = id,
                                 onNavigateBack = {
                                     navController.popBackStack()
