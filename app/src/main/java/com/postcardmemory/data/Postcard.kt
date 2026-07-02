@@ -10,5 +10,12 @@ data class Postcard(
     val imagePath: String,
     val title: String,
     val capturedAt: Long = System.currentTimeMillis(),
-    val location: String? = null
+    val location: String? = null,
+    val message: String = "",
+    val backgroundColorArgb: Long = 0xFFFFFBF7L,
+    val backgroundImagePath: String? = null,
+    val backgroundPattern: String = "NONE",
+    val messageFont: String = "SERIF",
+    val layoutStyle: String = "STANDARD",
+    val dateFormat: String = "DOT"
 )

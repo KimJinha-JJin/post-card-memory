@@ -1,0 +1,1517 @@
+package com.postcardmemory.utils
+
+import android.content.ContentValues
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ImageDecoder
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.TextUtils
+import com.postcardmemory.data.Postcard
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+
+object PostcardImageExporter {
+
+    private const val OUTPUT_SIZE = 2048
+    private const val STAMP_BORDER_WIDTH = 18f
+
+    private enum class ExportLayoutStyle {
+        STANDARD,
+        PHOTO_FOCUS,
+        AIRY,
+        MAGAZINE
+    }
+
+    fun exportToGallery(
+        context: Context,
+        postcard: Postcard
+    ): Result<Uri> {
+        return runCatching {
+            val outputBitmap =
+                createPostcardBitmap(postcard)
+
+            try {
+                saveBitmapToGallery(
+                    context = context,
+                    bitmap = outputBitmap
+                )
+            } finally {
+                if (!outputBitmap.isRecycled) {
+                    outputBitmap.recycle()
+                }
+            }
+        }
+    }
+
+    private fun createPostcardBitmap(
+        postcard: Postcard
+    ): Bitmap {
+        val sourceFile =
+            File(postcard.imagePath)
+
+        if (!sourceFile.exists()) {
+            throw IOException(
+                "원본 사진 파일을 찾지 못했습니다."
+            )
+        }
+
+        val sourceBitmap =
+            decodeBitmap(sourceFile)
+
+        try {
+            val outputBitmap =
+                Bitmap.createBitmap(
+                    OUTPUT_SIZE,
+                    OUTPUT_SIZE,
+                    Bitmap.Config.ARGB_8888
+                )
+
+            val canvas =
+                Canvas(outputBitmap)
+
+            drawBackground(
+                canvas = canvas,
+                postcard = postcard
+            )
+
+            when (
+                resolveLayoutStyle(
+                    postcard.layoutStyle
+                )
+            ) {
+                ExportLayoutStyle.STANDARD -> {
+                    drawStampPhoto(
+                        canvas = canvas,
+                        sourceBitmap = sourceBitmap,
+                        stampBounds = RectF(
+                            394f,
+                            180f,
+                            1654f,
+                            1440f
+                        )
+                    )
+
+                    drawMessage(
+                        canvas = canvas,
+                        message = postcard.message,
+                        messageFont = postcard.messageFont,
+                        messagePanel = RectF(
+                            220f,
+                            1535f,
+                            1828f,
+                            1815f
+                        )
+                    )
+
+                    drawDate(
+                        canvas = canvas,
+                        capturedAt = postcard.capturedAt,
+                        dateFormat = postcard.dateFormat,
+                        datePanel = RectF(
+                            730f,
+                            1870f,
+                            1318f,
+                            1960f
+                        )
+                    )
+                }
+
+                ExportLayoutStyle.PHOTO_FOCUS -> {
+                    drawStampPhoto(
+                        canvas = canvas,
+                        sourceBitmap = sourceBitmap,
+                        stampBounds = RectF(
+                            264f,
+                            110f,
+                            1784f,
+                            1630f
+                        )
+                    )
+
+                    drawMessage(
+                        canvas = canvas,
+                        message = postcard.message,
+                        messageFont = postcard.messageFont,
+                        messagePanel = RectF(
+                            250f,
+                            1685f,
+                            1798f,
+                            1880f
+                        ),
+                        compact = true
+                    )
+
+                    drawDate(
+                        canvas = canvas,
+                        capturedAt = postcard.capturedAt,
+                        dateFormat = postcard.dateFormat,
+                        datePanel = RectF(
+                            760f,
+                            1910f,
+                            1288f,
+                            1984f
+                        ),
+                        compact = true
+                    )
+                }
+
+                ExportLayoutStyle.AIRY -> {
+                    drawStampPhoto(
+                        canvas = canvas,
+                        sourceBitmap = sourceBitmap,
+                        stampBounds = RectF(
+                            534f,
+                            250f,
+                            1514f,
+                            1230f
+                        )
+                    )
+
+                    drawMessage(
+                        canvas = canvas,
+                        message = postcard.message,
+                        messageFont = postcard.messageFont,
+                        messagePanel = RectF(
+                            320f,
+                            1390f,
+                            1728f,
+                            1690f
+                        )
+                    )
+
+                    drawDate(
+                        canvas = canvas,
+                        capturedAt = postcard.capturedAt,
+                        dateFormat = postcard.dateFormat,
+                        datePanel = RectF(
+                            730f,
+                            1800f,
+                            1318f,
+                            1890f
+                        )
+                    )
+                }
+
+                ExportLayoutStyle.MAGAZINE -> {
+                    drawStampPhoto(
+                        canvas = canvas,
+                        sourceBitmap = sourceBitmap,
+                        stampBounds = RectF(
+                            194f,
+                            120f,
+                            1854f,
+                            1780f
+                        )
+                    )
+
+                    drawMessage(
+                        canvas = canvas,
+                        message = postcard.message,
+                        messageFont = postcard.messageFont,
+                        messagePanel = RectF(
+                            270f,
+                            1370f,
+                            1778f,
+                            1660f
+                        ),
+                        darkOverlay = true
+                    )
+
+                    drawDate(
+                        canvas = canvas,
+                        capturedAt = postcard.capturedAt,
+                        dateFormat = postcard.dateFormat,
+                        datePanel = RectF(
+                            730f,
+                            1840f,
+                            1318f,
+                            1930f
+                        )
+                    )
+                }
+            }
+
+            return outputBitmap
+        } finally {
+            if (!sourceBitmap.isRecycled) {
+                sourceBitmap.recycle()
+            }
+        }
+    }
+
+    private fun resolveLayoutStyle(
+        layoutStyle: String
+    ): ExportLayoutStyle {
+        return when (layoutStyle) {
+            "PHOTO_FOCUS" ->
+                ExportLayoutStyle.PHOTO_FOCUS
+
+            "AIRY" ->
+                ExportLayoutStyle.AIRY
+
+            "MAGAZINE" ->
+                ExportLayoutStyle.MAGAZINE
+
+            else ->
+                ExportLayoutStyle.STANDARD
+        }
+    }
+
+    private fun resolveMessageTypeface(
+        messageFont: String
+    ): Typeface {
+        return when (messageFont) {
+            "DEFAULT" ->
+                Typeface.create(
+                    Typeface.DEFAULT,
+                    Typeface.NORMAL
+                )
+
+            "SANS_SERIF" ->
+                Typeface.create(
+                    Typeface.SANS_SERIF,
+                    Typeface.NORMAL
+                )
+
+            "SERIF" ->
+                Typeface.create(
+                    Typeface.SERIF,
+                    Typeface.NORMAL
+                )
+
+            "MONOSPACE" ->
+                Typeface.create(
+                    Typeface.MONOSPACE,
+                    Typeface.NORMAL
+                )
+
+            "CURSIVE" ->
+                Typeface.create(
+                    "cursive",
+                    Typeface.NORMAL
+                )
+
+            else ->
+                Typeface.create(
+                    Typeface.SERIF,
+                    Typeface.NORMAL
+                )
+        }
+    }
+
+    private fun drawBackground(
+        canvas: Canvas,
+        postcard: Postcard
+    ) {
+        canvas.drawColor(
+            postcard.backgroundColorArgb.toInt()
+        )
+
+        drawBackgroundPattern(
+            canvas = canvas,
+            backgroundPattern = postcard.backgroundPattern,
+            backgroundColorArgb = postcard.backgroundColorArgb
+        )
+
+        val innerBorderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color =
+                    Color.argb(
+                        115,
+                        255,
+                        255,
+                        255
+                    )
+
+                style =
+                    Paint.Style.STROKE
+
+                strokeWidth = 8f
+            }
+
+        canvas.drawRect(
+            32f,
+            32f,
+            OUTPUT_SIZE - 32f,
+            OUTPUT_SIZE - 32f,
+            innerBorderPaint
+        )
+    }
+
+    private fun drawBackgroundPattern(
+        canvas: Canvas,
+        backgroundPattern: String,
+        backgroundColorArgb: Long
+    ) {
+        if (backgroundPattern == "NONE") {
+            return
+        }
+
+        val patternColor =
+            getPatternColor(
+                backgroundColorArgb
+            )
+
+        if (backgroundPattern == "CHECKER") {
+            drawCheckerPattern(
+                canvas = canvas,
+                color = patternColor
+            )
+            return
+        }
+
+        val cellSize = 290f
+        val horizontalCount =
+            (OUTPUT_SIZE / cellSize).toInt() + 3
+        val verticalCount =
+            (OUTPUT_SIZE / cellSize).toInt() + 3
+
+        for (row in -1..verticalCount) {
+            val staggerOffset =
+                if (row % 2 == 0) {
+                    0f
+                } else {
+                    cellSize / 2f
+                }
+
+            for (column in -1..horizontalCount) {
+                val centerX =
+                    column * cellSize + staggerOffset
+                val centerY =
+                    row * cellSize
+
+                when (backgroundPattern) {
+                    "DOTS" -> {
+                        val radius =
+                            if ((row + column) % 2 == 0) {
+                                34f
+                            } else {
+                                22f
+                            }
+
+                        canvas.drawCircle(
+                            centerX,
+                            centerY,
+                            radius,
+                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = patternColor
+                                style = Paint.Style.FILL
+                            }
+                        )
+                    }
+
+                    "STARS" -> {
+                        canvas.drawPath(
+                            createStarPath(
+                                centerX = centerX,
+                                centerY = centerY,
+                                outerRadius = 62f,
+                                innerRadius = 27f
+                            ),
+                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = patternColor
+                                style = Paint.Style.FILL
+                            }
+                        )
+                    }
+
+                    "HEARTS" -> {
+                        canvas.drawPath(
+                            createHeartPath(
+                                centerX = centerX,
+                                centerY = centerY,
+                                radius = 56f
+                            ),
+                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = patternColor
+                                style = Paint.Style.FILL
+                            }
+                        )
+                    }
+
+                    "CHERRY_BLOSSOMS" -> {
+                        drawCherryBlossomPattern(
+                            canvas = canvas,
+                            centerX = centerX,
+                            centerY = centerY,
+                            radius = 52f,
+                            color = patternColor
+                        )
+                    }
+
+                    "TRIANGLES" -> {
+                        val trianglePath =
+                            Path().apply {
+                                moveTo(
+                                    centerX,
+                                    centerY - 56f
+                                )
+                                lineTo(
+                                    centerX - 51f,
+                                    centerY + 42f
+                                )
+                                lineTo(
+                                    centerX + 51f,
+                                    centerY + 42f
+                                )
+                                close()
+                            }
+
+                        canvas.drawPath(
+                            trianglePath,
+                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = patternColor
+                                style = Paint.Style.STROKE
+                                strokeWidth = 13f
+                                strokeJoin = Paint.Join.ROUND
+                            }
+                        )
+                    }
+
+                    "SQUARES" -> {
+                        canvas.save()
+
+                        if ((row + column) % 2 != 0) {
+                            canvas.rotate(
+                                45f,
+                                centerX,
+                                centerY
+                            )
+                        }
+
+                        canvas.drawRoundRect(
+                            RectF(
+                                centerX - 48f,
+                                centerY - 48f,
+                                centerX + 48f,
+                                centerY + 48f
+                            ),
+                            14f,
+                            14f,
+                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = patternColor
+                                style = Paint.Style.STROKE
+                                strokeWidth = 12f
+                                strokeJoin = Paint.Join.ROUND
+                            }
+                        )
+
+                        canvas.restore()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun drawCheckerPattern(
+        canvas: Canvas,
+        color: Int
+    ) {
+        val tileSize = 175f
+        val horizontalCount =
+            (OUTPUT_SIZE / tileSize).toInt() + 2
+        val verticalCount =
+            (OUTPUT_SIZE / tileSize).toInt() + 2
+
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.FILL
+            }
+
+        for (row in 0..verticalCount) {
+            for (column in 0..horizontalCount) {
+                if ((row + column) % 2 == 0) {
+                    canvas.drawRect(
+                        column * tileSize,
+                        row * tileSize,
+                        (column + 1) * tileSize,
+                        (row + 1) * tileSize,
+                        paint
+                    )
+                }
+            }
+        }
+    }
+
+    private fun drawCherryBlossomPattern(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        radius: Float,
+        color: Int
+    ) {
+        val petalPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.FILL
+            }
+
+        repeat(5) { index ->
+            canvas.save()
+            canvas.rotate(
+                index * 72f,
+                centerX,
+                centerY
+            )
+            canvas.drawOval(
+                RectF(
+                    centerX - radius * 0.42f,
+                    centerY - radius * 1.08f,
+                    centerX + radius * 0.42f,
+                    centerY + radius * 0.12f
+                ),
+                petalPaint
+            )
+            canvas.restore()
+        }
+
+        canvas.drawCircle(
+            centerX,
+            centerY,
+            radius * 0.27f,
+            petalPaint
+        )
+    }
+
+    private fun createStarPath(
+        centerX: Float,
+        centerY: Float,
+        outerRadius: Float,
+        innerRadius: Float
+    ): Path {
+        return Path().apply {
+            repeat(10) { index ->
+                val radius =
+                    if (index % 2 == 0) {
+                        outerRadius
+                    } else {
+                        innerRadius
+                    }
+
+                val angle =
+                    -PI / 2.0 + index * PI / 5.0
+
+                val pointX =
+                    centerX +
+                            cos(angle).toFloat() * radius
+
+                val pointY =
+                    centerY +
+                            sin(angle).toFloat() * radius
+
+                if (index == 0) {
+                    moveTo(pointX, pointY)
+                } else {
+                    lineTo(pointX, pointY)
+                }
+            }
+
+            close()
+        }
+    }
+
+    private fun createHeartPath(
+        centerX: Float,
+        centerY: Float,
+        radius: Float
+    ): Path {
+        return Path().apply {
+            moveTo(
+                centerX,
+                centerY + radius
+            )
+
+            cubicTo(
+                centerX - radius * 1.35f,
+                centerY + radius * 0.2f,
+                centerX - radius,
+                centerY - radius * 0.95f,
+                centerX,
+                centerY - radius * 0.28f
+            )
+
+            cubicTo(
+                centerX + radius,
+                centerY - radius * 0.95f,
+                centerX + radius * 1.35f,
+                centerY + radius * 0.2f,
+                centerX,
+                centerY + radius
+            )
+
+            close()
+        }
+    }
+
+    private fun getPatternColor(
+        backgroundColorArgb: Long
+    ): Int {
+        val color =
+            backgroundColorArgb.toInt()
+
+        val red =
+            Color.red(color)
+
+        val green =
+            Color.green(color)
+
+        val blue =
+            Color.blue(color)
+
+        val brightness =
+            (
+                    red * 0.299f +
+                            green * 0.587f +
+                            blue * 0.114f
+                    ) / 255f
+
+        return if (brightness < 0.48f) {
+            Color.argb(
+                87,
+                255,
+                255,
+                255
+            )
+        } else {
+            Color.argb(
+                46,
+                61,
+                41,
+                88
+            )
+        }
+    }
+
+    private fun drawStampPhoto(
+        canvas: Canvas,
+        sourceBitmap: Bitmap,
+        stampBounds: RectF
+    ) {
+        val stampPath =
+            createPinkingPath(
+                bounds = stampBounds,
+                inset = STAMP_BORDER_WIDTH / 2f
+            )
+
+        val shadowBounds =
+            RectF(
+                stampBounds.left + 22f,
+                stampBounds.top + 26f,
+                stampBounds.right + 22f,
+                stampBounds.bottom + 26f
+            )
+
+        val shadowPath =
+            createPinkingPath(
+                bounds = shadowBounds,
+                inset = STAMP_BORDER_WIDTH / 2f
+            )
+
+        val shadowPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color =
+                    Color.argb(
+                        85,
+                        18,
+                        12,
+                        28
+                    )
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.drawPath(
+            shadowPath,
+            shadowPaint
+        )
+
+        canvas.save()
+
+        canvas.clipPath(
+            stampPath
+        )
+
+        drawCenterCroppedBitmap(
+            canvas = canvas,
+            bitmap = sourceBitmap,
+            destinationRect = stampBounds
+        )
+
+        canvas.restore()
+
+        val whiteBorderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = STAMP_BORDER_WIDTH
+                strokeJoin = Paint.Join.ROUND
+                strokeCap = Paint.Cap.ROUND
+            }
+
+        canvas.drawPath(
+            stampPath,
+            whiteBorderPaint
+        )
+    }
+
+
+    private fun drawMessage(
+        canvas: Canvas,
+        message: String,
+        messageFont: String,
+        messagePanel: RectF,
+        darkOverlay: Boolean = false,
+        compact: Boolean = false
+    ) {
+        val normalizedMessage =
+            message.trim()
+
+        if (normalizedMessage.isBlank()) {
+            return
+        }
+
+        if (!darkOverlay) {
+            val panelShadowPaint =
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color =
+                        Color.argb(
+                            55,
+                            20,
+                            14,
+                            26
+                        )
+
+                    style =
+                        Paint.Style.FILL
+                }
+
+            canvas.drawRoundRect(
+                RectF(
+                    messagePanel.left + 12f,
+                    messagePanel.top + 14f,
+                    messagePanel.right + 12f,
+                    messagePanel.bottom + 14f
+                ),
+                34f,
+                34f,
+                panelShadowPaint
+            )
+        }
+
+        val panelPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color =
+                    if (darkOverlay) {
+                        Color.argb(
+                            188,
+                            24,
+                            18,
+                            30
+                        )
+                    } else {
+                        Color.argb(
+                            222,
+                            255,
+                            252,
+                            247
+                        )
+                    }
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(
+            messagePanel,
+            34f,
+            34f,
+            panelPaint
+        )
+
+        val textSize =
+            when {
+                compact &&
+                        normalizedMessage.length <= 20 ->
+                    58f
+
+                compact &&
+                        normalizedMessage.length <= 45 ->
+                    50f
+
+                compact ->
+                    43f
+
+                normalizedMessage.length <= 20 ->
+                    72f
+
+                normalizedMessage.length <= 45 ->
+                    62f
+
+                normalizedMessage.length <= 75 ->
+                    54f
+
+                else ->
+                    47f
+            }
+
+        val textPaint =
+            TextPaint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+                color =
+                    if (darkOverlay) {
+                        Color.WHITE
+                    } else {
+                        Color.rgb(
+                            47,
+                            37,
+                            43
+                        )
+                    }
+
+                this.textSize =
+                    textSize
+
+                typeface =
+                    resolveMessageTypeface(
+                        messageFont
+                    )
+            }
+
+        val horizontalPadding =
+            if (compact) {
+                100f
+            } else {
+                130f
+            }
+
+        val textWidth =
+            (
+                    messagePanel.width() -
+                            horizontalPadding
+                    )
+                .toInt()
+                .coerceAtLeast(1)
+
+        val textLayout =
+            StaticLayout.Builder
+                .obtain(
+                    normalizedMessage,
+                    0,
+                    normalizedMessage.length,
+                    textPaint,
+                    textWidth
+                )
+                .setAlignment(
+                    Layout.Alignment.ALIGN_CENTER
+                )
+                .setIncludePad(false)
+                .setLineSpacing(
+                    if (compact) {
+                        8f
+                    } else {
+                        12f
+                    },
+                    1.08f
+                )
+                .setMaxLines(
+                    if (compact) {
+                        3
+                    } else {
+                        4
+                    }
+                )
+                .setEllipsize(
+                    TextUtils.TruncateAt.END
+                )
+                .setEllipsizedWidth(
+                    textWidth
+                )
+                .build()
+
+        val textX =
+            messagePanel.centerX() -
+                    textWidth / 2f
+
+        val textY =
+            messagePanel.centerY() -
+                    textLayout.height / 2f
+
+        canvas.save()
+
+        canvas.translate(
+            textX,
+            textY
+        )
+
+        textLayout.draw(
+            canvas
+        )
+
+        canvas.restore()
+    }
+
+
+    private fun formatDateForExport(
+        capturedAt: Long,
+        dateFormat: String
+    ): String {
+        val pattern: String
+        val locale: Locale
+        val uppercase: Boolean
+
+        when (dateFormat) {
+            "KOREAN" -> {
+                pattern = "yyyy년 M월 d일"
+                locale = Locale.KOREAN
+                uppercase = false
+            }
+
+            "ENGLISH_LONG" -> {
+                pattern = "MMMM d, yyyy"
+                locale = Locale.ENGLISH
+                uppercase = true
+            }
+
+            "ENGLISH_SHORT" -> {
+                pattern = "dd MMM yyyy"
+                locale = Locale.ENGLISH
+                uppercase = true
+            }
+
+            else -> {
+                pattern = "yyyy.MM.dd"
+                locale = Locale.KOREAN
+                uppercase = false
+            }
+        }
+
+        val formattedDate =
+            SimpleDateFormat(
+                pattern,
+                locale
+            ).format(
+                Date(capturedAt)
+            )
+
+        return if (uppercase) {
+            formattedDate.uppercase(locale)
+        } else {
+            formattedDate
+        }
+    }
+
+
+    private fun drawDate(
+        canvas: Canvas,
+        capturedAt: Long,
+        dateFormat: String,
+        datePanel: RectF,
+        compact: Boolean = false
+    ) {
+        val dateText =
+            formatDateForExport(
+                capturedAt = capturedAt,
+                dateFormat = dateFormat
+            )
+
+        val panelPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color =
+                    Color.argb(
+                        205,
+                        255,
+                        252,
+                        247
+                    )
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(
+            datePanel,
+            if (compact) {
+                22f
+            } else {
+                28f
+            },
+            if (compact) {
+                22f
+            } else {
+                28f
+            },
+            panelPaint
+        )
+
+        val datePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color =
+                    Color.rgb(
+                        70,
+                        58,
+                        68
+                    )
+
+                textSize =
+                    if (compact) {
+                        32f
+                    } else {
+                        38f
+                    }
+
+                textAlign = Paint.Align.CENTER
+
+                typeface =
+                    Typeface.create(
+                        Typeface.SERIF,
+                        Typeface.NORMAL
+                    )
+            }
+
+        val metrics =
+            datePaint.fontMetrics
+
+        val baseline =
+            datePanel.centerY() -
+                    (
+                            metrics.ascent +
+                                    metrics.descent
+                            ) / 2f
+
+        canvas.drawText(
+            dateText,
+            datePanel.centerX(),
+            baseline,
+            datePaint
+        )
+    }
+
+
+    private fun createPinkingPath(
+        bounds: RectF,
+        inset: Float = 0f
+    ): Path {
+        val left =
+            bounds.left + inset
+
+        val top =
+            bounds.top + inset
+
+        val right =
+            bounds.right - inset
+
+        val bottom =
+            bounds.bottom - inset
+
+        val width =
+            (right - left)
+                .coerceAtLeast(1f)
+
+        val height =
+            (bottom - top)
+                .coerceAtLeast(1f)
+
+        val shortestSide =
+            min(
+                width,
+                height
+            )
+
+        val toothDepth =
+            (
+                    shortestSide *
+                            0.032f
+                    ).coerceAtLeast(2f)
+
+        val cornerCut =
+            toothDepth * 1.5f
+
+        val horizontalLength =
+            (
+                    width -
+                            cornerCut * 2f
+                    ).coerceAtLeast(1f)
+
+        val verticalLength =
+            (
+                    height -
+                            cornerCut * 2f
+                    ).coerceAtLeast(1f)
+
+        val horizontalTeeth =
+            max(
+                8,
+                (
+                        horizontalLength /
+                                (toothDepth * 2.3f)
+                        ).toInt()
+            )
+
+        val verticalTeeth =
+            max(
+                8,
+                (
+                        verticalLength /
+                                (toothDepth * 2.3f)
+                        ).toInt()
+            )
+
+        val horizontalStep =
+            horizontalLength /
+                    horizontalTeeth
+
+        val verticalStep =
+            verticalLength /
+                    verticalTeeth
+
+        return Path().apply {
+            moveTo(
+                left + cornerCut,
+                top
+            )
+
+            repeat(horizontalTeeth) { index ->
+                val startX =
+                    left +
+                            cornerCut +
+                            index * horizontalStep
+
+                lineTo(
+                    startX +
+                            horizontalStep / 2f,
+                    top + toothDepth
+                )
+
+                lineTo(
+                    startX + horizontalStep,
+                    top
+                )
+            }
+
+            lineTo(
+                right,
+                top + cornerCut
+            )
+
+            repeat(verticalTeeth) { index ->
+                val startY =
+                    top +
+                            cornerCut +
+                            index * verticalStep
+
+                lineTo(
+                    right - toothDepth,
+                    startY +
+                            verticalStep / 2f
+                )
+
+                lineTo(
+                    right,
+                    startY + verticalStep
+                )
+            }
+
+            lineTo(
+                right - cornerCut,
+                bottom
+            )
+
+            repeat(horizontalTeeth) { index ->
+                val startX =
+                    right -
+                            cornerCut -
+                            index * horizontalStep
+
+                lineTo(
+                    startX -
+                            horizontalStep / 2f,
+                    bottom - toothDepth
+                )
+
+                lineTo(
+                    startX - horizontalStep,
+                    bottom
+                )
+            }
+
+            lineTo(
+                left,
+                bottom - cornerCut
+            )
+
+            repeat(verticalTeeth) { index ->
+                val startY =
+                    bottom -
+                            cornerCut -
+                            index * verticalStep
+
+                lineTo(
+                    left + toothDepth,
+                    startY -
+                            verticalStep / 2f
+                )
+
+                lineTo(
+                    left,
+                    startY - verticalStep
+                )
+            }
+
+            close()
+        }
+    }
+
+    private fun drawCenterCroppedBitmap(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        destinationRect: RectF
+    ) {
+        val sourceWidth =
+            bitmap.width.toFloat()
+
+        val sourceHeight =
+            bitmap.height.toFloat()
+
+        if (
+            sourceWidth <= 0f ||
+            sourceHeight <= 0f
+        ) {
+            throw IOException(
+                "사진 크기를 확인하지 못했습니다."
+            )
+        }
+
+        val destinationRatio =
+            destinationRect.width() /
+                    destinationRect.height()
+
+        val sourceRatio =
+            sourceWidth /
+                    sourceHeight
+
+        val sourceRect =
+            if (sourceRatio > destinationRatio) {
+                val croppedWidth =
+                    sourceHeight *
+                            destinationRatio
+
+                val left =
+                    (
+                            sourceWidth -
+                                    croppedWidth
+                            ) / 2f
+
+                Rect(
+                    left.toInt(),
+                    0,
+                    (
+                            left +
+                                    croppedWidth
+                            ).toInt(),
+                    sourceHeight.toInt()
+                )
+            } else {
+                val croppedHeight =
+                    sourceWidth /
+                            destinationRatio
+
+                val top =
+                    (
+                            sourceHeight -
+                                    croppedHeight
+                            ) / 2f
+
+                Rect(
+                    0,
+                    top.toInt(),
+                    sourceWidth.toInt(),
+                    (
+                            top +
+                                    croppedHeight
+                            ).toInt()
+                )
+            }
+
+        canvas.drawBitmap(
+            bitmap,
+            sourceRect,
+            destinationRect,
+            Paint(
+                Paint.ANTI_ALIAS_FLAG or
+                        Paint.FILTER_BITMAP_FLAG
+            )
+        )
+    }
+
+    private fun decodeBitmap(
+        sourceFile: File
+    ): Bitmap {
+        return if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.P
+        ) {
+            val source =
+                ImageDecoder.createSource(
+                    sourceFile
+                )
+
+            ImageDecoder.decodeBitmap(
+                source
+            ) { decoder, _, _ ->
+                decoder.allocator =
+                    ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        } else {
+            BitmapFactory.decodeFile(
+                sourceFile.absolutePath
+            ) ?: throw IOException(
+                "사진을 불러오지 못했습니다."
+            )
+        }
+    }
+
+    private fun saveBitmapToGallery(
+        context: Context,
+        bitmap: Bitmap
+    ): Uri {
+        val resolver =
+            context.contentResolver
+
+        val fileName =
+            "postcard_memory_" +
+                    System.currentTimeMillis() +
+                    ".png"
+
+        val contentValues =
+            ContentValues().apply {
+                put(
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    fileName
+                )
+
+                put(
+                    MediaStore.Images.Media.MIME_TYPE,
+                    "image/png"
+                )
+
+                put(
+                    MediaStore.Images.Media.DATE_TAKEN,
+                    System.currentTimeMillis()
+                )
+
+                if (
+                    Build.VERSION.SDK_INT >=
+                    Build.VERSION_CODES.Q
+                ) {
+                    put(
+                        MediaStore.Images.Media.RELATIVE_PATH,
+                        "${Environment.DIRECTORY_PICTURES}/PostcardMemory"
+                    )
+
+                    put(
+                        MediaStore.Images.Media.IS_PENDING,
+                        1
+                    )
+                }
+            }
+
+        val collectionUri =
+            if (
+                Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.Q
+            ) {
+                MediaStore.Images.Media
+                    .getContentUri(
+                        MediaStore.VOLUME_EXTERNAL_PRIMARY
+                    )
+            } else {
+                MediaStore.Images.Media
+                    .EXTERNAL_CONTENT_URI
+            }
+
+        val imageUri =
+            resolver.insert(
+                collectionUri,
+                contentValues
+            ) ?: throw IOException(
+                "갤러리에 이미지를 만들지 못했습니다."
+            )
+
+        try {
+            resolver
+                .openOutputStream(imageUri)
+                ?.use { outputStream ->
+                    val saved =
+                        bitmap.compress(
+                            Bitmap.CompressFormat.PNG,
+                            100,
+                            outputStream
+                        )
+
+                    if (!saved) {
+                        throw IOException(
+                            "이미지 파일 저장에 실패했습니다."
+                        )
+                    }
+                }
+                ?: throw IOException(
+                    "이미지 저장 공간을 열지 못했습니다."
+                )
+
+            if (
+                Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.Q
+            ) {
+                val completedValues =
+                    ContentValues().apply {
+                        put(
+                            MediaStore.Images.Media.IS_PENDING,
+                            0
+                        )
+                    }
+
+                resolver.update(
+                    imageUri,
+                    completedValues,
+                    null,
+                    null
+                )
+            }
+
+            return imageUri
+        } catch (exception: Exception) {
+            resolver.delete(
+                imageUri,
+                null,
+                null
+            )
+
+            throw exception
+        }
+    }
+}

@@ -17,16 +17,29 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): PostcardDatabase {
+    fun provideDatabase(
+        @ApplicationContext context: Context
+    ): PostcardDatabase {
         return Room.databaseBuilder(
             context,
             PostcardDatabase::class.java,
             "postcard_database"
-        ).build()
+        )
+            .addMigrations(
+                PostcardDatabase.MIGRATION_1_2,
+                PostcardDatabase.MIGRATION_2_3,
+                PostcardDatabase.MIGRATION_3_4,
+                PostcardDatabase.MIGRATION_4_5,
+                PostcardDatabase.MIGRATION_5_6,
+                PostcardDatabase.MIGRATION_6_7
+            )
+            .build()
     }
 
     @Provides
-    fun providePostcardDao(database: PostcardDatabase): PostcardDao {
+    fun providePostcardDao(
+        database: PostcardDatabase
+    ): PostcardDao {
         return database.postcardDao()
     }
 }

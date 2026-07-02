@@ -4,13 +4,125 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- 폴라로이드 그림자 -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-7">
+
+        <path
+            android:fillColor="#4A347F"
+            android:fillAlpha="0.38"
+            android:pathData="
+                M34,24
+                C31.8,24 30,25.8 30,28
+                L30,82
+                C30,84.2 31.8,86 34,86
+                L78,86
+                C80.2,86 82,84.2 82,82
+                L82,28
+                C82,25.8 80.2,24 78,24
+                Z" />
+
+        <!-- 폴라로이드 본체 -->
+        <path
+            android:fillColor="#FFFDFB"
+            android:pathData="
+                M31,21
+                C28.8,21 27,22.8 27,25
+                L27,79
+                C27,81.2 28.8,83 31,83
+                L75,83
+                C77.2,83 79,81.2 79,79
+                L79,25
+                C79,22.8 77.2,21 75,21
+                Z" />
+
+        <!-- 사진 창 -->
+        <path
+            android:fillColor="#A9E7D5"
+            android:pathData="
+                M33,28
+                C31.9,28 31,28.9 31,30
+                L31,59
+                C31,60.1 31.9,61 33,61
+                L73,61
+                C74.1,61 75,60.1 75,59
+                L75,30
+                C75,28.9 74.1,28 73,28
+                Z" />
+
+        <!-- 해 -->
+        <path
+            android:fillColor="#FF8378"
+            android:pathData="
+                M62,35
+                A5.5,5.5 0,1 0,73 35
+                A5.5,5.5 0,1 0,62 35" />
+
+        <!-- 뒤쪽 산 -->
+        <path
+            android:fillColor="#9D89D9"
+            android:pathData="
+                M31,53
+                L42,40
+                L51,49
+                L58,43
+                L75,57
+                L75,61
+                L31,61
+                Z" />
+
+        <!-- 앞쪽 산 -->
+        <path
+            android:fillColor="#5D43A6"
+            android:pathData="
+                M31,57
+                L45,45
+                L56,56
+                L63,50
+                L75,59
+                L75,61
+                L31,61
+                Z" />
+
+        <!-- 짧은 기억 문장선 -->
+        <path
+            android:fillColor="#C9BCEB"
+            android:pathData="
+                M35,69
+                C34,69 33,70 33,71
+                C33,72 34,73 35,73
+                L61,73
+                C62,73 63,72 63,71
+                C63,70 62,69 61,69
+                Z" />
+
+        <path
+            android:fillColor="#DED6F3"
+            android:pathData="
+                M35,76
+                C34,76 33,77 33,78
+                C33,79 34,80 35,80
+                L51,80
+                C52,80 53,79 53,78
+                C53,77 52,76 51,76
+                Z" />
+    </group>
+
+    <!-- 작은 코랄 반짝이 -->
     <path
-        android:fillColor="#FFFFE566"
-        android:pathData="M54,30 C54,30 30,42 30,58 C30,72 40,80 54,80 C68,80 78,72 78,58 C78,42 54,30 54,30 Z" />
-    <path
-        android:fillColor="#FFFFE566"
-        android:pathData="M44,45 L64,45 L64,65 L44,65 Z" />
-    <path
-        android:fillColor="#FF1A1A1A"
-        android:pathData="M47,48 L61,48 L61,62 L47,62 Z" />
+        android:fillColor="#FF8378"
+        android:pathData="
+            M82,67
+            L84.4,72.6
+            L90,75
+            L84.4,77.4
+            L82,83
+            L79.6,77.4
+            L74,75
+            L79.6,72.6
+            Z" />
+
 </vector>
