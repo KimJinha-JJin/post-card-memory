@@ -11,7 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.postcardmemory.ui.camera.CameraScreen
-import com.postcardmemory.ui.detail.DetailScreen
+import com.postcardmemory.ui.detail.PhotoStickerDetailScreen
 import com.postcardmemory.ui.gallery.GalleryScreen
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.PostCardMemoryTheme
@@ -35,20 +35,35 @@ class MainActivity : ComponentActivity() {
                     ) {
                         composable("gallery") {
                             GalleryScreen(
-                                onNavigateToCamera = { navController.navigate("camera") },
-                                onNavigateToDetail = { id -> navController.navigate("detail/$id") }
+                                onNavigateToCamera = {
+                                    navController.navigate("camera")
+                                },
+                                onNavigateToDetail = { id ->
+                                    navController.navigate("detail/$id")
+                                }
                             )
                         }
+
                         composable("camera") {
                             CameraScreen(
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = {
+                                    navController.popBackStack()
+                                }
                             )
                         }
+
                         composable("detail/{postcardId}") { backStackEntry ->
-                            val id = backStackEntry.arguments?.getString("postcardId")?.toLongOrNull() ?: 0L
-                            DetailScreen(
+                            val id =
+                                backStackEntry.arguments
+                                    ?.getString("postcardId")
+                                    ?.toLongOrNull()
+                                    ?: 0L
+
+                            PhotoStickerDetailScreen(
                                 postcardId = id,
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = {
+                                    navController.popBackStack()
+                                }
                             )
                         }
                     }
