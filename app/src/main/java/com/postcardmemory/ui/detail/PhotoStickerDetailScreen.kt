@@ -26,10 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,19 +45,17 @@ import com.postcardmemory.ui.theme.BrutalWhite
 
 @Composable
 fun PhotoStickerPickerPanel(
+    selectedStickerUri: Uri?,
+    onSelectedStickerUriChange: (Uri?) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var selectedStickerUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
-
     val photoPicker =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.PickVisualMedia()
         ) { uri ->
             if (uri != null) {
-                selectedStickerUri = uri
+                onSelectedStickerUriChange(uri)
             }
         }
 
@@ -117,7 +111,7 @@ fun PhotoStickerPickerPanel(
         )
 
         Text(
-            text = "갤러리 사진을 골라서 포스트카드 스티커로 준비해.",
+            text = "갤러리 사진을 골라서 포스트카드 위에 바로 올려봐.",
             color = BrutalDeepViolet,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
@@ -226,7 +220,7 @@ fun PhotoStickerPickerPanel(
 
             OutlinedButton(
                 onClick = {
-                    selectedStickerUri = null
+                    onSelectedStickerUriChange(null)
                 },
                 enabled = enabled,
                 shape = RoundedCornerShape(14.dp),
@@ -251,7 +245,7 @@ fun PhotoStickerPickerPanel(
         )
 
         Text(
-            text = "누끼와 이동·크기 조절은 다음 단계에서 이 칸에 이어 붙일 거야.",
+            text = "지금은 포스트카드 가운데에 한 장만 보여줘. 이동과 크기 조절은 다음 단계에서 붙일 거야.",
             color = Color(0xFF554B68),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,

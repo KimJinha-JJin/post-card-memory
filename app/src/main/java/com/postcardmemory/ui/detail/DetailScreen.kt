@@ -1,5 +1,6 @@
 package com.postcardmemory.ui.detail
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -50,14 +51,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
 import com.postcardmemory.ui.components.PostcardBackgroundPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
@@ -547,6 +551,10 @@ fun DetailScreen(
         mutableStateOf("")
     }
 
+    var selectedStickerUri by remember {
+        mutableStateOf<Uri?>(null)
+    }
+
     var openedDrawerName by rememberSaveable {
         mutableStateOf(
             DetailDrawerSection.LAYOUT.name
@@ -706,6 +714,29 @@ fun DetailScreen(
                             selectedFont = selectedFont,
                             selectedLayout = selectedLayout
                         )
+
+                        selectedStickerUri?.let { stickerUri ->
+                            AsyncImage(
+                                model = stickerUri,
+                                contentDescription =
+                                    "포스트카드 스티커 사진",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(120.dp)
+                                    .clip(
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = 3.dp,
+                                        color = BrutalBlack,
+                                        shape =
+                                            RoundedCornerShape(
+                                                16.dp
+                                            )
+                                    )
+                            )
+                        }
                     }
                 }
 
@@ -921,6 +952,11 @@ fun DetailScreen(
                                 contentAlignment = Alignment.TopCenter
                             ) {
                                 PhotoStickerPickerPanel(
+                                    selectedStickerUri =
+                                        selectedStickerUri,
+                                    onSelectedStickerUriChange = { uri ->
+                                        selectedStickerUri = uri
+                                    },
                                     enabled = controlsEnabled,
                                     modifier =
                                         Modifier.fillMaxWidth(0.92f)
