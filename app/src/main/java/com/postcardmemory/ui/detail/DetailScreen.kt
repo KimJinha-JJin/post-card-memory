@@ -86,6 +86,7 @@ import com.postcardmemory.ui.theme.BrutalLavender
 import com.postcardmemory.ui.theme.BrutalViolet
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.LavenderSoft
+import com.postcardmemory.utils.PostcardImageExporter
 
 private enum class DetailDrawerSection {
     LAYOUT,
@@ -130,6 +131,67 @@ private fun centeredStickerOffset(
         y = ((postcardSize.height - stickerSize.height) / 2f)
             .coerceAtLeast(0f)
     )
+
+private fun createStickerOverlayForExport(
+    stickerUri: Uri?,
+    stickerOffset: Offset?,
+    postcardSize: IntSize,
+    stickerSize: IntSize
+): PostcardImageExporter.StickerOverlay? {
+    val selectedUri =
+        stickerUri
+            ?: return null
+
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0 ||
+        stickerSize.width <= 0 ||
+        stickerSize.height <= 0
+    ) {
+        return null
+    }
+
+    val resolvedOffset =
+        clampStickerOffset(
+            offset =
+                stickerOffset
+                    ?: centeredStickerOffset(
+                        postcardSize = postcardSize,
+                        stickerSize = stickerSize
+                    ),
+            postcardSize = postcardSize,
+            stickerSize = stickerSize
+        )
+    val availableX =
+        (postcardSize.width - stickerSize.width)
+            .coerceAtLeast(0)
+            .toFloat()
+    val availableY =
+        (postcardSize.height - stickerSize.height)
+            .coerceAtLeast(0)
+            .toFloat()
+
+    return PostcardImageExporter.StickerOverlay(
+        uri = selectedUri,
+        normalizedX =
+            if (availableX == 0f) {
+                0.5f
+            } else {
+                (resolvedOffset.x / availableX)
+                    .coerceIn(0f, 1f)
+            },
+        normalizedY =
+            if (availableY == 0f) {
+                0.5f
+            } else {
+                (resolvedOffset.y / availableY)
+                    .coerceIn(0f, 1f)
+            },
+        sizeRatio =
+            stickerSize.width.toFloat() /
+                    postcardSize.width.toFloat()
+    )
+}
 
 @Composable
 private fun DetailDrawer(
@@ -1292,7 +1354,19 @@ fun DetailScreen(
 
                 Button(
                     onClick = {
-                        viewModel.exportPostcardToGallery()
+                        viewModel.exportPostcardToGallery(
+                            stickerOverlay =
+                                createStickerOverlayForExport(
+                                    stickerUri =
+                                        selectedStickerUri,
+                                    stickerOffset =
+                                        stickerOffset,
+                                    postcardSize =
+                                        postcardPreviewSize,
+                                    stickerSize =
+                                        stickerSize
+                                )
+                        )
                     },
                     enabled = controlsEnabled,
                     colors =

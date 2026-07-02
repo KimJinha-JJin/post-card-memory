@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -20,6 +21,7 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
+import androidx.exifinterface.media.ExifInterface
 import com.postcardmemory.data.Postcard
 import java.io.File
 import java.io.IOException
@@ -36,6 +38,10 @@ object PostcardImageExporter {
 
     private const val OUTPUT_SIZE = 2048
     private const val STAMP_BORDER_WIDTH = 18f
+    private const val STICKER_CORNER_RADIUS_RATIO =
+        16f / 120f
+    private const val STICKER_BORDER_WIDTH_RATIO =
+        3f / 120f
 
     private enum class ExportLayoutStyle {
         STANDARD,
@@ -44,13 +50,25 @@ object PostcardImageExporter {
         MAGAZINE
     }
 
+    data class StickerOverlay(
+        val uri: Uri,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val sizeRatio: Float
+    )
+
     fun exportToGallery(
         context: Context,
-        postcard: Postcard
+        postcard: Postcard,
+        stickerOverlay: StickerOverlay? = null
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
-                createPostcardBitmap(postcard)
+                createPostcardBitmap(
+                    context = context,
+                    postcard = postcard,
+                    stickerOverlay = stickerOverlay
+                )
 
             try {
                 saveBitmapToGallery(
@@ -66,7 +84,9 @@ object PostcardImageExporter {
     }
 
     private fun createPostcardBitmap(
-        postcard: Postcard
+        context: Context,
+        postcard: Postcard,
+        stickerOverlay: StickerOverlay?
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -251,6 +271,14 @@ object PostcardImageExporter {
                         )
                     )
                 }
+            }
+
+            if (stickerOverlay != null) {
+                drawStickerOverlay(
+                    context = context,
+                    canvas = canvas,
+                    stickerOverlay = stickerOverlay
+                )
             }
 
             return outputBitmap
@@ -1286,6 +1314,118 @@ object PostcardImageExporter {
         }
     }
 
+    private fun drawStickerOverlay(
+        context: Context,
+        canvas: Canvas,
+        stickerOverlay: StickerOverlay
+    ) {
+        val stickerBitmap =
+            runCatching {
+                decodeStickerBitmap(
+                    context = context,
+                    stickerUri = stickerOverlay.uri
+                )
+            }.getOrNull()
+                ?: return
+
+        try {
+            val stickerSide =
+                (stickerOverlay.sizeRatio * OUTPUT_SIZE)
+                    .coerceIn(
+                        1f,
+                        OUTPUT_SIZE.toFloat()
+                    )
+            val availableX =
+                (OUTPUT_SIZE - stickerSide)
+                    .coerceAtLeast(0f)
+            val availableY =
+                (OUTPUT_SIZE - stickerSide)
+                    .coerceAtLeast(0f)
+            val left =
+                stickerOverlay.normalizedX
+                    .coerceIn(0f, 1f) *
+                        availableX
+            val top =
+                stickerOverlay.normalizedY
+                    .coerceIn(0f, 1f) *
+                        availableY
+            val stickerBounds =
+                RectF(
+                    left,
+                    top,
+                    left + stickerSide,
+                    top + stickerSide
+                )
+
+            if (
+                stickerBounds.width() <= 0f ||
+                stickerBounds.height() <= 0f
+            ) {
+                return
+            }
+
+            val stickerSize =
+                min(
+                    stickerBounds.width(),
+                    stickerBounds.height()
+                )
+            val cornerRadius =
+                stickerSize *
+                        STICKER_CORNER_RADIUS_RATIO
+            val stickerPath =
+                Path().apply {
+                    addRoundRect(
+                        stickerBounds,
+                        cornerRadius,
+                        cornerRadius,
+                        Path.Direction.CW
+                    )
+                }
+
+            canvas.save()
+            canvas.clipPath(stickerPath)
+
+            drawCenterCroppedBitmap(
+                canvas = canvas,
+                bitmap = stickerBitmap,
+                destinationRect = stickerBounds
+            )
+
+            canvas.restore()
+
+            val borderWidth =
+                stickerSize *
+                        STICKER_BORDER_WIDTH_RATIO
+            val borderBounds =
+                RectF(stickerBounds).apply {
+                    inset(
+                        borderWidth / 2f,
+                        borderWidth / 2f
+                    )
+                }
+            val borderRadius =
+                (cornerRadius - borderWidth / 2f)
+                    .coerceAtLeast(0f)
+            val borderPaint =
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    style = Paint.Style.STROKE
+                    strokeWidth = borderWidth
+                }
+
+            canvas.drawRoundRect(
+                borderBounds,
+                borderRadius,
+                borderRadius,
+                borderPaint
+            )
+        } finally {
+            if (!stickerBitmap.isRecycled) {
+                stickerBitmap.recycle()
+            }
+        }
+    }
+
     private fun drawCenterCroppedBitmap(
         canvas: Canvas,
         bitmap: Bitmap,
@@ -1393,6 +1533,149 @@ object PostcardImageExporter {
                 "사진을 불러오지 못했습니다."
             )
         }
+    }
+
+    private fun decodeStickerBitmap(
+        context: Context,
+        stickerUri: Uri
+    ): Bitmap {
+        val resolver =
+            context.contentResolver
+
+        return if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.P
+        ) {
+            val source =
+                ImageDecoder.createSource(
+                    resolver,
+                    stickerUri
+                )
+
+            ImageDecoder.decodeBitmap(
+                source
+            ) { decoder, _, _ ->
+                decoder.allocator =
+                    ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        } else {
+            val decodedBitmap =
+                resolver
+                    .openInputStream(stickerUri)
+                    ?.use { inputStream ->
+                        BitmapFactory.decodeStream(
+                            inputStream
+                        )
+                    }
+                    ?: throw IOException(
+                        "스티커 사진을 불러오지 못했습니다."
+                    )
+
+            val orientation =
+                resolver
+                    .openInputStream(stickerUri)
+                    ?.use { inputStream ->
+                        ExifInterface(inputStream)
+                            .getAttributeInt(
+                                ExifInterface
+                                    .TAG_ORIENTATION,
+                                ExifInterface
+                                    .ORIENTATION_NORMAL
+                            )
+                    }
+                    ?: ExifInterface.ORIENTATION_NORMAL
+
+            rotateBitmapUsingExif(
+                bitmap = decodedBitmap,
+                orientation = orientation
+            )
+        }
+    }
+
+    private fun rotateBitmapUsingExif(
+        bitmap: Bitmap,
+        orientation: Int
+    ): Bitmap {
+        val matrix =
+            Matrix()
+
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
+                matrix.setScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_ROTATE_180 -> {
+                matrix.setRotate(
+                    180f
+                )
+            }
+
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
+                matrix.setRotate(
+                    180f
+                )
+                matrix.postScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.setRotate(
+                    90f
+                )
+                matrix.postScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_ROTATE_90 -> {
+                matrix.setRotate(
+                    90f
+                )
+            }
+
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.setRotate(
+                    270f
+                )
+                matrix.postScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_ROTATE_270 -> {
+                matrix.setRotate(
+                    270f
+                )
+            }
+
+            else -> {
+                return bitmap
+            }
+        }
+
+        val rotatedBitmap =
+            Bitmap.createBitmap(
+                bitmap,
+                0,
+                0,
+                bitmap.width,
+                bitmap.height,
+                matrix,
+                true
+            )
+
+        if (rotatedBitmap != bitmap) {
+            bitmap.recycle()
+        }
+
+        return rotatedBitmap
     }
 
     private fun saveBitmapToGallery(

@@ -578,7 +578,9 @@ class DetailViewModel @Inject constructor(
             DateFormatUpdateState.Idle
     }
 
-    fun exportPostcardToGallery() {
+    fun exportPostcardToGallery(
+        stickerOverlay: PostcardImageExporter.StickerOverlay? = null
+    ) {
         val currentPostcard =
             _postcard.value
                 ?: return
@@ -599,7 +601,8 @@ class DetailViewModel @Inject constructor(
                     PostcardImageExporter
                         .exportToGallery(
                             context = context,
-                            postcard = currentPostcard
+                            postcard = currentPostcard,
+                            stickerOverlay = stickerOverlay
                         )
                 }
 
