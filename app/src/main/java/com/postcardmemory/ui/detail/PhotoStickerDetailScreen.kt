@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -53,6 +54,15 @@ fun PhotoStickerPickerPanel(
     val photoPicker =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.PickVisualMedia()
+        ) { uri ->
+            if (uri != null) {
+                onSelectedStickerUriChange(uri)
+            }
+        }
+
+    val filePicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument()
         ) { uri ->
             if (uri != null) {
                 onSelectedStickerUriChange(uri)
@@ -208,6 +218,32 @@ fun PhotoStickerPickerPanel(
 
             Text(
                 text = "  갤러리에서 사진 선택",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(10.dp)
+        )
+
+        OutlinedButton(
+            onClick = {
+                filePicker.launch(
+                    arrayOf("image/*")
+                )
+            },
+            enabled = enabled,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.FolderOpen,
+                contentDescription = null
+            )
+
+            Text(
+                text = "\uD30C\uC77C\uC5D0\uC11C \uC120\uD0DD",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold
             )
