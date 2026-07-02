@@ -5,8 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -16,21 +14,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.pastelColors
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,11 +48,25 @@ fun StampCard(
     }
 
     val dateFormatter = remember {
-        SimpleDateFormat("MM.dd.yyyy", Locale.getDefault())
+        SimpleDateFormat(
+            "MM.dd.yyyy",
+            Locale.getDefault()
+        )
     }
 
-    val borderColor = if (isSelected) BrutalCoral else BrutalBlack
-    val borderWidth = if (isSelected) 5.dp else 3.dp
+    val borderColor =
+        if (isSelected) {
+            BrutalCoral
+        } else {
+            BrutalBlack
+        }
+
+    val borderWidth =
+        if (isSelected) {
+            5.dp
+        } else {
+            3.dp
+        }
 
     Box(
         modifier = modifier
@@ -67,13 +75,15 @@ fun StampCard(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .offset(x = 4.dp, y = 4.dp)
+                .matchParentSize()
+                .offset(
+                    x = 4.dp,
+                    y = 4.dp
+                )
                 .background(
                     color = BrutalBlack,
                     shape = RoundedCornerShape(8.dp)
                 )
-                .aspectRatio(3f / 4.5f)
         )
 
         Column(
@@ -88,46 +98,41 @@ fun StampCard(
                     color = borderColor,
                     shape = RoundedCornerShape(8.dp)
                 )
-                .pointerInput(onClick, onLongClick) {
+                .pointerInput(
+                    onClick,
+                    onLongClick
+                ) {
                     detectTapGestures(
-                        onTap = { onClick() },
-                        onLongPress = { onLongClick() }
+                        onTap = {
+                            onClick()
+                        },
+                        onLongPress = {
+                            onLongClick()
+                        }
                     )
                 }
                 .padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment =
+                Alignment.CenterHorizontally
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(3f / 4f)
-            ) {
-                AsyncImage(
-                    model = File(postcard.imagePath),
-                    contentDescription = postcard.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(10.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                )
-
-                StampBorderCanvas(
-                    modifier = Modifier.fillMaxSize(),
-                    backgroundColor = Color.Transparent,
-                    perfSize = 7.dp,
-                    strokeWidth = 2.5.dp
-                )
-            }
+            StampPhoto(
+                imagePath = postcard.imagePath,
+                contentDescription = postcard.title,
+                modifier = Modifier.fillMaxWidth(),
+                outlineColor = Color.White,
+                outlineWidth = 3f
+            )
 
             Text(
-                text = dateFormatter.format(Date(postcard.capturedAt)),
+                text = dateFormatter.format(
+                    Date(postcard.capturedAt)
+                ),
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = BrutalBlack,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
