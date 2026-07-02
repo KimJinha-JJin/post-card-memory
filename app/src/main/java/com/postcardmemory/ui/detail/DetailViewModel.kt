@@ -1,9 +1,15 @@
 package com.postcardmemory.ui.detail
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.tasks.Task
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmenter
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.BackgroundImageStorage
@@ -11,11 +17,15 @@ import com.postcardmemory.utils.PostcardImageExporter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 sealed interface ExportState {
@@ -85,6 +95,24 @@ sealed interface DateFormatUpdateState {
     ) : DateFormatUpdateState
 }
 
+sealed interface StickerBackgroundRemovalState {
+
+    data object Idle : StickerBackgroundRemovalState
+
+    data class Removing(
+        val sourceUri: Uri
+    ) : StickerBackgroundRemovalState
+
+    data class Success(
+        val sourceUri: Uri,
+        val resultUri: Uri
+    ) : StickerBackgroundRemovalState
+
+    data class Error(
+        val message: String
+    ) : StickerBackgroundRemovalState
+}
+
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repository: PostcardRepository,
@@ -146,6 +174,18 @@ class DetailViewModel @Inject constructor(
     val dateFormatUpdateState:
             StateFlow<DateFormatUpdateState> =
         _dateFormatUpdateState
+
+    private val _stickerBackgroundRemovalState =
+        MutableStateFlow<StickerBackgroundRemovalState>(
+            StickerBackgroundRemovalState.Idle
+        )
+
+    val stickerBackgroundRemovalState:
+            StateFlow<StickerBackgroundRemovalState> =
+        _stickerBackgroundRemovalState
+
+    private var subjectSegmenter: SubjectSegmenter? =
+        null
 
     fun loadPostcard(
         postcardId: Long
@@ -578,6 +618,110 @@ class DetailViewModel @Inject constructor(
             DateFormatUpdateState.Idle
     }
 
+    fun removeStickerBackground(
+        sourceUri: Uri
+    ) {
+        if (
+            _stickerBackgroundRemovalState.value
+                    is StickerBackgroundRemovalState.Removing
+        ) {
+            return
+        }
+
+        _stickerBackgroundRemovalState.value =
+            StickerBackgroundRemovalState.Removing(
+                sourceUri
+            )
+
+        viewModelScope.launch {
+            val result =
+                runCatching {
+                    val inputImage =
+                        withContext(Dispatchers.IO) {
+                            InputImage.fromFilePath(
+                                context,
+                                sourceUri
+                            )
+                        }
+
+                    val foregroundBitmap =
+                        getSubjectSegmenter()
+                            .process(inputImage)
+                            .awaitResult()
+                            .foregroundBitmap
+                            ?: throw IllegalStateException(
+                                "\uBC30\uACBD \uC81C\uAC70 \uACB0\uACFC\uB97C \uB9CC\uB4E4\uC9C0 \uBABB\uD588\uC5B4."
+                            )
+
+                    try {
+                        withContext(Dispatchers.IO) {
+                            saveStickerForegroundBitmap(
+                                foregroundBitmap
+                            )
+                        }
+                    } finally {
+                        if (!foregroundBitmap.isRecycled) {
+                            foregroundBitmap.recycle()
+                        }
+                    }
+                }
+
+            result.fold(
+                onSuccess = { resultUri ->
+                    _stickerBackgroundRemovalState.value =
+                        StickerBackgroundRemovalState.Success(
+                            sourceUri = sourceUri,
+                            resultUri = resultUri
+                        )
+                },
+                onFailure = {
+                    _stickerBackgroundRemovalState.value =
+                        StickerBackgroundRemovalState.Error(
+                            "\uBC30\uACBD \uC81C\uAC70\uB97C \uC900\uBE44\uD558\uC9C0 \uBABB\uD588\uC5B4. \uC7A0\uC2DC \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC918."
+                        )
+                }
+            )
+        }
+    }
+
+    fun resetStickerBackgroundRemovalState() {
+        _stickerBackgroundRemovalState.value =
+            StickerBackgroundRemovalState.Idle
+    }
+
+    fun deleteStickerCacheUri(
+        uri: Uri?
+    ) {
+        val file =
+            uri
+                ?.takeIf { cachedUri ->
+                    cachedUri.scheme == "file"
+                }
+                ?.path
+                ?.let { path ->
+                    File(path)
+                }
+                ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val stickerCacheDir =
+                File(
+                    context.cacheDir,
+                    "photo_stickers"
+                ).canonicalFile
+            val cacheFile =
+                file.canonicalFile
+
+            if (
+                cacheFile.path.startsWith(
+                    stickerCacheDir.path
+                )
+            ) {
+                cacheFile.delete()
+            }
+        }
+    }
+
     fun exportPostcardToGallery(
         stickerOverlay: PostcardImageExporter.StickerOverlay? = null
     ) {
@@ -712,5 +856,113 @@ class DetailViewModel @Inject constructor(
 
             else -> "DOT"
         }
+    }
+
+    private fun getSubjectSegmenter():
+            SubjectSegmenter {
+        val currentSegmenter =
+            subjectSegmenter
+
+        if (currentSegmenter != null) {
+            return currentSegmenter
+        }
+
+        val options =
+            SubjectSegmenterOptions.Builder()
+                .enableForegroundBitmap()
+                .build()
+        val newSegmenter =
+            SubjectSegmentation.getClient(
+                options
+            )
+
+        subjectSegmenter =
+            newSegmenter
+
+        return newSegmenter
+    }
+
+    private fun saveStickerForegroundBitmap(
+        bitmap: Bitmap
+    ): Uri {
+        val stickerCacheDir =
+            File(
+                context.cacheDir,
+                "photo_stickers"
+            )
+
+        if (
+            !stickerCacheDir.exists() &&
+            !stickerCacheDir.mkdirs()
+        ) {
+            throw IllegalStateException(
+                "\uC2A4\uD2F0\uCEE4 \uCE90\uC2DC \uD3F4\uB354\uB97C \uB9CC\uB4E4\uC9C0 \uBABB\uD588\uC5B4."
+            )
+        }
+
+        val outputFile =
+            File(
+                stickerCacheDir,
+                "removed_background_" +
+                        System.currentTimeMillis() +
+                        ".png"
+            )
+
+        val outputBitmap =
+            if (
+                bitmap.config ==
+                Bitmap.Config.ARGB_8888
+            ) {
+                bitmap
+            } else {
+                bitmap.copy(
+                    Bitmap.Config.ARGB_8888,
+                    false
+                )
+            }
+
+        FileOutputStream(outputFile).use { stream ->
+            val saved =
+                outputBitmap.compress(
+                    Bitmap.CompressFormat.PNG,
+                    100,
+                    stream
+                )
+
+            if (!saved) {
+                throw IllegalStateException(
+                    "\uC2A4\uD2F0\uCEE4 PNG\uB97C \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC5B4."
+                )
+            }
+        }
+
+        if (outputBitmap != bitmap) {
+            outputBitmap.recycle()
+        }
+
+        return Uri.fromFile(outputFile)
+    }
+
+    private suspend fun <T> Task<T>.awaitResult(): T =
+        suspendCancellableCoroutine { continuation ->
+            addOnSuccessListener { result ->
+                if (continuation.isActive) {
+                    continuation.resume(result)
+                }
+            }
+
+            addOnFailureListener { exception ->
+                if (continuation.isActive) {
+                    continuation.resumeWithException(
+                        exception
+                    )
+                }
+            }
+        }
+
+    override fun onCleared() {
+        subjectSegmenter?.close()
+        subjectSegmenter = null
+        super.onCleared()
     }
 }

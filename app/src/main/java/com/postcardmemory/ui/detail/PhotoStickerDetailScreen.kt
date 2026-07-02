@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -47,7 +49,12 @@ import com.postcardmemory.ui.theme.BrutalWhite
 @Composable
 fun PhotoStickerPickerPanel(
     selectedStickerUri: Uri?,
+    isBackgroundRemoved: Boolean,
+    isRemovingBackground: Boolean,
+    backgroundRemovalError: String?,
     onSelectedStickerUriChange: (Uri?) -> Unit,
+    onRemoveBackground: () -> Unit,
+    onRestoreOriginal: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -175,10 +182,22 @@ fun PhotoStickerPickerPanel(
                 AsyncImage(
                     model = selectedUri,
                     contentDescription = "선택한 스티커 사진",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(10.dp))
+                    contentScale =
+                        if (isBackgroundRemoved) {
+                            ContentScale.Fit
+                        } else {
+                            ContentScale.Crop
+                        },
+                    modifier =
+                        if (isBackgroundRemoved) {
+                            Modifier.fillMaxSize()
+                        } else {
+                            Modifier
+                                .fillMaxSize()
+                                .clip(
+                                    RoundedCornerShape(10.dp)
+                                )
+                        }
                 )
             }
         }
@@ -246,6 +265,64 @@ fun PhotoStickerPickerPanel(
                 text = "\uD30C\uC77C\uC5D0\uC11C \uC120\uD0DD",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold
+            )
+        }
+
+        if (selectedStickerUri != null) {
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+            OutlinedButton(
+                onClick = {
+                    if (isBackgroundRemoved) {
+                        onRestoreOriginal()
+                    } else {
+                        onRemoveBackground()
+                    }
+                },
+                enabled =
+                    enabled &&
+                            !isRemovingBackground,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isRemovingBackground) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+
+                    Text(
+                        text = "  \uBC30\uACBD \uC81C\uAC70 \uC911...",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                } else {
+                    Text(
+                        text =
+                            if (isBackgroundRemoved) {
+                                "\uC6D0\uBCF8\uC73C\uB85C \uB418\uB3CC\uB9AC\uAE30"
+                            } else {
+                                "\uBC30\uACBD \uC81C\uAC70"
+                            },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+
+        backgroundRemovalError?.let { errorMessage ->
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+
+            Text(
+                text = errorMessage,
+                color = BrutalCoral,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 

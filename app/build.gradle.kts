@@ -83,6 +83,7 @@ dependencies {
         libs.androidx.lifecycle.viewmodel.compose
     )
     implementation(libs.androidx.exifinterface)
+    implementation(libs.mlkit.subject.segmentation)
 
     testImplementation(libs.junit)
 

@@ -134,6 +134,8 @@ private fun centeredStickerOffset(
 
 private fun createStickerOverlayForExport(
     stickerUri: Uri?,
+    originalStickerUri: Uri?,
+    isBackgroundRemoved: Boolean,
     stickerOffset: Offset?,
     postcardSize: IntSize,
     stickerSize: IntSize
@@ -173,6 +175,8 @@ private fun createStickerOverlayForExport(
 
     return PostcardImageExporter.StickerOverlay(
         uri = selectedUri,
+        originalUri = originalStickerUri,
+        isBackgroundRemoved = isBackgroundRemoved,
         normalizedX =
             if (availableX == 0f) {
                 0.5f
@@ -644,6 +648,8 @@ fun DetailScreen(
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
     val layoutUpdateState by viewModel.layoutUpdateState.collectAsState()
     val dateFormatUpdateState by viewModel.dateFormatUpdateState.collectAsState()
+    val stickerBackgroundRemovalState by
+        viewModel.stickerBackgroundRemovalState.collectAsState()
 
     var showDeleteDialog by remember {
         mutableStateOf(false)
@@ -657,8 +663,24 @@ fun DetailScreen(
         mutableStateOf("")
     }
 
-    var selectedStickerUri by remember {
+    var originalStickerUri by remember {
         mutableStateOf<Uri?>(null)
+    }
+
+    var displayedStickerUri by remember {
+        mutableStateOf<Uri?>(null)
+    }
+
+    var removedStickerUri by remember {
+        mutableStateOf<Uri?>(null)
+    }
+
+    var isBackgroundRemoved by remember {
+        mutableStateOf(false)
+    }
+
+    var backgroundRemovalError by remember {
+        mutableStateOf<String?>(null)
     }
 
     var postcardPreviewSize by remember {
@@ -757,11 +779,11 @@ fun DetailScreen(
     }
 
     LaunchedEffect(
-        selectedStickerUri,
+        displayedStickerUri,
         postcardPreviewSize,
         stickerSize
     ) {
-        val selectedUri = selectedStickerUri
+        val selectedUri = displayedStickerUri
 
         if (selectedUri == null) {
             stickerOffset = null
@@ -792,12 +814,59 @@ fun DetailScreen(
             }
     }
 
+    LaunchedEffect(stickerBackgroundRemovalState) {
+        when (
+            val removalState =
+                stickerBackgroundRemovalState
+        ) {
+            is StickerBackgroundRemovalState.Success -> {
+                if (
+                    originalStickerUri ==
+                    removalState.sourceUri
+                ) {
+                    removedStickerUri?.let { oldUri ->
+                        viewModel.deleteStickerCacheUri(
+                            oldUri
+                        )
+                    }
+
+                    removedStickerUri =
+                        removalState.resultUri
+                    displayedStickerUri =
+                        removalState.resultUri
+                    isBackgroundRemoved = true
+                    backgroundRemovalError = null
+                } else {
+                    viewModel.deleteStickerCacheUri(
+                        removalState.resultUri
+                    )
+                }
+
+                viewModel
+                    .resetStickerBackgroundRemovalState()
+            }
+
+            is StickerBackgroundRemovalState.Error -> {
+                backgroundRemovalError =
+                    removalState.message
+                viewModel
+                    .resetStickerBackgroundRemovalState()
+            }
+
+            else -> Unit
+        }
+    }
+
+    val isRemovingBackground =
+        stickerBackgroundRemovalState is StickerBackgroundRemovalState.Removing
+
     val controlsEnabled =
         exportState !is ExportState.Exporting &&
                 backgroundUpdateState !is BackgroundUpdateState.Saving &&
                 fontUpdateState !is FontUpdateState.Saving &&
                 layoutUpdateState !is LayoutUpdateState.Saving &&
-                dateFormatUpdateState !is DateFormatUpdateState.Saving
+                dateFormatUpdateState !is DateFormatUpdateState.Saving &&
+                !isRemovingBackground
 
     Box(
         modifier = Modifier
@@ -872,7 +941,7 @@ fun DetailScreen(
                             selectedLayout = selectedLayout
                         )
 
-                        selectedStickerUri?.let { stickerUri ->
+                        displayedStickerUri?.let { stickerUri ->
                             val currentStickerOffset =
                                 stickerOffset
                             val stickerPositionModifier =
@@ -893,21 +962,46 @@ fun DetailScreen(
                                                 y =
                                                     currentStickerOffset.y
                                                         .roundToInt()
-                                            )
+                                                )
                                         }
+                                }
+                            val stickerBaseModifier =
+                                stickerPositionModifier
+                                    .size(120.dp)
+                                    .onSizeChanged { size ->
+                                        stickerSize = size
+                                    }
+                            val stickerVisualModifier =
+                                if (isBackgroundRemoved) {
+                                    stickerBaseModifier
+                                } else {
+                                    stickerBaseModifier
+                                        .clip(
+                                            RoundedCornerShape(16.dp)
+                                        )
+                                        .border(
+                                            width = 3.dp,
+                                            color = BrutalBlack,
+                                            shape =
+                                                RoundedCornerShape(
+                                                    16.dp
+                                                )
+                                        )
                                 }
 
                             AsyncImage(
                                 model = stickerUri,
                                 contentDescription =
                                     "포스트카드 스티커 사진",
-                                contentScale = ContentScale.Crop,
-                                modifier = stickerPositionModifier
-                                    .size(120.dp)
-                                    .onSizeChanged { size ->
-                                        stickerSize = size
-                                    }
-                                    .pointerInput(
+                                contentScale =
+                                    if (isBackgroundRemoved) {
+                                        ContentScale.Fit
+                                    } else {
+                                        ContentScale.Crop
+                                    },
+                                modifier =
+                                    stickerVisualModifier
+                                        .pointerInput(
                                         stickerUri,
                                         postcardPreviewSize,
                                         stickerSize
@@ -950,17 +1044,6 @@ fun DetailScreen(
                                             }
                                         )
                                     }
-                                    .clip(
-                                        RoundedCornerShape(16.dp)
-                                    )
-                                    .border(
-                                        width = 3.dp,
-                                        color = BrutalBlack,
-                                        shape =
-                                            RoundedCornerShape(
-                                                16.dp
-                                            )
-                                    )
                             )
                         }
                     }
@@ -1179,10 +1262,60 @@ fun DetailScreen(
                             ) {
                                 PhotoStickerPickerPanel(
                                     selectedStickerUri =
-                                        selectedStickerUri,
+                                        displayedStickerUri,
+                                    isBackgroundRemoved =
+                                        isBackgroundRemoved,
+                                    isRemovingBackground =
+                                        isRemovingBackground,
+                                    backgroundRemovalError =
+                                        backgroundRemovalError,
                                     onSelectedStickerUriChange = { uri ->
+                                        removedStickerUri?.let {
+                                                removedUri ->
+                                            viewModel
+                                                .deleteStickerCacheUri(
+                                                    removedUri
+                                                )
+                                        }
+
                                         stickerOffset = null
-                                        selectedStickerUri = uri
+
+                                        originalStickerUri = uri
+                                        displayedStickerUri = uri
+                                        removedStickerUri = null
+                                        isBackgroundRemoved = false
+                                        backgroundRemovalError = null
+                                        viewModel
+                                            .resetStickerBackgroundRemovalState()
+                                    },
+                                    onRemoveBackground = {
+                                        val removedUri =
+                                            removedStickerUri
+                                        val originalUri =
+                                            originalStickerUri
+
+                                        backgroundRemovalError = null
+
+                                        if (removedUri != null) {
+                                            displayedStickerUri =
+                                                removedUri
+                                            isBackgroundRemoved = true
+                                        } else if (originalUri != null) {
+                                            viewModel
+                                                .removeStickerBackground(
+                                                    originalUri
+                                                )
+                                        }
+                                    },
+                                    onRestoreOriginal = {
+                                        originalStickerUri?.let {
+                                                originalUri ->
+                                            displayedStickerUri =
+                                                originalUri
+                                            isBackgroundRemoved = false
+                                            backgroundRemovalError =
+                                                null
+                                        }
                                     },
                                     enabled = controlsEnabled,
                                     modifier =
@@ -1358,7 +1491,11 @@ fun DetailScreen(
                             stickerOverlay =
                                 createStickerOverlayForExport(
                                     stickerUri =
-                                        selectedStickerUri,
+                                        displayedStickerUri,
+                                    originalStickerUri =
+                                        originalStickerUri,
+                                    isBackgroundRemoved =
+                                        isBackgroundRemoved,
                                     stickerOffset =
                                         stickerOffset,
                                     postcardSize =

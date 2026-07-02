@@ -54,7 +54,9 @@ object PostcardImageExporter {
         val uri: Uri,
         val normalizedX: Float,
         val normalizedY: Float,
-        val sizeRatio: Float
+        val sizeRatio: Float,
+        val originalUri: Uri? = null,
+        val isBackgroundRemoved: Boolean = false
     )
 
     fun exportToGallery(
@@ -1319,14 +1321,36 @@ object PostcardImageExporter {
         canvas: Canvas,
         stickerOverlay: StickerOverlay
     ) {
-        val stickerBitmap =
+        val decodedStickerBitmap =
             runCatching {
                 decodeStickerBitmap(
                     context = context,
                     stickerUri = stickerOverlay.uri
                 )
             }.getOrNull()
+        val decodedOriginalBitmap =
+            if (
+                decodedStickerBitmap == null &&
+                stickerOverlay.isBackgroundRemoved &&
+                stickerOverlay.originalUri != null
+            ) {
+                runCatching {
+                    decodeStickerBitmap(
+                        context = context,
+                        stickerUri =
+                            stickerOverlay.originalUri
+                    )
+                }.getOrNull()
+            } else {
+                null
+            }
+        val stickerBitmap =
+            decodedStickerBitmap
+                ?: decodedOriginalBitmap
                 ?: return
+        val drawAsBackgroundRemoved =
+            stickerOverlay.isBackgroundRemoved &&
+                    decodedStickerBitmap != null
 
         try {
             val stickerSide =
@@ -1372,58 +1396,119 @@ object PostcardImageExporter {
             val cornerRadius =
                 stickerSize *
                         STICKER_CORNER_RADIUS_RATIO
-            val stickerPath =
-                Path().apply {
-                    addRoundRect(
-                        stickerBounds,
-                        cornerRadius,
-                        cornerRadius,
-                        Path.Direction.CW
-                    )
-                }
+            if (drawAsBackgroundRemoved) {
+                drawFitCenteredBitmap(
+                    canvas = canvas,
+                    bitmap = stickerBitmap,
+                    destinationRect = stickerBounds
+                )
+            } else {
+                val stickerPath =
+                    Path().apply {
+                        addRoundRect(
+                            stickerBounds,
+                            cornerRadius,
+                            cornerRadius,
+                            Path.Direction.CW
+                        )
+                    }
 
-            canvas.save()
-            canvas.clipPath(stickerPath)
+                canvas.save()
+                canvas.clipPath(stickerPath)
 
-            drawCenterCroppedBitmap(
-                canvas = canvas,
-                bitmap = stickerBitmap,
-                destinationRect = stickerBounds
-            )
+                drawCenterCroppedBitmap(
+                    canvas = canvas,
+                    bitmap = stickerBitmap,
+                    destinationRect = stickerBounds
+                )
 
-            canvas.restore()
+                canvas.restore()
 
-            val borderWidth =
-                stickerSize *
-                        STICKER_BORDER_WIDTH_RATIO
-            val borderBounds =
-                RectF(stickerBounds).apply {
-                    inset(
-                        borderWidth / 2f,
-                        borderWidth / 2f
-                    )
-                }
-            val borderRadius =
-                (cornerRadius - borderWidth / 2f)
-                    .coerceAtLeast(0f)
-            val borderPaint =
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.BLACK
-                    style = Paint.Style.STROKE
-                    strokeWidth = borderWidth
-                }
+                val borderWidth =
+                    stickerSize *
+                            STICKER_BORDER_WIDTH_RATIO
+                val borderBounds =
+                    RectF(stickerBounds).apply {
+                        inset(
+                            borderWidth / 2f,
+                            borderWidth / 2f
+                        )
+                    }
+                val borderRadius =
+                    (cornerRadius - borderWidth / 2f)
+                        .coerceAtLeast(0f)
+                val borderPaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.BLACK
+                        style = Paint.Style.STROKE
+                        strokeWidth = borderWidth
+                    }
 
-            canvas.drawRoundRect(
-                borderBounds,
-                borderRadius,
-                borderRadius,
-                borderPaint
-            )
+                canvas.drawRoundRect(
+                    borderBounds,
+                    borderRadius,
+                    borderRadius,
+                    borderPaint
+                )
+            }
         } finally {
             if (!stickerBitmap.isRecycled) {
                 stickerBitmap.recycle()
             }
         }
+    }
+
+    private fun drawFitCenteredBitmap(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        destinationRect: RectF
+    ) {
+        val sourceWidth =
+            bitmap.width.toFloat()
+        val sourceHeight =
+            bitmap.height.toFloat()
+
+        if (
+            sourceWidth <= 0f ||
+            sourceHeight <= 0f
+        ) {
+            throw IOException(
+                "비트맵 크기를 확인할 수 없어."
+            )
+        }
+
+        val scale =
+            min(
+                destinationRect.width() / sourceWidth,
+                destinationRect.height() / sourceHeight
+            )
+        val fittedWidth =
+            sourceWidth * scale
+        val fittedHeight =
+            sourceHeight * scale
+        val left =
+            destinationRect.left +
+                    (destinationRect.width() - fittedWidth) /
+                    2f
+        val top =
+            destinationRect.top +
+                    (destinationRect.height() - fittedHeight) /
+                    2f
+
+        canvas.drawBitmap(
+            bitmap,
+            null,
+            RectF(
+                left,
+                top,
+                left + fittedWidth,
+                top + fittedHeight
+            ),
+            Paint(
+                Paint.ANTI_ALIAS_FLAG or
+                        Paint.FILTER_BITMAP_FLAG
+            )
+        )
     }
 
     private fun drawCenterCroppedBitmap(
@@ -1547,10 +1632,21 @@ object PostcardImageExporter {
             Build.VERSION_CODES.P
         ) {
             val source =
-                ImageDecoder.createSource(
-                    resolver,
-                    stickerUri
-                )
+                if (stickerUri.scheme == "file") {
+                    ImageDecoder.createSource(
+                        File(
+                            stickerUri.path
+                                ?: throw IOException(
+                                    "스티커 파일 경로를 찾지 못했습니다."
+                                )
+                        )
+                    )
+                } else {
+                    ImageDecoder.createSource(
+                        resolver,
+                        stickerUri
+                    )
+                }
 
             ImageDecoder.decodeBitmap(
                 source
@@ -1560,29 +1656,51 @@ object PostcardImageExporter {
             }
         } else {
             val decodedBitmap =
-                resolver
-                    .openInputStream(stickerUri)
-                    ?.use { inputStream ->
-                        BitmapFactory.decodeStream(
-                            inputStream
-                        )
-                    }
+                if (stickerUri.scheme == "file") {
+                    BitmapFactory.decodeFile(
+                        stickerUri.path
+                            ?: throw IOException(
+                                "스티커 파일 경로를 찾지 못했습니다."
+                            )
+                    )
+                } else {
+                    resolver
+                        .openInputStream(stickerUri)
+                        ?.use { inputStream ->
+                            BitmapFactory.decodeStream(
+                                inputStream
+                            )
+                        }
+                }
                     ?: throw IOException(
                         "스티커 사진을 불러오지 못했습니다."
                     )
 
             val orientation =
-                resolver
-                    .openInputStream(stickerUri)
-                    ?.use { inputStream ->
-                        ExifInterface(inputStream)
-                            .getAttributeInt(
-                                ExifInterface
-                                    .TAG_ORIENTATION,
-                                ExifInterface
-                                    .ORIENTATION_NORMAL
-                            )
-                    }
+                if (stickerUri.scheme == "file") {
+                    stickerUri.path
+                        ?.let { path ->
+                            ExifInterface(path)
+                                .getAttributeInt(
+                                    ExifInterface
+                                        .TAG_ORIENTATION,
+                                    ExifInterface
+                                        .ORIENTATION_NORMAL
+                                )
+                        }
+                } else {
+                    resolver
+                        .openInputStream(stickerUri)
+                        ?.use { inputStream ->
+                            ExifInterface(inputStream)
+                                .getAttributeInt(
+                                    ExifInterface
+                                        .TAG_ORIENTATION,
+                                    ExifInterface
+                                        .ORIENTATION_NORMAL
+                                )
+                        }
+                }
                     ?: ExifInterface.ORIENTATION_NORMAL
 
             rotateBitmapUsingExif(
