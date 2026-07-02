@@ -1,6 +1,8 @@
 package com.postcardmemory.ui.detail
 
 import android.net.Uri
+import android.widget.Toast
+import java.util.UUID
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -10,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -59,6 +63,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +75,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import kotlin.math.roundToInt
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
 import com.postcardmemory.ui.components.PostcardBackgroundPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
@@ -196,6 +203,34 @@ private fun createStickerOverlayForExport(
             stickerSize.width.toFloat() /
                     postcardSize.width.toFloat()
     )
+}
+
+private fun createStickerOverlaysForExport(
+    photoStickers: List<PhotoStickerItem>,
+    postcardSize: IntSize,
+    stickerSizes: Map<String, IntSize>
+): List<PostcardImageExporter.StickerOverlay> {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0
+    ) {
+        return emptyList()
+    }
+
+    return photoStickers.mapNotNull { sticker ->
+        val stickerSize =
+            stickerSizes[sticker.id]
+                ?: return@mapNotNull null
+
+        createStickerOverlayForExport(
+            stickerUri = sticker.displayedUri,
+            originalStickerUri = sticker.originalUri,
+            isBackgroundRemoved = sticker.isBackgroundRemoved,
+            stickerOffset = sticker.offset,
+            postcardSize = postcardSize,
+            stickerSize = stickerSize
+        )
+    }
 }
 
 @Composable
@@ -664,20 +699,11 @@ fun DetailScreen(
         mutableStateOf("")
     }
 
-    var originalStickerUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
+    val photoStickers by viewModel.photoStickers.collectAsState()
+    val selectedStickerId by viewModel.selectedStickerId.collectAsState()
 
-    var displayedStickerUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
-
-    var removedStickerUri by remember {
-        mutableStateOf<Uri?>(null)
-    }
-
-    var isBackgroundRemoved by remember {
-        mutableStateOf(false)
+    var stickerSizes by remember {
+        mutableStateOf(mapOf<String, IntSize>())
     }
 
     var backgroundRemovalError by remember {
@@ -688,21 +714,11 @@ fun DetailScreen(
         mutableStateOf(IntSize.Zero)
     }
 
-    var stickerSize by remember {
-        mutableStateOf(IntSize.Zero)
-    }
-
-    var stickerOffset by remember {
-        mutableStateOf<Offset?>(null)
-    }
-
-    var stickerScale by remember {
-        mutableStateOf(1f)
-    }
-
     val baseStickerPx = with(LocalDensity.current) {
         120.dp.toPx()
     }
+
+    val context = LocalContext.current
 
     var openedDrawerName by rememberSaveable {
         mutableStateOf(
@@ -755,6 +771,7 @@ fun DetailScreen(
 
     LaunchedEffect(postcardId) {
         viewModel.loadPostcard(postcardId)
+        viewModel.loadPhotoStickersState(postcardId)
     }
 
     LaunchedEffect(deleted) {
@@ -788,39 +805,45 @@ fun DetailScreen(
     }
 
     LaunchedEffect(
-        displayedStickerUri,
+        photoStickers,
         postcardPreviewSize,
-        stickerSize
+        stickerSizes
     ) {
-        val selectedUri = displayedStickerUri
-
-        if (selectedUri == null) {
-            stickerOffset = null
+        if (postcardPreviewSize == IntSize.Zero) {
             return@LaunchedEffect
         }
 
-        if (
-            postcardPreviewSize == IntSize.Zero ||
-            stickerSize == IntSize.Zero
-        ) {
-            return@LaunchedEffect
-        }
+        val updated = photoStickers.map { sticker ->
+            val stickerSize =
+                stickerSizes[sticker.id]
 
-        val currentOffset = stickerOffset
-
-        stickerOffset =
-            if (currentOffset == null) {
-                centeredStickerOffset(
-                    postcardSize = postcardPreviewSize,
-                    stickerSize = stickerSize
-                )
-            } else {
-                clampStickerOffset(
-                    offset = currentOffset,
-                    postcardSize = postcardPreviewSize,
-                    stickerSize = stickerSize
-                )
+            if (
+                stickerSize == null ||
+                stickerSize == IntSize.Zero
+            ) {
+                return@map sticker
             }
+
+            val newOffset =
+                if (sticker.offset == null) {
+                    centeredStickerOffset(
+                        postcardSize = postcardPreviewSize,
+                        stickerSize = stickerSize
+                    )
+                } else {
+                    clampStickerOffset(
+                        offset = sticker.offset,
+                        postcardSize = postcardPreviewSize,
+                        stickerSize = stickerSize
+                    )
+                }
+
+            sticker.copy(offset = newOffset)
+        }
+
+        if (updated != photoStickers) {
+            viewModel.setPhotoStickers(updated)
+        }
     }
 
     LaunchedEffect(stickerBackgroundRemovalState) {
@@ -829,30 +852,35 @@ fun DetailScreen(
                 stickerBackgroundRemovalState
         ) {
             is StickerBackgroundRemovalState.Success -> {
-                if (
-                    originalStickerUri ==
-                    removalState.sourceUri
-                ) {
-                    removedStickerUri?.let { oldUri ->
-                        viewModel.deleteStickerCacheUri(
-                            oldUri
-                        )
+                val targetId = removalState.stickerId
+
+                viewModel.setPhotoStickers(photoStickers.map { sticker ->
+                    if (sticker.id != targetId) {
+                        return@map sticker
                     }
 
-                    removedStickerUri =
-                        removalState.resultUri
-                    displayedStickerUri =
-                        removalState.resultUri
-                    isBackgroundRemoved = true
-                    backgroundRemovalError = null
-                } else {
-                    viewModel.deleteStickerCacheUri(
-                        removalState.resultUri
-                    )
-                }
+                    if (sticker.originalUri != removalState.sourceUri) {
+                        viewModel.deleteStickerCacheUri(
+                            removalState.resultUri
+                        )
+                        return@map sticker
+                    }
 
-                viewModel
-                    .resetStickerBackgroundRemovalState()
+                    sticker.removedBgUri?.let { oldUri ->
+                        if (oldUri != removalState.resultUri) {
+                            viewModel.deleteStickerCacheUri(oldUri)
+                        }
+                    }
+
+                    sticker.copy(
+                        removedBgUri = removalState.resultUri,
+                        displayedUri = removalState.resultUri,
+                        isBackgroundRemoved = true
+                    )
+                })
+
+                backgroundRemovalError = null
+                viewModel.resetStickerBackgroundRemovalState()
             }
 
             is StickerBackgroundRemovalState.Error -> {
@@ -951,11 +979,14 @@ fun DetailScreen(
                             selectedLayout = selectedLayout
                         )
 
-                        displayedStickerUri?.let { stickerUri ->
-                            val currentStickerOffset =
-                                stickerOffset
+                        photoStickers.forEach { sticker ->
+                            val isSelected =
+                                sticker.id == selectedStickerId
+                            val currentOffset =
+                                sticker.offset
+
                             val stickerPositionModifier =
-                                if (currentStickerOffset == null) {
+                                if (currentOffset == null) {
                                     Modifier.align(
                                         Alignment.Center
                                     )
@@ -966,121 +997,209 @@ fun DetailScreen(
                                         )
                                         .offset {
                                             IntOffset(
-                                                x =
-                                                    currentStickerOffset.x
-                                                        .roundToInt(),
-                                                y =
-                                                    currentStickerOffset.y
-                                                        .roundToInt()
-                                                )
-                                        }
-                                }
-                            val stickerBaseModifier =
-                                stickerPositionModifier
-                                    .size(120.dp * stickerScale)
-                                    .onSizeChanged { size ->
-                                        stickerSize = size
-                                    }
-                            val stickerVisualModifier =
-                                if (isBackgroundRemoved) {
-                                    stickerBaseModifier
-                                } else {
-                                    stickerBaseModifier
-                                        .clip(
-                                            RoundedCornerShape(16.dp)
-                                        )
-                                        .border(
-                                            width = 3.dp,
-                                            color = BrutalBlack,
-                                            shape =
-                                                RoundedCornerShape(
-                                                    16.dp
-                                                )
-                                        )
-                                }
-
-                            AsyncImage(
-                                model = stickerUri,
-                                contentDescription =
-                                    "포스트카드 스티커 사진",
-                                contentScale =
-                                    if (isBackgroundRemoved) {
-                                        ContentScale.Fit
-                                    } else {
-                                        ContentScale.Crop
-                                    },
-                                modifier =
-                                    stickerVisualModifier
-                                        .pointerInput(
-                                        stickerUri,
-                                        postcardPreviewSize
-                                    ) {
-                                        detectTransformGestures {
-                                                centroid,
-                                                pan,
-                                                zoom,
-                                                _ ->
-
-                                            val newScale =
-                                                (stickerScale * zoom)
-                                                    .coerceIn(
-                                                        0.5f,
-                                                        2.5f
-                                                    )
-                                            val actualZoom =
-                                                newScale / stickerScale
-
-                                            if (
-                                                postcardPreviewSize ==
-                                                IntSize.Zero
-                                            ) {
-                                                stickerScale = newScale
-                                                return@detectTransformGestures
-                                            }
-
-                                            val oldOffset =
-                                                stickerOffset
-                                                    ?: centeredStickerOffset(
-                                                        postcardSize =
-                                                            postcardPreviewSize,
-                                                        stickerSize =
-                                                            stickerSize
-                                                    )
-
-                                            // 핀치 중심점 고정:
-                                            // centroid 아래의 이미지 지점이
-                                            // 확대 후에도 같은 화면 위치 유지
-                                            val correctedOffset =
-                                                oldOffset +
-                                                        centroid *
-                                                        (1f - actualZoom)
-
-                                            val newOffset =
-                                                correctedOffset + pan
-
-                                            // baseStickerPx로 frame-lag 없이
-                                            // 정확한 새 크기로 경계 계산
-                                            val newSizePx =
-                                                (baseStickerPx * newScale)
+                                                x = currentOffset.x
+                                                    .roundToInt(),
+                                                y = currentOffset.y
                                                     .roundToInt()
-                                            val newEffectiveSize =
-                                                IntSize(
-                                                    newSizePx,
-                                                    newSizePx
-                                                )
-
-                                            stickerScale = newScale
-                                            stickerOffset =
-                                                clampStickerOffset(
-                                                    offset = newOffset,
-                                                    postcardSize =
-                                                        postcardPreviewSize,
-                                                    stickerSize =
-                                                        newEffectiveSize
-                                                )
+                                            )
                                         }
+                                }
+
+                            val imageModifier =
+                                when {
+                                    sticker.isBackgroundRemoved && isSelected ->
+                                        Modifier
+                                            .fillMaxSize()
+                                            .border(
+                                                width = 3.dp,
+                                                color = BrutalViolet,
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                    sticker.isBackgroundRemoved ->
+                                        Modifier.fillMaxSize()
+                                    isSelected ->
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .border(
+                                                width = 3.dp,
+                                                color = BrutalViolet,
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                    else ->
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .border(
+                                                width = 3.dp,
+                                                color = BrutalBlack,
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                }
+
+                            Box(
+                                modifier = stickerPositionModifier
+                                    .size(120.dp * sticker.scale)
+                                    .onSizeChanged { size ->
+                                        stickerSizes =
+                                            stickerSizes +
+                                                    (sticker.id to size)
                                     }
-                            )
+                            ) {
+                                AsyncImage(
+                                    model = sticker.displayedUri,
+                                    contentDescription =
+                                        "포스트카드 스티커 사진",
+                                    contentScale =
+                                        if (sticker.isBackgroundRemoved) {
+                                            ContentScale.Fit
+                                        } else {
+                                            ContentScale.Crop
+                                        },
+                                    modifier = imageModifier
+                                        .pointerInput(
+                                            sticker.id,
+                                            postcardPreviewSize
+                                        ) {
+                                            coroutineScope {
+                                            launch {
+                                                detectTapGestures(
+                                                    onTap = {
+                                                        viewModel.setSelectedStickerId(
+                                                            if (selectedStickerId == sticker.id) {
+                                                                null
+                                                            } else {
+                                                                sticker.id
+                                                            }
+                                                        )
+                                                    }
+                                                )
+                                            }
+                                            launch {
+                                            detectTransformGestures {
+                                                centroid, pan, zoom, _ ->
+
+                                                viewModel.setSelectedStickerId(sticker.id)
+
+                                                val currentSticker =
+                                                    photoStickers.find {
+                                                        it.id == sticker.id
+                                                    } ?: return@detectTransformGestures
+
+                                                val oldScale = currentSticker.scale
+                                                val newScale =
+                                                    (oldScale * zoom).coerceIn(0.5f, 2.5f)
+                                                val actualZoom =
+                                                    newScale / oldScale
+
+                                                if (postcardPreviewSize == IntSize.Zero) {
+                                                    viewModel.setPhotoStickers(
+                                                        photoStickers.map {
+                                                            if (it.id == sticker.id) {
+                                                                it.copy(scale = newScale)
+                                                            } else {
+                                                                it
+                                                            }
+                                                        }
+                                                    )
+                                                    return@detectTransformGestures
+                                                }
+
+                                                val currentStickerSize =
+                                                    stickerSizes[sticker.id]
+                                                        ?: IntSize.Zero
+
+                                                val oldOffset =
+                                                    currentSticker.offset
+                                                        ?: centeredStickerOffset(
+                                                            postcardSize = postcardPreviewSize,
+                                                            stickerSize = currentStickerSize
+                                                        )
+
+                                                val correctedOffset =
+                                                    oldOffset +
+                                                            centroid * (1f - actualZoom)
+
+                                                val newOffset =
+                                                    correctedOffset + pan
+
+                                                val newSizePx =
+                                                    (baseStickerPx * newScale).roundToInt()
+                                                val newEffectiveSize =
+                                                    IntSize(newSizePx, newSizePx)
+
+                                                viewModel.setPhotoStickers(
+                                                    photoStickers.map {
+                                                        if (it.id == sticker.id) {
+                                                            it.copy(
+                                                                scale = newScale,
+                                                                offset = clampStickerOffset(
+                                                                    offset = newOffset,
+                                                                    postcardSize = postcardPreviewSize,
+                                                                    stickerSize = newEffectiveSize
+                                                                )
+                                                            )
+                                                        } else {
+                                                            it
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        }  // launch (transform)
+                                        }  // coroutineScope
+                                )
+
+                                if (isSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 8.dp, y = (-8).dp)
+                                            .size(26.dp)
+                                            .background(
+                                                color = BrutalCoral,
+                                                shape = CircleShape
+                                            )
+                                            .border(
+                                                width = 1.5.dp,
+                                                color = BrutalBlack,
+                                                shape = CircleShape
+                                            )
+                                            .clickable(
+                                                enabled = controlsEnabled
+                                            ) {
+                                                val toDelete =
+                                                    photoStickers.find {
+                                                        it.id == sticker.id
+                                                    }
+                                                toDelete?.removedBgUri?.let { uri ->
+                                                    viewModel
+                                                        .deleteStickerCacheUri(uri)
+                                                }
+                                                val remaining =
+                                                    photoStickers.filter {
+                                                        it.id != sticker.id
+                                                    }
+                                                viewModel.setPhotoStickers(remaining)
+                                                stickerSizes =
+                                                    stickerSizes - sticker.id
+                                                if (selectedStickerId == sticker.id) {
+                                                    viewModel.setSelectedStickerId(
+                                                        remaining.lastOrNull()?.id
+                                                    )
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "스티커 삭제",
+                                            tint = BrutalWhite,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1297,66 +1416,89 @@ fun DetailScreen(
                                 contentAlignment = Alignment.TopCenter
                             ) {
                                 PhotoStickerPickerPanel(
-                                    selectedStickerUri =
-                                        displayedStickerUri,
-                                    isBackgroundRemoved =
-                                        isBackgroundRemoved,
-                                    isRemovingBackground =
-                                        isRemovingBackground,
-                                    backgroundRemovalError =
-                                        backgroundRemovalError,
-                                    onSelectedStickerUriChange = { uri ->
-                                        removedStickerUri?.let {
-                                                removedUri ->
-                                            viewModel
-                                                .deleteStickerCacheUri(
-                                                    removedUri
-                                                )
-                                        }
-
-                                        stickerOffset = null
-                                        stickerScale = 1f
-
-                                        originalStickerUri = uri
-                                        displayedStickerUri = uri
-                                        removedStickerUri = null
-                                        isBackgroundRemoved = false
-                                        backgroundRemovalError = null
-                                        viewModel
-                                            .resetStickerBackgroundRemovalState()
+                                    photoStickers = photoStickers,
+                                    selectedStickerId = selectedStickerId,
+                                    isRemovingBackground = isRemovingBackground,
+                                    backgroundRemovalError = backgroundRemovalError,
+                                    onSelectSticker = { id ->
+                                        viewModel.setSelectedStickerId(id)
                                     },
-                                    onRemoveBackground = {
-                                        val removedUri =
-                                            removedStickerUri
-                                        val originalUri =
-                                            originalStickerUri
-
+                                    onAddFromGallery = { uri ->
+                                        val newSticker = PhotoStickerItem(
+                                            originalUri = uri,
+                                            displayedUri = uri
+                                        )
+                                        viewModel.setPhotoStickers(photoStickers + newSticker)
+                                        viewModel.setSelectedStickerId(newSticker.id)
                                         backgroundRemovalError = null
-
-                                        if (removedUri != null) {
-                                            displayedStickerUri =
-                                                removedUri
-                                            isBackgroundRemoved = true
-                                        } else if (originalUri != null) {
-                                            viewModel
-                                                .removeStickerBackground(
-                                                    originalUri
+                                        viewModel.resetStickerBackgroundRemovalState()
+                                    },
+                                    onAddFromFile = { uri ->
+                                        val newSticker = PhotoStickerItem(
+                                            originalUri = uri,
+                                            displayedUri = uri
+                                        )
+                                        viewModel.setPhotoStickers(photoStickers + newSticker)
+                                        viewModel.setSelectedStickerId(newSticker.id)
+                                        backgroundRemovalError = null
+                                        viewModel.resetStickerBackgroundRemovalState()
+                                    },
+                                    onRemoveBackground = { id ->
+                                        val sticker = photoStickers.find { it.id == id }
+                                        if (sticker != null) {
+                                            backgroundRemovalError = null
+                                            if (sticker.removedBgUri != null) {
+                                                viewModel.setPhotoStickers(
+                                                    photoStickers.map {
+                                                        if (it.id == id) {
+                                                            it.copy(
+                                                                displayedUri = sticker.removedBgUri,
+                                                                isBackgroundRemoved = true
+                                                            )
+                                                        } else {
+                                                            it
+                                                        }
+                                                    }
                                                 )
+                                            } else {
+                                                viewModel.removeStickerBackground(
+                                                    stickerId = id,
+                                                    sourceUri = sticker.originalUri
+                                                )
+                                            }
                                         }
                                     },
-                                    onRestoreOriginal = {
-                                        originalStickerUri?.let {
-                                                originalUri ->
-                                            displayedStickerUri =
-                                                originalUri
-                                            isBackgroundRemoved = false
-                                            backgroundRemovalError =
-                                                null
+                                    onRestoreOriginal = { id ->
+                                        viewModel.setPhotoStickers(
+                                            photoStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(
+                                                        displayedUri = it.originalUri,
+                                                        isBackgroundRemoved = false
+                                                    )
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                        backgroundRemovalError = null
+                                    },
+                                    onDeleteSticker = { id ->
+                                        val sticker = photoStickers.find { it.id == id }
+                                        sticker?.removedBgUri?.let { uri ->
+                                            viewModel.deleteStickerCacheUri(uri)
+                                        }
+                                        val remaining = photoStickers.filter { it.id != id }
+                                        viewModel.setPhotoStickers(remaining)
+                                        stickerSizes = stickerSizes - id
+                                        if (selectedStickerId == id) {
+                                            viewModel.setSelectedStickerId(
+                                                remaining.lastOrNull()?.id
+                                            )
                                         }
                                     },
                                     enabled = controlsEnabled,
-                                    modifier =
-                                        Modifier.fillMaxWidth(0.92f)
+                                    modifier = Modifier.fillMaxWidth(0.92f)
                                 )
                             }
                         }
@@ -1525,20 +1667,14 @@ fun DetailScreen(
                 Button(
                     onClick = {
                         viewModel.exportPostcardToGallery(
-                            stickerOverlay =
-                                createStickerOverlayForExport(
-                                    stickerUri =
-                                        displayedStickerUri,
-                                    originalStickerUri =
-                                        originalStickerUri,
-                                    isBackgroundRemoved =
-                                        isBackgroundRemoved,
-                                    stickerOffset =
-                                        stickerOffset,
+                            stickerOverlays =
+                                createStickerOverlaysForExport(
+                                    photoStickers =
+                                        photoStickers,
                                     postcardSize =
                                         postcardPreviewSize,
-                                    stickerSize =
-                                        stickerSize
+                                    stickerSizes =
+                                        stickerSizes
                                 )
                         )
                     },
@@ -1731,9 +1867,31 @@ fun DetailScreen(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = BrutalWhite,
-                modifier =
-                    Modifier.padding(start = 8.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp)
             )
+
+            TextButton(
+                onClick = {
+                    viewModel.savePhotoStickersState(
+                        postcardId
+                    )
+                    Toast.makeText(
+                        context,
+                        "스티커 배치를 저장했어!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                enabled = controlsEnabled
+            ) {
+                Text(
+                    text = "저장",
+                    color = BrutalWhite,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 15.sp
+                )
+            }
         }
     }
 

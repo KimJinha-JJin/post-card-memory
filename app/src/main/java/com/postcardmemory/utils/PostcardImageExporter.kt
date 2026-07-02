@@ -62,14 +62,14 @@ object PostcardImageExporter {
     fun exportToGallery(
         context: Context,
         postcard: Postcard,
-        stickerOverlay: StickerOverlay? = null
+        stickerOverlays: List<StickerOverlay> = emptyList()
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
                 createPostcardBitmap(
                     context = context,
                     postcard = postcard,
-                    stickerOverlay = stickerOverlay
+                    stickerOverlays = stickerOverlays
                 )
 
             try {
@@ -88,7 +88,7 @@ object PostcardImageExporter {
     private fun createPostcardBitmap(
         context: Context,
         postcard: Postcard,
-        stickerOverlay: StickerOverlay?
+        stickerOverlays: List<StickerOverlay>
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -275,11 +275,11 @@ object PostcardImageExporter {
                 }
             }
 
-            if (stickerOverlay != null) {
+            for (overlay in stickerOverlays) {
                 drawStickerOverlay(
                     context = context,
                     canvas = canvas,
-                    stickerOverlay = stickerOverlay
+                    stickerOverlay = overlay
                 )
             }
 

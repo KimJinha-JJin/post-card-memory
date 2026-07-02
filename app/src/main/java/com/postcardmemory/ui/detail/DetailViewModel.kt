@@ -100,15 +100,18 @@ sealed interface StickerBackgroundRemovalState {
     data object Idle : StickerBackgroundRemovalState
 
     data class Removing(
+        val stickerId: String,
         val sourceUri: Uri
     ) : StickerBackgroundRemovalState
 
     data class Success(
+        val stickerId: String,
         val sourceUri: Uri,
         val resultUri: Uri
     ) : StickerBackgroundRemovalState
 
     data class Error(
+        val stickerId: String,
         val message: String
     ) : StickerBackgroundRemovalState
 }
@@ -183,6 +186,160 @@ class DetailViewModel @Inject constructor(
     val stickerBackgroundRemovalState:
             StateFlow<StickerBackgroundRemovalState> =
         _stickerBackgroundRemovalState
+
+    private val _photoStickers =
+        MutableStateFlow(listOf<PhotoStickerItem>())
+
+    val photoStickers: StateFlow<List<PhotoStickerItem>> =
+        _photoStickers
+
+    private val _selectedStickerId =
+        MutableStateFlow<String?>(null)
+
+    val selectedStickerId: StateFlow<String?> =
+        _selectedStickerId
+
+    fun setPhotoStickers(
+        stickers: List<PhotoStickerItem>
+    ) {
+        _photoStickers.value = stickers
+    }
+
+    fun setSelectedStickerId(
+        id: String?
+    ) {
+        _selectedStickerId.value = id
+    }
+
+    fun savePhotoStickersState(
+        postcardId: Long
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val stickerCacheDir =
+                File(
+                    context.cacheDir,
+                    "photo_stickers"
+                ).canonicalFile
+            val persistDir =
+                File(
+                    context.filesDir,
+                    "sticker_bgs/$postcardId"
+                )
+            if (!persistDir.exists()) persistDir.mkdirs()
+
+            val updatedStickers =
+                _photoStickers.value.map { sticker ->
+                    val removedUri = sticker.removedBgUri
+                    if (
+                        sticker.isBackgroundRemoved &&
+                        removedUri != null &&
+                        removedUri.scheme == "file"
+                    ) {
+                        val srcPath =
+                            removedUri.path
+                                ?: return@map sticker
+                        val srcFile =
+                            File(srcPath).canonicalFile
+                        if (
+                            srcFile.path.startsWith(
+                                stickerCacheDir.path
+                            )
+                        ) {
+                            val destFile =
+                                File(
+                                    persistDir,
+                                    "${sticker.id}.png"
+                                )
+                            srcFile.copyTo(
+                                destFile,
+                                overwrite = true
+                            )
+                            srcFile.delete()
+                            val newUri =
+                                Uri.fromFile(destFile)
+                            sticker.copy(
+                                removedBgUri = newUri,
+                                displayedUri =
+                                    if (
+                                        sticker.displayedUri ==
+                                        removedUri
+                                    ) {
+                                        newUri
+                                    } else {
+                                        sticker.displayedUri
+                                    }
+                            )
+                        } else {
+                            sticker
+                        }
+                    } else {
+                        sticker
+                    }
+                }
+
+            if (updatedStickers != _photoStickers.value) {
+                _photoStickers.value = updatedStickers
+            }
+
+            val stateDir =
+                File(context.filesDir, "sticker_states")
+            if (!stateDir.exists()) stateDir.mkdirs()
+            File(stateDir, "$postcardId.txt").writeText(
+                updatedStickers.joinToString("\n") {
+                    it.serialize()
+                }
+            )
+        }
+    }
+
+    fun loadPhotoStickersState(
+        postcardId: Long
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file =
+                File(
+                    context.filesDir,
+                    "sticker_states/$postcardId.txt"
+                )
+            if (!file.exists()) return@launch
+            val stickers =
+                file.readLines()
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { line ->
+                        val item =
+                            deserializePhotoStickerItem(
+                                line
+                            ) ?: return@mapNotNull null
+                        if (
+                            item.isBackgroundRemoved &&
+                            item.removedBgUri?.scheme ==
+                            "file"
+                        ) {
+                            val bgPath =
+                                item.removedBgUri.path
+                            if (
+                                bgPath == null ||
+                                !File(bgPath).exists()
+                            ) {
+                                item.copy(
+                                    displayedUri =
+                                        item.originalUri,
+                                    removedBgUri = null,
+                                    isBackgroundRemoved =
+                                        false
+                                )
+                            } else {
+                                item
+                            }
+                        } else {
+                            item
+                        }
+                    }
+            if (stickers.isNotEmpty()) {
+                _photoStickers.value = stickers
+            }
+        }
+    }
 
     private var subjectSegmenter: SubjectSegmenter? =
         null
@@ -619,6 +776,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun removeStickerBackground(
+        stickerId: String,
         sourceUri: Uri
     ) {
         if (
@@ -630,7 +788,8 @@ class DetailViewModel @Inject constructor(
 
         _stickerBackgroundRemovalState.value =
             StickerBackgroundRemovalState.Removing(
-                sourceUri
+                stickerId = stickerId,
+                sourceUri = sourceUri
             )
 
         viewModelScope.launch {
@@ -670,6 +829,7 @@ class DetailViewModel @Inject constructor(
                 onSuccess = { resultUri ->
                     _stickerBackgroundRemovalState.value =
                         StickerBackgroundRemovalState.Success(
+                            stickerId = stickerId,
                             sourceUri = sourceUri,
                             resultUri = resultUri
                         )
@@ -677,7 +837,8 @@ class DetailViewModel @Inject constructor(
                 onFailure = {
                     _stickerBackgroundRemovalState.value =
                         StickerBackgroundRemovalState.Error(
-                            "\uBC30\uACBD \uC81C\uAC70\uB97C \uC900\uBE44\uD558\uC9C0 \uBABB\uD588\uC5B4. \uC7A0\uC2DC \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC918."
+                            stickerId = stickerId,
+                            message = "\uBC30\uACBD \uC81C\uAC70\uB97C \uC900\uBE44\uD558\uC9C0 \uBABB\uD588\uC5B4. \uC7A0\uC2DC \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC918."
                         )
                 }
             )
@@ -709,21 +870,29 @@ class DetailViewModel @Inject constructor(
                     context.cacheDir,
                     "photo_stickers"
                 ).canonicalFile
-            val cacheFile =
+            val stickerPersistDir =
+                File(
+                    context.filesDir,
+                    "sticker_bgs"
+                ).canonicalFile
+            val targetFile =
                 file.canonicalFile
 
             if (
-                cacheFile.path.startsWith(
+                targetFile.path.startsWith(
                     stickerCacheDir.path
+                ) ||
+                targetFile.path.startsWith(
+                    stickerPersistDir.path
                 )
             ) {
-                cacheFile.delete()
+                targetFile.delete()
             }
         }
     }
 
     fun exportPostcardToGallery(
-        stickerOverlay: PostcardImageExporter.StickerOverlay? = null
+        stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList()
     ) {
         val currentPostcard =
             _postcard.value
@@ -746,7 +915,7 @@ class DetailViewModel @Inject constructor(
                         .exportToGallery(
                             context = context,
                             postcard = currentPostcard,
-                            stickerOverlay = stickerOverlay
+                            stickerOverlays = stickerOverlays
                         )
                 }
 
@@ -791,6 +960,25 @@ class DetailViewModel @Inject constructor(
                         currentPostcard
                             .backgroundImagePath
                     )
+
+                File(
+                    context.filesDir,
+                    "sticker_states/" +
+                            "${currentPostcard.id}.txt"
+                ).let { stickerFile ->
+                    if (stickerFile.exists()) {
+                        stickerFile.delete()
+                    }
+                }
+
+                File(
+                    context.filesDir,
+                    "sticker_bgs/${currentPostcard.id}"
+                ).let { bgDir ->
+                    if (bgDir.exists()) {
+                        bgDir.deleteRecursively()
+                    }
+                }
 
                 repository.deletePostcard(
                     currentPostcard
@@ -963,6 +1151,22 @@ class DetailViewModel @Inject constructor(
     override fun onCleared() {
         subjectSegmenter?.close()
         subjectSegmenter = null
+        val stickerCacheDir =
+            File(
+                context.cacheDir,
+                "photo_stickers"
+            ).canonicalFile
+        _photoStickers.value.forEach { sticker ->
+            sticker.removedBgUri
+                ?.takeIf { it.scheme == "file" }
+                ?.path
+                ?.let { path ->
+                    val f = File(path).canonicalFile
+                    if (f.path.startsWith(stickerCacheDir.path)) {
+                        f.delete()
+                    }
+                }
+        }
         super.onCleared()
     }
 }
