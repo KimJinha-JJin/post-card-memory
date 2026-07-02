@@ -10,7 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -695,6 +696,14 @@ fun DetailScreen(
         mutableStateOf<Offset?>(null)
     }
 
+    var stickerScale by remember {
+        mutableStateOf(1f)
+    }
+
+    val baseStickerPx = with(LocalDensity.current) {
+        120.dp.toPx()
+    }
+
     var openedDrawerName by rememberSaveable {
         mutableStateOf(
             DetailDrawerSection.LAYOUT.name
@@ -868,6 +877,7 @@ fun DetailScreen(
                 dateFormatUpdateState !is DateFormatUpdateState.Saving &&
                 !isRemovingBackground
 
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -967,7 +977,7 @@ fun DetailScreen(
                                 }
                             val stickerBaseModifier =
                                 stickerPositionModifier
-                                    .size(120.dp)
+                                    .size(120.dp * stickerScale)
                                     .onSizeChanged { size ->
                                         stickerSize = size
                                     }
@@ -1003,46 +1013,72 @@ fun DetailScreen(
                                     stickerVisualModifier
                                         .pointerInput(
                                         stickerUri,
-                                        postcardPreviewSize,
-                                        stickerSize
+                                        postcardPreviewSize
                                     ) {
-                                        detectDragGestures(
-                                            onDrag = {
-                                                    change,
-                                                    dragAmount ->
+                                        detectTransformGestures {
+                                                centroid,
+                                                pan,
+                                                zoom,
+                                                _ ->
 
-                                                change.consume()
+                                            val newScale =
+                                                (stickerScale * zoom)
+                                                    .coerceIn(
+                                                        0.5f,
+                                                        2.5f
+                                                    )
+                                            val actualZoom =
+                                                newScale / stickerScale
 
-                                                if (
-                                                    postcardPreviewSize ==
-                                                    IntSize.Zero ||
-                                                    stickerSize ==
-                                                    IntSize.Zero
-                                                ) {
-                                                    return@detectDragGestures
-                                                }
+                                            if (
+                                                postcardPreviewSize ==
+                                                IntSize.Zero
+                                            ) {
+                                                stickerScale = newScale
+                                                return@detectTransformGestures
+                                            }
 
-                                                val startOffset =
-                                                    stickerOffset
-                                                        ?: centeredStickerOffset(
-                                                            postcardSize =
-                                                                postcardPreviewSize,
-                                                            stickerSize =
-                                                                stickerSize
-                                                        )
-
-                                                stickerOffset =
-                                                    clampStickerOffset(
-                                                        offset =
-                                                            startOffset +
-                                                                    dragAmount,
+                                            val oldOffset =
+                                                stickerOffset
+                                                    ?: centeredStickerOffset(
                                                         postcardSize =
                                                             postcardPreviewSize,
                                                         stickerSize =
                                                             stickerSize
                                                     )
-                                            }
-                                        )
+
+                                            // 핀치 중심점 고정:
+                                            // centroid 아래의 이미지 지점이
+                                            // 확대 후에도 같은 화면 위치 유지
+                                            val correctedOffset =
+                                                oldOffset +
+                                                        centroid *
+                                                        (1f - actualZoom)
+
+                                            val newOffset =
+                                                correctedOffset + pan
+
+                                            // baseStickerPx로 frame-lag 없이
+                                            // 정확한 새 크기로 경계 계산
+                                            val newSizePx =
+                                                (baseStickerPx * newScale)
+                                                    .roundToInt()
+                                            val newEffectiveSize =
+                                                IntSize(
+                                                    newSizePx,
+                                                    newSizePx
+                                                )
+
+                                            stickerScale = newScale
+                                            stickerOffset =
+                                                clampStickerOffset(
+                                                    offset = newOffset,
+                                                    postcardSize =
+                                                        postcardPreviewSize,
+                                                    stickerSize =
+                                                        newEffectiveSize
+                                                )
+                                        }
                                     }
                             )
                         }
@@ -1279,6 +1315,7 @@ fun DetailScreen(
                                         }
 
                                         stickerOffset = null
+                                        stickerScale = 1f
 
                                         originalStickerUri = uri
                                         displayedStickerUri = uri
