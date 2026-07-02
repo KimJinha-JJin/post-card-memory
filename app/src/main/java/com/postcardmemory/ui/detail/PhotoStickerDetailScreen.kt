@@ -6,22 +6,24 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,19 +33,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.BrutalDeepViolet
+import com.postcardmemory.ui.theme.BrutalLavender
+import com.postcardmemory.ui.theme.BrutalViolet
 import com.postcardmemory.ui.theme.BrutalWhite
 
 @Composable
-fun PhotoStickerDetailScreen(
-    postcardId: Long,
-    onNavigateBack: () -> Unit
+fun PhotoStickerPickerPanel(
+    enabled: Boolean,
+    modifier: Modifier = Modifier
 ) {
     var selectedStickerUri by remember {
         mutableStateOf<Uri?>(null)
@@ -58,132 +65,206 @@ fun PhotoStickerDetailScreen(
             }
         }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
+    Column(
+        modifier = modifier
+            .background(
+                color = BrutalLavender,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .border(
+                width = 2.dp,
+                color = BrutalBlack,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .padding(16.dp)
     ) {
-        DetailScreen(
-            postcardId = postcardId,
-            onNavigateBack = onNavigateBack
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "스티커 사진",
+                color = BrutalDeepViolet,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            Text(
+                text = "2 / 2",
+                color = BrutalDeepViolet,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier
+                    .background(
+                        color = BrutalWhite,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .border(
+                        width = 2.dp,
+                        color = BrutalBlack,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .padding(
+                        horizontal = 9.dp,
+                        vertical = 5.dp
+                    )
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(4.dp)
         )
 
-        Column(
+        Text(
+            text = "갤러리 사진을 골라서 포스트카드 스티커로 준비해.",
+            color = BrutalDeepViolet,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
+
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    end = 20.dp,
-                    bottom = 28.dp
-                ),
-            horizontalAlignment = Alignment.End
-        ) {
-            selectedStickerUri?.let { uri ->
-                Box(
-                    modifier = Modifier
-                        .size(
-                            width = 132.dp,
-                            height = 154.dp
-                        )
-                        .background(
-                            color = BrutalWhite,
-                            shape = RoundedCornerShape(18.dp)
-                        )
-                        .border(
-                            width = 3.dp,
-                            color = BrutalBlack,
-                            shape = RoundedCornerShape(18.dp)
-                        )
-                        .padding(8.dp)
-                ) {
-                    AsyncImage(
-                        model = uri,
-                        contentDescription = "선택한 스티커 사진",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(12.dp))
-                    )
-
-                    IconButton(
-                        onClick = {
-                            selectedStickerUri = null
-                        },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(34.dp)
-                            .background(
-                                color = BrutalCoral,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "선택한 사진 제거",
-                            tint = BrutalWhite
-                        )
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(10.dp)
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .background(
+                    color = BrutalWhite,
+                    shape = RoundedCornerShape(14.dp)
                 )
-
-                Text(
-                    text = "사진 선택 완료",
-                    color = BrutalDeepViolet,
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .background(
-                            color = BrutalWhite,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = BrutalBlack,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .padding(
-                            horizontal = 10.dp,
-                            vertical = 6.dp
-                        )
-                )
-
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
-            }
-
-            Button(
-                onClick = {
-                    photoPicker.launch(
-                        PickVisualMediaRequest(
-                            ActivityResultContracts
-                                .PickVisualMedia
-                                .ImageOnly
-                        )
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BrutalDeepViolet,
-                    contentColor = BrutalWhite
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.border(
+                .border(
                     width = 2.dp,
                     color = BrutalBlack,
                     shape = RoundedCornerShape(14.dp)
                 )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PhotoLibrary,
-                    contentDescription = null
-                )
+                .padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val selectedUri = selectedStickerUri
 
-                Text(
-                    text = "  스티커 사진",
-                    fontSize = 14.sp
+            if (selectedUri == null) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoLibrary,
+                        contentDescription = null,
+                        tint = BrutalViolet
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Text(
+                        text = "아직 고른 사진이 없어",
+                        color = BrutalDeepViolet,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                AsyncImage(
+                    model = selectedUri,
+                    contentDescription = "선택한 스티커 사진",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(10.dp))
                 )
             }
         }
+
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
+
+        Button(
+            onClick = {
+                photoPicker.launch(
+                    PickVisualMediaRequest(
+                        ActivityResultContracts
+                            .PickVisualMedia
+                            .ImageOnly
+                    )
+                )
+            },
+            enabled = enabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = BrutalViolet,
+                contentColor = BrutalWhite
+            ),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 2.dp,
+                    color = BrutalBlack,
+                    shape = RoundedCornerShape(14.dp)
+                )
+        ) {
+            Icon(
+                imageVector = Icons.Default.PhotoLibrary,
+                contentDescription = null
+            )
+
+            Text(
+                text = "  갤러리에서 사진 선택",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+
+        if (selectedStickerUri != null) {
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+            OutlinedButton(
+                onClick = {
+                    selectedStickerUri = null
+                },
+                enabled = enabled,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = BrutalCoral
+                )
+
+                Text(
+                    text = "  선택한 사진 지우기",
+                    color = BrutalCoral,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+
+        Spacer(
+            modifier = Modifier.height(10.dp)
+        )
+
+        Text(
+            text = "누끼와 이동·크기 조절은 다음 단계에서 이 칸에 이어 붙일 거야.",
+            color = Color(0xFF554B68),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = BrutalWhite,
+                    shape = RoundedCornerShape(10.dp)
+                )
+                .padding(
+                    horizontal = 10.dp,
+                    vertical = 8.dp
+                )
+        )
     }
 }
