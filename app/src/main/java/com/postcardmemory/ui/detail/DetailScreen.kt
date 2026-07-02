@@ -10,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,16 +53,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import kotlin.math.roundToInt
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
 import com.postcardmemory.ui.components.PostcardBackgroundPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
@@ -86,6 +93,43 @@ private enum class DetailDrawerSection {
     TEXT,
     DATE
 }
+
+private fun clampStickerOffset(
+    offset: Offset,
+    postcardSize: IntSize,
+    stickerSize: IntSize
+): Offset {
+    val maxX =
+        (postcardSize.width - stickerSize.width)
+            .coerceAtLeast(0)
+            .toFloat()
+    val maxY =
+        (postcardSize.height - stickerSize.height)
+            .coerceAtLeast(0)
+            .toFloat()
+
+    return Offset(
+        x = offset.x.coerceIn(
+            minimumValue = 0f,
+            maximumValue = maxX
+        ),
+        y = offset.y.coerceIn(
+            minimumValue = 0f,
+            maximumValue = maxY
+        )
+    )
+}
+
+private fun centeredStickerOffset(
+    postcardSize: IntSize,
+    stickerSize: IntSize
+): Offset =
+    Offset(
+        x = ((postcardSize.width - stickerSize.width) / 2f)
+            .coerceAtLeast(0f),
+        y = ((postcardSize.height - stickerSize.height) / 2f)
+            .coerceAtLeast(0f)
+    )
 
 @Composable
 private fun DetailDrawer(
@@ -555,6 +599,18 @@ fun DetailScreen(
         mutableStateOf<Uri?>(null)
     }
 
+    var postcardPreviewSize by remember {
+        mutableStateOf(IntSize.Zero)
+    }
+
+    var stickerSize by remember {
+        mutableStateOf(IntSize.Zero)
+    }
+
+    var stickerOffset by remember {
+        mutableStateOf<Offset?>(null)
+    }
+
     var openedDrawerName by rememberSaveable {
         mutableStateOf(
             DetailDrawerSection.LAYOUT.name
@@ -638,6 +694,42 @@ fun DetailScreen(
         }
     }
 
+    LaunchedEffect(
+        selectedStickerUri,
+        postcardPreviewSize,
+        stickerSize
+    ) {
+        val selectedUri = selectedStickerUri
+
+        if (selectedUri == null) {
+            stickerOffset = null
+            return@LaunchedEffect
+        }
+
+        if (
+            postcardPreviewSize == IntSize.Zero ||
+            stickerSize == IntSize.Zero
+        ) {
+            return@LaunchedEffect
+        }
+
+        val currentOffset = stickerOffset
+
+        stickerOffset =
+            if (currentOffset == null) {
+                centeredStickerOffset(
+                    postcardSize = postcardPreviewSize,
+                    stickerSize = stickerSize
+                )
+            } else {
+                clampStickerOffset(
+                    offset = currentOffset,
+                    postcardSize = postcardPreviewSize,
+                    stickerSize = stickerSize
+                )
+            }
+    }
+
     val controlsEnabled =
         exportState !is ExportState.Exporting &&
                 backgroundUpdateState !is BackgroundUpdateState.Saving &&
@@ -696,6 +788,9 @@ fun DetailScreen(
                                 color = BrutalBlack,
                                 shape = RectangleShape
                             )
+                            .onSizeChanged { size ->
+                                postcardPreviewSize = size
+                            }
                     ) {
                         PostcardPatternPreview(
                             pattern = selectedPattern,
@@ -716,14 +811,83 @@ fun DetailScreen(
                         )
 
                         selectedStickerUri?.let { stickerUri ->
+                            val currentStickerOffset =
+                                stickerOffset
+                            val stickerPositionModifier =
+                                if (currentStickerOffset == null) {
+                                    Modifier.align(
+                                        Alignment.Center
+                                    )
+                                } else {
+                                    Modifier
+                                        .align(
+                                            Alignment.TopStart
+                                        )
+                                        .offset {
+                                            IntOffset(
+                                                x =
+                                                    currentStickerOffset.x
+                                                        .roundToInt(),
+                                                y =
+                                                    currentStickerOffset.y
+                                                        .roundToInt()
+                                            )
+                                        }
+                                }
+
                             AsyncImage(
                                 model = stickerUri,
                                 contentDescription =
                                     "포스트카드 스티커 사진",
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .align(Alignment.Center)
+                                modifier = stickerPositionModifier
                                     .size(120.dp)
+                                    .onSizeChanged { size ->
+                                        stickerSize = size
+                                    }
+                                    .pointerInput(
+                                        stickerUri,
+                                        postcardPreviewSize,
+                                        stickerSize
+                                    ) {
+                                        detectDragGestures(
+                                            onDrag = {
+                                                    change,
+                                                    dragAmount ->
+
+                                                change.consume()
+
+                                                if (
+                                                    postcardPreviewSize ==
+                                                    IntSize.Zero ||
+                                                    stickerSize ==
+                                                    IntSize.Zero
+                                                ) {
+                                                    return@detectDragGestures
+                                                }
+
+                                                val startOffset =
+                                                    stickerOffset
+                                                        ?: centeredStickerOffset(
+                                                            postcardSize =
+                                                                postcardPreviewSize,
+                                                            stickerSize =
+                                                                stickerSize
+                                                        )
+
+                                                stickerOffset =
+                                                    clampStickerOffset(
+                                                        offset =
+                                                            startOffset +
+                                                                    dragAmount,
+                                                        postcardSize =
+                                                            postcardPreviewSize,
+                                                        stickerSize =
+                                                            stickerSize
+                                                    )
+                                            }
+                                        )
+                                    }
                                     .clip(
                                         RoundedCornerShape(16.dp)
                                     )
@@ -955,6 +1119,7 @@ fun DetailScreen(
                                     selectedStickerUri =
                                         selectedStickerUri,
                                     onSelectedStickerUriChange = { uri ->
+                                        stickerOffset = null
                                         selectedStickerUri = uri
                                     },
                                     enabled = controlsEnabled,
