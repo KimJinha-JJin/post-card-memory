@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -550,6 +553,9 @@ fun DetailScreen(
         )
     }
 
+    val customizationPagerState = rememberPagerState(
+        pageCount = { 2 }
+    )
     val selectedLayout =
         remember(postcard?.layoutStyle) {
             PostcardLayoutStyle.entries
@@ -707,6 +713,20 @@ fun DetailScreen(
                     modifier = Modifier.height(28.dp)
                 )
 
+                HorizontalPager(
+                    state = customizationPagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    verticalAlignment = Alignment.Top
+                ) { page ->
+                    when (page) {
+                        0 -> {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment =
+                                    Alignment.CenterHorizontally
+                            ) {
                 DetailDrawer(
                     title = "레이아웃 꾸미기",
                     summary = selectedLayout.label,
@@ -892,6 +912,67 @@ fun DetailScreen(
                     )
                 }
 
+                            }
+                        }
+
+                        else -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                PhotoStickerPickerPanel(
+                                    enabled = controlsEnabled,
+                                    modifier =
+                                        Modifier.fillMaxWidth(0.92f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                Row(
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp),
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
+                    repeat(2) { pageIndex ->
+                        Box(
+                            modifier = Modifier
+                                .size(
+                                    if (
+                                        customizationPagerState.currentPage ==
+                                        pageIndex
+                                    ) {
+                                        11.dp
+                                    } else {
+                                        8.dp
+                                    }
+                                )
+                                .background(
+                                    color =
+                                        if (
+                                            customizationPagerState.currentPage ==
+                                            pageIndex
+                                        ) {
+                                            BrutalDeepViolet
+                                        } else {
+                                            BrutalLavender
+                                        },
+                                    shape = CircleShape
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = BrutalBlack,
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+                }
                 if (
                     dateFormatUpdateState
                             is DateFormatUpdateState.Saving
