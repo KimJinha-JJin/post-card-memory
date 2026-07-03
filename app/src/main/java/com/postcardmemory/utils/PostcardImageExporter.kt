@@ -118,11 +118,21 @@ object PostcardImageExporter {
                 postcard = postcard
             )
 
-            when (
+            val layoutStyle =
                 resolveLayoutStyle(
                     postcard.layoutStyle
                 )
-            ) {
+            var datePanel =
+                RectF(
+                    730f,
+                    1870f,
+                    1318f,
+                    1960f
+                )
+            var compactDate =
+                false
+
+            when (layoutStyle) {
                 ExportLayoutStyle.STANDARD -> {
                     drawStampPhoto(
                         canvas = canvas,
@@ -141,23 +151,19 @@ object PostcardImageExporter {
                         messageFont = postcard.messageFont,
                         messagePanel = RectF(
                             220f,
-                            1535f,
+                            1505f,
                             1828f,
-                            1815f
+                            1748f
                         )
                     )
 
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            730f,
-                            1870f,
-                            1318f,
-                            1960f
-                        )
+                    datePanel = RectF(
+                        544f,
+                        1846f,
+                        1504f,
+                        1932f
                     )
+                    compactDate = false
                 }
 
                 ExportLayoutStyle.PHOTO_FOCUS -> {
@@ -178,25 +184,20 @@ object PostcardImageExporter {
                         messageFont = postcard.messageFont,
                         messagePanel = RectF(
                             250f,
-                            1685f,
+                            1670f,
                             1798f,
-                            1880f
+                            1838f
                         ),
                         compact = true
                     )
 
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            760f,
-                            1910f,
-                            1288f,
-                            1984f
-                        ),
-                        compact = true
+                    datePanel = RectF(
+                        574f,
+                        1900f,
+                        1474f,
+                        1972f
                     )
+                    compactDate = true
                 }
 
                 ExportLayoutStyle.AIRY -> {
@@ -223,17 +224,13 @@ object PostcardImageExporter {
                         )
                     )
 
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            730f,
-                            1800f,
-                            1318f,
-                            1890f
-                        )
+                    datePanel = RectF(
+                        544f,
+                        1810f,
+                        1504f,
+                        1896f
                     )
+                    compactDate = false
                 }
 
                 ExportLayoutStyle.MAGAZINE -> {
@@ -261,17 +258,13 @@ object PostcardImageExporter {
                         darkOverlay = true
                     )
 
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            730f,
-                            1840f,
-                            1318f,
-                            1930f
-                        )
+                    datePanel = RectF(
+                        544f,
+                        1846f,
+                        1504f,
+                        1932f
                     )
+                    compactDate = false
                 }
             }
 
@@ -282,6 +275,14 @@ object PostcardImageExporter {
                     stickerOverlay = overlay
                 )
             }
+
+            drawDate(
+                canvas = canvas,
+                capturedAt = postcard.capturedAt,
+                dateFormat = postcard.dateFormat,
+                datePanel = datePanel,
+                compact = compactDate
+            )
 
             return outputBitmap
         } finally {
@@ -886,26 +887,26 @@ object PostcardImageExporter {
             when {
                 compact &&
                         normalizedMessage.length <= 20 ->
-                    58f
+                    50f
 
                 compact &&
                         normalizedMessage.length <= 45 ->
-                    50f
+                    46f
 
                 compact ->
-                    43f
+                    40f
 
                 normalizedMessage.length <= 20 ->
-                    72f
-
-                normalizedMessage.length <= 45 ->
                     62f
 
+                normalizedMessage.length <= 45 ->
+                    56f
+
                 normalizedMessage.length <= 75 ->
-                    54f
+                    50f
 
                 else ->
-                    47f
+                    44f
             }
 
         val textPaint =
@@ -962,9 +963,9 @@ object PostcardImageExporter {
                 .setIncludePad(false)
                 .setLineSpacing(
                     if (compact) {
-                        8f
+                        7f
                     } else {
-                        12f
+                        10f
                     },
                     1.08f
                 )
@@ -1069,35 +1070,6 @@ object PostcardImageExporter {
                 dateFormat = dateFormat
             )
 
-        val panelPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color =
-                    Color.argb(
-                        205,
-                        255,
-                        252,
-                        247
-                    )
-
-                style =
-                    Paint.Style.FILL
-            }
-
-        canvas.drawRoundRect(
-            datePanel,
-            if (compact) {
-                22f
-            } else {
-                28f
-            },
-            if (compact) {
-                22f
-            } else {
-                28f
-            },
-            panelPaint
-        )
-
         val datePaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color =
@@ -1109,9 +1081,9 @@ object PostcardImageExporter {
 
                 textSize =
                     if (compact) {
-                        32f
+                        30f
                     } else {
-                        38f
+                        34f
                     }
 
                 textAlign = Paint.Align.CENTER
@@ -1359,26 +1331,32 @@ object PostcardImageExporter {
                         1f,
                         OUTPUT_SIZE.toFloat()
                     )
-            val availableX =
-                (OUTPUT_SIZE - stickerSide)
-                    .coerceAtLeast(0f)
-            val availableY =
-                (OUTPUT_SIZE - stickerSide)
-                    .coerceAtLeast(0f)
             val left =
                 stickerOverlay.normalizedX
                     .coerceIn(0f, 1f) *
-                        availableX
+                        OUTPUT_SIZE
             val top =
                 stickerOverlay.normalizedY
                     .coerceIn(0f, 1f) *
-                        availableY
+                        OUTPUT_SIZE
             val stickerBounds =
                 RectF(
-                    left,
-                    top,
-                    left + stickerSide,
-                    top + stickerSide
+                    left.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ),
+                    top.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ),
+                    left.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ) + stickerSide,
+                    top.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ) + stickerSide
                 )
 
             if (

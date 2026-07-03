@@ -16,9 +16,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -67,7 +69,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -172,33 +176,18 @@ private fun createStickerOverlayForExport(
             postcardSize = postcardSize,
             stickerSize = stickerSize
         )
-    val availableX =
-        (postcardSize.width - stickerSize.width)
-            .coerceAtLeast(0)
-            .toFloat()
-    val availableY =
-        (postcardSize.height - stickerSize.height)
-            .coerceAtLeast(0)
-            .toFloat()
-
     return PostcardImageExporter.StickerOverlay(
         uri = selectedUri,
         originalUri = originalStickerUri,
         isBackgroundRemoved = isBackgroundRemoved,
         normalizedX =
-            if (availableX == 0f) {
-                0.5f
-            } else {
-                (resolvedOffset.x / availableX)
-                    .coerceIn(0f, 1f)
-            },
+            (resolvedOffset.x /
+                    postcardSize.width.toFloat())
+                .coerceIn(0f, 1f),
         normalizedY =
-            if (availableY == 0f) {
-                0.5f
-            } else {
-                (resolvedOffset.y / availableY)
-                    .coerceIn(0f, 1f)
-            },
+            (resolvedOffset.y /
+                    postcardSize.height.toFloat())
+                .coerceIn(0f, 1f),
         sizeRatio =
             stickerSize.width.toFloat() /
                     postcardSize.width.toFloat()
@@ -364,154 +353,199 @@ private fun PostcardPreviewContent(
     selectedFont: PostcardTextFont,
     selectedLayout: PostcardLayoutStyle
 ) {
-    when (selectedLayout) {
-        PostcardLayoutStyle.STANDARD -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = 20.dp,
-                        vertical = 24.dp
-                    ),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        val side = maxWidth
+        val messageFontSize =
+            ((side.value * 62f / 2048f)
+                .coerceIn(10.5f, 14f)).sp
+        val messageLineHeight =
+            ((side.value * 74f / 2048f)
+                .coerceIn(14f, 19f)).sp
+        val compactMessageFontSize =
+            ((side.value * 50f / 2048f)
+                .coerceIn(10f, 13f)).sp
+        val compactMessageLineHeight =
+            ((side.value * 60f / 2048f)
+                .coerceIn(13.5f, 17f)).sp
+        val messageHorizontalPadding =
+            (side * (65f / 2048f))
+                .coerceIn(8.dp, 12.dp)
+        val messageVerticalPadding =
+            (side * (38f / 2048f))
+                .coerceIn(6.dp, 10.dp)
+        val dateFontSize =
+            ((side.value * 34f / 2048f)
+                .coerceIn(9.5f, 12f)).sp
+        val compactDateFontSize =
+            ((side.value * 30f / 2048f)
+                .coerceIn(9f, 11f)).sp
+        fun Modifier.exportBounds(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float
+        ): Modifier =
+            this
+                .align(Alignment.TopStart)
+                .offset(
+                    x = side * (left / 2048f),
+                    y = side * (top / 2048f)
+                )
+                .fillMaxWidth(
+                    (right - left) / 2048f
+                )
+                .height(
+                    side * ((bottom - top) / 2048f)
+                )
+
+        when (selectedLayout) {
+            PostcardLayoutStyle.STANDARD -> {
                 StampPhoto(
                     imagePath = imagePath,
                     contentDescription =
                         contentDescription,
                     modifier =
-                        Modifier.fillMaxWidth(0.78f),
+                        Modifier.exportBounds(
+                            left = 394f,
+                            top = 180f,
+                            right = 1654f,
+                            bottom = 1440f
+                        ),
                     outlineColor = Color.White,
                     outlineWidth = 3f
-                )
-
-                Spacer(
-                    modifier = Modifier.height(20.dp)
                 )
 
                 PostcardMessageCard(
                     message = message,
                     selectedFont = selectedFont,
-                    widthFraction = 1f
+                    widthFraction = 1f,
+                    modifier = Modifier.exportBounds(
+                        left = 220f,
+                        top = 1505f,
+                        right = 1828f,
+                        bottom = 1748f
+                    ),
+                    fontSize = messageFontSize,
+                    lineHeight = messageLineHeight,
+                    horizontalPadding = messageHorizontalPadding,
+                    verticalPadding = messageVerticalPadding,
+                    maxLines = 4
                 )
-
-                if (message.isNotBlank()) {
-                    Spacer(
-                        modifier =
-                            Modifier.height(12.dp)
-                    )
-                }
 
                 PostcardDateLabel(
-                    dateText = dateText
+                    dateText = dateText,
+                    modifier = Modifier.exportBounds(
+                        left = 544f,
+                        top = 1846f,
+                        right = 1504f,
+                        bottom = 1932f
+                    ),
+                    fontSize = dateFontSize
                 )
             }
-        }
 
-        PostcardLayoutStyle.PHOTO_FOCUS -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = 14.dp,
-                        vertical = 18.dp
-                    ),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
+            PostcardLayoutStyle.PHOTO_FOCUS -> {
                 StampPhoto(
                     imagePath = imagePath,
                     contentDescription =
                         contentDescription,
                     modifier =
-                        Modifier.fillMaxWidth(0.94f),
+                        Modifier.exportBounds(
+                            left = 264f,
+                            top = 110f,
+                            right = 1784f,
+                            bottom = 1630f
+                        ),
                     outlineColor = Color.White,
                     outlineWidth = 3f
-                )
-
-                Spacer(
-                    modifier = Modifier.height(14.dp)
                 )
 
                 PostcardMessageCard(
                     message = message,
                     selectedFont = selectedFont,
-                    widthFraction = 0.94f,
-                    compact = true
+                    widthFraction = 1f,
+                    compact = true,
+                    modifier = Modifier.exportBounds(
+                        left = 250f,
+                        top = 1670f,
+                        right = 1798f,
+                        bottom = 1838f
+                    ),
+                    fontSize = compactMessageFontSize,
+                    lineHeight = compactMessageLineHeight,
+                    horizontalPadding = messageHorizontalPadding,
+                    verticalPadding = messageVerticalPadding,
+                    maxLines = 3
                 )
-
-                if (message.isNotBlank()) {
-                    Spacer(
-                        modifier =
-                            Modifier.height(10.dp)
-                    )
-                }
 
                 PostcardDateLabel(
-                    dateText = dateText
+                    dateText = dateText,
+                    modifier = Modifier.exportBounds(
+                        left = 574f,
+                        top = 1900f,
+                        right = 1474f,
+                        bottom = 1972f
+                    ),
+                    fontSize = compactDateFontSize
                 )
             }
-        }
 
-        PostcardLayoutStyle.AIRY -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = 28.dp,
-                        vertical = 34.dp
-                    ),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
+            PostcardLayoutStyle.AIRY -> {
                 StampPhoto(
                     imagePath = imagePath,
                     contentDescription =
                         contentDescription,
                     modifier =
-                        Modifier.fillMaxWidth(0.62f),
+                        Modifier.exportBounds(
+                            left = 534f,
+                            top = 250f,
+                            right = 1514f,
+                            bottom = 1230f
+                        ),
                     outlineColor = Color.White,
                     outlineWidth = 3f
-                )
-
-                Spacer(
-                    modifier = Modifier.height(30.dp)
                 )
 
                 PostcardMessageCard(
                     message = message,
                     selectedFont = selectedFont,
-                    widthFraction = 0.84f
+                    widthFraction = 1f,
+                    modifier = Modifier.exportBounds(
+                        left = 320f,
+                        top = 1390f,
+                        right = 1728f,
+                        bottom = 1666f
+                    ),
+                    fontSize = messageFontSize,
+                    lineHeight = messageLineHeight,
+                    horizontalPadding = messageHorizontalPadding,
+                    verticalPadding = messageVerticalPadding,
+                    maxLines = 4
                 )
-
-                if (message.isNotBlank()) {
-                    Spacer(
-                        modifier =
-                            Modifier.height(20.dp)
-                    )
-                }
 
                 PostcardDateLabel(
-                    dateText = dateText
+                    dateText = dateText,
+                    modifier = Modifier.exportBounds(
+                        left = 544f,
+                        top = 1810f,
+                        right = 1504f,
+                        bottom = 1896f
+                    ),
+                    fontSize = dateFontSize
                 )
             }
-        }
 
-        PostcardLayoutStyle.MAGAZINE -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = 16.dp,
-                        vertical = 20.dp
-                    ),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
+            PostcardLayoutStyle.MAGAZINE -> {
                 Box(
                     modifier =
-                        Modifier.fillMaxWidth(0.92f)
+                        Modifier.exportBounds(
+                            left = 194f,
+                            top = 120f,
+                            right = 1854f,
+                            bottom = 1780f
+                        )
                 ) {
                     StampPhoto(
                         imagePath = imagePath,
@@ -565,12 +599,15 @@ private fun PostcardPreviewContent(
                     }
                 }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
                 PostcardDateLabel(
-                    dateText = dateText
+                    dateText = dateText,
+                    modifier = Modifier.exportBounds(
+                        left = 544f,
+                        top = 1846f,
+                        right = 1504f,
+                        bottom = 1932f
+                    ),
+                    fontSize = dateFontSize
                 )
             }
         }
@@ -582,14 +619,45 @@ private fun PostcardMessageCard(
     message: String,
     selectedFont: PostcardTextFont,
     widthFraction: Float,
-    compact: Boolean = false
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit =
+        if (compact) {
+            15.sp
+        } else {
+            17.sp
+        },
+    lineHeight: androidx.compose.ui.unit.TextUnit =
+        if (compact) {
+            21.sp
+        } else {
+            25.sp
+        },
+    horizontalPadding: Dp =
+        if (compact) {
+            14.dp
+        } else {
+            16.dp
+        },
+    verticalPadding: Dp =
+        if (compact) {
+            10.dp
+        } else {
+            14.dp
+        },
+    maxLines: Int =
+        if (compact) {
+            3
+        } else {
+            4
+        }
 ) {
     if (message.isBlank()) {
         return
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth(widthFraction)
             .background(
                 color =
@@ -602,18 +670,8 @@ private fun PostcardMessageCard(
                     )
             )
             .padding(
-                horizontal =
-                    if (compact) {
-                        14.dp
-                    } else {
-                        16.dp
-                    },
-                vertical =
-                    if (compact) {
-                        10.dp
-                    } else {
-                        14.dp
-                    }
+                horizontal = horizontalPadding,
+                vertical = verticalPadding
             ),
         contentAlignment =
             Alignment.Center
@@ -621,54 +679,43 @@ private fun PostcardMessageCard(
         Text(
             text = message,
             color = BrutalBlack,
-            fontSize =
-                if (compact) {
-                    15.sp
-                } else {
-                    17.sp
-                },
+            fontSize = fontSize,
             fontFamily =
                 selectedFont.fontFamily,
             fontWeight =
                 FontWeight.Normal,
             textAlign =
                 TextAlign.Center,
-            lineHeight =
-                if (compact) {
-                    21.sp
-                } else {
-                    25.sp
-                }
+            lineHeight = lineHeight,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
 @Composable
 private fun PostcardDateLabel(
-    dateText: String
+    dateText: String,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 12.sp
 ) {
-    Text(
-        text = dateText,
-        fontSize = 12.sp,
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Normal,
-        color = BrutalBlack,
-        modifier = Modifier
-            .background(
-                color =
-                    BrutalWhite.copy(
-                        alpha = 0.84f
-                    ),
-                shape =
-                    RoundedCornerShape(
-                        8.dp
-                    )
-            )
-            .padding(
-                horizontal = 10.dp,
-                vertical = 6.dp
-            )
-    )
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = dateText,
+            fontSize = fontSize,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Normal,
+            color = BrutalBlack,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
 
 @Composable
@@ -946,6 +993,7 @@ fun DetailScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .aspectRatio(1f)
                             .background(
                                 color = Color(
                                     pc.backgroundColorArgb
