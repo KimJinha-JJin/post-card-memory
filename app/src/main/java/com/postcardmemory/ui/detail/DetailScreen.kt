@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -390,13 +392,23 @@ private fun DetailDrawer(
 
 @Composable
 private fun StickerEditModeToolbar(
+    sticker: PhotoStickerItem,
     editMode: StickerEditMode,
     onModeSelected: (StickerEditMode) -> Unit,
+    isRemovingBackground: Boolean,
+    onToggleBackgroundRemoval: () -> Unit,
+    onToggleFlipHorizontal: () -> Unit,
+    onToggleFlipVertical: () -> Unit,
+    canMoveForward: Boolean,
+    canMoveBackward: Boolean,
+    onMoveForward: () -> Unit,
+    onMoveBackward: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
+            .horizontalScroll(rememberScrollState())
             .background(
                 color = BrutalLavender,
                 shape = RoundedCornerShape(14.dp)
@@ -415,8 +427,7 @@ private fun StickerEditModeToolbar(
             enabled = enabled,
             onClick = {
                 onModeSelected(StickerEditMode.Move)
-            },
-            modifier = Modifier.weight(1f)
+            }
         )
 
         StickerEditModeButton(
@@ -431,8 +442,7 @@ private fun StickerEditModeToolbar(
                         StickerEditMode.Scale
                     }
                 )
-            },
-            modifier = Modifier.weight(1f)
+            }
         )
 
         StickerEditModeButton(
@@ -447,8 +457,47 @@ private fun StickerEditModeToolbar(
                         StickerEditMode.Rotate
                     }
                 )
-            },
-            modifier = Modifier.weight(1f)
+            }
+        )
+
+        StickerEditModeButton(
+            label = "좌우대칭",
+            selected = sticker.flipHorizontal,
+            enabled = enabled,
+            onClick = onToggleFlipHorizontal
+        )
+
+        StickerEditModeButton(
+            label = "상하대칭",
+            selected = sticker.flipVertical,
+            enabled = enabled,
+            onClick = onToggleFlipVertical
+        )
+
+        StickerEditModeButton(
+            label =
+                when {
+                    isRemovingBackground -> "처리중..."
+                    sticker.isBackgroundRemoved -> "원본복원"
+                    else -> "배경제거"
+                },
+            selected = sticker.isBackgroundRemoved,
+            enabled = enabled && !isRemovingBackground,
+            onClick = onToggleBackgroundRemoval
+        )
+
+        StickerEditModeButton(
+            label = "뒤로",
+            selected = false,
+            enabled = enabled && canMoveBackward,
+            onClick = onMoveBackward
+        )
+
+        StickerEditModeButton(
+            label = "앞으로",
+            selected = false,
+            enabled = enabled && canMoveForward,
+            onClick = onMoveForward
         )
     }
 }
@@ -463,6 +512,7 @@ private fun StickerEditModeButton(
 ) {
     Box(
         modifier = modifier
+            .alpha(if (enabled) 1f else 0.4f)
             .background(
                 color = if (selected) BrutalViolet else BrutalWhite,
                 shape = RoundedCornerShape(10.dp)
@@ -476,7 +526,7 @@ private fun StickerEditModeButton(
                 enabled = enabled,
                 onClick = onClick
             )
-            .padding(vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -1527,19 +1577,109 @@ fun DetailScreen(
                     }
                 }
 
-                if (selectedStickerId != null) {
+                val selectedSticker =
+                    photoStickers.find {
+                        it.id == selectedStickerId
+                    }
+                val selectedStickerIndex =
+                    photoStickers.indexOfFirst {
+                        it.id == selectedStickerId
+                    }
+                val canMoveSelectedStickerForward =
+                    selectedStickerIndex != -1 &&
+                            selectedStickerIndex < photoStickers.lastIndex
+                val canMoveSelectedStickerBackward =
+                    selectedStickerIndex > 0
+
+                if (selectedSticker != null) {
                     Spacer(
                         modifier = Modifier.height(12.dp)
                     )
 
                     StickerEditModeToolbar(
+                        sticker = selectedSticker,
                         editMode = resolvedStickerEditMode,
                         onModeSelected = { mode ->
                             stickerEditMode = mode
                             stickerEditModeOwnerId = selectedStickerId
                         },
+                        isRemovingBackground = isRemovingBackground,
+                        onToggleBackgroundRemoval = {
+                            if (selectedSticker.isBackgroundRemoved) {
+                                viewModel.setPhotoStickers(
+                                    photoStickers.map {
+                                        if (it.id == selectedSticker.id) {
+                                            it.copy(
+                                                displayedUri = it.originalUri,
+                                                isBackgroundRemoved = false
+                                            )
+                                        } else {
+                                            it
+                                        }
+                                    }
+                                )
+                                backgroundRemovalError = null
+                            } else {
+                                backgroundRemovalError = null
+                                val removedBgUri =
+                                    selectedSticker.removedBgUri
+                                if (removedBgUri != null) {
+                                    viewModel.setPhotoStickers(
+                                        photoStickers.map {
+                                            if (it.id == selectedSticker.id) {
+                                                it.copy(
+                                                    displayedUri = removedBgUri,
+                                                    isBackgroundRemoved = true
+                                                )
+                                            } else {
+                                                it
+                                            }
+                                        }
+                                    )
+                                } else {
+                                    viewModel.removeStickerBackground(
+                                        stickerId = selectedSticker.id,
+                                        sourceUri = selectedSticker.originalUri
+                                    )
+                                }
+                            }
+                        },
+                        onToggleFlipHorizontal = {
+                            viewModel.setPhotoStickers(
+                                photoStickers.map {
+                                    if (it.id == selectedSticker.id) {
+                                        it.copy(
+                                            flipHorizontal = !it.flipHorizontal
+                                        )
+                                    } else {
+                                        it
+                                    }
+                                }
+                            )
+                        },
+                        onToggleFlipVertical = {
+                            viewModel.setPhotoStickers(
+                                photoStickers.map {
+                                    if (it.id == selectedSticker.id) {
+                                        it.copy(
+                                            flipVertical = !it.flipVertical
+                                        )
+                                    } else {
+                                        it
+                                    }
+                                }
+                            )
+                        },
+                        canMoveForward = canMoveSelectedStickerForward,
+                        canMoveBackward = canMoveSelectedStickerBackward,
+                        onMoveForward = {
+                            viewModel.moveStickerForward(selectedSticker.id)
+                        },
+                        onMoveBackward = {
+                            viewModel.moveStickerBackward(selectedSticker.id)
+                        },
                         enabled = controlsEnabled,
-                        modifier = Modifier.fillMaxWidth(0.88f)
+                        modifier = Modifier.fillMaxWidth(0.92f)
                     )
                 }
 
@@ -1757,7 +1897,6 @@ fun DetailScreen(
                                 PhotoStickerPickerPanel(
                                     photoStickers = photoStickers,
                                     selectedStickerId = selectedStickerId,
-                                    isRemovingBackground = isRemovingBackground,
                                     backgroundRemovalError = backgroundRemovalError,
                                     onSelectSticker = { id ->
                                         viewModel.setSelectedStickerId(id)
@@ -1782,46 +1921,6 @@ fun DetailScreen(
                                         backgroundRemovalError = null
                                         viewModel.resetStickerBackgroundRemovalState()
                                     },
-                                    onRemoveBackground = { id ->
-                                        val sticker = photoStickers.find { it.id == id }
-                                        if (sticker != null) {
-                                            backgroundRemovalError = null
-                                            if (sticker.removedBgUri != null) {
-                                                viewModel.setPhotoStickers(
-                                                    photoStickers.map {
-                                                        if (it.id == id) {
-                                                            it.copy(
-                                                                displayedUri = sticker.removedBgUri,
-                                                                isBackgroundRemoved = true
-                                                            )
-                                                        } else {
-                                                            it
-                                                        }
-                                                    }
-                                                )
-                                            } else {
-                                                viewModel.removeStickerBackground(
-                                                    stickerId = id,
-                                                    sourceUri = sticker.originalUri
-                                                )
-                                            }
-                                        }
-                                    },
-                                    onRestoreOriginal = { id ->
-                                        viewModel.setPhotoStickers(
-                                            photoStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(
-                                                        displayedUri = it.originalUri,
-                                                        isBackgroundRemoved = false
-                                                    )
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                        backgroundRemovalError = null
-                                    },
                                     onDeleteSticker = { id ->
                                         val sticker = photoStickers.find { it.id == id }
                                         sticker?.removedBgUri?.let { uri ->
@@ -1835,32 +1934,6 @@ fun DetailScreen(
                                                 remaining.lastOrNull()?.id
                                             )
                                         }
-                                    },
-                                    onToggleFlipHorizontal = { id ->
-                                        viewModel.setPhotoStickers(
-                                            photoStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(
-                                                        flipHorizontal = !it.flipHorizontal
-                                                    )
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onToggleFlipVertical = { id ->
-                                        viewModel.setPhotoStickers(
-                                            photoStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(
-                                                        flipVertical = !it.flipVertical
-                                                    )
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
                                     },
                                     onDuplicateSticker = { id ->
                                         viewModel.duplicateSticker(id)

@@ -1041,29 +1041,53 @@ class DetailViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
-            val copiedUri =
-                withContext(Dispatchers.IO) {
-                    copyStickerBackgroundToCache(
-                        sourceUri = original.removedBgUri!!,
-                        newId = newId
-                    )
-                }
+        val sourceUri = original.removedBgUri!!
 
+        viewModelScope.launch {
             val duplicate =
-                original.copy(
-                    id = newId,
-                    offset = duplicateOffset,
-                    removedBgUri =
-                        copiedUri ?: original.removedBgUri,
-                    displayedUri =
-                        copiedUri ?: original.displayedUri
-                )
+                withContext(Dispatchers.IO) {
+                    val copiedUri =
+                        copyStickerBackgroundToCache(
+                            sourceUri = sourceUri,
+                            newId = newId
+                        )
+
+                    val fallbackUri =
+                        copiedUri ?: sourceUri.takeIf {
+                            isFileUriReadable(it)
+                        }
+
+                    if (fallbackUri != null) {
+                        original.copy(
+                            id = newId,
+                            offset = duplicateOffset,
+                            removedBgUri = fallbackUri,
+                            displayedUri = fallbackUri
+                        )
+                    } else {
+                        // 원본 누끼 파일이 복사 도중 사라진 경우 원본 사진으로 대체
+                        original.copy(
+                            id = newId,
+                            offset = duplicateOffset,
+                            removedBgUri = null,
+                            displayedUri = original.originalUri,
+                            isBackgroundRemoved = false
+                        )
+                    }
+                }
 
             _photoStickers.value =
                 _photoStickers.value + duplicate
             _selectedStickerId.value = newId
         }
+    }
+
+    private fun isFileUriReadable(
+        uri: Uri
+    ): Boolean {
+        val path = uri.path ?: return false
+        val file = File(path)
+        return file.exists() && file.canRead()
     }
 
     private fun copyStickerBackgroundToCache(
@@ -1109,6 +1133,44 @@ class DetailViewModel @Inject constructor(
             )
             Uri.fromFile(destFile)
         }.getOrNull()
+    }
+
+    fun moveStickerForward(
+        stickerId: String
+    ) {
+        val stickers = _photoStickers.value
+        val index =
+            stickers.indexOfFirst { it.id == stickerId }
+
+        if (index == -1 || index == stickers.lastIndex) {
+            return
+        }
+
+        _photoStickers.value =
+            stickers.toMutableList().apply {
+                val temp = this[index]
+                this[index] = this[index + 1]
+                this[index + 1] = temp
+            }
+    }
+
+    fun moveStickerBackward(
+        stickerId: String
+    ) {
+        val stickers = _photoStickers.value
+        val index =
+            stickers.indexOfFirst { it.id == stickerId }
+
+        if (index <= 0) {
+            return
+        }
+
+        _photoStickers.value =
+            stickers.toMutableList().apply {
+                val temp = this[index]
+                this[index] = this[index - 1]
+                this[index - 1] = temp
+            }
     }
 
     fun exportPostcardToGallery(

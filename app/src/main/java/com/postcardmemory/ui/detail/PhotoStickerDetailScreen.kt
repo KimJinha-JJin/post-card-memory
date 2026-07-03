@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -57,16 +56,11 @@ import com.postcardmemory.ui.theme.BrutalWhite
 fun PhotoStickerPickerPanel(
     photoStickers: List<PhotoStickerItem>,
     selectedStickerId: String?,
-    isRemovingBackground: Boolean,
     backgroundRemovalError: String?,
     onSelectSticker: (String) -> Unit,
     onAddFromGallery: (Uri) -> Unit,
     onAddFromFile: (Uri) -> Unit,
-    onRemoveBackground: (String) -> Unit,
-    onRestoreOriginal: (String) -> Unit,
     onDeleteSticker: (String) -> Unit,
-    onToggleFlipHorizontal: (String) -> Unit,
-    onToggleFlipVertical: (String) -> Unit,
     onDuplicateSticker: (String) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
@@ -320,42 +314,13 @@ fun PhotoStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 배경 제거 / 원본 복원
-            OutlinedButton(
-                onClick = {
-                    if (selectedSticker.isBackgroundRemoved) {
-                        onRestoreOriginal(selectedSticker.id)
-                    } else {
-                        onRemoveBackground(selectedSticker.id)
-                    }
-                },
-                enabled = enabled && !isRemovingBackground,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (isRemovingBackground) {
-                    CircularProgressIndicator(
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "배경 제거 중...",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                } else {
-                    Text(
-                        text = if (selectedSticker.isBackgroundRemoved) {
-                            "원본으로 되돌리기"
-                        } else {
-                            "배경 제거"
-                        },
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
+            Text(
+                text = "이동·크기·회전·대칭·배경 제거·레이어 순서는 " +
+                        "위쪽 캔버스 바로 아래 도구막대에서 조절할 수 있어.",
+                color = BrutalDeepViolet,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
 
             backgroundRemovalError?.let { errorMessage ->
                 Spacer(modifier = Modifier.height(6.dp))
@@ -367,68 +332,7 @@ fun PhotoStickerPickerPanel(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        onToggleFlipHorizontal(selectedSticker.id)
-                    },
-                    enabled = enabled,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (selectedSticker.flipHorizontal) {
-                            BrutalViolet
-                        } else {
-                            Color.Transparent
-                        },
-                        contentColor = if (selectedSticker.flipHorizontal) {
-                            BrutalWhite
-                        } else {
-                            BrutalDeepViolet
-                        }
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "좌우 대칭",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        onToggleFlipVertical(selectedSticker.id)
-                    },
-                    enabled = enabled,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (selectedSticker.flipVertical) {
-                            BrutalViolet
-                        } else {
-                            Color.Transparent
-                        },
-                        contentColor = if (selectedSticker.flipVertical) {
-                            BrutalWhite
-                        } else {
-                            BrutalDeepViolet
-                        }
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "상하 대칭",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedButton(
                 onClick = { onDuplicateSticker(selectedSticker.id) },
