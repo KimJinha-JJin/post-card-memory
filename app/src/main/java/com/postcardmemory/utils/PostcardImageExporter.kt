@@ -56,7 +56,10 @@ object PostcardImageExporter {
         val normalizedY: Float,
         val sizeRatio: Float,
         val originalUri: Uri? = null,
-        val isBackgroundRemoved: Boolean = false
+        val isBackgroundRemoved: Boolean = false,
+        val rotationDegrees: Float = 0f,
+        val flipHorizontal: Boolean = false,
+        val flipVertical: Boolean = false
     )
 
     fun exportToGallery(
@@ -100,7 +103,9 @@ object PostcardImageExporter {
         }
 
         val sourceBitmap =
-            decodeBitmap(sourceFile)
+            PostcardRenderSpec.decodeSourceBitmap(
+                sourceFile
+            )
 
         try {
             val outputBitmap =
@@ -113,160 +118,20 @@ object PostcardImageExporter {
             val canvas =
                 Canvas(outputBitmap)
 
-            drawBackground(
+            PostcardRenderSpec.drawBaseContent(
                 canvas = canvas,
-                postcard = postcard
+                sourceBitmap = sourceBitmap,
+                backgroundColorArgb =
+                    postcard.backgroundColorArgb,
+                backgroundPattern =
+                    postcard.backgroundPattern,
+                message = postcard.message,
+                messageFont = postcard.messageFont,
+                layoutStyle = postcard.layoutStyle,
+                capturedAt = postcard.capturedAt,
+                dateFormat = postcard.dateFormat,
+                targetSize = OUTPUT_SIZE.toFloat()
             )
-
-            val layoutStyle =
-                resolveLayoutStyle(
-                    postcard.layoutStyle
-                )
-            var datePanel =
-                RectF(
-                    730f,
-                    1870f,
-                    1318f,
-                    1960f
-                )
-            var compactDate =
-                false
-
-            when (layoutStyle) {
-                ExportLayoutStyle.STANDARD -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            394f,
-                            180f,
-                            1654f,
-                            1440f
-                        )
-                    )
-
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            220f,
-                            1505f,
-                            1828f,
-                            1748f
-                        )
-                    )
-
-                    datePanel = RectF(
-                        544f,
-                        1846f,
-                        1504f,
-                        1932f
-                    )
-                    compactDate = false
-                }
-
-                ExportLayoutStyle.PHOTO_FOCUS -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            264f,
-                            110f,
-                            1784f,
-                            1630f
-                        )
-                    )
-
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            250f,
-                            1670f,
-                            1798f,
-                            1838f
-                        ),
-                        compact = true
-                    )
-
-                    datePanel = RectF(
-                        574f,
-                        1900f,
-                        1474f,
-                        1972f
-                    )
-                    compactDate = true
-                }
-
-                ExportLayoutStyle.AIRY -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            534f,
-                            250f,
-                            1514f,
-                            1230f
-                        )
-                    )
-
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            320f,
-                            1390f,
-                            1728f,
-                            1690f
-                        )
-                    )
-
-                    datePanel = RectF(
-                        544f,
-                        1810f,
-                        1504f,
-                        1896f
-                    )
-                    compactDate = false
-                }
-
-                ExportLayoutStyle.MAGAZINE -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            194f,
-                            120f,
-                            1854f,
-                            1780f
-                        )
-                    )
-
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            270f,
-                            1370f,
-                            1778f,
-                            1660f
-                        ),
-                        darkOverlay = true
-                    )
-
-                    datePanel = RectF(
-                        544f,
-                        1846f,
-                        1504f,
-                        1932f
-                    )
-                    compactDate = false
-                }
-            }
 
             for (overlay in stickerOverlays) {
                 drawStickerOverlay(
@@ -275,14 +140,6 @@ object PostcardImageExporter {
                     stickerOverlay = overlay
                 )
             }
-
-            drawDate(
-                canvas = canvas,
-                capturedAt = postcard.capturedAt,
-                dateFormat = postcard.dateFormat,
-                datePanel = datePanel,
-                compact = compactDate
-            )
 
             return outputBitmap
         } finally {
@@ -1374,60 +1231,80 @@ object PostcardImageExporter {
             val cornerRadius =
                 stickerSize *
                         STICKER_CORNER_RADIUS_RATIO
-            if (drawAsBackgroundRemoved) {
-                drawFitCenteredBitmap(
-                    canvas = canvas,
-                    bitmap = stickerBitmap,
-                    destinationRect = stickerBounds
-                )
-            } else {
-                val stickerPath =
-                    Path().apply {
-                        addRoundRect(
-                            stickerBounds,
-                            cornerRadius,
-                            cornerRadius,
-                            Path.Direction.CW
+
+            canvas.save()
+            canvas.rotate(
+                stickerOverlay.rotationDegrees,
+                stickerBounds.centerX(),
+                stickerBounds.centerY()
+            )
+            canvas.scale(
+                if (stickerOverlay.flipHorizontal) -1f else 1f,
+                if (stickerOverlay.flipVertical) -1f else 1f,
+                stickerBounds.centerX(),
+                stickerBounds.centerY()
+            )
+
+            try {
+                if (drawAsBackgroundRemoved) {
+                    drawFitCenteredBitmap(
+                        canvas = canvas,
+                        bitmap = stickerBitmap,
+                        destinationRect = stickerBounds
+                    )
+                } else {
+                    val stickerPath =
+                        Path().apply {
+                            addRoundRect(
+                                stickerBounds,
+                                cornerRadius,
+                                cornerRadius,
+                                Path.Direction.CW
+                            )
+                        }
+
+                    canvas.save()
+                    try {
+                        canvas.clipPath(stickerPath)
+
+                        drawCenterCroppedBitmap(
+                            canvas = canvas,
+                            bitmap = stickerBitmap,
+                            destinationRect = stickerBounds
                         )
+                    } finally {
+                        canvas.restore()
                     }
 
-                canvas.save()
-                canvas.clipPath(stickerPath)
+                    val borderWidth =
+                        stickerSize *
+                                STICKER_BORDER_WIDTH_RATIO
+                    val borderBounds =
+                        RectF(stickerBounds).apply {
+                            inset(
+                                borderWidth / 2f,
+                                borderWidth / 2f
+                            )
+                        }
+                    val borderRadius =
+                        (cornerRadius - borderWidth / 2f)
+                            .coerceAtLeast(0f)
+                    val borderPaint =
+                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = Color.BLACK
+                            style = Paint.Style.STROKE
+                            strokeWidth = borderWidth
+                        }
 
-                drawCenterCroppedBitmap(
-                    canvas = canvas,
-                    bitmap = stickerBitmap,
-                    destinationRect = stickerBounds
-                )
-
+                    canvas.drawRoundRect(
+                        borderBounds,
+                        borderRadius,
+                        borderRadius,
+                        borderPaint
+                    )
+                }
+            } finally {
                 canvas.restore()
-
-                val borderWidth =
-                    stickerSize *
-                            STICKER_BORDER_WIDTH_RATIO
-                val borderBounds =
-                    RectF(stickerBounds).apply {
-                        inset(
-                            borderWidth / 2f,
-                            borderWidth / 2f
-                        )
-                    }
-                val borderRadius =
-                    (cornerRadius - borderWidth / 2f)
-                        .coerceAtLeast(0f)
-                val borderPaint =
-                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = Color.BLACK
-                        style = Paint.Style.STROKE
-                        strokeWidth = borderWidth
-                    }
-
-                canvas.drawRoundRect(
-                    borderBounds,
-                    borderRadius,
-                    borderRadius,
-                    borderPaint
-                )
             }
         } finally {
             if (!stickerBitmap.isRecycled) {

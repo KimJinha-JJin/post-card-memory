@@ -65,6 +65,8 @@ fun PhotoStickerPickerPanel(
     onRemoveBackground: (String) -> Unit,
     onRestoreOriginal: (String) -> Unit,
     onDeleteSticker: (String) -> Unit,
+    onToggleFlipHorizontal: (String) -> Unit,
+    onToggleFlipVertical: (String) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -362,6 +364,67 @@ fun PhotoStickerPickerPanel(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        onToggleFlipHorizontal(selectedSticker.id)
+                    },
+                    enabled = enabled,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (selectedSticker.flipHorizontal) {
+                            BrutalViolet
+                        } else {
+                            Color.Transparent
+                        },
+                        contentColor = if (selectedSticker.flipHorizontal) {
+                            BrutalWhite
+                        } else {
+                            BrutalDeepViolet
+                        }
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "좌우 대칭",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onToggleFlipVertical(selectedSticker.id)
+                    },
+                    enabled = enabled,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (selectedSticker.flipVertical) {
+                            BrutalViolet
+                        } else {
+                            Color.Transparent
+                        },
+                        contentColor = if (selectedSticker.flipVertical) {
+                            BrutalWhite
+                        } else {
+                            BrutalDeepViolet
+                        }
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "상하 대칭",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

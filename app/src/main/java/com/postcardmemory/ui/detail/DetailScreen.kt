@@ -2,21 +2,22 @@ package com.postcardmemory.ui.detail
 
 import android.net.Uri
 import android.widget.Toast
-import java.util.UUID
+import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,11 +50,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,22 +65,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import kotlin.math.atan2
 import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -88,9 +92,7 @@ import com.postcardmemory.ui.components.PostcardDateFormatPicker
 import com.postcardmemory.ui.components.PostcardFontPicker
 import com.postcardmemory.ui.components.PostcardLayoutPicker
 import com.postcardmemory.ui.components.PostcardLayoutStyle
-import com.postcardmemory.ui.components.PostcardPatternPreview
 import com.postcardmemory.ui.components.PostcardTextFont
-import com.postcardmemory.ui.components.StampPhoto
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.BrutalDeepViolet
@@ -99,12 +101,19 @@ import com.postcardmemory.ui.theme.BrutalViolet
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.LavenderSoft
 import com.postcardmemory.utils.PostcardImageExporter
+import com.postcardmemory.utils.PostcardRenderSpec
 
 private enum class DetailDrawerSection {
     LAYOUT,
     BACKGROUND,
     TEXT,
     DATE
+}
+
+private enum class StickerEditMode {
+    Move,
+    Scale,
+    Rotate
 }
 
 private fun clampStickerOffset(
@@ -144,10 +153,39 @@ private fun centeredStickerOffset(
             .coerceAtLeast(0f)
     )
 
+private fun localStickerDeltaToParent(
+    localDelta: Offset,
+    rotationDegrees: Float,
+    flipHorizontal: Boolean,
+    flipVertical: Boolean
+): Offset {
+    val flippedX =
+        if (flipHorizontal) -localDelta.x else localDelta.x
+    val flippedY =
+        if (flipVertical) -localDelta.y else localDelta.y
+
+    if (rotationDegrees == 0f) {
+        return Offset(flippedX, flippedY)
+    }
+
+    val radians =
+        Math.toRadians(rotationDegrees.toDouble())
+    val cos = kotlin.math.cos(radians).toFloat()
+    val sin = kotlin.math.sin(radians).toFloat()
+
+    return Offset(
+        x = flippedX * cos - flippedY * sin,
+        y = flippedX * sin + flippedY * cos
+    )
+}
+
 private fun createStickerOverlayForExport(
     stickerUri: Uri?,
     originalStickerUri: Uri?,
     isBackgroundRemoved: Boolean,
+    rotationDegrees: Float,
+    flipHorizontal: Boolean,
+    flipVertical: Boolean,
     stickerOffset: Offset?,
     postcardSize: IntSize,
     stickerSize: IntSize
@@ -180,6 +218,9 @@ private fun createStickerOverlayForExport(
         uri = selectedUri,
         originalUri = originalStickerUri,
         isBackgroundRemoved = isBackgroundRemoved,
+        rotationDegrees = rotationDegrees,
+        flipHorizontal = flipHorizontal,
+        flipVertical = flipVertical,
         normalizedX =
             (resolvedOffset.x /
                     postcardSize.width.toFloat())
@@ -215,6 +256,9 @@ private fun createStickerOverlaysForExport(
             stickerUri = sticker.displayedUri,
             originalStickerUri = sticker.originalUri,
             isBackgroundRemoved = sticker.isBackgroundRemoved,
+            rotationDegrees = sticker.rotationDegrees,
+            flipHorizontal = sticker.flipHorizontal,
+            flipVertical = sticker.flipVertical,
             stickerOffset = sticker.offset,
             postcardSize = postcardSize,
             stickerSize = stickerSize
@@ -345,376 +389,156 @@ private fun DetailDrawer(
 }
 
 @Composable
-private fun PostcardPreviewContent(
-    imagePath: String,
-    contentDescription: String?,
-    message: String,
-    dateText: String,
-    selectedFont: PostcardTextFont,
-    selectedLayout: PostcardLayoutStyle
+private fun StickerEditModeToolbar(
+    editMode: StickerEditMode,
+    onModeSelected: (StickerEditMode) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
 ) {
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        val side = maxWidth
-        val messageFontSize =
-            ((side.value * 62f / 2048f)
-                .coerceIn(10.5f, 14f)).sp
-        val messageLineHeight =
-            ((side.value * 74f / 2048f)
-                .coerceIn(14f, 19f)).sp
-        val compactMessageFontSize =
-            ((side.value * 50f / 2048f)
-                .coerceIn(10f, 13f)).sp
-        val compactMessageLineHeight =
-            ((side.value * 60f / 2048f)
-                .coerceIn(13.5f, 17f)).sp
-        val messageHorizontalPadding =
-            (side * (65f / 2048f))
-                .coerceIn(8.dp, 12.dp)
-        val messageVerticalPadding =
-            (side * (38f / 2048f))
-                .coerceIn(6.dp, 10.dp)
-        val dateFontSize =
-            ((side.value * 34f / 2048f)
-                .coerceIn(9.5f, 12f)).sp
-        val compactDateFontSize =
-            ((side.value * 30f / 2048f)
-                .coerceIn(9f, 11f)).sp
-        fun Modifier.exportBounds(
-            left: Float,
-            top: Float,
-            right: Float,
-            bottom: Float
-        ): Modifier =
-            this
-                .align(Alignment.TopStart)
-                .offset(
-                    x = side * (left / 2048f),
-                    y = side * (top / 2048f)
-                )
-                .fillMaxWidth(
-                    (right - left) / 2048f
-                )
-                .height(
-                    side * ((bottom - top) / 2048f)
-                )
-
-        when (selectedLayout) {
-            PostcardLayoutStyle.STANDARD -> {
-                StampPhoto(
-                    imagePath = imagePath,
-                    contentDescription =
-                        contentDescription,
-                    modifier =
-                        Modifier.exportBounds(
-                            left = 394f,
-                            top = 180f,
-                            right = 1654f,
-                            bottom = 1440f
-                        ),
-                    outlineColor = Color.White,
-                    outlineWidth = 3f
-                )
-
-                PostcardMessageCard(
-                    message = message,
-                    selectedFont = selectedFont,
-                    widthFraction = 1f,
-                    modifier = Modifier.exportBounds(
-                        left = 220f,
-                        top = 1505f,
-                        right = 1828f,
-                        bottom = 1748f
-                    ),
-                    fontSize = messageFontSize,
-                    lineHeight = messageLineHeight,
-                    horizontalPadding = messageHorizontalPadding,
-                    verticalPadding = messageVerticalPadding,
-                    maxLines = 4
-                )
-
-                PostcardDateLabel(
-                    dateText = dateText,
-                    modifier = Modifier.exportBounds(
-                        left = 544f,
-                        top = 1846f,
-                        right = 1504f,
-                        bottom = 1932f
-                    ),
-                    fontSize = dateFontSize
-                )
-            }
-
-            PostcardLayoutStyle.PHOTO_FOCUS -> {
-                StampPhoto(
-                    imagePath = imagePath,
-                    contentDescription =
-                        contentDescription,
-                    modifier =
-                        Modifier.exportBounds(
-                            left = 264f,
-                            top = 110f,
-                            right = 1784f,
-                            bottom = 1630f
-                        ),
-                    outlineColor = Color.White,
-                    outlineWidth = 3f
-                )
-
-                PostcardMessageCard(
-                    message = message,
-                    selectedFont = selectedFont,
-                    widthFraction = 1f,
-                    compact = true,
-                    modifier = Modifier.exportBounds(
-                        left = 250f,
-                        top = 1670f,
-                        right = 1798f,
-                        bottom = 1838f
-                    ),
-                    fontSize = compactMessageFontSize,
-                    lineHeight = compactMessageLineHeight,
-                    horizontalPadding = messageHorizontalPadding,
-                    verticalPadding = messageVerticalPadding,
-                    maxLines = 3
-                )
-
-                PostcardDateLabel(
-                    dateText = dateText,
-                    modifier = Modifier.exportBounds(
-                        left = 574f,
-                        top = 1900f,
-                        right = 1474f,
-                        bottom = 1972f
-                    ),
-                    fontSize = compactDateFontSize
-                )
-            }
-
-            PostcardLayoutStyle.AIRY -> {
-                StampPhoto(
-                    imagePath = imagePath,
-                    contentDescription =
-                        contentDescription,
-                    modifier =
-                        Modifier.exportBounds(
-                            left = 534f,
-                            top = 250f,
-                            right = 1514f,
-                            bottom = 1230f
-                        ),
-                    outlineColor = Color.White,
-                    outlineWidth = 3f
-                )
-
-                PostcardMessageCard(
-                    message = message,
-                    selectedFont = selectedFont,
-                    widthFraction = 1f,
-                    modifier = Modifier.exportBounds(
-                        left = 320f,
-                        top = 1390f,
-                        right = 1728f,
-                        bottom = 1666f
-                    ),
-                    fontSize = messageFontSize,
-                    lineHeight = messageLineHeight,
-                    horizontalPadding = messageHorizontalPadding,
-                    verticalPadding = messageVerticalPadding,
-                    maxLines = 4
-                )
-
-                PostcardDateLabel(
-                    dateText = dateText,
-                    modifier = Modifier.exportBounds(
-                        left = 544f,
-                        top = 1810f,
-                        right = 1504f,
-                        bottom = 1896f
-                    ),
-                    fontSize = dateFontSize
-                )
-            }
-
-            PostcardLayoutStyle.MAGAZINE -> {
-                Box(
-                    modifier =
-                        Modifier.exportBounds(
-                            left = 194f,
-                            top = 120f,
-                            right = 1854f,
-                            bottom = 1780f
-                        )
-                ) {
-                    StampPhoto(
-                        imagePath = imagePath,
-                        contentDescription =
-                            contentDescription,
-                        modifier =
-                            Modifier.fillMaxWidth(),
-                        outlineColor = Color.White,
-                        outlineWidth = 3f
-                    )
-
-                    if (message.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .align(
-                                    Alignment.BottomCenter
-                                )
-                                .fillMaxWidth()
-                                .padding(12.dp)
-                                .background(
-                                    color =
-                                        BrutalBlack.copy(
-                                            alpha = 0.72f
-                                        ),
-                                    shape =
-                                        RoundedCornerShape(
-                                            10.dp
-                                        )
-                                )
-                                .padding(
-                                    horizontal = 14.dp,
-                                    vertical = 10.dp
-                                ),
-                            contentAlignment =
-                                Alignment.Center
-                        ) {
-                            Text(
-                                text = message,
-                                color = BrutalWhite,
-                                fontSize = 16.sp,
-                                fontFamily =
-                                    selectedFont
-                                        .fontFamily,
-                                fontWeight =
-                                    FontWeight.Medium,
-                                textAlign =
-                                    TextAlign.Center,
-                                lineHeight = 22.sp
-                            )
-                        }
-                    }
-                }
-
-                PostcardDateLabel(
-                    dateText = dateText,
-                    modifier = Modifier.exportBounds(
-                        left = 544f,
-                        top = 1846f,
-                        right = 1504f,
-                        bottom = 1932f
-                    ),
-                    fontSize = dateFontSize
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PostcardMessageCard(
-    message: String,
-    selectedFont: PostcardTextFont,
-    widthFraction: Float,
-    compact: Boolean = false,
-    modifier: Modifier = Modifier,
-    fontSize: androidx.compose.ui.unit.TextUnit =
-        if (compact) {
-            15.sp
-        } else {
-            17.sp
-        },
-    lineHeight: androidx.compose.ui.unit.TextUnit =
-        if (compact) {
-            21.sp
-        } else {
-            25.sp
-        },
-    horizontalPadding: Dp =
-        if (compact) {
-            14.dp
-        } else {
-            16.dp
-        },
-    verticalPadding: Dp =
-        if (compact) {
-            10.dp
-        } else {
-            14.dp
-        },
-    maxLines: Int =
-        if (compact) {
-            3
-        } else {
-            4
-        }
-) {
-    if (message.isBlank()) {
-        return
-    }
-
-    Box(
+    Row(
         modifier = modifier
-            .fillMaxWidth(widthFraction)
             .background(
-                color =
-                    BrutalWhite.copy(
-                        alpha = 0.88f
-                    ),
-                shape =
-                    RoundedCornerShape(
-                        12.dp
-                    )
+                color = BrutalLavender,
+                shape = RoundedCornerShape(14.dp)
             )
-            .padding(
-                horizontal = horizontalPadding,
-                vertical = verticalPadding
-            ),
-        contentAlignment =
-            Alignment.Center
+            .border(
+                width = 2.dp,
+                color = BrutalBlack,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            text = message,
-            color = BrutalBlack,
-            fontSize = fontSize,
-            fontFamily =
-                selectedFont.fontFamily,
-            fontWeight =
-                FontWeight.Normal,
-            textAlign =
-                TextAlign.Center,
-            lineHeight = lineHeight,
-            maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis
+        StickerEditModeButton(
+            label = "이동",
+            selected = editMode == StickerEditMode.Move,
+            enabled = enabled,
+            onClick = {
+                onModeSelected(StickerEditMode.Move)
+            },
+            modifier = Modifier.weight(1f)
+        )
+
+        StickerEditModeButton(
+            label = "크기",
+            selected = editMode == StickerEditMode.Scale,
+            enabled = enabled,
+            onClick = {
+                onModeSelected(
+                    if (editMode == StickerEditMode.Scale) {
+                        StickerEditMode.Move
+                    } else {
+                        StickerEditMode.Scale
+                    }
+                )
+            },
+            modifier = Modifier.weight(1f)
+        )
+
+        StickerEditModeButton(
+            label = "회전",
+            selected = editMode == StickerEditMode.Rotate,
+            enabled = enabled,
+            onClick = {
+                onModeSelected(
+                    if (editMode == StickerEditMode.Rotate) {
+                        StickerEditMode.Move
+                    } else {
+                        StickerEditMode.Rotate
+                    }
+                )
+            },
+            modifier = Modifier.weight(1f)
         )
     }
 }
 
 @Composable
-private fun PostcardDateLabel(
-    dateText: String,
-    modifier: Modifier = Modifier,
-    fontSize: androidx.compose.ui.unit.TextUnit = 12.sp
+private fun StickerEditModeButton(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier,
+        modifier = modifier
+            .background(
+                color = if (selected) BrutalViolet else BrutalWhite,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .border(
+                width = 1.5.dp,
+                color = BrutalBlack,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .clickable(
+                enabled = enabled,
+                onClick = onClick
+            )
+            .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = dateText,
-            fontSize = fontSize,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Normal,
-            color = BrutalBlack,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Visible,
-            modifier = Modifier.fillMaxWidth()
+            text = label,
+            color = if (selected) BrutalWhite else BrutalDeepViolet,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.ExtraBold
         )
+    }
+}
+
+@Composable
+private fun PostcardPreviewContent(
+    imagePath: String,
+    message: String,
+    backgroundColorArgb: Long,
+    backgroundPattern: String,
+    messageFont: String,
+    layoutStyle: String,
+    capturedAt: Long,
+    dateFormat: String
+) {
+    val sourceBitmap =
+        remember(imagePath) {
+            runCatching {
+                PostcardRenderSpec.decodeSourceBitmap(
+                    File(imagePath)
+                )
+            }.getOrNull()
+        }
+
+    DisposableEffect(sourceBitmap) {
+        onDispose {
+            if (
+                sourceBitmap != null &&
+                !sourceBitmap.isRecycled
+            ) {
+                sourceBitmap.recycle()
+            }
+        }
+    }
+
+    Canvas(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        val bitmap =
+            sourceBitmap ?: return@Canvas
+
+        drawIntoCanvas { composeCanvas ->
+            PostcardRenderSpec.drawBaseContent(
+                canvas = composeCanvas.nativeCanvas,
+                sourceBitmap = bitmap,
+                backgroundColorArgb = backgroundColorArgb,
+                backgroundPattern = backgroundPattern,
+                message = message,
+                messageFont = messageFont,
+                layoutStyle = layoutStyle,
+                capturedAt = capturedAt,
+                dateFormat = dateFormat,
+                targetSize = size.width
+            )
+        }
     }
 }
 
@@ -748,6 +572,23 @@ fun DetailScreen(
 
     val photoStickers by viewModel.photoStickers.collectAsState()
     val selectedStickerId by viewModel.selectedStickerId.collectAsState()
+    val latestPhotoStickers by rememberUpdatedState(photoStickers)
+
+    var stickerEditMode by remember {
+        mutableStateOf(StickerEditMode.Move)
+    }
+    var stickerEditModeOwnerId by remember {
+        mutableStateOf<String?>(null)
+    }
+    val resolvedStickerEditMode =
+        if (
+            selectedStickerId != null &&
+            selectedStickerId == stickerEditModeOwnerId
+        ) {
+            stickerEditMode
+        } else {
+            StickerEditMode.Move
+        }
 
     var stickerSizes by remember {
         mutableStateOf(mapOf<String, IntSize>())
@@ -763,6 +604,11 @@ fun DetailScreen(
 
     val baseStickerPx = with(LocalDensity.current) {
         120.dp.toPx()
+    }
+    val stickerScaleHandleTouchSize = 44.dp
+    val stickerScaleHandleVisibleSize = 24.dp
+    val stickerScaleHandleTouchPx = with(LocalDensity.current) {
+        stickerScaleHandleTouchSize.toPx()
     }
 
     val context = LocalContext.current
@@ -951,6 +797,7 @@ fun DetailScreen(
                 layoutUpdateState !is LayoutUpdateState.Saving &&
                 dateFormatUpdateState !is DateFormatUpdateState.Saving &&
                 !isRemovingBackground
+    val latestControlsEnabled by rememberUpdatedState(controlsEnabled)
 
 
     Box(
@@ -979,19 +826,6 @@ fun DetailScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .matchParentSize()
-                            .offset(
-                                x = 8.dp,
-                                y = 10.dp
-                            )
-                            .background(
-                                color = BrutalBlack,
-                                shape = RectangleShape
-                            )
-                    )
-
-                    Box(
-                        modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .background(
@@ -1000,36 +834,33 @@ fun DetailScreen(
                                 ),
                                 shape = RectangleShape
                             )
-                            .border(
-                                width = 3.dp,
-                                color = BrutalBlack,
-                                shape = RectangleShape
-                            )
                             .onSizeChanged { size ->
                                 postcardPreviewSize = size
                             }
                     ) {
-                        PostcardPatternPreview(
-                            pattern = selectedPattern,
-                            backgroundColorArgb = pc.backgroundColorArgb,
-                            modifier = Modifier.matchParentSize()
-                        )
-
                         PostcardPreviewContent(
                             imagePath = pc.imagePath,
-                            contentDescription = pc.title,
                             message = pc.message,
-                            dateText =
-                                selectedDateFormat.format(
-                                    pc.capturedAt
-                                ),
-                            selectedFont = selectedFont,
-                            selectedLayout = selectedLayout
+                            backgroundColorArgb =
+                                pc.backgroundColorArgb,
+                            backgroundPattern =
+                                selectedPattern.name,
+                            messageFont = selectedFont.name,
+                            layoutStyle = selectedLayout.name,
+                            capturedAt = pc.capturedAt,
+                            dateFormat =
+                                selectedDateFormat.name
                         )
 
                         photoStickers.forEach { sticker ->
                             val isSelected =
                                 sticker.id == selectedStickerId
+                            val perStickerEditMode =
+                                if (isSelected) {
+                                    resolvedStickerEditMode
+                                } else {
+                                    StickerEditMode.Move
+                                }
                             val currentOffset =
                                 sticker.offset
 
@@ -1105,98 +936,369 @@ fun DetailScreen(
                                             ContentScale.Crop
                                         },
                                     modifier = imageModifier
+                                        .graphicsLayer {
+                                            rotationZ =
+                                                sticker.rotationDegrees
+                                            scaleX =
+                                                if (sticker.flipHorizontal) -1f else 1f
+                                            scaleY =
+                                                if (sticker.flipVertical) -1f else 1f
+                                        }
                                         .pointerInput(
                                             sticker.id,
-                                            postcardPreviewSize
+                                            postcardPreviewSize,
+                                            perStickerEditMode
                                         ) {
                                             coroutineScope {
                                             launch {
                                                 detectTapGestures(
                                                     onTap = {
-                                                        viewModel.setSelectedStickerId(
-                                                            if (selectedStickerId == sticker.id) {
-                                                                null
-                                                            } else {
+                                                        if (selectedStickerId == sticker.id) {
+                                                            stickerEditModeOwnerId = null
+                                                            viewModel.setSelectedStickerId(null)
+                                                        } else {
+                                                            viewModel.setSelectedStickerId(
                                                                 sticker.id
-                                                            }
-                                                        )
+                                                            )
+                                                        }
                                                     }
                                                 )
                                             }
                                             launch {
-                                            detectTransformGestures {
-                                                centroid, pan, zoom, _ ->
+                                            when (perStickerEditMode) {
+                                                StickerEditMode.Move -> {
+                                                    detectDragGestures(
+                                                        onDragStart = {
+                                                            viewModel.setSelectedStickerId(
+                                                                sticker.id
+                                                            )
+                                                        },
+                                                        onDrag = { change, dragAmount ->
+                                                            change.consume()
 
-                                                viewModel.setSelectedStickerId(sticker.id)
-
-                                                val currentSticker =
-                                                    photoStickers.find {
-                                                        it.id == sticker.id
-                                                    } ?: return@detectTransformGestures
-
-                                                val oldScale = currentSticker.scale
-                                                val newScale =
-                                                    (oldScale * zoom).coerceIn(0.5f, 2.5f)
-                                                val actualZoom =
-                                                    newScale / oldScale
-
-                                                if (postcardPreviewSize == IntSize.Zero) {
-                                                    viewModel.setPhotoStickers(
-                                                        photoStickers.map {
-                                                            if (it.id == sticker.id) {
-                                                                it.copy(scale = newScale)
-                                                            } else {
-                                                                it
+                                                            if (postcardPreviewSize == IntSize.Zero) {
+                                                                return@detectDragGestures
                                                             }
+
+                                                            val currentSticker =
+                                                                latestPhotoStickers.find {
+                                                                    it.id == sticker.id
+                                                                } ?: return@detectDragGestures
+
+                                                            val currentStickerSize =
+                                                                stickerSizes[sticker.id]
+                                                                    ?: IntSize.Zero
+
+                                                            val oldOffset =
+                                                                currentSticker.offset
+                                                                    ?: centeredStickerOffset(
+                                                                        postcardSize = postcardPreviewSize,
+                                                                        stickerSize = currentStickerSize
+                                                                    )
+
+                                                            val parentSpaceDrag =
+                                                                localStickerDeltaToParent(
+                                                                    localDelta = dragAmount,
+                                                                    rotationDegrees =
+                                                                        currentSticker.rotationDegrees,
+                                                                    flipHorizontal =
+                                                                        currentSticker.flipHorizontal,
+                                                                    flipVertical =
+                                                                        currentSticker.flipVertical
+                                                                )
+
+                                                            viewModel.setPhotoStickers(
+                                                                latestPhotoStickers.map {
+                                                                    if (it.id == sticker.id) {
+                                                                        it.copy(
+                                                                            offset = clampStickerOffset(
+                                                                                offset = oldOffset + parentSpaceDrag,
+                                                                                postcardSize = postcardPreviewSize,
+                                                                                stickerSize = currentStickerSize
+                                                                            )
+                                                                        )
+                                                                    } else {
+                                                                        it
+                                                                    }
+                                                                }
+                                                            )
                                                         }
                                                     )
-                                                    return@detectTransformGestures
                                                 }
 
-                                                val currentStickerSize =
-                                                    stickerSizes[sticker.id]
-                                                        ?: IntSize.Zero
+                                                StickerEditMode.Scale -> {
+                                                    detectTransformGestures {
+                                                        centroid, _, zoom, _ ->
 
-                                                val oldOffset =
-                                                    currentSticker.offset
-                                                        ?: centeredStickerOffset(
-                                                            postcardSize = postcardPreviewSize,
-                                                            stickerSize = currentStickerSize
-                                                        )
+                                                        viewModel.setSelectedStickerId(sticker.id)
 
-                                                val correctedOffset =
-                                                    oldOffset +
-                                                            centroid * (1f - actualZoom)
+                                                        val currentSticker =
+                                                            latestPhotoStickers.find {
+                                                                it.id == sticker.id
+                                                            } ?: return@detectTransformGestures
 
-                                                val newOffset =
-                                                    correctedOffset + pan
+                                                        val oldScale = currentSticker.scale
+                                                        val newScale =
+                                                            (oldScale * zoom).coerceIn(0.5f, 2.5f)
+                                                        val actualZoom =
+                                                            newScale / oldScale
 
-                                                val newSizePx =
-                                                    (baseStickerPx * newScale).roundToInt()
-                                                val newEffectiveSize =
-                                                    IntSize(newSizePx, newSizePx)
-
-                                                viewModel.setPhotoStickers(
-                                                    photoStickers.map {
-                                                        if (it.id == sticker.id) {
-                                                            it.copy(
-                                                                scale = newScale,
-                                                                offset = clampStickerOffset(
-                                                                    offset = newOffset,
-                                                                    postcardSize = postcardPreviewSize,
-                                                                    stickerSize = newEffectiveSize
-                                                                )
+                                                        if (postcardPreviewSize == IntSize.Zero) {
+                                                            viewModel.setPhotoStickers(
+                                                                latestPhotoStickers.map {
+                                                                    if (it.id == sticker.id) {
+                                                                        it.copy(scale = newScale)
+                                                                    } else {
+                                                                        it
+                                                                    }
+                                                                }
                                                             )
-                                                        } else {
-                                                            it
+                                                            return@detectTransformGestures
                                                         }
+
+                                                        val currentStickerSize =
+                                                            stickerSizes[sticker.id]
+                                                                ?: IntSize.Zero
+
+                                                        val oldOffset =
+                                                            currentSticker.offset
+                                                                ?: centeredStickerOffset(
+                                                                    postcardSize = postcardPreviewSize,
+                                                                    stickerSize = currentStickerSize
+                                                                )
+
+                                                        val correctedOffset =
+                                                            oldOffset +
+                                                                    localStickerDeltaToParent(
+                                                                        localDelta =
+                                                                            centroid * (1f - actualZoom),
+                                                                        rotationDegrees =
+                                                                            currentSticker.rotationDegrees,
+                                                                        flipHorizontal =
+                                                                            currentSticker.flipHorizontal,
+                                                                        flipVertical =
+                                                                            currentSticker.flipVertical
+                                                                    )
+
+                                                        val newSizePx =
+                                                            (baseStickerPx * newScale).roundToInt()
+                                                        val newEffectiveSize =
+                                                            IntSize(newSizePx, newSizePx)
+
+                                                        viewModel.setPhotoStickers(
+                                                            latestPhotoStickers.map {
+                                                                if (it.id == sticker.id) {
+                                                                    it.copy(
+                                                                        scale = newScale,
+                                                                        offset = clampStickerOffset(
+                                                                            offset = correctedOffset,
+                                                                            postcardSize = postcardPreviewSize,
+                                                                            stickerSize = newEffectiveSize
+                                                                        )
+                                                                    )
+                                                                } else {
+                                                                    it
+                                                                }
+                                                            }
+                                                        )
                                                     }
-                                                )
+                                                }
+
+                                                StickerEditMode.Rotate -> {
+                                                    detectTransformGestures {
+                                                        _, _, _, rotationChange ->
+
+                                                        viewModel.setSelectedStickerId(sticker.id)
+
+                                                        val currentSticker =
+                                                            latestPhotoStickers.find {
+                                                                it.id == sticker.id
+                                                            } ?: return@detectTransformGestures
+
+                                                        val newRotation =
+                                                            normalizeStickerRotation(
+                                                                currentSticker.rotationDegrees +
+                                                                        rotationChange
+                                                            )
+
+                                                        viewModel.setPhotoStickers(
+                                                            latestPhotoStickers.map {
+                                                                if (it.id == sticker.id) {
+                                                                    it.copy(
+                                                                        rotationDegrees = newRotation
+                                                                    )
+                                                                } else {
+                                                                    it
+                                                                }
+                                                            }
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
-                                        }  // launch (transform)
+                                        }  // launch (mode gesture)
                                         }  // coroutineScope
                                 )
+
+                                if (isSelected && perStickerEditMode == StickerEditMode.Rotate) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .offset(y = (-22).dp)
+                                            .size(stickerScaleHandleTouchSize)
+                                            .pointerInput(
+                                                sticker.id,
+                                                postcardPreviewSize,
+                                                stickerScaleHandleTouchPx
+                                            ) {
+                                                var rotationGestureActive = false
+                                                var gestureStartRotation = 0f
+                                                var gestureStartCenter = Offset.Zero
+                                                var gestureStartTouch = Offset.Zero
+                                                var gestureStartAngle = 0f
+                                                var accumulatedDrag = Offset.Zero
+
+                                                detectDragGestures(
+                                                    onDragStart = { startTouch ->
+                                                        rotationGestureActive =
+                                                            latestControlsEnabled
+                                                        val currentSticker =
+                                                            if (rotationGestureActive) {
+                                                                latestPhotoStickers.find {
+                                                                    it.id == sticker.id
+                                                                }
+                                                            } else {
+                                                                null
+                                                            }
+
+                                                        if (
+                                                            currentSticker == null ||
+                                                            postcardPreviewSize == IntSize.Zero
+                                                        ) {
+                                                            rotationGestureActive = false
+                                                        } else {
+                                                            viewModel.setSelectedStickerId(
+                                                                sticker.id
+                                                            )
+
+                                                            gestureStartRotation =
+                                                                currentSticker.rotationDegrees
+                                                            val startSidePx =
+                                                                baseStickerPx *
+                                                                        currentSticker.scale
+                                                            val startSize =
+                                                                IntSize(
+                                                                    startSidePx
+                                                                        .roundToInt(),
+                                                                    startSidePx
+                                                                        .roundToInt()
+                                                                )
+                                                            val startOffset =
+                                                                currentSticker.offset
+                                                                    ?: centeredStickerOffset(
+                                                                        postcardSize =
+                                                                            postcardPreviewSize,
+                                                                        stickerSize =
+                                                                            startSize
+                                                                    )
+                                                            gestureStartCenter =
+                                                                startOffset +
+                                                                        Offset(
+                                                                            x = startSidePx / 2f,
+                                                                            y = startSidePx / 2f
+                                                                        )
+
+                                                            val handleTopLeft =
+                                                                Offset(
+                                                                    x = (
+                                                                        startSidePx -
+                                                                                stickerScaleHandleTouchPx
+                                                                        ) / 2f,
+                                                                    y = -stickerScaleHandleTouchPx / 2f
+                                                                )
+                                                            gestureStartTouch =
+                                                                startOffset +
+                                                                        handleTopLeft +
+                                                                        startTouch
+                                                            gestureStartAngle =
+                                                                atan2(
+                                                                    gestureStartTouch.y -
+                                                                            gestureStartCenter.y,
+                                                                    gestureStartTouch.x -
+                                                                            gestureStartCenter.x
+                                                                )
+                                                            accumulatedDrag =
+                                                                Offset.Zero
+                                                        }
+                                                    },
+                                                    onDrag = { change, dragAmount ->
+                                                        if (rotationGestureActive) {
+                                                            change.consume()
+                                                            accumulatedDrag += dragAmount
+
+                                                            val currentTouch =
+                                                                gestureStartTouch +
+                                                                        accumulatedDrag
+                                                            val currentAngle =
+                                                                atan2(
+                                                                    currentTouch.y -
+                                                                            gestureStartCenter.y,
+                                                                    currentTouch.x -
+                                                                            gestureStartCenter.x
+                                                                )
+                                                            val angleDeltaDegrees =
+                                                                (
+                                                                    currentAngle -
+                                                                            gestureStartAngle
+                                                                    ) * 180f /
+                                                                        kotlin.math.PI.toFloat()
+                                                            val newRotation =
+                                                                normalizeStickerRotation(
+                                                                    gestureStartRotation +
+                                                                            angleDeltaDegrees
+                                                                )
+
+                                                            viewModel.setPhotoStickers(
+                                                                latestPhotoStickers.map {
+                                                                    if (it.id == sticker.id) {
+                                                                        it.copy(
+                                                                            rotationDegrees =
+                                                                                newRotation
+                                                                        )
+                                                                    } else {
+                                                                        it
+                                                                    }
+                                                                }
+                                                            )
+                                                        }
+                                                    },
+                                                    onDragEnd = {
+                                                        rotationGestureActive = false
+                                                    },
+                                                    onDragCancel = {
+                                                        rotationGestureActive = false
+                                                    }
+                                                )
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(
+                                                    stickerScaleHandleVisibleSize
+                                                )
+                                                .background(
+                                                    color = BrutalWhite,
+                                                    shape = CircleShape
+                                                )
+                                                .border(
+                                                    width = 2.dp,
+                                                    color = BrutalDeepViolet,
+                                                    shape = CircleShape
+                                                )
+                                        )
+                                    }
+                                }
 
                                 if (isSelected) {
                                     Box(
@@ -1247,9 +1349,198 @@ fun DetailScreen(
                                         )
                                     }
                                 }
+
+                                if (isSelected && perStickerEditMode == StickerEditMode.Scale) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .size(stickerScaleHandleTouchSize)
+                                            .pointerInput(
+                                                sticker.id,
+                                                postcardPreviewSize,
+                                                stickerScaleHandleTouchPx
+                                            ) {
+                                                var scaleGestureActive = false
+                                                var gestureStartScale = 1f
+                                                var gestureStartCenter = Offset.Zero
+                                                var gestureStartTouch = Offset.Zero
+                                                var gestureStartDistance = 1f
+                                                var accumulatedDrag = Offset.Zero
+
+                                                detectDragGestures(
+                                                    onDragStart = { startTouch ->
+                                                        scaleGestureActive =
+                                                            latestControlsEnabled
+                                                        val currentSticker =
+                                                            if (scaleGestureActive) {
+                                                                latestPhotoStickers.find {
+                                                                    it.id == sticker.id
+                                                                }
+                                                            } else {
+                                                                null
+                                                            }
+
+                                                        if (currentSticker == null) {
+                                                            scaleGestureActive = false
+                                                        } else {
+                                                            viewModel.setSelectedStickerId(
+                                                                sticker.id
+                                                            )
+
+                                                            gestureStartScale =
+                                                                currentSticker.scale
+                                                            val startSidePx =
+                                                                baseStickerPx *
+                                                                        gestureStartScale
+                                                            val startSize =
+                                                                IntSize(
+                                                                    startSidePx
+                                                                        .roundToInt(),
+                                                                    startSidePx
+                                                                        .roundToInt()
+                                                                )
+                                                            val startOffset =
+                                                                currentSticker.offset
+                                                                    ?: centeredStickerOffset(
+                                                                        postcardSize =
+                                                                            postcardPreviewSize,
+                                                                        stickerSize =
+                                                                            startSize
+                                                                    )
+                                                            gestureStartCenter =
+                                                                startOffset +
+                                                                        Offset(
+                                                                            x = startSidePx / 2f,
+                                                                            y = startSidePx / 2f
+                                                                        )
+
+                                                            val handleTopLeft =
+                                                                Offset(
+                                                                    x = (
+                                                                        startSidePx -
+                                                                                stickerScaleHandleTouchPx
+                                                                        ).coerceAtLeast(0f),
+                                                                    y = (
+                                                                        startSidePx -
+                                                                                stickerScaleHandleTouchPx
+                                                                        ).coerceAtLeast(0f)
+                                                                )
+                                                            gestureStartTouch =
+                                                                handleTopLeft + startTouch
+                                                            gestureStartDistance =
+                                                                (
+                                                                    gestureStartTouch -
+                                                                            gestureStartCenter
+                                                                    ).getDistance()
+                                                                    .coerceAtLeast(1f)
+                                                            accumulatedDrag =
+                                                                Offset.Zero
+                                                        }
+                                                    },
+                                                    onDrag = { change, dragAmount ->
+                                                        if (scaleGestureActive) {
+                                                            change.consume()
+                                                            accumulatedDrag += dragAmount
+
+                                                            val currentTouch =
+                                                                gestureStartTouch +
+                                                                        accumulatedDrag
+                                                            val currentDistance =
+                                                                (
+                                                                    currentTouch -
+                                                                            gestureStartCenter
+                                                                    ).getDistance()
+                                                                    .coerceAtLeast(1f)
+                                                            val newScale =
+                                                                (
+                                                                    gestureStartScale *
+                                                                            currentDistance /
+                                                                            gestureStartDistance
+                                                                    ).coerceIn(0.5f, 2.5f)
+                                                            val newSidePx =
+                                                                baseStickerPx * newScale
+                                                            val newSize =
+                                                                IntSize(
+                                                                    newSidePx
+                                                                        .roundToInt(),
+                                                                    newSidePx
+                                                                        .roundToInt()
+                                                                )
+                                                            val newOffset =
+                                                                gestureStartCenter -
+                                                                        Offset(
+                                                                            x = newSidePx / 2f,
+                                                                            y = newSidePx / 2f
+                                                                        )
+
+                                                            viewModel.setPhotoStickers(
+                                                                latestPhotoStickers.map {
+                                                                    if (it.id == sticker.id) {
+                                                                        it.copy(
+                                                                            scale = newScale,
+                                                                            offset =
+                                                                                clampStickerOffset(
+                                                                                    offset =
+                                                                                        newOffset,
+                                                                                    postcardSize =
+                                                                                        postcardPreviewSize,
+                                                                                    stickerSize =
+                                                                                        newSize
+                                                                                )
+                                                                        )
+                                                                    } else {
+                                                                        it
+                                                                    }
+                                                                }
+                                                            )
+                                                        }
+                                                    },
+                                                    onDragEnd = {
+                                                        scaleGestureActive = false
+                                                    },
+                                                    onDragCancel = {
+                                                        scaleGestureActive = false
+                                                    }
+                                                )
+                                            },
+                                        contentAlignment = Alignment.BottomEnd
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(
+                                                    stickerScaleHandleVisibleSize
+                                                )
+                                                .background(
+                                                    color = BrutalWhite,
+                                                    shape = CircleShape
+                                                )
+                                                .border(
+                                                    width = 2.dp,
+                                                    color = BrutalViolet,
+                                                    shape = CircleShape
+                                                )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
+                }
+
+                if (selectedStickerId != null) {
+                    Spacer(
+                        modifier = Modifier.height(12.dp)
+                    )
+
+                    StickerEditModeToolbar(
+                        editMode = resolvedStickerEditMode,
+                        onModeSelected = { mode ->
+                            stickerEditMode = mode
+                            stickerEditModeOwnerId = selectedStickerId
+                        },
+                        enabled = controlsEnabled,
+                        modifier = Modifier.fillMaxWidth(0.88f)
+                    )
                 }
 
                 Spacer(
@@ -1544,6 +1835,32 @@ fun DetailScreen(
                                                 remaining.lastOrNull()?.id
                                             )
                                         }
+                                    },
+                                    onToggleFlipHorizontal = { id ->
+                                        viewModel.setPhotoStickers(
+                                            photoStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(
+                                                        flipHorizontal = !it.flipHorizontal
+                                                    )
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onToggleFlipVertical = { id ->
+                                        viewModel.setPhotoStickers(
+                                            photoStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(
+                                                        flipVertical = !it.flipVertical
+                                                    )
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
                                     },
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth(0.92f)

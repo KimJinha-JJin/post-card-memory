@@ -134,27 +134,6 @@ fun PostcardLayoutPicker(
                     )
                 }
         }
-
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
-
-        Text(
-            text = "지금 단계에서는 화면 미리보기에만 적용돼.",
-            color = BrutalDeepViolet,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = BrutalLavender,
-                    shape = RoundedCornerShape(10.dp)
-                )
-                .padding(
-                    horizontal = 10.dp,
-                    vertical = 8.dp
-                )
-        )
     }
 }
 
