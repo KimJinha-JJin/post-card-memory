@@ -67,6 +67,7 @@ fun PhotoStickerPickerPanel(
     onDeleteSticker: (String) -> Unit,
     onToggleFlipHorizontal: (String) -> Unit,
     onToggleFlipVertical: (String) -> Unit,
+    onDuplicateSticker: (String) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -425,6 +426,21 @@ fun PhotoStickerPickerPanel(
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = { onDuplicateSticker(selectedSticker.id) },
+                enabled = enabled,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "선택한 스티커 복제",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))

@@ -1862,6 +1862,9 @@ fun DetailScreen(
                                             }
                                         )
                                     },
+                                    onDuplicateSticker = { id ->
+                                        viewModel.duplicateSticker(id)
+                                    },
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 )

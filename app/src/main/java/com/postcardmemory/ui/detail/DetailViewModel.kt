@@ -3,6 +3,7 @@ package com.postcardmemory.ui.detail
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.tasks.Task
@@ -18,6 +19,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -1006,6 +1008,107 @@ class DetailViewModel @Inject constructor(
                 targetFile.delete()
             }
         }
+    }
+
+    fun duplicateSticker(
+        stickerId: String
+    ) {
+        val original =
+            _photoStickers.value.find {
+                it.id == stickerId
+            } ?: return
+
+        val newId =
+            UUID.randomUUID().toString()
+        val duplicateOffset =
+            original.offset?.plus(
+                Offset(40f, 40f)
+            )
+        val needsFileCopy =
+            original.isBackgroundRemoved &&
+                    original.removedBgUri?.scheme == "file"
+
+        if (!needsFileCopy) {
+            val duplicate =
+                original.copy(
+                    id = newId,
+                    offset = duplicateOffset
+                )
+
+            _photoStickers.value =
+                _photoStickers.value + duplicate
+            _selectedStickerId.value = newId
+            return
+        }
+
+        viewModelScope.launch {
+            val copiedUri =
+                withContext(Dispatchers.IO) {
+                    copyStickerBackgroundToCache(
+                        sourceUri = original.removedBgUri!!,
+                        newId = newId
+                    )
+                }
+
+            val duplicate =
+                original.copy(
+                    id = newId,
+                    offset = duplicateOffset,
+                    removedBgUri =
+                        copiedUri ?: original.removedBgUri,
+                    displayedUri =
+                        copiedUri ?: original.displayedUri
+                )
+
+            _photoStickers.value =
+                _photoStickers.value + duplicate
+            _selectedStickerId.value = newId
+        }
+    }
+
+    private fun copyStickerBackgroundToCache(
+        sourceUri: Uri,
+        newId: String
+    ): Uri? {
+        val sourcePath =
+            sourceUri.path ?: return null
+        val sourceFile =
+            File(sourcePath)
+
+        if (!sourceFile.exists() || !sourceFile.canRead()) {
+            return null
+        }
+
+        val stickerCacheDir =
+            File(
+                context.cacheDir,
+                "photo_stickers"
+            )
+
+        if (
+            !stickerCacheDir.exists() &&
+            !stickerCacheDir.mkdirs()
+        ) {
+            return null
+        }
+
+        val destFile =
+            File(
+                stickerCacheDir,
+                "duplicated_" +
+                        newId +
+                        "_" +
+                        System.currentTimeMillis() +
+                        ".png"
+            )
+
+        return runCatching {
+            sourceFile.copyTo(
+                destFile,
+                overwrite = true
+            )
+            Uri.fromFile(destFile)
+        }.getOrNull()
     }
 
     fun exportPostcardToGallery(
