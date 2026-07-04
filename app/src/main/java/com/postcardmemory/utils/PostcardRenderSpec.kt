@@ -719,6 +719,19 @@ object PostcardRenderSpec {
                 capturedAt = capturedAt,
                 dateFormat = dateFormat
             )
+        val panelPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(205, 255, 252, 247)
+                style = Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(
+            datePanel,
+            if (compact) 22f else 28f,
+            if (compact) 22f else 28f,
+            panelPaint
+        )
+
         val datePaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.rgb(70, 58, 68)
