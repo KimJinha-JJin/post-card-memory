@@ -1,13 +1,13 @@
 package com.postcardmemory.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,18 +54,11 @@ fun StampCard(
         )
     }
 
-    val borderColor =
+    val displayedCardColor =
         if (isSelected) {
-            BrutalCoral
+            BrutalCoral.copy(alpha = 0.22f)
         } else {
-            BrutalBlack
-        }
-
-    val borderWidth =
-        if (isSelected) {
-            5.dp
-        } else {
-            3.dp
+            cardColor
         }
 
     Box(
@@ -73,29 +66,11 @@ fun StampCard(
             .rotate(rotation)
             .padding(4.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .offset(
-                    x = 4.dp,
-                    y = 4.dp
-                )
-                .background(
-                    color = BrutalBlack,
-                    shape = RoundedCornerShape(8.dp)
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    color = cardColor,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .border(
-                    width = borderWidth,
-                    color = borderColor,
+                    color = displayedCardColor,
                     shape = RoundedCornerShape(8.dp)
                 )
                 .pointerInput(
@@ -133,6 +108,19 @@ fun StampCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(14.dp)
+                    .background(
+                        color = BrutalCoral,
+                        shape = CircleShape
+                    )
             )
         }
     }
