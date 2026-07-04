@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -157,6 +157,30 @@ abstract class PostcardDatabase : RoomDatabase() {
                         """
                         ALTER TABLE postcards
                         ADD COLUMN dateFormat TEXT NOT NULL DEFAULT 'DOT'
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        val MIGRATION_7_8 =
+            object : Migration(
+                startVersion = 7,
+                endVersion = 8
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN messageTextScale REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN dateTextScale REAL NOT NULL DEFAULT 1.0
                         """.trimIndent()
                     )
                 }

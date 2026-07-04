@@ -17,5 +17,7 @@ data class Postcard(
     val backgroundPattern: String = "NONE",
     val messageFont: String = "SERIF",
     val layoutStyle: String = "STANDARD",
-    val dateFormat: String = "DOT"
+    val dateFormat: String = "DOT",
+    val messageTextScale: Float = 1f,
+    val dateTextScale: Float = 1f
 )

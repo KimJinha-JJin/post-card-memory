@@ -124,7 +124,9 @@ object PostcardRenderSpec {
         layoutStyle: String,
         capturedAt: Long,
         dateFormat: String,
-        targetSize: Float = LOGICAL_SIZE
+        targetSize: Float = LOGICAL_SIZE,
+        messageTextScale: Float = 1f,
+        dateTextScale: Float = 1f
     ) {
         val scale =
             targetSize / LOGICAL_SIZE
@@ -164,14 +166,16 @@ object PostcardRenderSpec {
             messageFont = messageFont,
             messagePanel = layout.messagePanel,
             darkOverlay = layout.darkMessageOverlay,
-            compact = layout.compactMessage
+            compact = layout.compactMessage,
+            textScale = messageTextScale
         )
         drawDate(
             canvas = canvas,
             capturedAt = capturedAt,
             dateFormat = dateFormat,
             datePanel = layout.datePanel,
-            compact = layout.compactDate
+            compact = layout.compactDate,
+            textScale = dateTextScale
         )
 
         canvas.restore()
@@ -609,7 +613,8 @@ object PostcardRenderSpec {
         messageFont: String,
         messagePanel: RectF,
         darkOverlay: Boolean = false,
-        compact: Boolean = false
+        compact: Boolean = false,
+        textScale: Float = 1f
     ) {
         val normalizedMessage =
             message.trim()
@@ -650,7 +655,7 @@ object PostcardRenderSpec {
             }
         )
 
-        val textSize =
+        val baseTextSize =
             when {
                 compact && normalizedMessage.length <= 20 -> 50f
                 compact && normalizedMessage.length <= 45 -> 46f
@@ -660,6 +665,10 @@ object PostcardRenderSpec {
                 normalizedMessage.length <= 75 -> 50f
                 else -> 44f
             }
+        val clampedTextScale =
+            textScale.coerceIn(0.6f, 1.4f)
+        val textSize =
+            baseTextSize * clampedTextScale
         val textPaint =
             TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color =
@@ -677,6 +686,55 @@ object PostcardRenderSpec {
             (messagePanel.width() - horizontalPadding)
                 .toInt()
                 .coerceAtLeast(1)
+        val lineSpacingExtra =
+            if (compact) 7f else 10f
+        val existingMaxLines =
+            if (compact) 3 else 4
+
+        val measureLayout =
+            StaticLayout.Builder
+                .obtain(
+                    normalizedMessage,
+                    0,
+                    normalizedMessage.length,
+                    textPaint,
+                    textWidth
+                )
+                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setIncludePad(false)
+                .setLineSpacing(lineSpacingExtra, 1.08f)
+                .build()
+        val lineHeight =
+            if (measureLayout.lineCount > 0) {
+                (
+                    measureLayout.getLineBottom(0) -
+                            measureLayout.getLineTop(0)
+                ).toFloat()
+            } else {
+                textSize * 1.2f
+            }.coerceAtLeast(1f)
+
+        val baseIndicatorSize =
+            if (compact) 34f else 40f
+        val indicatorSize =
+            baseIndicatorSize * clampedTextScale
+        val markerReserveHeight =
+            indicatorSize + 16f
+        val verticalPadding = 20f
+
+        val availableHeightForBody =
+            (
+                messagePanel.height() -
+                        verticalPadding * 2f -
+                        markerReserveHeight
+            ).coerceAtLeast(lineHeight)
+        val maxVisibleLines =
+            (availableHeightForBody / lineHeight)
+                .toInt()
+                .coerceAtLeast(1)
+        val finalMaxLines =
+            minOf(existingMaxLines, maxVisibleLines)
+
         val textLayout =
             StaticLayout.Builder
                 .obtain(
@@ -688,23 +746,56 @@ object PostcardRenderSpec {
                 )
                 .setAlignment(Layout.Alignment.ALIGN_CENTER)
                 .setIncludePad(false)
-                .setLineSpacing(
-                    if (compact) 7f else 10f,
-                    1.08f
-                )
-                .setMaxLines(if (compact) 3 else 4)
+                .setLineSpacing(lineSpacingExtra, 1.08f)
+                .setMaxLines(finalMaxLines)
                 .setEllipsize(TextUtils.TruncateAt.END)
                 .setEllipsizedWidth(textWidth)
                 .build()
+
+        val bodyTop =
+            messagePanel.top + verticalPadding
+        val bodyBottom =
+            (
+                messagePanel.bottom -
+                        verticalPadding -
+                        markerReserveHeight
+            ).coerceAtLeast(bodyTop + lineHeight)
+
         val textX =
             messagePanel.centerX() - textWidth / 2f
         val textY =
-            messagePanel.centerY() - textLayout.height / 2f
+            (bodyTop + bodyBottom) / 2f -
+                    textLayout.height / 2f
 
         canvas.save()
+        canvas.clipRect(
+            messagePanel.left,
+            bodyTop,
+            messagePanel.right,
+            bodyBottom
+        )
         canvas.translate(textX, textY)
         textLayout.draw(canvas)
         canvas.restore()
+
+        val indicatorPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color =
+                    if (darkOverlay) {
+                        Color.WHITE
+                    } else {
+                        Color.rgb(47, 37, 43)
+                    }
+                this.textSize = indicatorSize
+                textAlign = Paint.Align.RIGHT
+            }
+
+        canvas.drawText(
+            "▼",
+            messagePanel.right - 30f,
+            messagePanel.bottom - 26f,
+            indicatorPaint
+        )
     }
 
     private fun drawDate(
@@ -712,7 +803,8 @@ object PostcardRenderSpec {
         capturedAt: Long,
         dateFormat: String,
         datePanel: RectF,
-        compact: Boolean = false
+        compact: Boolean = false,
+        textScale: Float = 1f
     ) {
         val dateText =
             formatDate(
@@ -732,10 +824,30 @@ object PostcardRenderSpec {
             panelPaint
         )
 
+        val baseDateTextSize =
+            if (compact) 30f else 34f
+        var renderTextSize =
+            baseDateTextSize *
+                    textScale.coerceIn(0.6f, 1.8f)
+        val dateHorizontalPadding =
+            if (compact) 32f else 40f
+        val availableDateWidth =
+            (datePanel.width() - dateHorizontalPadding)
+                .coerceAtLeast(1f)
+        val measuredWidth =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = renderTextSize
+                typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            }.measureText(dateText)
+
+        if (measuredWidth > availableDateWidth) {
+            renderTextSize *= availableDateWidth / measuredWidth
+        }
+
         val datePaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.rgb(70, 58, 68)
-                textSize = if (compact) 30f else 34f
+                textSize = renderTextSize
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
             }
@@ -745,70 +857,31 @@ object PostcardRenderSpec {
             datePanel.centerY() -
                     (metrics.ascent + metrics.descent) / 2f
 
+        canvas.save()
+        canvas.clipRect(datePanel)
         canvas.drawText(
             dateText,
             datePanel.centerX(),
             baseline,
             datePaint
         )
+        canvas.restore()
     }
 
     private fun formatDate(
         capturedAt: Long,
         dateFormat: String
     ): String {
-        val pattern: String
-        val locale: Locale
-        val uppercase: Boolean
-
-        when (dateFormat) {
-            "KOREAN" -> {
-                pattern = "yyyy년 M월 d일"
-                locale = Locale.KOREAN
-                uppercase = false
-            }
-
-            "ENGLISH_LONG" -> {
-                pattern = "MMMM d, yyyy"
-                locale = Locale.ENGLISH
-                uppercase = true
-            }
-
-            "ENGLISH_SHORT" -> {
-                pattern = "dd MMM yyyy"
-                locale = Locale.ENGLISH
-                uppercase = true
-            }
-
-            else -> {
-                pattern = "yyyy.MM.dd"
-                locale = Locale.KOREAN
-                uppercase = false
-            }
-        }
-
-        val formattedDate =
-            SimpleDateFormat(pattern, locale)
-                .format(Date(capturedAt))
-
-        return if (uppercase) {
-            formattedDate.uppercase(locale)
-        } else {
-            formattedDate
-        }
+        return SimpleDateFormat(
+            "yyyy-MM-dd",
+            Locale.KOREAN
+        ).format(Date(capturedAt))
     }
 
     private fun resolveMessageTypeface(
         messageFont: String
     ): Typeface {
-        return when (messageFont) {
-            "DEFAULT" -> Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-            "SANS_SERIF" -> Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            "SERIF" -> Typeface.create(Typeface.SERIF, Typeface.NORMAL)
-            "MONOSPACE" -> Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
-            "CURSIVE" -> Typeface.create("cursive", Typeface.NORMAL)
-            else -> Typeface.create(Typeface.SERIF, Typeface.NORMAL)
-        }
+        return Typeface.create(Typeface.SERIF, Typeface.NORMAL)
     }
 
     private fun getPatternColor(

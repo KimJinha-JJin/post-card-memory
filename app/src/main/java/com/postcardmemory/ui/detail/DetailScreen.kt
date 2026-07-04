@@ -29,12 +29,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -48,6 +51,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,6 +62,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -64,6 +72,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -75,7 +84,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -90,8 +102,6 @@ import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
 import com.postcardmemory.ui.components.PostcardBackgroundPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
-import com.postcardmemory.ui.components.PostcardDateFormatPicker
-import com.postcardmemory.ui.components.PostcardFontPicker
 import com.postcardmemory.ui.components.PostcardLayoutPicker
 import com.postcardmemory.ui.components.PostcardLayoutStyle
 import com.postcardmemory.ui.components.PostcardTextFont
@@ -108,8 +118,7 @@ import com.postcardmemory.utils.PostcardRenderSpec
 private enum class DetailDrawerSection {
     LAYOUT,
     BACKGROUND,
-    TEXT,
-    DATE
+    TEXT_SIZE
 }
 
 private enum class StickerEditMode {
@@ -391,6 +400,139 @@ private fun DetailDrawer(
 }
 
 @Composable
+private fun TextSizeControl(
+    label: String,
+    initialPercent: Int,
+    minPercent: Int,
+    maxPercent: Int,
+    enabled: Boolean,
+    onPreviewPercentChanged: (Int) -> Unit,
+    onPercentConfirmed: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var currentPercent by remember {
+        mutableIntStateOf(initialPercent)
+    }
+    var textValue by remember {
+        mutableStateOf(initialPercent.toString())
+    }
+    val focusManager = LocalFocusManager.current
+
+    fun confirmTextValue() {
+        val parsedPercent =
+            textValue.toIntOrNull()
+                ?: currentPercent
+        val clampedPercent =
+            parsedPercent.coerceIn(minPercent, maxPercent)
+
+        currentPercent = clampedPercent
+        textValue = clampedPercent.toString()
+        onPercentConfirmed(clampedPercent)
+    }
+
+    Column(
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                color = BrutalDeepViolet,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            OutlinedTextField(
+                value = textValue,
+                onValueChange = { newValue ->
+                    if (
+                        newValue.isEmpty() ||
+                        (
+                            newValue.length <= 3 &&
+                                    newValue.all { it.isDigit() }
+                            )
+                    ) {
+                        textValue = newValue
+                    }
+                },
+                enabled = enabled,
+                singleLine = true,
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                keyboardActions =
+                    KeyboardActions(
+                        onDone = {
+                            confirmTextValue()
+                            focusManager.clearFocus()
+                        }
+                    ),
+                modifier = Modifier
+                    .width(76.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            confirmTextValue()
+                        }
+                    }
+            )
+
+            Text(
+                text = "%",
+                color = BrutalDeepViolet,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier =
+                    Modifier.padding(start = 6.dp)
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(4.dp)
+        )
+
+        Slider(
+            value = currentPercent.toFloat(),
+            onValueChange = { newValue ->
+                val snappedPercent =
+                    ((newValue / 5f).roundToInt() * 5)
+                        .coerceIn(minPercent, maxPercent)
+
+                currentPercent = snappedPercent
+                textValue = snappedPercent.toString()
+                onPreviewPercentChanged(snappedPercent)
+            },
+            onValueChangeFinished = {
+                onPercentConfirmed(currentPercent)
+            },
+            valueRange =
+                minPercent.toFloat()..maxPercent.toFloat(),
+            steps =
+                ((maxPercent - minPercent) / 5) - 1,
+            enabled = enabled,
+            colors =
+                SliderDefaults.colors(
+                    thumbColor = BrutalDeepViolet,
+                    activeTrackColor = BrutalDeepViolet,
+                    inactiveTrackColor = BrutalLavender
+                ),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Text(
+            text = "$minPercent% ~ $maxPercent%",
+            color = BrutalDeepViolet,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
 private fun StickerEditModeToolbar(
     sticker: PhotoStickerItem,
     editMode: StickerEditMode,
@@ -547,7 +689,9 @@ private fun PostcardPreviewContent(
     messageFont: String,
     layoutStyle: String,
     capturedAt: Long,
-    dateFormat: String
+    dateFormat: String,
+    messageTextScale: Float = 1f,
+    dateTextScale: Float = 1f
 ) {
     val sourceBitmap =
         remember(imagePath) {
@@ -586,7 +730,9 @@ private fun PostcardPreviewContent(
                 layoutStyle = layoutStyle,
                 capturedAt = capturedAt,
                 dateFormat = dateFormat,
-                targetSize = size.width
+                targetSize = size.width,
+                messageTextScale = messageTextScale,
+                dateTextScale = dateTextScale
             )
         }
     }
@@ -711,6 +857,14 @@ fun DetailScreen(
                 }
                 ?: PostcardDateFormat.DOT
         }
+
+    val messageTextScalePercent =
+        ((postcard?.messageTextScale ?: 1f) * 100f)
+            .roundToInt()
+
+    val dateTextScalePercent =
+        ((postcard?.dateTextScale ?: 1f) * 100f)
+            .roundToInt()
 
     LaunchedEffect(postcardId) {
         viewModel.loadPostcard(postcardId)
@@ -849,7 +1003,18 @@ fun DetailScreen(
                 !isRemovingBackground
     val latestControlsEnabled by rememberUpdatedState(controlsEnabled)
 
+    val textScaleSnackbarHostState =
+        remember { SnackbarHostState() }
 
+    LaunchedEffect(Unit) {
+        viewModel.textScaleSaveErrors.collect { message ->
+            textScaleSnackbarHostState.showSnackbar(message)
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -899,7 +1064,11 @@ fun DetailScreen(
                             layoutStyle = selectedLayout.name,
                             capturedAt = pc.capturedAt,
                             dateFormat =
-                                selectedDateFormat.name
+                                selectedDateFormat.name,
+                            messageTextScale =
+                                pc.messageTextScale,
+                            dateTextScale =
+                                pc.dateTextScale
                         )
 
                         photoStickers.forEach { sticker ->
@@ -1802,12 +1971,14 @@ fun DetailScreen(
                 )
 
                 DetailDrawer(
-                    title = "글귀 꾸미기",
-                    summary = selectedFont.label,
+                    title = "글자 크기",
+                    summary =
+                        "글귀 ${messageTextScalePercent}% · " +
+                                "날짜 ${dateTextScalePercent}%",
                     expanded =
                         openedDrawerName ==
                                 DetailDrawerSection
-                                    .TEXT
+                                    .TEXT_SIZE
                                     .name,
                     enabled = controlsEnabled,
                     onClick = {
@@ -1815,75 +1986,64 @@ fun DetailScreen(
                             if (
                                 openedDrawerName ==
                                 DetailDrawerSection
-                                    .TEXT
+                                    .TEXT_SIZE
                                     .name
                             ) {
                                 ""
                             } else {
                                 DetailDrawerSection
-                                    .TEXT
+                                    .TEXT_SIZE
                                     .name
                             }
                     },
                     modifier =
                         Modifier.fillMaxWidth(0.92f)
                 ) {
-                    PostcardFontPicker(
-                        selectedFont = selectedFont,
-                        onFontSelected = { font ->
-                            viewModel.updateMessageFont(
-                                font.name
-                            )
-                        },
-                        enabled = controlsEnabled,
-                        modifier =
-                            Modifier.fillMaxWidth()
-                    )
-                }
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextSizeControl(
+                            label = "글귀 크기",
+                            initialPercent = messageTextScalePercent,
+                            minPercent = 60,
+                            maxPercent = 140,
+                            enabled = controlsEnabled,
+                            onPreviewPercentChanged = { percent ->
+                                viewModel.setMessageTextScalePreview(
+                                    percent / 100f
+                                )
+                            },
+                            onPercentConfirmed = { percent ->
+                                viewModel.saveMessageTextScale(
+                                    percent / 100f
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
+                        Spacer(
+                            modifier = Modifier.height(18.dp)
+                        )
 
-                DetailDrawer(
-                    title = "날짜 꾸미기",
-                    summary = selectedDateFormat.label,
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .DATE
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .DATE
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .DATE
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    PostcardDateFormatPicker(
-                        selectedFormat =
-                            selectedDateFormat,
-                        onFormatSelected = { dateFormat ->
-                            viewModel.updateDateFormat(
-                                dateFormat.name
-                            )
-                        },
-                        enabled = controlsEnabled,
-                        modifier =
-                            Modifier.fillMaxWidth()
-                    )
+                        TextSizeControl(
+                            label = "날짜 크기",
+                            initialPercent = dateTextScalePercent,
+                            minPercent = 60,
+                            maxPercent = 180,
+                            enabled = controlsEnabled,
+                            onPreviewPercentChanged = { percent ->
+                                viewModel.setDateTextScalePreview(
+                                    percent / 100f
+                                )
+                            },
+                            onPercentConfirmed = { percent ->
+                                viewModel.saveDateTextScale(
+                                    percent / 100f
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
 
                             }
@@ -2722,4 +2882,12 @@ fun DetailScreen(
                 }
             )
         }
+
+        SnackbarHost(
+            hostState = textScaleSnackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
+    }
 }

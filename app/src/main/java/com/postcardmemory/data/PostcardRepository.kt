@@ -101,4 +101,24 @@ class PostcardRepository @Inject constructor(
             dateFormat = dateFormat
         )
     }
+
+    suspend fun updatePostcardMessageTextScale(
+        id: Long,
+        messageTextScale: Float
+    ) {
+        dao.updatePostcardMessageTextScale(
+            id = id,
+            messageTextScale = messageTextScale
+        )
+    }
+
+    suspend fun updatePostcardDateTextScale(
+        id: Long,
+        dateTextScale: Float
+    ) {
+        dao.updatePostcardDateTextScale(
+            id = id,
+            dateTextScale = dateTextScale
+        )
+    }
 }

@@ -130,7 +130,9 @@ object PostcardImageExporter {
                 layoutStyle = postcard.layoutStyle,
                 capturedAt = postcard.capturedAt,
                 dateFormat = postcard.dateFormat,
-                targetSize = OUTPUT_SIZE.toFloat()
+                targetSize = OUTPUT_SIZE.toFloat(),
+                messageTextScale = postcard.messageTextScale,
+                dateTextScale = postcard.dateTextScale
             )
 
             for (overlay in stickerOverlays) {

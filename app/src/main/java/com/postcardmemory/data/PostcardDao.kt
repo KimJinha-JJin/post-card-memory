@@ -123,4 +123,28 @@ interface PostcardDao {
         id: Long,
         dateFormat: String
     )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET messageTextScale = :messageTextScale
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardMessageTextScale(
+        id: Long,
+        messageTextScale: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET dateTextScale = :dateTextScale
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardDateTextScale(
+        id: Long,
+        dateTextScale: Float
+    )
 }

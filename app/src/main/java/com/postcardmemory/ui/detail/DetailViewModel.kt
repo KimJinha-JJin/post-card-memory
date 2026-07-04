@@ -23,9 +23,14 @@ import java.util.UUID
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -188,6 +193,16 @@ class DetailViewModel @Inject constructor(
     val stickerBackgroundRemovalState:
             StateFlow<StickerBackgroundRemovalState> =
         _stickerBackgroundRemovalState
+
+    private val _textScaleSaveErrors =
+        Channel<String>(Channel.BUFFERED)
+
+    val textScaleSaveErrors: Flow<String> =
+        _textScaleSaveErrors.receiveAsFlow()
+
+    private var messageTextScaleSaveJob: Job? = null
+
+    private var dateTextScaleSaveJob: Job? = null
 
     private val _photoStickers =
         MutableStateFlow(listOf<PhotoStickerItem>())
@@ -655,6 +670,128 @@ class DetailViewModel @Inject constructor(
                     )
             }
         }
+    }
+
+    fun setMessageTextScalePreview(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                messageTextScale =
+                    scale.coerceIn(0.6f, 1.4f)
+            )
+    }
+
+    fun saveMessageTextScale(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousScale =
+            currentPostcard.messageTextScale
+        val normalizedScale =
+            scale.coerceIn(0.6f, 1.4f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                messageTextScale = normalizedScale
+            )
+
+        messageTextScaleSaveJob?.cancel()
+        messageTextScaleSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardMessageTextScale(
+                                id = currentPostcard.id,
+                                messageTextScale =
+                                    normalizedScale
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            messageTextScale = normalizedScale
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            messageTextScale = previousScale
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "글귀 크기를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setDateTextScalePreview(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                dateTextScale =
+                    scale.coerceIn(0.6f, 1.8f)
+            )
+    }
+
+    fun saveDateTextScale(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousScale =
+            currentPostcard.dateTextScale
+        val normalizedScale =
+            scale.coerceIn(0.6f, 1.8f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                dateTextScale = normalizedScale
+            )
+
+        dateTextScaleSaveJob?.cancel()
+        dateTextScaleSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardDateTextScale(
+                                id = currentPostcard.id,
+                                dateTextScale =
+                                    normalizedScale
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            dateTextScale = normalizedScale
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            dateTextScale = previousScale
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "날짜 크기를 저장하지 못했어."
+                    )
+                }
+            }
     }
 
     fun updateBackgroundColor(

@@ -31,7 +31,8 @@ object DatabaseModule {
                 PostcardDatabase.MIGRATION_3_4,
                 PostcardDatabase.MIGRATION_4_5,
                 PostcardDatabase.MIGRATION_5_6,
-                PostcardDatabase.MIGRATION_6_7
+                PostcardDatabase.MIGRATION_6_7,
+                PostcardDatabase.MIGRATION_7_8
             )
             .build()
     }
