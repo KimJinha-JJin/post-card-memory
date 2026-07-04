@@ -2,9 +2,7 @@ package com.postcardmemory.ui.camera
 
 import androidx.activity.compose.BackHandler
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +14,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -259,10 +256,6 @@ private fun CameraPreviewScreen(
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .background(BrutalBlack)
-                        .border(
-                            width = 3.dp,
-                            color = BrutalBlack
-                        )
                         .clipToBounds()
                 ) {
                     AndroidView(
@@ -343,11 +336,6 @@ private fun CameraPreviewScreen(
                     color = LavenderSoft,
                     shape = CircleShape
                 )
-                .border(
-                    width = 2.dp,
-                    color = BrutalBlack,
-                    shape = CircleShape
-                )
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
@@ -368,33 +356,12 @@ private fun CameraPreviewScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 34.dp)
             ) {
-                /*
-                 * 촬영 버튼 그림자
-                 */
-                Box(
-                    modifier = Modifier
-                        .size(76.dp)
-                        .offset(
-                            x = 4.dp,
-                            y = 4.dp
-                        )
-                        .background(
-                            color = BrutalBlack,
-                            shape = CircleShape
-                        )
-                )
-
                 IconButton(
                     onClick = onCapture,
                     modifier = Modifier
                         .size(72.dp)
                         .background(
                             color = BrutalLavender,
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = 3.dp,
-                            color = BrutalBlack,
                             shape = CircleShape
                         )
                 ) {
@@ -448,11 +415,6 @@ private fun CameraPreviewScreen(
                     )
                     .background(
                         color = BrutalCoral,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .border(
-                        width = 2.dp,
-                        color = BrutalBlack,
                         shape = RoundedCornerShape(12.dp)
                     )
                     .padding(12.dp)
@@ -764,10 +726,6 @@ private fun CropEditorScreen(
                     containerColor = LavenderSurface,
                     contentColor = BrutalDeepViolet
                 ),
-                border = BorderStroke(
-                    width = 2.dp,
-                    color = BrutalBlack
-                ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .weight(1f)
@@ -801,10 +759,6 @@ private fun CropEditorScreen(
                         BrutalLavender,
                     disabledContentColor =
                         BrutalDeepViolet
-                ),
-                border = BorderStroke(
-                    width = 2.dp,
-                    color = BrutalBlack
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
@@ -849,11 +803,6 @@ private fun TeleportWaitingScreen(
                     .size(120.dp)
                     .background(
                         color = LavenderSurface,
-                        shape = CircleShape
-                    )
-                    .border(
-                        width = 3.dp,
-                        color = BrutalDeepViolet,
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
