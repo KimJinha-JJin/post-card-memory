@@ -147,4 +147,40 @@ interface PostcardDao {
         id: Long,
         dateTextScale: Float
     )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET backgroundPatternDensity = :backgroundPatternDensity
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardBackgroundPatternDensity(
+        id: Long,
+        backgroundPatternDensity: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET stampPhotoScale = :stampPhotoScale
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardStampPhotoScale(
+        id: Long,
+        stampPhotoScale: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET polaroidPhotoScale = :polaroidPhotoScale
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPolaroidPhotoScale(
+        id: Long,
+        polaroidPhotoScale: Float
+    )
 }

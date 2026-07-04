@@ -38,21 +38,9 @@ enum class PostcardLayoutStyle(
     val label: String,
     val description: String
 ) {
-    STANDARD(
-        label = "기본형",
-        description = "사진 위 · 글귀 아래"
-    ),
-    PHOTO_FOCUS(
-        label = "사진 강조",
-        description = "사진을 더 크게"
-    ),
-    AIRY(
-        label = "여백형",
-        description = "작은 사진 · 넓은 여백"
-    ),
-    MAGAZINE(
-        label = "잡지형",
-        description = "글귀를 사진 위에"
+    STAMP(
+        label = "우표",
+        description = "핑킹 가위 사진 · 크기 조절 가능"
     ),
     POLAROID(
         label = "폴라로이드",
@@ -261,7 +249,7 @@ private fun LayoutMiniPreview(
             Alignment.Center
     ) {
         when (layout) {
-            PostcardLayoutStyle.STANDARD -> {
+            PostcardLayoutStyle.STAMP -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment =
@@ -301,138 +289,6 @@ private fun LayoutMiniPreview(
                                 shape =
                                     RoundedCornerShape(
                                         4.dp
-                                    )
-                            )
-                    )
-                }
-            }
-
-            PostcardLayoutStyle.PHOTO_FOCUS -> {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
-                            .background(
-                                color = BrutalLavender,
-                                shape =
-                                    RoundedCornerShape(
-                                        4.dp
-                                    )
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = BrutalBlack,
-                                shape =
-                                    RoundedCornerShape(
-                                        4.dp
-                                    )
-                            )
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.72f)
-                            .height(6.dp)
-                            .background(
-                                color = BrutalDeepViolet,
-                                shape =
-                                    RoundedCornerShape(
-                                        3.dp
-                                    )
-                            )
-                    )
-                }
-            }
-
-            PostcardLayoutStyle.AIRY -> {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
-                ) {
-                    Spacer(
-                        modifier = Modifier.height(5.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .background(
-                                color = BrutalLavender,
-                                shape =
-                                    RoundedCornerShape(
-                                        4.dp
-                                    )
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = BrutalBlack,
-                                shape =
-                                    RoundedCornerShape(
-                                        4.dp
-                                    )
-                            )
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.62f)
-                            .height(6.dp)
-                            .background(
-                                color = BrutalDeepViolet,
-                                shape =
-                                    RoundedCornerShape(
-                                        3.dp
-                                    )
-                            )
-                    )
-                }
-            }
-
-            PostcardLayoutStyle.MAGAZINE -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            color = BrutalLavender,
-                            shape =
-                                RoundedCornerShape(
-                                    4.dp
-                                )
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = BrutalBlack,
-                            shape =
-                                RoundedCornerShape(
-                                    4.dp
-                                )
-                        )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .align(
-                                Alignment.BottomCenter
-                            )
-                            .fillMaxWidth()
-                            .height(15.dp)
-                            .background(
-                                color =
-                                    BrutalBlack.copy(
-                                        alpha = 0.74f
                                     )
                             )
                     )

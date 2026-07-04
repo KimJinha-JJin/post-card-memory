@@ -204,6 +204,12 @@ class DetailViewModel @Inject constructor(
 
     private var dateTextScaleSaveJob: Job? = null
 
+    private var backgroundPatternDensitySaveJob: Job? = null
+
+    private var stampPhotoScaleSaveJob: Job? = null
+
+    private var polaroidPhotoScaleSaveJob: Job? = null
+
     private val _photoStickers =
         MutableStateFlow(listOf<PhotoStickerItem>())
 
@@ -789,6 +795,191 @@ class DetailViewModel @Inject constructor(
                         )
                     _textScaleSaveErrors.trySend(
                         "날짜 크기를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setBackgroundPatternDensityPreview(
+        density: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                backgroundPatternDensity =
+                    density.coerceIn(0.7f, 1.5f)
+            )
+    }
+
+    fun saveBackgroundPatternDensity(
+        density: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousDensity =
+            currentPostcard.backgroundPatternDensity
+        val normalizedDensity =
+            density.coerceIn(0.7f, 1.5f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                backgroundPatternDensity = normalizedDensity
+            )
+
+        backgroundPatternDensitySaveJob?.cancel()
+        backgroundPatternDensitySaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardBackgroundPatternDensity(
+                                id = currentPostcard.id,
+                                backgroundPatternDensity =
+                                    normalizedDensity
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backgroundPatternDensity =
+                                normalizedDensity
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backgroundPatternDensity =
+                                previousDensity
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "무늬 세기를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setStampPhotoScalePreview(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                stampPhotoScale =
+                    scale.coerceIn(0.7f, 1.3f)
+            )
+    }
+
+    fun saveStampPhotoScale(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousScale =
+            currentPostcard.stampPhotoScale
+        val normalizedScale =
+            scale.coerceIn(0.7f, 1.3f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                stampPhotoScale = normalizedScale
+            )
+
+        stampPhotoScaleSaveJob?.cancel()
+        stampPhotoScaleSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardStampPhotoScale(
+                                id = currentPostcard.id,
+                                stampPhotoScale =
+                                    normalizedScale
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            stampPhotoScale = normalizedScale
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            stampPhotoScale = previousScale
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 크기를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setPolaroidPhotoScalePreview(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                polaroidPhotoScale =
+                    scale.coerceIn(0.75f, 1.05f)
+            )
+    }
+
+    fun savePolaroidPhotoScale(
+        scale: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousScale =
+            currentPostcard.polaroidPhotoScale
+        val normalizedScale =
+            scale.coerceIn(0.75f, 1.05f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                polaroidPhotoScale = normalizedScale
+            )
+
+        polaroidPhotoScaleSaveJob?.cancel()
+        polaroidPhotoScaleSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardPolaroidPhotoScale(
+                                id = currentPostcard.id,
+                                polaroidPhotoScale =
+                                    normalizedScale
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            polaroidPhotoScale = normalizedScale
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            polaroidPhotoScale = previousScale
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 크기를 저장하지 못했어."
                     )
                 }
             }
@@ -1413,12 +1604,12 @@ class DetailViewModel @Inject constructor(
     ): String {
         return when (backgroundPattern) {
             "DOTS",
-            "STARS",
-            "HEARTS",
             "CHECKER",
-            "CHERRY_BLOSSOMS",
-            "TRIANGLES",
-            "SQUARES" -> backgroundPattern
+            "STRIPES",
+            "WAVES",
+            "GRID",
+            "CROSSHATCH",
+            "SPECKLE" -> backgroundPattern
 
             else -> "NONE"
         }
@@ -1442,13 +1633,10 @@ class DetailViewModel @Inject constructor(
         layoutStyle: String
     ): String {
         return when (layoutStyle) {
-            "STANDARD",
-            "PHOTO_FOCUS",
-            "AIRY",
-            "MAGAZINE",
+            "STAMP",
             "POLAROID" -> layoutStyle
 
-            else -> "STANDARD"
+            else -> "STAMP"
         }
     }
 

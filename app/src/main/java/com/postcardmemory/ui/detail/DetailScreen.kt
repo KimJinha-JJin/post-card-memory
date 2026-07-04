@@ -117,7 +117,9 @@ import com.postcardmemory.utils.PostcardRenderSpec
 
 private enum class DetailDrawerSection {
     LAYOUT,
+    PHOTO_SIZE,
     BACKGROUND,
+    PATTERN_INTENSITY,
     TEXT_SIZE
 }
 
@@ -691,7 +693,10 @@ private fun PostcardPreviewContent(
     capturedAt: Long,
     dateFormat: String,
     messageTextScale: Float = 1f,
-    dateTextScale: Float = 1f
+    dateTextScale: Float = 1f,
+    backgroundPatternDensity: Float = 1f,
+    stampPhotoScale: Float = 1f,
+    polaroidPhotoScale: Float = 1f
 ) {
     val sourceBitmap =
         remember(imagePath) {
@@ -732,7 +737,10 @@ private fun PostcardPreviewContent(
                 dateFormat = dateFormat,
                 targetSize = size.width,
                 messageTextScale = messageTextScale,
-                dateTextScale = dateTextScale
+                dateTextScale = dateTextScale,
+                backgroundPatternDensity = backgroundPatternDensity,
+                stampPhotoScale = stampPhotoScale,
+                polaroidPhotoScale = polaroidPhotoScale
             )
         }
     }
@@ -825,7 +833,7 @@ fun DetailScreen(
                     layout.name ==
                             postcard?.layoutStyle
                 }
-                ?: PostcardLayoutStyle.STANDARD
+                ?: PostcardLayoutStyle.STAMP
         }
 
     val selectedFont =
@@ -864,6 +872,20 @@ fun DetailScreen(
 
     val dateTextScalePercent =
         ((postcard?.dateTextScale ?: 1f) * 100f)
+            .roundToInt()
+
+    val backgroundPatternDensityPercent =
+        (
+            (postcard?.backgroundPatternDensity ?: 1f) *
+                    100f
+            ).roundToInt()
+
+    val stampPhotoScalePercent =
+        ((postcard?.stampPhotoScale ?: 1f) * 100f)
+            .roundToInt()
+
+    val polaroidPhotoScalePercent =
+        ((postcard?.polaroidPhotoScale ?: 1f) * 100f)
             .roundToInt()
 
     LaunchedEffect(postcardId) {
@@ -1068,7 +1090,13 @@ fun DetailScreen(
                             messageTextScale =
                                 pc.messageTextScale,
                             dateTextScale =
-                                pc.dateTextScale
+                                pc.dateTextScale,
+                            backgroundPatternDensity =
+                                pc.backgroundPatternDensity,
+                            stampPhotoScale =
+                                pc.stampPhotoScale,
+                            polaroidPhotoScale =
+                                pc.polaroidPhotoScale
                         )
 
                         photoStickers.forEach { sticker ->
@@ -1916,6 +1944,95 @@ fun DetailScreen(
                 )
 
                 DetailDrawer(
+                    title = "사진 크기",
+                    summary =
+                        if (
+                            selectedLayout ==
+                            PostcardLayoutStyle.POLAROID
+                        ) {
+                            "$polaroidPhotoScalePercent%"
+                        } else {
+                            "$stampPhotoScalePercent%"
+                        },
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_SIZE
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_SIZE
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .PHOTO_SIZE
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    if (
+                        selectedLayout ==
+                        PostcardLayoutStyle.POLAROID
+                    ) {
+                        TextSizeControl(
+                            label = "폴라로이드 사진 크기",
+                            initialPercent =
+                                polaroidPhotoScalePercent,
+                            minPercent = 75,
+                            maxPercent = 105,
+                            enabled = controlsEnabled,
+                            onPreviewPercentChanged = { percent ->
+                                viewModel
+                                    .setPolaroidPhotoScalePreview(
+                                        percent / 100f
+                                    )
+                            },
+                            onPercentConfirmed = { percent ->
+                                viewModel
+                                    .savePolaroidPhotoScale(
+                                        percent / 100f
+                                    )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        TextSizeControl(
+                            label = "우표 사진 크기",
+                            initialPercent =
+                                stampPhotoScalePercent,
+                            minPercent = 70,
+                            maxPercent = 130,
+                            enabled = controlsEnabled,
+                            onPreviewPercentChanged = { percent ->
+                                viewModel
+                                    .setStampPhotoScalePreview(
+                                        percent / 100f
+                                    )
+                            },
+                            onPercentConfirmed = { percent ->
+                                viewModel
+                                    .saveStampPhotoScale(
+                                        percent / 100f
+                                    )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
                     title = "배경 꾸미기",
                     summary = selectedPattern.label,
                     expanded =
@@ -1963,6 +2080,60 @@ fun DetailScreen(
                         },
                         modifier =
                             Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
+                    title = "무늬 세기",
+                    summary = "$backgroundPatternDensityPercent%",
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .PATTERN_INTENSITY
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .PATTERN_INTENSITY
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .PATTERN_INTENSITY
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    TextSizeControl(
+                        label = "무늬 세기",
+                        initialPercent =
+                            backgroundPatternDensityPercent,
+                        minPercent = 70,
+                        maxPercent = 150,
+                        enabled = controlsEnabled,
+                        onPreviewPercentChanged = { percent ->
+                            viewModel
+                                .setBackgroundPatternDensityPreview(
+                                    percent / 100f
+                                )
+                        },
+                        onPercentConfirmed = { percent ->
+                            viewModel
+                                .saveBackgroundPatternDensity(
+                                    percent / 100f
+                                )
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 

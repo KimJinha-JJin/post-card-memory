@@ -21,22 +21,28 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
+import kotlin.random.Random
 
 object PostcardRenderSpec {
     const val LOGICAL_SIZE = 2048f
     const val OUTPUT_SIZE = 2048
     const val STAMP_BORDER_WIDTH = 18f
+    private const val SPECKLE_PATTERN_SEED = 20240704L
+    private const val SPECKLE_COUNT = 900
+    private const val STAMP_BASE_PHOTO_SIZE = 1000f
+    private const val STAMP_PHOTO_ZONE_CENTER_Y = 802.5f
+    private const val POLAROID_ANCHOR_X = 1024f
+    private const val POLAROID_ANCHOR_Y = 805f
+    private const val POLAROID_PAPER_HALF_WIDTH = 630f
+    private const val POLAROID_PAPER_HALF_HEIGHT = 685f
+    private const val POLAROID_PHOTO_HALF_WIDTH = 570f
+    private const val POLAROID_PHOTO_TOP_OFFSET = 625f
+    private const val POLAROID_PHOTO_BOTTOM_OFFSET = 515f
 
     enum class LayoutStyle {
-        STANDARD,
-        PHOTO_FOCUS,
-        AIRY,
-        MAGAZINE,
+        STAMP,
         POLAROID
     }
 
@@ -60,57 +66,68 @@ object PostcardRenderSpec {
         layoutStyle: String
     ): LayoutStyle {
         return when (layoutStyle) {
-            "PHOTO_FOCUS" -> LayoutStyle.PHOTO_FOCUS
-            "AIRY" -> LayoutStyle.AIRY
-            "MAGAZINE" -> LayoutStyle.MAGAZINE
             "POLAROID" -> LayoutStyle.POLAROID
-            else -> LayoutStyle.STANDARD
+            else -> LayoutStyle.STAMP
         }
     }
 
     fun layoutFor(
-        layoutStyle: String
+        layoutStyle: String,
+        stampPhotoScale: Float = 1f,
+        polaroidPhotoScale: Float = 1f
     ): RenderLayout {
         return when (resolveLayoutStyle(layoutStyle)) {
-            LayoutStyle.STANDARD ->
+            LayoutStyle.STAMP -> {
+                val clampedScale =
+                    stampPhotoScale.coerceIn(0.7f, 1.3f)
+                val photoSize =
+                    STAMP_BASE_PHOTO_SIZE * clampedScale
+                val half = photoSize / 2f
+                val centerX = LOGICAL_SIZE / 2f
+                val centerY = STAMP_PHOTO_ZONE_CENTER_Y
+
                 RenderLayout(
-                    stampBounds = RectF(394f, 180f, 1654f, 1440f),
+                    stampBounds = RectF(
+                        centerX - half,
+                        centerY - half,
+                        centerX + half,
+                        centerY + half
+                    ),
                     messagePanel = RectF(220f, 1505f, 1828f, 1748f),
                     datePanel = RectF(544f, 1846f, 1504f, 1932f)
                 )
+            }
 
-            LayoutStyle.PHOTO_FOCUS ->
-                RenderLayout(
-                    stampBounds = RectF(264f, 110f, 1784f, 1630f),
-                    messagePanel = RectF(250f, 1670f, 1798f, 1838f),
-                    datePanel = RectF(574f, 1900f, 1474f, 1972f),
-                    compactMessage = true,
-                    compactDate = true
-                )
+            LayoutStyle.POLAROID -> {
+                val clampedScale =
+                    polaroidPhotoScale.coerceIn(0.75f, 1.05f)
 
-            LayoutStyle.AIRY ->
                 RenderLayout(
-                    stampBounds = RectF(534f, 250f, 1514f, 1230f),
-                    messagePanel = RectF(320f, 1390f, 1728f, 1690f),
-                    datePanel = RectF(544f, 1810f, 1504f, 1896f)
-                )
-
-            LayoutStyle.MAGAZINE ->
-                RenderLayout(
-                    stampBounds = RectF(194f, 120f, 1854f, 1780f),
-                    messagePanel = RectF(270f, 1370f, 1778f, 1660f),
-                    datePanel = RectF(544f, 1846f, 1504f, 1932f),
-                    darkMessageOverlay = true
-                )
-
-            LayoutStyle.POLAROID ->
-                RenderLayout(
-                    stampBounds = RectF(394f, 120f, 1654f, 1490f),
-                    photoBounds = RectF(454f, 180f, 1594f, 1320f),
+                    stampBounds = RectF(
+                        POLAROID_ANCHOR_X -
+                                POLAROID_PAPER_HALF_WIDTH * clampedScale,
+                        POLAROID_ANCHOR_Y -
+                                POLAROID_PAPER_HALF_HEIGHT * clampedScale,
+                        POLAROID_ANCHOR_X +
+                                POLAROID_PAPER_HALF_WIDTH * clampedScale,
+                        POLAROID_ANCHOR_Y +
+                                POLAROID_PAPER_HALF_HEIGHT * clampedScale
+                    ),
+                    photoBounds = RectF(
+                        POLAROID_ANCHOR_X -
+                                POLAROID_PHOTO_HALF_WIDTH * clampedScale,
+                        POLAROID_ANCHOR_Y -
+                                POLAROID_PHOTO_TOP_OFFSET * clampedScale,
+                        POLAROID_ANCHOR_X +
+                                POLAROID_PHOTO_HALF_WIDTH * clampedScale,
+                        POLAROID_ANCHOR_Y +
+                                POLAROID_PHOTO_BOTTOM_OFFSET * clampedScale
+                    ),
                     photoFrameStyle = PhotoFrameStyle.POLAROID,
                     messagePanel = RectF(220f, 1565f, 1828f, 1798f),
                     datePanel = RectF(544f, 1860f, 1504f, 1946f)
                 )
+            }
         }
     }
 
@@ -126,7 +143,10 @@ object PostcardRenderSpec {
         dateFormat: String,
         targetSize: Float = LOGICAL_SIZE,
         messageTextScale: Float = 1f,
-        dateTextScale: Float = 1f
+        dateTextScale: Float = 1f,
+        backgroundPatternDensity: Float = 1f,
+        stampPhotoScale: Float = 1f,
+        polaroidPhotoScale: Float = 1f
     ) {
         val scale =
             targetSize / LOGICAL_SIZE
@@ -135,12 +155,17 @@ object PostcardRenderSpec {
         canvas.scale(scale, scale)
 
         val layout =
-            layoutFor(layoutStyle)
+            layoutFor(
+                layoutStyle = layoutStyle,
+                stampPhotoScale = stampPhotoScale,
+                polaroidPhotoScale = polaroidPhotoScale
+            )
 
         drawBackground(
             canvas = canvas,
             backgroundColorArgb = backgroundColorArgb,
-            backgroundPattern = backgroundPattern
+            backgroundPattern = backgroundPattern,
+            patternDensity = backgroundPatternDensity
         )
         when (layout.photoFrameStyle) {
             PhotoFrameStyle.PINKING -> {
@@ -330,14 +355,16 @@ object PostcardRenderSpec {
     private fun drawBackground(
         canvas: Canvas,
         backgroundColorArgb: Long,
-        backgroundPattern: String
+        backgroundPattern: String,
+        patternDensity: Float = 1f
     ) {
         canvas.drawColor(backgroundColorArgb.toInt())
 
         drawBackgroundPattern(
             canvas = canvas,
             backgroundPattern = backgroundPattern,
-            backgroundColorArgb = backgroundColorArgb
+            backgroundColorArgb = backgroundColorArgb,
+            patternDensity = patternDensity
         )
 
         val innerBorderPaint =
@@ -359,7 +386,8 @@ object PostcardRenderSpec {
     private fun drawBackgroundPattern(
         canvas: Canvas,
         backgroundPattern: String,
-        backgroundColorArgb: Long
+        backgroundColorArgb: Long,
+        patternDensity: Float = 1f
     ) {
         if (backgroundPattern == "NONE") {
             return
@@ -367,104 +395,201 @@ object PostcardRenderSpec {
 
         val patternColor =
             getPatternColor(backgroundColorArgb)
+        val density =
+            patternDensity.coerceIn(0.7f, 1.5f)
 
-        if (backgroundPattern == "CHECKER") {
-            drawCheckerPattern(canvas, patternColor)
-            return
+        when (backgroundPattern) {
+            "CHECKER" -> drawCheckerPattern(canvas, patternColor, density)
+            "DOTS" -> drawDotsPattern(canvas, patternColor, density)
+            "STRIPES" -> drawStripePattern(canvas, patternColor, density)
+            "WAVES" -> drawWavePattern(canvas, patternColor, density)
+            "GRID" -> drawGridPattern(canvas, patternColor, density)
+            "CROSSHATCH" -> drawCrosshatchPattern(canvas, patternColor, density)
+            "SPECKLE" -> drawSpecklePattern(canvas, patternColor, density)
         }
+    }
 
-        val cellSize = 290f
+    private fun drawDotsPattern(
+        canvas: Canvas,
+        color: Int,
+        density: Float = 1f
+    ) {
+        val cellSize = 260f / density
         val horizontalCount = (LOGICAL_SIZE / cellSize).toInt() + 3
         val verticalCount = (LOGICAL_SIZE / cellSize).toInt() + 3
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.FILL
+            }
 
         for (row in -1..verticalCount) {
             val staggerOffset =
                 if (row % 2 == 0) 0f else cellSize / 2f
 
             for (column in -1..horizontalCount) {
-                val centerX = column * cellSize + staggerOffset
-                val centerY = row * cellSize
+                canvas.drawCircle(
+                    column * cellSize + staggerOffset,
+                    row * cellSize,
+                    if ((row + column) % 2 == 0) 13f else 8f,
+                    paint
+                )
+            }
+        }
+    }
 
-                when (backgroundPattern) {
-                    "DOTS" ->
-                        canvas.drawCircle(
-                            centerX,
-                            centerY,
-                            if ((row + column) % 2 == 0) 34f else 22f,
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.FILL
-                            }
-                        )
+    private fun drawStripePattern(
+        canvas: Canvas,
+        color: Int,
+        density: Float = 1f
+    ) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.STROKE
+                strokeWidth = 5f
+            }
+        val spacing = 64f / density
+        var offset = -LOGICAL_SIZE
 
-                    "STARS" ->
-                        canvas.drawPath(
-                            createStarPath(centerX, centerY, 62f, 27f),
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.FILL
-                            }
-                        )
+        while (offset < LOGICAL_SIZE * 2f) {
+            canvas.drawLine(
+                offset,
+                0f,
+                offset + LOGICAL_SIZE,
+                LOGICAL_SIZE,
+                paint
+            )
+            offset += spacing
+        }
+    }
 
-                    "HEARTS" ->
-                        canvas.drawPath(
-                            createHeartPath(centerX, centerY, 56f),
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.FILL
-                            }
-                        )
+    private fun drawWavePattern(
+        canvas: Canvas,
+        color: Int,
+        density: Float = 1f
+    ) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.STROKE
+                strokeWidth = 5f
+            }
+        val waveLength = 120f / density
+        val amplitude = 16f
+        val rowSpacing = 70f / density
+        var y = 0f
 
-                    "CHERRY_BLOSSOMS" ->
-                        drawCherryBlossomPattern(
-                            canvas = canvas,
-                            centerX = centerX,
-                            centerY = centerY,
-                            radius = 52f,
-                            color = patternColor
-                        )
+        while (y < LOGICAL_SIZE + rowSpacing) {
+            val path =
+                Path().apply {
+                    moveTo(0f, y)
 
-                    "TRIANGLES" ->
-                        canvas.drawPath(
-                            Path().apply {
-                                moveTo(centerX, centerY - 56f)
-                                lineTo(centerX - 51f, centerY + 42f)
-                                lineTo(centerX + 51f, centerY + 42f)
-                                close()
-                            },
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.STROKE
-                                strokeWidth = 13f
-                                strokeJoin = Paint.Join.ROUND
-                            }
-                        )
+                    var x = 0f
 
-                    "SQUARES" -> {
-                        canvas.save()
-                        if ((row + column) % 2 != 0) {
-                            canvas.rotate(45f, centerX, centerY)
-                        }
-                        canvas.drawRoundRect(
-                            RectF(
-                                centerX - 48f,
-                                centerY - 48f,
-                                centerX + 48f,
-                                centerY + 48f
-                            ),
-                            14f,
-                            14f,
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.STROKE
-                                strokeWidth = 12f
-                                strokeJoin = Paint.Join.ROUND
-                            }
+                    while (x < LOGICAL_SIZE) {
+                        quadTo(
+                            x + waveLength / 4f,
+                            y - amplitude,
+                            x + waveLength / 2f,
+                            y
                         )
-                        canvas.restore()
+                        quadTo(
+                            x + waveLength * 3f / 4f,
+                            y + amplitude,
+                            x + waveLength,
+                            y
+                        )
+                        x += waveLength
                     }
                 }
+
+            canvas.drawPath(path, paint)
+            y += rowSpacing
+        }
+    }
+
+    private fun drawGridPattern(
+        canvas: Canvas,
+        color: Int,
+        density: Float = 1f
+    ) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
             }
+        val spacing = 96f / density
+        var x = 0f
+
+        while (x <= LOGICAL_SIZE) {
+            canvas.drawLine(x, 0f, x, LOGICAL_SIZE, paint)
+            x += spacing
+        }
+
+        var y = 0f
+
+        while (y <= LOGICAL_SIZE) {
+            canvas.drawLine(0f, y, LOGICAL_SIZE, y, paint)
+            y += spacing
+        }
+    }
+
+    private fun drawCrosshatchPattern(
+        canvas: Canvas,
+        color: Int,
+        density: Float = 1f
+    ) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+            }
+        val spacing = 80f / density
+        var offset = -LOGICAL_SIZE
+
+        while (offset < LOGICAL_SIZE * 2f) {
+            canvas.drawLine(
+                offset,
+                0f,
+                offset + LOGICAL_SIZE,
+                LOGICAL_SIZE,
+                paint
+            )
+            canvas.drawLine(
+                offset,
+                LOGICAL_SIZE,
+                offset + LOGICAL_SIZE,
+                0f,
+                paint
+            )
+            offset += spacing
+        }
+    }
+
+    private fun drawSpecklePattern(
+        canvas: Canvas,
+        color: Int,
+        density: Float = 1f
+    ) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.FILL
+            }
+        val random = Random(SPECKLE_PATTERN_SEED)
+        val speckleCount =
+            (SPECKLE_COUNT * density).toInt()
+
+        repeat(speckleCount) {
+            canvas.drawCircle(
+                random.nextFloat() * LOGICAL_SIZE,
+                random.nextFloat() * LOGICAL_SIZE,
+                3f + random.nextFloat() * 4f,
+                paint
+            )
         }
     }
 
@@ -718,15 +843,12 @@ object PostcardRenderSpec {
             if (compact) 34f else 40f
         val indicatorSize =
             baseIndicatorSize * clampedTextScale
-        val markerReserveHeight =
-            indicatorSize + 16f
-        val verticalPadding = 20f
+        val verticalPadding = 8f
 
         val availableHeightForBody =
             (
                 messagePanel.height() -
-                        verticalPadding * 2f -
-                        markerReserveHeight
+                        verticalPadding * 2f
             ).coerceAtLeast(lineHeight)
         val maxVisibleLines =
             (availableHeightForBody / lineHeight)
@@ -756,9 +878,7 @@ object PostcardRenderSpec {
             messagePanel.top + verticalPadding
         val bodyBottom =
             (
-                messagePanel.bottom -
-                        verticalPadding -
-                        markerReserveHeight
+                messagePanel.bottom - verticalPadding
             ).coerceAtLeast(bodyTop + lineHeight)
 
         val textX =
@@ -903,9 +1023,10 @@ object PostcardRenderSpec {
 
     private fun drawCheckerPattern(
         canvas: Canvas,
-        color: Int
+        color: Int,
+        density: Float = 1f
     ) {
-        val tileSize = 175f
+        val tileSize = 175f / density
         val horizontalCount = (LOGICAL_SIZE / tileSize).toInt() + 2
         val verticalCount = (LOGICAL_SIZE / tileSize).toInt() + 2
         val paint =
@@ -926,97 +1047,6 @@ object PostcardRenderSpec {
                     )
                 }
             }
-        }
-    }
-
-    private fun drawCherryBlossomPattern(
-        canvas: Canvas,
-        centerX: Float,
-        centerY: Float,
-        radius: Float,
-        color: Int
-    ) {
-        val petalPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.color = color
-                style = Paint.Style.FILL
-            }
-
-        repeat(5) { index ->
-            canvas.save()
-            canvas.rotate(index * 72f, centerX, centerY)
-            canvas.drawOval(
-                RectF(
-                    centerX - radius * 0.42f,
-                    centerY - radius * 1.08f,
-                    centerX + radius * 0.42f,
-                    centerY + radius * 0.12f
-                ),
-                petalPaint
-            )
-            canvas.restore()
-        }
-
-        canvas.drawCircle(
-            centerX,
-            centerY,
-            radius * 0.27f,
-            petalPaint
-        )
-    }
-
-    private fun createStarPath(
-        centerX: Float,
-        centerY: Float,
-        outerRadius: Float,
-        innerRadius: Float
-    ): Path {
-        return Path().apply {
-            repeat(10) { index ->
-                val radius =
-                    if (index % 2 == 0) outerRadius else innerRadius
-                val angle =
-                    -PI / 2.0 + index * PI / 5.0
-                val pointX =
-                    centerX + cos(angle).toFloat() * radius
-                val pointY =
-                    centerY + sin(angle).toFloat() * radius
-
-                if (index == 0) {
-                    moveTo(pointX, pointY)
-                } else {
-                    lineTo(pointX, pointY)
-                }
-            }
-
-            close()
-        }
-    }
-
-    private fun createHeartPath(
-        centerX: Float,
-        centerY: Float,
-        radius: Float
-    ): Path {
-        return Path().apply {
-            moveTo(centerX, centerY + radius)
-            cubicTo(
-                centerX - radius * 1.35f,
-                centerY + radius * 0.2f,
-                centerX - radius,
-                centerY - radius * 0.95f,
-                centerX,
-                centerY - radius * 0.28f
-            )
-            cubicTo(
-                centerX + radius,
-                centerY - radius * 0.95f,
-                centerX + radius * 1.35f,
-                centerY + radius * 0.2f,
-                centerX,
-                centerY + radius
-            )
-            close()
         }
     }
 

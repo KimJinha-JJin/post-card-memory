@@ -132,7 +132,10 @@ object PostcardImageExporter {
                 dateFormat = postcard.dateFormat,
                 targetSize = OUTPUT_SIZE.toFloat(),
                 messageTextScale = postcard.messageTextScale,
-                dateTextScale = postcard.dateTextScale
+                dateTextScale = postcard.dateTextScale,
+                backgroundPatternDensity = postcard.backgroundPatternDensity,
+                stampPhotoScale = postcard.stampPhotoScale,
+                polaroidPhotoScale = postcard.polaroidPhotoScale
             )
 
             for (overlay in stickerOverlays) {

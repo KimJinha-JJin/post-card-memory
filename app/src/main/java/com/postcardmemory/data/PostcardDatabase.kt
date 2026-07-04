@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 8,
+    version = 11,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -181,6 +181,57 @@ abstract class PostcardDatabase : RoomDatabase() {
                         """
                         ALTER TABLE postcards
                         ADD COLUMN dateTextScale REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        val MIGRATION_8_9 =
+            object : Migration(
+                startVersion = 8,
+                endVersion = 9
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN backgroundPatternDensity REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        val MIGRATION_9_10 =
+            object : Migration(
+                startVersion = 9,
+                endVersion = 10
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN stampPhotoScale REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        val MIGRATION_10_11 =
+            object : Migration(
+                startVersion = 10,
+                endVersion = 11
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN polaroidPhotoScale REAL NOT NULL DEFAULT 1.0
                         """.trimIndent()
                     )
                 }

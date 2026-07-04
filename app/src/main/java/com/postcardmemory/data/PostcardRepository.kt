@@ -121,4 +121,34 @@ class PostcardRepository @Inject constructor(
             dateTextScale = dateTextScale
         )
     }
+
+    suspend fun updatePostcardBackgroundPatternDensity(
+        id: Long,
+        backgroundPatternDensity: Float
+    ) {
+        dao.updatePostcardBackgroundPatternDensity(
+            id = id,
+            backgroundPatternDensity = backgroundPatternDensity
+        )
+    }
+
+    suspend fun updatePostcardStampPhotoScale(
+        id: Long,
+        stampPhotoScale: Float
+    ) {
+        dao.updatePostcardStampPhotoScale(
+            id = id,
+            stampPhotoScale = stampPhotoScale
+        )
+    }
+
+    suspend fun updatePostcardPolaroidPhotoScale(
+        id: Long,
+        polaroidPhotoScale: Float
+    ) {
+        dao.updatePostcardPolaroidPhotoScale(
+            id = id,
+            polaroidPhotoScale = polaroidPhotoScale
+        )
+    }
 }

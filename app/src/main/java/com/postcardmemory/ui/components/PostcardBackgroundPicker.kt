@@ -73,12 +73,12 @@ enum class PostcardBackgroundPattern(
 ) {
     NONE("없음", "×"),
     DOTS("땡땡이", "●"),
-    STARS("별", "★"),
-    HEARTS("하트", "♥"),
     CHECKER("체크", "▦"),
-    CHERRY_BLOSSOMS("벚꽃", "✿"),
-    TRIANGLES("세모", "▲"),
-    SQUARES("사각형", "■")
+    STRIPES("사선무늬", "╱"),
+    WAVES("물결무늬", "〜"),
+    GRID("격자무늬", "#"),
+    CROSSHATCH("교차무늬", "▨"),
+    SPECKLE("은은한 입자", "░")
 }
 
 @Suppress("UNUSED_PARAMETER")
