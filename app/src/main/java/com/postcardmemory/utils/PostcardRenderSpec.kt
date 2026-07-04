@@ -36,13 +36,21 @@ object PostcardRenderSpec {
         STANDARD,
         PHOTO_FOCUS,
         AIRY,
-        MAGAZINE
+        MAGAZINE,
+        POLAROID
+    }
+
+    enum class PhotoFrameStyle {
+        PINKING,
+        POLAROID
     }
 
     data class RenderLayout(
         val stampBounds: RectF,
         val messagePanel: RectF,
         val datePanel: RectF,
+        val photoBounds: RectF = stampBounds,
+        val photoFrameStyle: PhotoFrameStyle = PhotoFrameStyle.PINKING,
         val compactMessage: Boolean = false,
         val compactDate: Boolean = false,
         val darkMessageOverlay: Boolean = false
@@ -55,6 +63,7 @@ object PostcardRenderSpec {
             "PHOTO_FOCUS" -> LayoutStyle.PHOTO_FOCUS
             "AIRY" -> LayoutStyle.AIRY
             "MAGAZINE" -> LayoutStyle.MAGAZINE
+            "POLAROID" -> LayoutStyle.POLAROID
             else -> LayoutStyle.STANDARD
         }
     }
@@ -93,6 +102,15 @@ object PostcardRenderSpec {
                     datePanel = RectF(544f, 1846f, 1504f, 1932f),
                     darkMessageOverlay = true
                 )
+
+            LayoutStyle.POLAROID ->
+                RenderLayout(
+                    stampBounds = RectF(394f, 120f, 1654f, 1490f),
+                    photoBounds = RectF(454f, 180f, 1594f, 1320f),
+                    photoFrameStyle = PhotoFrameStyle.POLAROID,
+                    messagePanel = RectF(220f, 1565f, 1828f, 1798f),
+                    datePanel = RectF(544f, 1860f, 1504f, 1946f)
+                )
         }
     }
 
@@ -122,11 +140,24 @@ object PostcardRenderSpec {
             backgroundColorArgb = backgroundColorArgb,
             backgroundPattern = backgroundPattern
         )
-        drawStampPhoto(
-            canvas = canvas,
-            sourceBitmap = sourceBitmap,
-            stampBounds = layout.stampBounds
-        )
+        when (layout.photoFrameStyle) {
+            PhotoFrameStyle.PINKING -> {
+                drawStampPhoto(
+                    canvas = canvas,
+                    sourceBitmap = sourceBitmap,
+                    stampBounds = layout.stampBounds
+                )
+            }
+
+            PhotoFrameStyle.POLAROID -> {
+                drawPolaroidPhoto(
+                    canvas = canvas,
+                    sourceBitmap = sourceBitmap,
+                    paperBounds = layout.stampBounds,
+                    photoBounds = layout.photoBounds
+                )
+            }
+        }
         drawMessage(
             canvas = canvas,
             message = message,
@@ -481,6 +512,95 @@ object PostcardRenderSpec {
             }
 
         canvas.drawPath(stampPath, whiteBorderPaint)
+    }
+
+    private fun drawPolaroidPhoto(
+        canvas: Canvas,
+        sourceBitmap: Bitmap,
+        paperBounds: RectF,
+        photoBounds: RectF
+    ) {
+        val paperCornerRadius = 18f
+        val shadowBounds =
+            RectF(
+                paperBounds.left + 18f,
+                paperBounds.top + 22f,
+                paperBounds.right + 18f,
+                paperBounds.bottom + 22f
+            )
+        val shadowPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(60, 18, 12, 28)
+                style = Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(
+            shadowBounds,
+            paperCornerRadius,
+            paperCornerRadius,
+            shadowPaint
+        )
+
+        val paperPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(255, 253, 248)
+                style = Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(
+            paperBounds,
+            paperCornerRadius,
+            paperCornerRadius,
+            paperPaint
+        )
+
+        val paperOutlinePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(45, 40, 30, 35)
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            }
+
+        canvas.drawRoundRect(
+            paperBounds,
+            paperCornerRadius,
+            paperCornerRadius,
+            paperOutlinePaint
+        )
+
+        val photoCornerRadius = 8f
+        val photoPath =
+            Path().apply {
+                addRoundRect(
+                    photoBounds,
+                    photoCornerRadius,
+                    photoCornerRadius,
+                    Path.Direction.CW
+                )
+            }
+
+        canvas.save()
+        canvas.clipPath(photoPath)
+        drawCenterCroppedBitmap(
+            canvas = canvas,
+            bitmap = sourceBitmap,
+            destinationRect = photoBounds
+        )
+        canvas.restore()
+
+        val photoBorderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(45, 30, 24, 34)
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            }
+
+        canvas.drawRoundRect(
+            photoBounds,
+            photoCornerRadius,
+            photoCornerRadius,
+            photoBorderPaint
+        )
     }
 
     private fun drawMessage(

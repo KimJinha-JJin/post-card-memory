@@ -53,6 +53,10 @@ enum class PostcardLayoutStyle(
     MAGAZINE(
         label = "잡지형",
         description = "글귀를 사진 위에"
+    ),
+    POLAROID(
+        label = "폴라로이드",
+        description = "하단 여백이 넓은 즉석사진"
     )
 }
 
@@ -432,6 +436,81 @@ private fun LayoutMiniPreview(
                                     )
                             )
                     )
+                }
+            }
+
+            PostcardLayoutStyle.POLAROID -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(50.dp)
+                            .height(50.dp)
+                            .offset(
+                                x = 3.dp,
+                                y = 3.dp
+                            )
+                            .background(
+                                color =
+                                    BrutalBlack.copy(
+                                        alpha = 0.25f
+                                    ),
+                                shape =
+                                    RoundedCornerShape(
+                                        4.dp
+                                    )
+                            )
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .width(50.dp)
+                            .height(50.dp)
+                            .background(
+                                color = BrutalWhite,
+                                shape =
+                                    RoundedCornerShape(
+                                        4.dp
+                                    )
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = BrutalBlack,
+                                shape =
+                                    RoundedCornerShape(
+                                        4.dp
+                                    )
+                            )
+                            .padding(
+                                top = 4.dp,
+                                start = 4.dp,
+                                end = 4.dp,
+                                bottom = 14.dp
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(32.dp)
+                                .background(
+                                    color = BrutalLavender,
+                                    shape =
+                                        RoundedCornerShape(
+                                            3.dp
+                                        )
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = BrutalBlack,
+                                    shape =
+                                        RoundedCornerShape(
+                                            3.dp
+                                        )
+                                )
+                        )
+                    }
                 }
             }
         }

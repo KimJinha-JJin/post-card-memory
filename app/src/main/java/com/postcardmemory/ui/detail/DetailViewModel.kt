@@ -1308,7 +1308,8 @@ class DetailViewModel @Inject constructor(
             "STANDARD",
             "PHOTO_FOCUS",
             "AIRY",
-            "MAGAZINE" -> layoutStyle
+            "MAGAZINE",
+            "POLAROID" -> layoutStyle
 
             else -> "STANDARD"
         }
