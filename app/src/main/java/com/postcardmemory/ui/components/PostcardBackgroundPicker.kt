@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalViolet
 import com.postcardmemory.ui.theme.BrutalWhite
 
 val postcardBackgroundPalette =
@@ -123,11 +122,6 @@ fun PostcardBackgroundPicker(
                 color = BrutalWhite,
                 shape = RoundedCornerShape(16.dp)
             )
-            .border(
-                width = 2.dp,
-                color = BrutalBlack,
-                shape = RoundedCornerShape(16.dp)
-            )
             .padding(16.dp)
     ) {
         Text(
@@ -166,24 +160,15 @@ fun PostcardBackgroundPicker(
 
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(
+                            if (selected) {
+                                54.dp
+                            } else {
+                                48.dp
+                            }
+                        )
                         .background(
                             color = Color(colorArgb),
-                            shape = CircleShape
-                        )
-                        .border(
-                            width =
-                                if (selected) {
-                                    4.dp
-                                } else {
-                                    2.dp
-                                },
-                            color =
-                                if (selected) {
-                                    BrutalViolet
-                                } else {
-                                    BrutalBlack
-                                },
                             shape = CircleShape
                         )
                         .clickable(
@@ -201,11 +186,6 @@ fun PostcardBackgroundPicker(
                                     color = BrutalWhite,
                                     shape = CircleShape
                                 )
-                                .border(
-                                    width = 2.dp,
-                                    color = BrutalBlack,
-                                    shape = CircleShape
-                                )
                         )
                     }
                 }
@@ -213,8 +193,20 @@ fun PostcardBackgroundPicker(
 
             Box(
                 modifier = Modifier
-                    .width(86.dp)
-                    .height(48.dp)
+                    .width(
+                        if (selectedIsCustomColor) {
+                            92.dp
+                        } else {
+                            86.dp
+                        }
+                    )
+                    .height(
+                        if (selectedIsCustomColor) {
+                            52.dp
+                        } else {
+                            48.dp
+                        }
+                    )
                     .background(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
@@ -229,21 +221,6 @@ fun PostcardBackgroundPicker(
                         ),
                         shape = RoundedCornerShape(12.dp)
                     )
-                    .border(
-                        width =
-                            if (selectedIsCustomColor) {
-                                4.dp
-                            } else {
-                                2.dp
-                            },
-                        color =
-                            if (selectedIsCustomColor) {
-                                BrutalViolet
-                            } else {
-                                BrutalBlack
-                            },
-                        shape = RoundedCornerShape(12.dp)
-                    )
                     .clickable(
                         enabled = enabled
                     ) {
@@ -255,14 +232,24 @@ fun PostcardBackgroundPicker(
                     text = "기타 색상",
                     modifier = Modifier
                         .background(
-                            color = BrutalWhite.copy(alpha = 0.88f),
+                            color =
+                                if (selectedIsCustomColor) {
+                                    BrutalDeepViolet.copy(alpha = 0.9f)
+                                } else {
+                                    BrutalWhite.copy(alpha = 0.88f)
+                                },
                             shape = RoundedCornerShape(8.dp)
                         )
                         .padding(
                             horizontal = 8.dp,
                             vertical = 5.dp
                         ),
-                    color = BrutalDeepViolet,
+                    color =
+                        if (selectedIsCustomColor) {
+                            BrutalWhite
+                        } else {
+                            BrutalDeepViolet
+                        },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -319,21 +306,6 @@ fun PostcardBackgroundPicker(
                                         Color(selectedColorArgb)
                                     } else {
                                         Color(0xFFF7F2FF)
-                                    },
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .border(
-                                width =
-                                    if (selected) {
-                                        4.dp
-                                    } else {
-                                        2.dp
-                                    },
-                                color =
-                                    if (selected) {
-                                        BrutalViolet
-                                    } else {
-                                        BrutalBlack
                                     },
                                 shape = RoundedCornerShape(14.dp)
                             )

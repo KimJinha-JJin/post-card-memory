@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,11 +67,6 @@ fun PostcardLayoutPicker(
             )
             .background(
                 color = LavenderSoft,
-                shape = RoundedCornerShape(18.dp)
-            )
-            .border(
-                width = 2.dp,
-                color = BrutalBlack,
                 shape = RoundedCornerShape(18.dp)
             )
             .padding(
@@ -139,89 +135,68 @@ private fun LayoutOption(
     val cardShape =
         RoundedCornerShape(14.dp)
 
-    Box {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .offset(
-                    x = 4.dp,
-                    y = 4.dp
-                )
-                .background(
-                    color = BrutalBlack,
-                    shape = cardShape
-                )
+    Column(
+        modifier = Modifier
+            .width(126.dp)
+            .graphicsLayer {
+                scaleX = if (selected) 1.02f else 1f
+                scaleY = if (selected) 1.02f else 1f
+            }
+            .background(
+                color =
+                    if (selected) {
+                        BrutalYellow
+                    } else {
+                        BrutalWhite
+                    },
+                shape = cardShape
+            )
+            .clickable(
+                enabled = enabled,
+                onClick = onClick
+            )
+            .padding(
+                horizontal = 10.dp,
+                vertical = 12.dp
+            ),
+        horizontalAlignment =
+            Alignment.CenterHorizontally
+    ) {
+        LayoutMiniPreview(
+            layout = layout
         )
 
-        Column(
-            modifier = Modifier
-                .width(126.dp)
-                .background(
-                    color =
-                        if (selected) {
-                            BrutalYellow
-                        } else {
-                            BrutalWhite
-                        },
-                    shape = cardShape
-                )
-                .border(
-                    width =
-                        if (selected) {
-                            3.dp
-                        } else {
-                            2.dp
-                        },
-                    color = BrutalBlack,
-                    shape = cardShape
-                )
-                .clickable(
-                    enabled = enabled,
-                    onClick = onClick
-                )
-                .padding(
-                    horizontal = 10.dp,
-                    vertical = 12.dp
-                ),
-            horizontalAlignment =
-                Alignment.CenterHorizontally
-        ) {
-            LayoutMiniPreview(
-                layout = layout
-            )
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
 
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
+        Text(
+            text = layout.label,
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight =
+                if (selected) {
+                    FontWeight.ExtraBold
+                } else {
+                    FontWeight.Bold
+                },
+            textAlign = TextAlign.Center
+        )
 
-            Text(
-                text = layout.label,
-                color = BrutalBlack,
-                fontSize = 13.sp,
-                fontWeight =
-                    if (selected) {
-                        FontWeight.ExtraBold
-                    } else {
-                        FontWeight.Bold
-                    },
-                textAlign = TextAlign.Center
-            )
+        Spacer(
+            modifier = Modifier.height(2.dp)
+        )
 
-            Spacer(
-                modifier = Modifier.height(2.dp)
-            )
-
-            Text(
-                text = layout.description,
-                color = BrutalDeepViolet,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                minLines = 2,
-                maxLines = 2,
-                lineHeight = 13.sp
-            )
-        }
+        Text(
+            text = layout.description,
+            color = BrutalDeepViolet,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            minLines = 2,
+            maxLines = 2,
+            lineHeight = 13.sp
+        )
     }
 }
 

@@ -6,7 +6,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -51,6 +49,7 @@ import com.postcardmemory.ui.theme.BrutalDeepViolet
 import com.postcardmemory.ui.theme.BrutalLavender
 import com.postcardmemory.ui.theme.BrutalViolet
 import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.LavenderSoft
 
 @Composable
 fun PhotoStickerPickerPanel(
@@ -108,11 +107,6 @@ fun PhotoStickerPickerPanel(
                 color = BrutalLavender,
                 shape = RoundedCornerShape(18.dp)
             )
-            .border(
-                width = 2.dp,
-                color = BrutalBlack,
-                shape = RoundedCornerShape(18.dp)
-            )
             .padding(16.dp)
     ) {
         Row(
@@ -135,11 +129,6 @@ fun PhotoStickerPickerPanel(
                 modifier = Modifier
                     .background(
                         color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .border(
-                        width = 2.dp,
-                        color = BrutalBlack,
                         shape = RoundedCornerShape(10.dp)
                     )
                     .padding(horizontal = 9.dp, vertical = 5.dp)
@@ -172,18 +161,14 @@ fun PhotoStickerPickerPanel(
                     modifier = Modifier
                         .size(64.dp)
                         .background(
-                            color = BrutalWhite,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .border(
-                            width = if (isSelected) 3.dp else 2.dp,
-                            color = if (isSelected) BrutalViolet else BrutalBlack,
+                            color = if (isSelected) BrutalViolet else BrutalWhite,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))
                         .clickable(enabled = enabled) {
                             onSelectSticker(sticker.id)
-                        },
+                        }
+                        .padding(if (isSelected) 4.dp else 0.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -195,7 +180,9 @@ fun PhotoStickerPickerPanel(
                             } else {
                                 ContentScale.Crop
                             },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(if (isSelected) 6.dp else 10.dp))
                     )
                 }
             }
@@ -206,11 +193,6 @@ fun PhotoStickerPickerPanel(
                     .size(64.dp)
                     .background(
                         color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .border(
-                        width = 2.dp,
-                        color = BrutalBlack,
                         shape = RoundedCornerShape(10.dp)
                     )
                     .clickable(enabled = enabled) {
@@ -258,13 +240,7 @@ fun PhotoStickerPickerPanel(
                 contentColor = BrutalWhite
             ),
             shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 2.dp,
-                    color = BrutalBlack,
-                    shape = RoundedCornerShape(14.dp)
-                )
+            modifier = Modifier.fillMaxWidth()
         ) {
             Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null)
             Text(
@@ -276,11 +252,15 @@ fun PhotoStickerPickerPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        OutlinedButton(
+        Button(
             onClick = {
                 filePicker.launch(arrayOf("image/*"))
             },
             enabled = enabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = LavenderSoft,
+                contentColor = BrutalDeepViolet
+            ),
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -334,9 +314,13 @@ fun PhotoStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            OutlinedButton(
+            Button(
                 onClick = { onDuplicateSticker(selectedSticker.id) },
                 enabled = enabled,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = LavenderSoft,
+                    contentColor = BrutalDeepViolet
+                ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -349,9 +333,13 @@ fun PhotoStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedButton(
+            Button(
                 onClick = { onDeleteSticker(selectedSticker.id) },
                 enabled = enabled,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrutalCoral.copy(alpha = 0.16f),
+                    contentColor = BrutalCoral
+                ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {

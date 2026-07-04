@@ -8,7 +8,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -51,6 +50,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
@@ -302,22 +302,6 @@ private fun DetailDrawer(
         Box(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .offset(
-                        x = 5.dp,
-                        y = 5.dp
-                    )
-                    .background(
-                        color = BrutalBlack,
-                        shape =
-                            RoundedCornerShape(
-                                16.dp
-                            )
-                    )
-            )
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -328,14 +312,6 @@ private fun DetailDrawer(
                             } else {
                                 BrutalWhite
                             },
-                        shape =
-                            RoundedCornerShape(
-                                16.dp
-                            )
-                    )
-                    .border(
-                        width = 2.dp,
-                        color = BrutalBlack,
                         shape =
                             RoundedCornerShape(
                                 16.dp
@@ -481,6 +457,15 @@ private fun TextSizeControl(
                             focusManager.clearFocus()
                         }
                     ),
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent,
+                    focusedContainerColor = LavenderSoft,
+                    unfocusedContainerColor = LavenderSoft,
+                    disabledContainerColor = LavenderSoft.copy(alpha = 0.6f)
+                ),
                 modifier = Modifier
                     .width(76.dp)
                     .onFocusChanged { focusState ->
@@ -562,11 +547,6 @@ private fun StickerEditModeToolbar(
             .horizontalScroll(rememberScrollState())
             .background(
                 color = BrutalLavender,
-                shape = RoundedCornerShape(14.dp)
-            )
-            .border(
-                width = 2.dp,
-                color = BrutalBlack,
                 shape = RoundedCornerShape(14.dp)
             )
             .padding(6.dp),
@@ -666,11 +646,6 @@ private fun StickerEditModeButton(
             .alpha(if (enabled) 1f else 0.4f)
             .background(
                 color = if (selected) BrutalViolet else BrutalWhite,
-                shape = RoundedCornerShape(10.dp)
-            )
-            .border(
-                width = 1.5.dp,
-                color = BrutalBlack,
                 shape = RoundedCornerShape(10.dp)
             )
             .clickable(
@@ -1169,11 +1144,6 @@ fun DetailScreen(
                                         Modifier
                                             .fillMaxSize()
                                             .clip(RoundedCornerShape(16.dp))
-                                            .border(
-                                                width = 3.dp,
-                                                color = BrutalBlack,
-                                                shape = RoundedCornerShape(16.dp)
-                                            )
                                 }
 
                             Box(
@@ -1918,11 +1888,6 @@ fun DetailScreen(
                             color = LavenderSoft,
                             shape = RoundedCornerShape(14.dp)
                         )
-                        .border(
-                            width = 2.dp,
-                            color = BrutalBlack,
-                            shape = RoundedCornerShape(14.dp)
-                        )
                         .padding(6.dp),
                     horizontalArrangement =
                         Arrangement.spacedBy(6.dp)
@@ -1942,12 +1907,6 @@ fun DetailScreen(
                                         } else {
                                             BrutalWhite
                                         },
-                                    shape =
-                                        RoundedCornerShape(10.dp)
-                                )
-                                .border(
-                                    width = 1.5.dp,
-                                    color = BrutalBlack,
                                     shape =
                                         RoundedCornerShape(10.dp)
                                 )
@@ -2401,11 +2360,6 @@ fun DetailScreen(
                                         },
                                     shape = CircleShape
                                 )
-                                .border(
-                                    width = 1.dp,
-                                    color = BrutalBlack,
-                                    shape = CircleShape
-                                )
                         )
                     }
                 }
@@ -2551,10 +2505,7 @@ fun DetailScreen(
                             disabledContentColor =
                                 BrutalDeepViolet
                         ),
-                    border = BorderStroke(
-                        width = 2.dp,
-                        color = BrutalBlack
-                    ),
+                    border = null,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth(0.84f)
@@ -2600,97 +2551,53 @@ fun DetailScreen(
                     verticalAlignment =
                         Alignment.CenterVertically
                 ) {
-                    Box {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .offset(
-                                    x = 4.dp,
-                                    y = 4.dp
-                                )
-                                .background(
-                                    color = BrutalBlack,
-                                    shape = CircleShape
-                                )
-                        )
+                    IconButton(
+                        onClick = {
+                            messageDraft =
+                                pc.message
 
-                        IconButton(
-                            onClick = {
-                                messageDraft =
-                                    pc.message
-
-                                showMessageDialog =
-                                    true
-                            },
-                            enabled = controlsEnabled,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(
-                                    color =
-                                        BrutalLavender,
-                                    shape =
-                                        CircleShape
-                                )
-                                .border(
-                                    width = 2.dp,
-                                    color =
-                                        BrutalBlack,
-                                    shape =
-                                        CircleShape
-                                )
-                        ) {
-                            Icon(
-                                imageVector =
-                                    Icons.Default.Edit,
-                                contentDescription =
-                                    "글귀 편집",
-                                tint =
-                                    BrutalDeepViolet
+                            showMessageDialog =
+                                true
+                        },
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                color =
+                                    BrutalLavender,
+                                shape =
+                                    CircleShape
                             )
-                        }
+                    ) {
+                        Icon(
+                            imageVector =
+                                Icons.Default.Edit,
+                            contentDescription =
+                                "글귀 편집",
+                            tint =
+                                BrutalDeepViolet
+                        )
                     }
 
-                    Box {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .offset(
-                                    x = 4.dp,
-                                    y = 4.dp
-                                )
-                                .background(
-                                    color = BrutalBlack,
-                                    shape = CircleShape
-                                )
-                        )
-
-                        IconButton(
-                            onClick = {
-                                showDeleteDialog = true
-                            },
-                            enabled = controlsEnabled,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(
-                                    color = BrutalCoral,
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 2.dp,
-                                    color =
-                                        BrutalBlack,
-                                    shape =
-                                        CircleShape
-                                )
-                        ) {
-                            Icon(
-                                imageVector =
-                                    Icons.Default.Delete,
-                                contentDescription =
-                                    "삭제",
-                                tint = BrutalBlack
+                    IconButton(
+                        onClick = {
+                            showDeleteDialog = true
+                        },
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                color = BrutalCoral,
+                                shape = CircleShape
                             )
-                        }
+                    ) {
+                        Icon(
+                            imageVector =
+                                Icons.Default.Delete,
+                            contentDescription =
+                                "삭제",
+                            tint = BrutalBlack
+                        )
                     }
                 }
 
