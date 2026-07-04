@@ -123,6 +123,13 @@ private enum class DetailDrawerSection {
     TEXT_SIZE
 }
 
+private enum class CustomizationGroup(
+    val label: String
+) {
+    PHOTO(label = "사진"),
+    DESIGN(label = "디자인")
+}
+
 private enum class StickerEditMode {
     Move,
     Scale,
@@ -820,6 +827,12 @@ fun DetailScreen(
     var openedDrawerName by rememberSaveable {
         mutableStateOf(
             DetailDrawerSection.LAYOUT.name
+        )
+    }
+
+    var selectedCustomizationGroup by rememberSaveable {
+        mutableStateOf(
+            CustomizationGroup.PHOTO.name
         )
     }
 
@@ -1898,6 +1911,80 @@ fun DetailScreen(
                                 horizontalAlignment =
                                     Alignment.CenterHorizontally
                             ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .background(
+                            color = LavenderSoft,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .border(
+                            width = 2.dp,
+                            color = BrutalBlack,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .padding(6.dp),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(6.dp)
+                ) {
+                    CustomizationGroup.entries.forEach { group ->
+                        val groupSelected =
+                            selectedCustomizationGroup ==
+                                    group.name
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    color =
+                                        if (groupSelected) {
+                                            BrutalViolet
+                                        } else {
+                                            BrutalWhite
+                                        },
+                                    shape =
+                                        RoundedCornerShape(10.dp)
+                                )
+                                .border(
+                                    width = 1.5.dp,
+                                    color = BrutalBlack,
+                                    shape =
+                                        RoundedCornerShape(10.dp)
+                                )
+                                .clickable(
+                                    enabled = controlsEnabled
+                                ) {
+                                    selectedCustomizationGroup =
+                                        group.name
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment =
+                                Alignment.Center
+                        ) {
+                            Text(
+                                text = group.label,
+                                color =
+                                    if (groupSelected) {
+                                        BrutalWhite
+                                    } else {
+                                        BrutalDeepViolet
+                                    },
+                                fontSize = 14.sp,
+                                fontWeight =
+                                    FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                if (
+                    selectedCustomizationGroup ==
+                    CustomizationGroup.PHOTO.name
+                ) {
                 DetailDrawer(
                     title = "레이아웃 꾸미기",
                     summary = selectedLayout.label,
@@ -2027,11 +2114,12 @@ fun DetailScreen(
                         )
                     }
                 }
+                }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
+                if (
+                    selectedCustomizationGroup ==
+                    CustomizationGroup.DESIGN.name
+                ) {
                 DetailDrawer(
                     title = "배경 꾸미기",
                     summary = selectedPattern.label,
@@ -2215,6 +2303,7 @@ fun DetailScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                }
                 }
 
                             }
