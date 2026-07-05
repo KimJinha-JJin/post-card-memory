@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -232,6 +232,23 @@ abstract class PostcardDatabase : RoomDatabase() {
                         """
                         ALTER TABLE postcards
                         ADD COLUMN polaroidPhotoScale REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        val MIGRATION_11_12 =
+            object : Migration(
+                startVersion = 11,
+                endVersion = 12
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN photoEdgeBlur REAL NOT NULL DEFAULT 0.0
                         """.trimIndent()
                     )
                 }

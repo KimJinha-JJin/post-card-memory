@@ -195,4 +195,16 @@ interface PostcardDao {
         id: Long,
         imagePath: String
     )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET photoEdgeBlur = :photoEdgeBlur
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPhotoEdgeBlur(
+        id: Long,
+        photoEdgeBlur: Float
+    )
 }

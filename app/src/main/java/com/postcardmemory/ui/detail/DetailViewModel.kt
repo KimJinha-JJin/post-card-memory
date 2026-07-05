@@ -233,6 +233,8 @@ class DetailViewModel @Inject constructor(
 
     private var polaroidPhotoScaleSaveJob: Job? = null
 
+    private var photoEdgeBlurSaveJob: Job? = null
+
     private val _photoStickers =
         MutableStateFlow(listOf<PhotoStickerItem>())
 
@@ -1003,6 +1005,67 @@ class DetailViewModel @Inject constructor(
                         )
                     _textScaleSaveErrors.trySend(
                         "사진 크기를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setPhotoEdgeBlurPreview(
+        edgeBlur: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                photoEdgeBlur =
+                    edgeBlur.coerceIn(0f, 1f)
+            )
+    }
+
+    fun savePhotoEdgeBlur(
+        edgeBlur: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousEdgeBlur =
+            currentPostcard.photoEdgeBlur
+        val normalizedEdgeBlur =
+            edgeBlur.coerceIn(0f, 1f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                photoEdgeBlur = normalizedEdgeBlur
+            )
+
+        photoEdgeBlurSaveJob?.cancel()
+        photoEdgeBlurSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardPhotoEdgeBlur(
+                                id = currentPostcard.id,
+                                photoEdgeBlur =
+                                    normalizedEdgeBlur
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            photoEdgeBlur = normalizedEdgeBlur
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            photoEdgeBlur = previousEdgeBlur
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "가장자리 블러를 저장하지 못했어."
                     )
                 }
             }

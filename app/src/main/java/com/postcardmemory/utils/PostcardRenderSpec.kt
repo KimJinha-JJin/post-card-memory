@@ -7,8 +7,12 @@ import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.text.Layout
@@ -23,6 +27,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 object PostcardRenderSpec {
@@ -146,7 +151,8 @@ object PostcardRenderSpec {
         dateTextScale: Float = 1f,
         backgroundPatternDensity: Float = 1f,
         stampPhotoScale: Float = 1f,
-        polaroidPhotoScale: Float = 1f
+        polaroidPhotoScale: Float = 1f,
+        photoEdgeBlur: Float = 0f
     ) {
         val scale =
             targetSize / LOGICAL_SIZE
@@ -172,7 +178,8 @@ object PostcardRenderSpec {
                 drawStampPhoto(
                     canvas = canvas,
                     sourceBitmap = sourceBitmap,
-                    stampBounds = layout.stampBounds
+                    stampBounds = layout.stampBounds,
+                    edgeBlur = photoEdgeBlur
                 )
             }
 
@@ -181,7 +188,8 @@ object PostcardRenderSpec {
                     canvas = canvas,
                     sourceBitmap = sourceBitmap,
                     paperBounds = layout.stampBounds,
-                    photoBounds = layout.photoBounds
+                    photoBounds = layout.photoBounds,
+                    edgeBlur = photoEdgeBlur
                 )
             }
         }
@@ -237,7 +245,8 @@ object PostcardRenderSpec {
     fun drawCenterCroppedBitmap(
         canvas: Canvas,
         bitmap: Bitmap,
-        destinationRect: RectF
+        destinationRect: RectF,
+        edgeBlur: Float = 0f
     ) {
         val sourceWidth =
             bitmap.width.toFloat()
@@ -255,6 +264,11 @@ object PostcardRenderSpec {
             sourceWidth /
                     sourceHeight
 
+        val sourceWidthInt =
+            bitmap.width
+        val sourceHeightInt =
+            bitmap.height
+
         val sourceRect =
             if (sourceRatio > destinationRatio) {
                 val croppedWidth =
@@ -263,10 +277,12 @@ object PostcardRenderSpec {
                     (sourceWidth - croppedWidth) / 2f
 
                 Rect(
-                    left.toInt(),
+                    left.toInt()
+                        .coerceIn(0, sourceWidthInt),
                     0,
-                    (left + croppedWidth).toInt(),
-                    sourceHeight.toInt()
+                    (left + croppedWidth).toInt()
+                        .coerceIn(0, sourceWidthInt),
+                    sourceHeightInt
                 )
             } else {
                 val croppedHeight =
@@ -276,21 +292,203 @@ object PostcardRenderSpec {
 
                 Rect(
                     0,
-                    top.toInt(),
-                    sourceWidth.toInt(),
+                    top.toInt()
+                        .coerceIn(0, sourceHeightInt),
+                    sourceWidthInt,
                     (top + croppedHeight).toInt()
+                        .coerceIn(0, sourceHeightInt)
                 )
             }
+
+        val paint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG or
+                        Paint.FILTER_BITMAP_FLAG
+            )
 
         canvas.drawBitmap(
             bitmap,
             sourceRect,
             destinationRect,
-            Paint(
-                Paint.ANTI_ALIAS_FLAG or
-                        Paint.FILTER_BITMAP_FLAG
-            )
+            paint
         )
+
+        val clampedEdgeBlur =
+            edgeBlur.coerceIn(0f, 1f)
+
+        if (clampedEdgeBlur > 0f) {
+            drawEdgeBlurOverlay(
+                canvas = canvas,
+                bitmap = bitmap,
+                sourceRect = sourceRect,
+                destinationRect = destinationRect,
+                intensity = clampedEdgeBlur,
+                paint = paint
+            )
+        }
+    }
+
+    private fun drawEdgeBlurOverlay(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        sourceRect: Rect,
+        destinationRect: RectF,
+        intensity: Float,
+        paint: Paint
+    ) {
+        val croppedWidth =
+            sourceRect.width()
+        val croppedHeight =
+            sourceRect.height()
+
+        if (croppedWidth <= 0 || croppedHeight <= 0) {
+            return
+        }
+
+        val visibleBitmap =
+            Bitmap.createBitmap(
+                bitmap,
+                sourceRect.left,
+                sourceRect.top,
+                croppedWidth,
+                croppedHeight
+            )
+
+        val blurredBitmap =
+            createFullyBlurredBitmap(
+                bitmap = visibleBitmap
+            )
+
+        val saveCount =
+            canvas.saveLayer(
+                destinationRect.left,
+                destinationRect.top,
+                destinationRect.right,
+                destinationRect.bottom,
+                null
+            )
+
+        val blurredPaint =
+            Paint(paint).apply {
+                alpha =
+                    (intensity * 255f)
+                        .roundToInt()
+                        .coerceIn(0, 255)
+            }
+
+        canvas.drawBitmap(
+            blurredBitmap,
+            null,
+            destinationRect,
+            blurredPaint
+        )
+
+        // Shorter-side radius keeps the fade even on all edges, not just corners.
+        val vignetteRadius =
+            min(
+                destinationRect.width(),
+                destinationRect.height()
+            ) / 2f
+
+        val gradient =
+            RadialGradient(
+                destinationRect.centerX(),
+                destinationRect.centerY(),
+                vignetteRadius,
+                intArrayOf(
+                    Color.TRANSPARENT,
+                    Color.TRANSPARENT,
+                    Color.BLACK
+                ),
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP
+            )
+
+        val maskPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = gradient
+                xfermode =
+                    PorterDuffXfermode(
+                        PorterDuff.Mode.DST_IN
+                    )
+            }
+
+        canvas.drawRect(
+            destinationRect,
+            maskPaint
+        )
+
+        canvas.restoreToCount(saveCount)
+
+        if (visibleBitmap !== bitmap) {
+            visibleBitmap.recycle()
+        }
+
+        if (blurredBitmap !== visibleBitmap) {
+            blurredBitmap.recycle()
+        }
+    }
+
+    // Repeated halving looks smoother than one big downsample/upsample jump.
+    private fun createFullyBlurredBitmap(
+        bitmap: Bitmap
+    ): Bitmap {
+        val halvingSteps = 6
+        val width = bitmap.width
+        val height = bitmap.height
+
+        var current = bitmap
+        val intermediates = mutableListOf<Bitmap>()
+
+        repeat(halvingSteps) {
+            val nextWidth =
+                (current.width / 2)
+                    .coerceAtLeast(1)
+            val nextHeight =
+                (current.height / 2)
+                    .coerceAtLeast(1)
+
+            if (
+                nextWidth == current.width &&
+                nextHeight == current.height
+            ) {
+                return@repeat
+            }
+
+            val smaller =
+                Bitmap.createScaledBitmap(
+                    current,
+                    nextWidth,
+                    nextHeight,
+                    true
+                )
+
+            if (current !== bitmap) {
+                intermediates.add(current)
+            }
+
+            current = smaller
+        }
+
+        val blurred =
+            Bitmap.createScaledBitmap(
+                current,
+                width,
+                height,
+                true
+            )
+
+        if (current !== bitmap) {
+            intermediates.add(current)
+        }
+
+        intermediates.forEach { candidate ->
+            if (candidate !== blurred) {
+                candidate.recycle()
+            }
+        }
+
+        return blurred
     }
 
     fun createPinkingPath(
@@ -596,7 +794,8 @@ object PostcardRenderSpec {
     private fun drawStampPhoto(
         canvas: Canvas,
         sourceBitmap: Bitmap,
-        stampBounds: RectF
+        stampBounds: RectF,
+        edgeBlur: Float = 0f
     ) {
         val stampPath =
             createPinkingPath(
@@ -627,7 +826,8 @@ object PostcardRenderSpec {
         drawCenterCroppedBitmap(
             canvas = canvas,
             bitmap = sourceBitmap,
-            destinationRect = stampBounds
+            destinationRect = stampBounds,
+            edgeBlur = edgeBlur
         )
         canvas.restore()
 
@@ -647,7 +847,8 @@ object PostcardRenderSpec {
         canvas: Canvas,
         sourceBitmap: Bitmap,
         paperBounds: RectF,
-        photoBounds: RectF
+        photoBounds: RectF,
+        edgeBlur: Float = 0f
     ) {
         val paperCornerRadius = 18f
         val shadowBounds =
@@ -713,7 +914,8 @@ object PostcardRenderSpec {
         drawCenterCroppedBitmap(
             canvas = canvas,
             bitmap = sourceBitmap,
-            destinationRect = photoBounds
+            destinationRect = photoBounds,
+            edgeBlur = edgeBlur
         )
         canvas.restore()
 

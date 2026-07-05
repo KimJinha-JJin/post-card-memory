@@ -122,6 +122,7 @@ private enum class DetailDrawerSection {
     LAYOUT,
     PHOTO_SIZE,
     PHOTO_CHANGE,
+    PHOTO_EDGE_BLUR,
     BACKGROUND,
     PATTERN_INTENSITY,
     TEXT_SIZE
@@ -682,7 +683,8 @@ private fun PostcardPreviewContent(
     dateTextScale: Float = 1f,
     backgroundPatternDensity: Float = 1f,
     stampPhotoScale: Float = 1f,
-    polaroidPhotoScale: Float = 1f
+    polaroidPhotoScale: Float = 1f,
+    photoEdgeBlur: Float = 0f
 ) {
     val sourceBitmap =
         remember(imagePath) {
@@ -726,7 +728,8 @@ private fun PostcardPreviewContent(
                 dateTextScale = dateTextScale,
                 backgroundPatternDensity = backgroundPatternDensity,
                 stampPhotoScale = stampPhotoScale,
-                polaroidPhotoScale = polaroidPhotoScale
+                polaroidPhotoScale = polaroidPhotoScale,
+                photoEdgeBlur = photoEdgeBlur
             )
         }
     }
@@ -888,6 +891,10 @@ fun DetailScreen(
 
     val polaroidPhotoScalePercent =
         ((postcard?.polaroidPhotoScale ?: 1f) * 100f)
+            .roundToInt()
+
+    val photoEdgeBlurPercent =
+        ((postcard?.photoEdgeBlur ?: 0f) * 100f)
             .roundToInt()
 
     LaunchedEffect(postcardId) {
@@ -1105,7 +1112,9 @@ fun DetailScreen(
                             stampPhotoScale =
                                 pc.stampPhotoScale,
                             polaroidPhotoScale =
-                                pc.polaroidPhotoScale
+                                pc.polaroidPhotoScale,
+                            photoEdgeBlur =
+                                pc.photoEdgeBlur
                         )
 
                         photoStickers.forEach { sticker ->
@@ -2168,6 +2177,80 @@ fun DetailScreen(
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
+                    title = "가장자리 블러",
+                    summary =
+                        if (photoEdgeBlurPercent <= 0) {
+                            "없음"
+                        } else {
+                            "$photoEdgeBlurPercent%"
+                        },
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_EDGE_BLUR
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_EDGE_BLUR
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .PHOTO_EDGE_BLUR
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    Column {
+                        Text(
+                            text =
+                                "사진 가장자리를 흐리게 만들어서 " +
+                                        "부드러운 느낌을 줘.",
+                            color = BrutalDeepViolet,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(12.dp)
+                        )
+
+                        TextSizeControl(
+                            label = "흐림 정도",
+                            initialPercent =
+                                photoEdgeBlurPercent,
+                            minPercent = 0,
+                            maxPercent = 100,
+                            enabled = controlsEnabled,
+                            onPreviewPercentChanged = { percent ->
+                                viewModel
+                                    .setPhotoEdgeBlurPreview(
+                                        percent / 100f
+                                    )
+                            },
+                            onPercentConfirmed = { percent ->
+                                viewModel
+                                    .savePhotoEdgeBlur(
+                                        percent / 100f
+                                    )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
                 }

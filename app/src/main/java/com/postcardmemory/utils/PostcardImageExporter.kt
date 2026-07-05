@@ -135,7 +135,8 @@ object PostcardImageExporter {
                 dateTextScale = postcard.dateTextScale,
                 backgroundPatternDensity = postcard.backgroundPatternDensity,
                 stampPhotoScale = postcard.stampPhotoScale,
-                polaroidPhotoScale = postcard.polaroidPhotoScale
+                polaroidPhotoScale = postcard.polaroidPhotoScale,
+                photoEdgeBlur = postcard.photoEdgeBlur
             )
 
             for (overlay in stickerOverlays) {
