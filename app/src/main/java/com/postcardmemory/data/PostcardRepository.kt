@@ -151,4 +151,14 @@ class PostcardRepository @Inject constructor(
             polaroidPhotoScale = polaroidPhotoScale
         )
     }
+
+    suspend fun updatePostcardImagePath(
+        id: Long,
+        imagePath: String
+    ) {
+        dao.updatePostcardImagePath(
+            id = id,
+            imagePath = imagePath
+        )
+    }
 }

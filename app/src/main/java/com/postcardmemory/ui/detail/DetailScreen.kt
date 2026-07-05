@@ -3,6 +3,9 @@ package com.postcardmemory.ui.detail
 import android.net.Uri
 import android.widget.Toast
 import java.io.File
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -118,6 +121,7 @@ import com.postcardmemory.utils.PostcardRenderSpec
 private enum class DetailDrawerSection {
     LAYOUT,
     PHOTO_SIZE,
+    PHOTO_CHANGE,
     BACKGROUND,
     PATTERN_INTENSITY,
     TEXT_SIZE
@@ -738,6 +742,7 @@ fun DetailScreen(
     val deleted by viewModel.deleted.collectAsState()
     val exportState by viewModel.exportState.collectAsState()
     val backgroundUpdateState by viewModel.backgroundUpdateState.collectAsState()
+    val imageUpdateState by viewModel.imageUpdateState.collectAsState()
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
     val layoutUpdateState by viewModel.layoutUpdateState.collectAsState()
     val dateFormatUpdateState by viewModel.dateFormatUpdateState.collectAsState()
@@ -798,6 +803,15 @@ fun DetailScreen(
     }
 
     val context = LocalContext.current
+
+    val postcardPhotoPicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.PickVisualMedia()
+        ) { uri ->
+            if (uri != null) {
+                viewModel.updatePostcardImage(uri)
+            }
+        }
 
     var openedDrawerName by rememberSaveable {
         mutableStateOf(
@@ -890,6 +904,12 @@ fun DetailScreen(
     LaunchedEffect(backgroundUpdateState) {
         if (backgroundUpdateState is BackgroundUpdateState.Success) {
             viewModel.resetBackgroundUpdateState()
+        }
+    }
+
+    LaunchedEffect(imageUpdateState) {
+        if (imageUpdateState is ImageUpdateState.Success) {
+            viewModel.resetImageUpdateState()
         }
     }
 
@@ -1010,6 +1030,7 @@ fun DetailScreen(
                 fontUpdateState !is FontUpdateState.Saving &&
                 layoutUpdateState !is LayoutUpdateState.Saving &&
                 dateFormatUpdateState !is DateFormatUpdateState.Saving &&
+                imageUpdateState !is ImageUpdateState.Saving &&
                 !isRemovingBackground
     val latestControlsEnabled by rememberUpdatedState(controlsEnabled)
 
@@ -2073,6 +2094,82 @@ fun DetailScreen(
                         )
                     }
                 }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
+                    title = "사진 바꾸기",
+                    summary = "현재 사진을 다른 사진으로 교체",
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_CHANGE
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_CHANGE
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .PHOTO_CHANGE
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    Column {
+                        Text(
+                            text =
+                                "배경과 글귀, 스티커는 유지하고 " +
+                                        "중심 사진만 바꿔.",
+                            color = BrutalDeepViolet,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(12.dp)
+                        )
+
+                        Button(
+                            onClick = {
+                                postcardPhotoPicker.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts
+                                            .PickVisualMedia
+                                            .ImageOnly
+                                    )
+                                )
+                            },
+                            enabled = controlsEnabled,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BrutalViolet,
+                                contentColor = BrutalWhite
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null
+                            )
+                            Text(
+                                text = "  갤러리에서 사진 선택",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
                 }
 
                 if (
@@ -2917,6 +3014,48 @@ fun DetailScreen(
                         onClick = {
                             viewModel
                                 .resetBackgroundUpdateState()
+                        }
+                    ) {
+                        Text(
+                            text = "확인",
+                            color = BrutalDeepViolet,
+                            fontWeight =
+                                FontWeight.ExtraBold
+                        )
+                    }
+                }
+            )
+        }
+
+    (
+            imageUpdateState
+                    as? ImageUpdateState.Error
+            )?.let { imageError ->
+
+            AlertDialog(
+                onDismissRequest = {
+                    viewModel.resetImageUpdateState()
+                },
+                title = {
+                    Text(
+                        text = "사진을 바꾸지 못했어",
+                        color = BrutalCoral,
+                        fontWeight =
+                            FontWeight.ExtraBold
+                    )
+                },
+                text = {
+                    Text(
+                        text =
+                            "사진을 바꾸지 못했어. 기존 사진은 그대로 유지했어.\n" +
+                                    imageError.message
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel
+                                .resetImageUpdateState()
                         }
                     ) {
                         Text(

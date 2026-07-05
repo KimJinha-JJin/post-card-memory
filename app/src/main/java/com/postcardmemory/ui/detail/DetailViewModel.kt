@@ -15,6 +15,7 @@ import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.BackgroundImageStorage
 import com.postcardmemory.utils.PostcardImageExporter
+import com.postcardmemory.utils.PostcardImageStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -102,6 +103,19 @@ sealed interface DateFormatUpdateState {
     ) : DateFormatUpdateState
 }
 
+sealed interface ImageUpdateState {
+
+    data object Idle : ImageUpdateState
+
+    data object Saving : ImageUpdateState
+
+    data object Success : ImageUpdateState
+
+    data class Error(
+        val message: String
+    ) : ImageUpdateState
+}
+
 sealed interface StickerBackgroundRemovalState {
 
     data object Idle : StickerBackgroundRemovalState
@@ -184,6 +198,15 @@ class DetailViewModel @Inject constructor(
     val dateFormatUpdateState:
             StateFlow<DateFormatUpdateState> =
         _dateFormatUpdateState
+
+    private val _imageUpdateState =
+        MutableStateFlow<ImageUpdateState>(
+            ImageUpdateState.Idle
+        )
+
+    val imageUpdateState:
+            StateFlow<ImageUpdateState> =
+        _imageUpdateState
 
     private val _stickerBackgroundRemovalState =
         MutableStateFlow<StickerBackgroundRemovalState>(
@@ -1205,6 +1228,78 @@ class DetailViewModel @Inject constructor(
     fun resetBackgroundUpdateState() {
         _backgroundUpdateState.value =
             BackgroundUpdateState.Idle
+    }
+
+    fun updatePostcardImage(
+        sourceUri: Uri
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        if (
+            _imageUpdateState.value is
+                    ImageUpdateState.Saving
+        ) {
+            return
+        }
+
+        _imageUpdateState.value =
+            ImageUpdateState.Saving
+
+        viewModelScope.launch {
+            var newImagePath: String? =
+                null
+
+            try {
+                newImagePath =
+                    withContext(Dispatchers.IO) {
+                        PostcardImageStorage
+                            .copyToAppStorage(
+                                context = context,
+                                sourceUri = sourceUri
+                            )
+                    }
+
+                withContext(Dispatchers.IO) {
+                    repository.updatePostcardImagePath(
+                        id = currentPostcard.id,
+                        imagePath = newImagePath
+                    )
+                }
+
+                _postcard.value =
+                    currentPostcard.copy(
+                        imagePath = newImagePath
+                    )
+
+                _imageUpdateState.value =
+                    ImageUpdateState.Success
+            } catch (exception: Exception) {
+                withContext(Dispatchers.IO) {
+                    newImagePath
+                        ?.let { path ->
+                            val newFile =
+                                File(path)
+
+                            if (newFile.exists()) {
+                                newFile.delete()
+                            }
+                        }
+                }
+
+                _imageUpdateState.value =
+                    ImageUpdateState.Error(
+                        exception.message
+                            ?: "사진을 바꾸지 못했습니다."
+                    )
+            }
+        }
+    }
+
+    fun resetImageUpdateState() {
+        _imageUpdateState.value =
+            ImageUpdateState.Idle
     }
 
     fun resetFontUpdateState() {

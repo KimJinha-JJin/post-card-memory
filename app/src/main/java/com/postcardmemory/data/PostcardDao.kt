@@ -183,4 +183,16 @@ interface PostcardDao {
         id: Long,
         polaroidPhotoScale: Float
     )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET imagePath = :imagePath
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardImagePath(
+        id: Long,
+        imagePath: String
+    )
 }
