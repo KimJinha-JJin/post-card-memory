@@ -1061,9 +1061,6 @@ fun DetailScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(
-                    rememberScrollState()
-                )
                 .padding(
                     horizontal = 20.dp
                 ),
@@ -1786,6 +1783,18 @@ fun DetailScreen(
                         }
                     }
                 }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(
+                        rememberScrollState()
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+            postcard?.let { pc ->
 
                 val selectedSticker =
                     photoStickers.find {
@@ -2784,6 +2793,7 @@ fun DetailScreen(
                 Spacer(
                     modifier = Modifier.height(40.dp)
                 )
+            }
             }
         }
 
