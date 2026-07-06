@@ -62,17 +62,28 @@ object PostcardImageExporter {
         val flipVertical: Boolean = false
     )
 
+    data class SealOverlay(
+        val type: String,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val sizeRatio: Float,
+        val rotationDegrees: Float = 0f,
+        val colorArgb: Long
+    )
+
     fun exportToGallery(
         context: Context,
         postcard: Postcard,
-        stickerOverlays: List<StickerOverlay> = emptyList()
+        stickerOverlays: List<StickerOverlay> = emptyList(),
+        sealOverlays: List<SealOverlay> = emptyList()
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
                 createPostcardBitmap(
                     context = context,
                     postcard = postcard,
-                    stickerOverlays = stickerOverlays
+                    stickerOverlays = stickerOverlays,
+                    sealOverlays = sealOverlays
                 )
 
             try {
@@ -91,7 +102,8 @@ object PostcardImageExporter {
     private fun createPostcardBitmap(
         context: Context,
         postcard: Postcard,
-        stickerOverlays: List<StickerOverlay>
+        stickerOverlays: List<StickerOverlay>,
+        sealOverlays: List<SealOverlay> = emptyList()
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -144,6 +156,13 @@ object PostcardImageExporter {
                     context = context,
                     canvas = canvas,
                     stickerOverlay = overlay
+                )
+            }
+
+            for (overlay in sealOverlays) {
+                drawSealOverlay(
+                    canvas = canvas,
+                    sealOverlay = overlay
                 )
             }
 
@@ -1317,6 +1336,220 @@ object PostcardImageExporter {
                 stickerBitmap.recycle()
             }
         }
+    }
+
+    private fun drawSealOverlay(
+        canvas: Canvas,
+        sealOverlay: SealOverlay
+    ) {
+        val sealSide =
+            (sealOverlay.sizeRatio * OUTPUT_SIZE)
+                .coerceIn(1f, OUTPUT_SIZE.toFloat())
+
+        val left =
+            (sealOverlay.normalizedX.coerceIn(0f, 1f) * OUTPUT_SIZE)
+                .coerceIn(0f, OUTPUT_SIZE - sealSide)
+        val top =
+            (sealOverlay.normalizedY.coerceIn(0f, 1f) * OUTPUT_SIZE)
+                .coerceIn(0f, OUTPUT_SIZE - sealSide)
+
+        val sealBounds =
+            RectF(left, top, left + sealSide, top + sealSide)
+
+        if (
+            sealBounds.width() <= 0f ||
+            sealBounds.height() <= 0f
+        ) {
+            return
+        }
+
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = sealOverlay.colorArgb.toInt()
+                style = Paint.Style.STROKE
+            }
+
+        canvas.save()
+        canvas.rotate(
+            sealOverlay.rotationDegrees,
+            sealBounds.centerX(),
+            sealBounds.centerY()
+        )
+
+        when (sealOverlay.type) {
+            "CIRCLE_POSTMARK" ->
+                drawCirclePostmarkOverlay(canvas, sealBounds, paint)
+
+            "WAVE_CANCEL" ->
+                drawWaveCancelOverlay(canvas, sealBounds, paint)
+
+            "AIR_MAIL" ->
+                drawAirMailOverlay(canvas, sealBounds, paint)
+
+            "STAR" ->
+                drawSealStarOverlay(canvas, sealBounds, paint)
+        }
+
+        canvas.restore()
+    }
+
+    private fun drawCirclePostmarkOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        paint: Paint
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
+
+        val outerRadius =
+            min(bounds.width(), bounds.height()) / 2f - strokeWidth
+        val innerRadius = outerRadius * 0.72f
+        val cx = bounds.centerX()
+        val cy = bounds.centerY()
+
+        canvas.drawCircle(cx, cy, outerRadius, paint)
+
+        val innerPaint =
+            Paint(paint).apply { this.strokeWidth = strokeWidth * 0.7f }
+        canvas.drawCircle(cx, cy, innerRadius, innerPaint)
+
+        val tickPaint =
+            Paint(paint).apply { this.strokeWidth = strokeWidth * 0.6f }
+        val tickCount = 16
+
+        for (i in 0 until tickCount) {
+            val angle = (2 * PI * i / tickCount).toFloat()
+            val fromRadius = outerRadius * 0.86f
+            val toRadius = outerRadius * 0.96f
+
+            canvas.drawLine(
+                cx + fromRadius * cos(angle),
+                cy + fromRadius * sin(angle),
+                cx + toRadius * cos(angle),
+                cy + toRadius * sin(angle),
+                tickPaint
+            )
+        }
+    }
+
+    private fun drawWaveCancelOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        paint: Paint
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
+
+        val lineCount = 4
+        val waveHeight = bounds.height() * 0.08f
+        val waveWidth = bounds.width() * 0.22f
+        val spacing = bounds.height() / (lineCount + 1)
+
+        for (lineIndex in 1..lineCount) {
+            val y = bounds.top + spacing * lineIndex
+            val path = Path()
+            path.moveTo(bounds.left, y)
+
+            var x = bounds.left
+            var up = true
+            while (x < bounds.right) {
+                val nextX = (x + waveWidth).coerceAtMost(bounds.right)
+                path.quadTo(
+                    x + waveWidth / 2f,
+                    y + if (up) -waveHeight else waveHeight,
+                    nextX,
+                    y
+                )
+                x = nextX
+                up = !up
+            }
+
+            canvas.drawPath(path, paint)
+        }
+    }
+
+    private fun drawAirMailOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        paint: Paint
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
+
+        val cornerRadius =
+            min(bounds.width(), bounds.height()) * 0.12f
+        val inset = strokeWidth
+        val rect =
+            RectF(
+                bounds.left + inset,
+                bounds.top + inset,
+                bounds.right - inset,
+                bounds.bottom - inset
+            )
+
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
+
+        val textPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = paint.color
+                typeface = Typeface.create(
+                    Typeface.SANS_SERIF,
+                    Typeface.BOLD
+                )
+                textSize = bounds.height() * 0.24f
+                textAlign = Paint.Align.CENTER
+            }
+
+        val textY =
+            bounds.centerY() -
+                    (textPaint.descent() + textPaint.ascent()) / 2f
+
+        canvas.drawText(
+            "AIR MAIL",
+            bounds.centerX(),
+            textY,
+            textPaint
+        )
+    }
+
+    private fun drawSealStarOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        paint: Paint
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
+
+        val outerRadius =
+            min(bounds.width(), bounds.height()) / 2f - strokeWidth
+        val cx = bounds.centerX()
+        val cy = bounds.centerY()
+
+        canvas.drawCircle(cx, cy, outerRadius, paint)
+
+        val starOuterRadius = outerRadius * 0.72f
+        val starInnerRadius = starOuterRadius * 0.42f
+        val points = 5
+        val path = Path()
+
+        for (i in 0 until points * 2) {
+            val radius =
+                if (i % 2 == 0) starOuterRadius else starInnerRadius
+            val angle = (PI / points * i - PI / 2).toFloat()
+            val x = cx + radius * cos(angle)
+            val y = cy + radius * sin(angle)
+
+            if (i == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+        }
+        path.close()
+
+        val starPaint =
+            Paint(paint).apply { this.strokeWidth = strokeWidth * 0.8f }
+        canvas.drawPath(path, starPaint)
     }
 
     private fun drawFitCenteredBitmap(

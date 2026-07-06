@@ -44,3 +44,23 @@ val pastelColors = listOf(
     BrutalPink,
     BrutalBlue
 )
+
+/*
+ * 도장(우편 소인) 잉크 색상
+ *
+ * UI 색상과 무관한 포스트카드 콘텐츠 전용 색이며
+ * 실제 우편 잉크처럼 제한된 색만 제공한다.
+ */
+val SealInkBlack = Color(0xFF252525)
+val SealInkRed = Color(0xFFB33A32)
+val SealInkNavy = Color(0xFF30415F)
+val SealInkSepia = Color(0xFF704E38)
+val SealInkGreen = Color(0xFF365C4A)
+
+val sealInkColors = listOf(
+    SealInkBlack,
+    SealInkRed,
+    SealInkNavy,
+    SealInkSepia,
+    SealInkGreen
+)

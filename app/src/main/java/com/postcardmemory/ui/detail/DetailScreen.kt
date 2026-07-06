@@ -111,6 +111,7 @@ import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.components.PostcardLayoutPicker
 import com.postcardmemory.ui.components.PostcardLayoutStyle
 import com.postcardmemory.ui.components.PostcardTextFont
+import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.NeutralLight
@@ -290,6 +291,81 @@ private fun createStickerOverlaysForExport(
             stickerOffset = sticker.offset,
             postcardSize = postcardSize,
             stickerSize = stickerSize
+        )
+    }
+}
+
+private fun createSealOverlayForExport(
+    type: SealType,
+    colorArgb: Long,
+    rotationDegrees: Float,
+    sealOffset: Offset?,
+    postcardSize: IntSize,
+    sealSize: IntSize
+): PostcardImageExporter.SealOverlay? {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0 ||
+        sealSize.width <= 0 ||
+        sealSize.height <= 0
+    ) {
+        return null
+    }
+
+    val resolvedOffset =
+        clampStickerOffset(
+            offset =
+                sealOffset
+                    ?: centeredStickerOffset(
+                        postcardSize = postcardSize,
+                        stickerSize = sealSize
+                    ),
+            postcardSize = postcardSize,
+            stickerSize = sealSize
+        )
+
+    return PostcardImageExporter.SealOverlay(
+        type = type.name,
+        normalizedX =
+            (resolvedOffset.x /
+                    postcardSize.width.toFloat())
+                .coerceIn(0f, 1f),
+        normalizedY =
+            (resolvedOffset.y /
+                    postcardSize.height.toFloat())
+                .coerceIn(0f, 1f),
+        sizeRatio =
+            sealSize.width.toFloat() /
+                    postcardSize.width.toFloat(),
+        rotationDegrees = rotationDegrees,
+        colorArgb = colorArgb
+    )
+}
+
+private fun createSealOverlaysForExport(
+    photoSeals: List<PostcardSealItem>,
+    postcardSize: IntSize,
+    sealSizes: Map<String, IntSize>
+): List<PostcardImageExporter.SealOverlay> {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0
+    ) {
+        return emptyList()
+    }
+
+    return photoSeals.mapNotNull { seal ->
+        val sealSize =
+            sealSizes[seal.id]
+                ?: return@mapNotNull null
+
+        createSealOverlayForExport(
+            type = seal.type,
+            colorArgb = seal.colorArgb,
+            rotationDegrees = seal.rotationDegrees,
+            sealOffset = seal.offset,
+            postcardSize = postcardSize,
+            sealSize = sealSize
         )
     }
 }
@@ -771,6 +847,10 @@ fun DetailScreen(
     val selectedStickerId by viewModel.selectedStickerId.collectAsState()
     val latestPhotoStickers by rememberUpdatedState(photoStickers)
 
+    val photoSeals by viewModel.photoSeals.collectAsState()
+    val selectedSealId by viewModel.selectedSealId.collectAsState()
+    val latestPhotoSeals by rememberUpdatedState(photoSeals)
+
     var stickerEditMode by remember {
         mutableStateOf(StickerEditMode.Move)
     }
@@ -788,6 +868,10 @@ fun DetailScreen(
         }
 
     var stickerSizes by remember {
+        mutableStateOf(mapOf<String, IntSize>())
+    }
+
+    var sealSizes by remember {
         mutableStateOf(mapOf<String, IntSize>())
     }
 
@@ -946,7 +1030,7 @@ fun DetailScreen(
     }
 
     val customizationPagerState = rememberPagerState(
-        pageCount = { 2 }
+        pageCount = { 3 }
     )
     val selectedLayout =
         remember(postcard?.layoutStyle) {
@@ -1017,6 +1101,7 @@ fun DetailScreen(
     LaunchedEffect(postcardId) {
         viewModel.loadPostcard(postcardId)
         viewModel.loadPhotoStickersState(postcardId)
+        viewModel.loadPhotoSealsState(postcardId)
     }
 
     LaunchedEffect(deleted) {
@@ -1919,6 +2004,140 @@ fun DetailScreen(
                                 }
                             }
                         }
+
+                        photoSeals.forEach { seal ->
+                            val isSealSelected =
+                                seal.id == selectedSealId
+                            val currentSealOffset =
+                                seal.offset
+
+                            val sealPositionModifier =
+                                if (currentSealOffset == null) {
+                                    Modifier.align(
+                                        Alignment.Center
+                                    )
+                                } else {
+                                    Modifier
+                                        .align(
+                                            Alignment.TopStart
+                                        )
+                                        .offset {
+                                            IntOffset(
+                                                x = currentSealOffset.x
+                                                    .roundToInt(),
+                                                y = currentSealOffset.y
+                                                    .roundToInt()
+                                            )
+                                        }
+                                }
+
+                            Box(
+                                modifier = sealPositionModifier
+                                    .size(90.dp * seal.scale)
+                                    .onSizeChanged { size ->
+                                        sealSizes =
+                                            sealSizes +
+                                                    (seal.id to size)
+                                    }
+                                    .graphicsLayer {
+                                        rotationZ =
+                                            seal.rotationDegrees
+                                    }
+                                    .then(
+                                        if (isSealSelected) {
+                                            Modifier.border(
+                                                width = 2.dp,
+                                                color = GraphiteAccent,
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    .pointerInput(
+                                        seal.id,
+                                        postcardPreviewSize
+                                    ) {
+                                        coroutineScope {
+                                            launch {
+                                                detectTapGestures(
+                                                    onTap = {
+                                                        viewModel.setSelectedSealId(
+                                                            if (selectedSealId == seal.id) {
+                                                                null
+                                                            } else {
+                                                                seal.id
+                                                            }
+                                                        )
+                                                    }
+                                                )
+                                            }
+                                            launch {
+                                                detectTransformGestures { _, pan, zoom, rotationChange ->
+                                                    if (postcardPreviewSize == IntSize.Zero) {
+                                                        return@detectTransformGestures
+                                                    }
+
+                                                    val currentSeal =
+                                                        latestPhotoSeals.find {
+                                                            it.id == seal.id
+                                                        } ?: return@detectTransformGestures
+
+                                                    val currentSealSize =
+                                                        sealSizes[seal.id]
+                                                            ?: IntSize.Zero
+
+                                                    val oldOffset =
+                                                        currentSeal.offset
+                                                            ?: centeredStickerOffset(
+                                                                postcardSize = postcardPreviewSize,
+                                                                stickerSize = currentSealSize
+                                                            )
+
+                                                    val newOffset =
+                                                        clampStickerOffset(
+                                                            offset = oldOffset + pan,
+                                                            postcardSize = postcardPreviewSize,
+                                                            stickerSize = currentSealSize
+                                                        )
+
+                                                    val newScale =
+                                                        (currentSeal.scale * zoom)
+                                                            .coerceIn(0.5f, 3f)
+
+                                                    val newRotation =
+                                                        normalizeStickerRotation(
+                                                            currentSeal.rotationDegrees +
+                                                                    rotationChange
+                                                        )
+
+                                                    viewModel.setSelectedSealId(seal.id)
+                                                    viewModel.setPhotoSeals(
+                                                        latestPhotoSeals.map {
+                                                            if (it.id == seal.id) {
+                                                                it.copy(
+                                                                    offset = newOffset,
+                                                                    scale = newScale,
+                                                                    rotationDegrees = newRotation
+                                                                )
+                                                            } else {
+                                                                it
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                SealPreviewContent(
+                                    type = seal.type,
+                                    color = Color(seal.colorArgb),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -2589,7 +2808,7 @@ fun DetailScreen(
                             }
                         }
 
-                        else -> {
+                        1 -> {
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter
@@ -2657,6 +2876,91 @@ fun DetailScreen(
                                 )
                             }
                         }
+
+                        2 -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                SealPickerPanel(
+                                    photoSeals = photoSeals,
+                                    selectedSealId = selectedSealId,
+                                    onSelectSeal = { id ->
+                                        viewModel.setSelectedSealId(
+                                            if (selectedSealId == id) {
+                                                null
+                                            } else {
+                                                id
+                                            }
+                                        )
+                                    },
+                                    onAddSeal = { type ->
+                                        val newSeal =
+                                            PostcardSealItem(type = type)
+                                        viewModel.setPhotoSeals(
+                                            photoSeals + newSeal
+                                        )
+                                        viewModel.setSelectedSealId(
+                                            newSeal.id
+                                        )
+                                    },
+                                    onDeleteSeal = { id ->
+                                        val remaining =
+                                            photoSeals.filter {
+                                                it.id != id
+                                            }
+                                        viewModel.setPhotoSeals(remaining)
+                                        sealSizes = sealSizes - id
+                                        if (selectedSealId == id) {
+                                            viewModel.setSelectedSealId(
+                                                remaining.lastOrNull()?.id
+                                            )
+                                        }
+                                    },
+                                    onScaleChanged = { id, newScale ->
+                                        viewModel.setPhotoSeals(
+                                            photoSeals.map {
+                                                if (it.id == id) {
+                                                    it.copy(scale = newScale)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onRotateBy = { id, deltaDegrees ->
+                                        viewModel.setPhotoSeals(
+                                            photoSeals.map {
+                                                if (it.id == id) {
+                                                    it.copy(
+                                                        rotationDegrees =
+                                                            normalizeStickerRotation(
+                                                                it.rotationDegrees +
+                                                                        deltaDegrees
+                                                            )
+                                                    )
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onColorSelected = { id, colorArgb ->
+                                        viewModel.setPhotoSeals(
+                                            photoSeals.map {
+                                                if (it.id == id) {
+                                                    it.copy(colorArgb = colorArgb)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    enabled = controlsEnabled,
+                                    modifier = Modifier.fillMaxWidth(0.92f)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -2670,7 +2974,7 @@ fun DetailScreen(
                     verticalAlignment =
                         Alignment.CenterVertically
                 ) {
-                    repeat(2) { pageIndex ->
+                    repeat(3) { pageIndex ->
                         Box(
                             modifier = Modifier
                                 .size(
@@ -2825,6 +3129,15 @@ fun DetailScreen(
                                         postcardPreviewSize,
                                     stickerSizes =
                                         stickerSizes
+                                ),
+                            sealOverlays =
+                                createSealOverlaysForExport(
+                                    photoSeals =
+                                        photoSeals,
+                                    postcardSize =
+                                        postcardPreviewSize,
+                                    sealSizes =
+                                        sealSizes
                                 )
                         )
                     },
@@ -2979,6 +3292,9 @@ fun DetailScreen(
             TextButton(
                 onClick = {
                     viewModel.savePhotoStickersState(
+                        postcardId
+                    )
+                    viewModel.savePhotoSealsState(
                         postcardId
                     )
                     Toast.makeText(

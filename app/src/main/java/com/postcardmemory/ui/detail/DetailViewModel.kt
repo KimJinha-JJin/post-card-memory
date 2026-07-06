@@ -340,6 +340,69 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    private val _photoSeals =
+        MutableStateFlow(listOf<PostcardSealItem>())
+
+    val photoSeals: StateFlow<List<PostcardSealItem>> =
+        _photoSeals
+
+    private val _selectedSealId =
+        MutableStateFlow<String?>(null)
+
+    val selectedSealId: StateFlow<String?> =
+        _selectedSealId
+
+    fun setPhotoSeals(
+        seals: List<PostcardSealItem>
+    ) {
+        _photoSeals.value = seals
+    }
+
+    fun setSelectedSealId(
+        id: String?
+    ) {
+        _selectedSealId.value = id
+    }
+
+    fun savePhotoSealsState(
+        postcardId: Long
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val stateDir =
+                File(context.filesDir, "seal_states")
+            if (!stateDir.exists()) stateDir.mkdirs()
+            File(stateDir, "$postcardId.txt").writeText(
+                _photoSeals.value.joinToString("\n") {
+                    it.serialize()
+                }
+            )
+        }
+    }
+
+    fun loadPhotoSealsState(
+        postcardId: Long
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file =
+                File(
+                    context.filesDir,
+                    "seal_states/$postcardId.txt"
+                )
+            _selectedSealId.value = null
+            if (!file.exists()) return@launch
+
+            val seals =
+                file.readLines()
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { line ->
+                        deserializePostcardSealItem(line)
+                    }
+            if (seals.isNotEmpty()) {
+                _photoSeals.value = seals
+            }
+        }
+    }
+
     private var subjectSegmenter: SubjectSegmenter? =
         null
 
@@ -1717,7 +1780,8 @@ class DetailViewModel @Inject constructor(
     }
 
     fun exportPostcardToGallery(
-        stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList()
+        stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList(),
+        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList()
     ) {
         val currentPostcard =
             _postcard.value
@@ -1740,7 +1804,8 @@ class DetailViewModel @Inject constructor(
                         .exportToGallery(
                             context = context,
                             postcard = currentPostcard,
-                            stickerOverlays = stickerOverlays
+                            stickerOverlays = stickerOverlays,
+                            sealOverlays = sealOverlays
                         )
                 }
 
