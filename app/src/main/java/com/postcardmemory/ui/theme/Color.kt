@@ -18,24 +18,24 @@ val BrutalPink = Color(0xFFFFB3E1)
 val BrutalBlue = Color(0xFFAAD4FF)
 
 /*
- * 앱 전체 라벤더·바이올렛 테마
+ * 앱 전체 흑백·회색조 테마
+ * (선택/강조 상태와 보조 배경)
  */
-val BrutalLavender = Color(0xFFD4B8FF)
-val BrutalViolet = Color(0xFF8055C7)
-val BrutalDeepViolet = Color(0xFF432665)
+val NeutralLight = Color(0xFFCFCED6)
+val GraphiteAccent = Color(0xFF57545C)
 
 /*
  * 화면 배경과 카드 표면
  */
-val LavenderBackground = Color(0xFFF1E8FF)
-val LavenderSurface = Color(0xFFE3D1FF)
-val LavenderSoft = Color(0xFFFAF6FF)
+val ScreenBackgroundGray = Color(0xFFEDEBF2)
+val SurfaceGray = Color(0xFFE0DFE5)
+val SoftGray = Color(0xFFF5F4F7)
 
 /*
  * 포스트카드 배경색 목록
  *
- * 앱 전체가 라벤더 테마이므로
- * 카드 색상 목록에서는 라벤더를 제외한다.
+ * 앱 전체가 흑백·회색조 테마이므로
+ * 카드 색상 목록에서는 무채색을 제외한다.
  */
 val pastelColors = listOf(
     BrutalMint,

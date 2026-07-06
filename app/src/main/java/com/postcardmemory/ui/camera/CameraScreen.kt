@@ -59,13 +59,12 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.postcardmemory.ui.components.PinkingPhotoGuide
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalLavender
-import com.postcardmemory.ui.theme.BrutalViolet
+import com.postcardmemory.ui.theme.NeutralLight
+import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.LavenderBackground
-import com.postcardmemory.ui.theme.LavenderSoft
-import com.postcardmemory.ui.theme.LavenderSurface
+import com.postcardmemory.ui.theme.ScreenBackgroundGray
+import com.postcardmemory.ui.theme.SoftGray
+import com.postcardmemory.ui.theme.SurfaceGray
 import java.io.File
 import kotlin.math.max
 import kotlinx.coroutines.delay
@@ -151,7 +150,7 @@ fun CameraScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(LavenderBackground)
+            .background(ScreenBackgroundGray)
     ) {
         when {
             cropState != null -> {
@@ -232,7 +231,7 @@ private fun CameraPreviewScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(LavenderBackground)
+            .background(ScreenBackgroundGray)
     ) {
         if (permissionGranted) {
             Column(
@@ -283,7 +282,7 @@ private fun CameraPreviewScreen(
                             .padding(6.dp),
                         outlineColor = BrutalBlack,
                         outlineWidth = 4f,
-                        haloColor = BrutalLavender,
+                        haloColor = NeutralLight,
                         haloWidth = 8f
                     )
                 }
@@ -291,14 +290,14 @@ private fun CameraPreviewScreen(
                 Text(
                     text =
                         "프레임을 기준으로 촬영하고\n다음 화면에서 위치를 조정할 수 있어요",
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .padding(top = 18.dp)
                         .background(
-                            color = LavenderSurface,
+                            color = SurfaceGray,
                             shape = RoundedCornerShape(20.dp)
                         )
                         .padding(
@@ -315,7 +314,7 @@ private fun CameraPreviewScreen(
                 Text(
                     text =
                         "카메라 권한이 필요합니다\n설정에서 권한을 허용해주세요",
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
@@ -333,14 +332,14 @@ private fun CameraPreviewScreen(
                 .align(Alignment.TopStart)
                 .padding(16.dp)
                 .background(
-                    color = LavenderSoft,
+                    color = SoftGray,
                     shape = CircleShape
                 )
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
                 contentDescription = "뒤로",
-                tint = BrutalDeepViolet
+                tint = BrutalBlack
             )
         }
 
@@ -361,14 +360,14 @@ private fun CameraPreviewScreen(
                     modifier = Modifier
                         .size(72.dp)
                         .background(
-                            color = BrutalLavender,
+                            color = NeutralLight,
                             shape = CircleShape
                         )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Camera,
                         contentDescription = "촬영",
-                        tint = BrutalDeepViolet,
+                        tint = BrutalBlack,
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -388,7 +387,7 @@ private fun CameraPreviewScreen(
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
-                    color = BrutalViolet,
+                    color = GraphiteAccent,
                     strokeWidth = 4.dp
                 )
             }
@@ -579,7 +578,7 @@ private fun CropEditorScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(LavenderBackground),
+            .background(ScreenBackgroundGray),
         horizontalAlignment =
             Alignment.CenterHorizontally
     ) {
@@ -589,7 +588,7 @@ private fun CropEditorScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(BrutalDeepViolet)
+                .background(BrutalBlack)
                 .padding(
                     horizontal = 8.dp,
                     vertical = 8.dp
@@ -622,7 +621,7 @@ private fun CropEditorScreen(
         Text(
             text =
                 "사진을 움직이고 두 손가락으로 확대하거나 축소해봐",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -687,7 +686,7 @@ private fun CropEditorScreen(
                 modifier = Modifier.fillMaxSize(),
                 outlineColor = BrutalBlack,
                 outlineWidth = 4f,
-                haloColor = BrutalLavender,
+                haloColor = NeutralLight,
                 haloWidth = 9f
             )
         }
@@ -695,7 +694,7 @@ private fun CropEditorScreen(
         Text(
             text =
                 "현재 ${String.format("%.1f", zoom)}배 · 최대 4배 확대",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -723,8 +722,8 @@ private fun CropEditorScreen(
             Button(
                 onClick = onRetake,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = LavenderSurface,
-                    contentColor = BrutalDeepViolet
+                    containerColor = SurfaceGray,
+                    contentColor = BrutalBlack
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
@@ -753,12 +752,12 @@ private fun CropEditorScreen(
                 },
                 enabled = viewportSize > 0f,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BrutalViolet,
+                    containerColor = GraphiteAccent,
                     contentColor = BrutalWhite,
                     disabledContainerColor =
-                        BrutalLavender,
+                        NeutralLight,
                     disabledContentColor =
-                        BrutalDeepViolet
+                        BrutalBlack
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
@@ -788,7 +787,7 @@ private fun TeleportWaitingScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(LavenderBackground),
+            .background(ScreenBackgroundGray),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -802,7 +801,7 @@ private fun TeleportWaitingScreen(
                 modifier = Modifier
                     .size(120.dp)
                     .background(
-                        color = LavenderSurface,
+                        color = SurfaceGray,
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
@@ -815,7 +814,7 @@ private fun TeleportWaitingScreen(
 
             Text(
                 text = title,
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
@@ -824,7 +823,7 @@ private fun TeleportWaitingScreen(
 
             Text(
                 text = subtitle,
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -836,7 +835,7 @@ private fun TeleportWaitingScreen(
             )
 
             CircularProgressIndicator(
-                color = BrutalViolet,
+                color = GraphiteAccent,
                 strokeWidth = 4.dp,
                 modifier = Modifier.padding(top = 24.dp)
             )

@@ -27,11 +27,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalLavender
+import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.BrutalYellow
-import com.postcardmemory.ui.theme.LavenderSoft
+import com.postcardmemory.ui.theme.SoftGray
 
 enum class PostcardTextFont(
     val label: String,
@@ -82,7 +81,7 @@ fun PostcardFontPicker(
                 }
             )
             .background(
-                color = LavenderSoft,
+                color = SoftGray,
                 shape = RoundedCornerShape(18.dp)
             )
             .border(
@@ -97,7 +96,7 @@ fun PostcardFontPicker(
     ) {
         Text(
             text = "글귀 폰트",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 17.sp,
             fontWeight = FontWeight.ExtraBold
         )
@@ -108,7 +107,7 @@ fun PostcardFontPicker(
 
         Text(
             text = "글씨체를 누르면 엽서에 저장돼.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
@@ -148,13 +147,13 @@ fun PostcardFontPicker(
 
         Text(
             text = "화면을 나갔다 돌아와도 선택한 폰트가 유지돼.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    color = BrutalLavender,
+                    color = NeutralLight,
                     shape = RoundedCornerShape(10.dp)
                 )
                 .padding(

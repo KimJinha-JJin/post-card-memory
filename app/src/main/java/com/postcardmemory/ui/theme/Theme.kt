@@ -5,34 +5,34 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val LightColorScheme = lightColorScheme(
-    primary = BrutalViolet,
+    primary = GraphiteAccent,
     onPrimary = BrutalWhite,
 
-    primaryContainer = BrutalLavender,
-    onPrimaryContainer = BrutalDeepViolet,
+    primaryContainer = NeutralLight,
+    onPrimaryContainer = BrutalBlack,
 
-    secondary = LavenderSurface,
-    onSecondary = BrutalDeepViolet,
+    secondary = SurfaceGray,
+    onSecondary = BrutalBlack,
 
-    secondaryContainer = LavenderSoft,
-    onSecondaryContainer = BrutalDeepViolet,
+    secondaryContainer = SoftGray,
+    onSecondaryContainer = BrutalBlack,
 
     tertiary = BrutalCoral,
     onTertiary = BrutalBlack,
 
-    background = LavenderBackground,
+    background = ScreenBackgroundGray,
     onBackground = BrutalBlack,
 
-    surface = LavenderSoft,
+    surface = SoftGray,
     onSurface = BrutalBlack,
 
-    surfaceVariant = LavenderSurface,
-    onSurfaceVariant = BrutalDeepViolet,
+    surfaceVariant = SurfaceGray,
+    onSurfaceVariant = BrutalBlack,
 
     error = BrutalCoral,
     onError = BrutalBlack,
 
-    outline = BrutalDeepViolet
+    outline = BrutalBlack
 )
 
 @Composable

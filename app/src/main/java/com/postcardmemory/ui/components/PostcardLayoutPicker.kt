@@ -29,11 +29,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalLavender
+import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.BrutalYellow
-import com.postcardmemory.ui.theme.LavenderSoft
+import com.postcardmemory.ui.theme.SoftGray
 
 enum class PostcardLayoutStyle(
     val label: String,
@@ -66,7 +65,7 @@ fun PostcardLayoutPicker(
                 }
             )
             .background(
-                color = LavenderSoft,
+                color = SoftGray,
                 shape = RoundedCornerShape(18.dp)
             )
             .padding(
@@ -76,7 +75,7 @@ fun PostcardLayoutPicker(
     ) {
         Text(
             text = "엽서 레이아웃",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 17.sp,
             fontWeight = FontWeight.ExtraBold
         )
@@ -87,7 +86,7 @@ fun PostcardLayoutPicker(
 
         Text(
             text = "배치를 누르면 위 엽서에서 바로 확인할 수 있어.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
@@ -189,7 +188,7 @@ private fun LayoutOption(
 
         Text(
             text = layout.description,
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
@@ -235,7 +234,7 @@ private fun LayoutMiniPreview(
                             .fillMaxWidth(0.72f)
                             .height(34.dp)
                             .background(
-                                color = BrutalLavender,
+                                color = NeutralLight,
                                 shape =
                                     RoundedCornerShape(
                                         4.dp
@@ -260,7 +259,7 @@ private fun LayoutMiniPreview(
                             .fillMaxWidth(0.9f)
                             .height(8.dp)
                             .background(
-                                color = BrutalDeepViolet,
+                                color = BrutalBlack,
                                 shape =
                                     RoundedCornerShape(
                                         4.dp
@@ -326,7 +325,7 @@ private fun LayoutMiniPreview(
                                 .fillMaxWidth()
                                 .height(32.dp)
                                 .background(
-                                    color = BrutalLavender,
+                                    color = NeutralLight,
                                     shape =
                                         RoundedCornerShape(
                                             3.dp

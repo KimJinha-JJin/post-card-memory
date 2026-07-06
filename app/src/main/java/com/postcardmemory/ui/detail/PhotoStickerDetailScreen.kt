@@ -45,11 +45,10 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalLavender
-import com.postcardmemory.ui.theme.BrutalViolet
+import com.postcardmemory.ui.theme.NeutralLight
+import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.LavenderSoft
+import com.postcardmemory.ui.theme.SoftGray
 
 @Composable
 fun PhotoStickerPickerPanel(
@@ -104,7 +103,7 @@ fun PhotoStickerPickerPanel(
     Column(
         modifier = modifier
             .background(
-                color = BrutalLavender,
+                color = NeutralLight,
                 shape = RoundedCornerShape(18.dp)
             )
             .padding(16.dp)
@@ -116,14 +115,14 @@ fun PhotoStickerPickerPanel(
         ) {
             Text(
                 text = "스티커 사진",
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.ExtraBold
             )
 
             Text(
                 text = "${photoStickers.size}장",
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier
@@ -139,7 +138,7 @@ fun PhotoStickerPickerPanel(
 
         Text(
             text = "갤러리 사진을 골라서 포스트카드 위에 바로 올려뵐아.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
@@ -161,7 +160,7 @@ fun PhotoStickerPickerPanel(
                     modifier = Modifier
                         .size(64.dp)
                         .background(
-                            color = if (isSelected) BrutalViolet else BrutalWhite,
+                            color = if (isSelected) GraphiteAccent else BrutalWhite,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))
@@ -210,12 +209,12 @@ fun PhotoStickerPickerPanel(
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
-                        tint = BrutalViolet,
+                        tint = GraphiteAccent,
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
                         text = "추가",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -236,7 +235,7 @@ fun PhotoStickerPickerPanel(
             },
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(
-                containerColor = BrutalViolet,
+                containerColor = GraphiteAccent,
                 contentColor = BrutalWhite
             ),
             shape = RoundedCornerShape(14.dp),
@@ -258,8 +257,8 @@ fun PhotoStickerPickerPanel(
             },
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(
-                containerColor = LavenderSoft,
-                contentColor = BrutalDeepViolet
+                containerColor = SoftGray,
+                contentColor = BrutalBlack
             ),
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
@@ -287,7 +286,7 @@ fun PhotoStickerPickerPanel(
 
             Text(
                 text = "선택된 스티커",
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.ExtraBold
             )
@@ -297,7 +296,7 @@ fun PhotoStickerPickerPanel(
             Text(
                 text = "이동·크기·회전·대칭·배경 제거·레이어 순서는 " +
                         "위쪽 캔버스 바로 아래 도구막대에서 조절할 수 있어.",
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -318,8 +317,8 @@ fun PhotoStickerPickerPanel(
                 onClick = { onDuplicateSticker(selectedSticker.id) },
                 enabled = enabled,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = LavenderSoft,
-                    contentColor = BrutalDeepViolet
+                    containerColor = SoftGray,
+                    contentColor = BrutalBlack
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()

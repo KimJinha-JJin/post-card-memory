@@ -43,11 +43,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalViolet
+import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.LavenderBackground
-import com.postcardmemory.ui.theme.LavenderSurface
+import com.postcardmemory.ui.theme.ScreenBackgroundGray
+import com.postcardmemory.ui.theme.SurfaceGray
 
 @Composable
 fun GalleryScreen(
@@ -81,14 +80,14 @@ fun GalleryScreen(
     }
 
     Scaffold(
-        containerColor = LavenderBackground,
+        containerColor = ScreenBackgroundGray,
 
         topBar = {
             if (selectionMode) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(BrutalViolet)
+                        .background(GraphiteAccent)
                         .padding(
                             horizontal = 8.dp,
                             vertical = 8.dp
@@ -133,7 +132,7 @@ fun GalleryScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(BrutalDeepViolet)
+                        .background(BrutalBlack)
                         .padding(
                             horizontal = 20.dp,
                             vertical = 16.dp
@@ -167,7 +166,7 @@ fun GalleryScreen(
 
                     FloatingActionButton(
                         onClick = onNavigateToCamera,
-                        containerColor = BrutalViolet,
+                        containerColor = GraphiteAccent,
                         contentColor = BrutalWhite,
                         shape = CircleShape,
                         modifier = Modifier.size(60.dp)
@@ -187,7 +186,7 @@ fun GalleryScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(LavenderBackground)
+                    .background(ScreenBackgroundGray)
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
@@ -195,7 +194,7 @@ fun GalleryScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .background(
-                            color = LavenderSurface,
+                            color = SurfaceGray,
                             shape = CircleShape
                         )
                         .padding(
@@ -212,7 +211,7 @@ fun GalleryScreen(
                         text = "아직 추억이 없어요\n첫 번째 사진을 찍어봐요!",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 16.dp)
                     )
@@ -231,7 +230,7 @@ fun GalleryScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(LavenderBackground)
+                    .background(ScreenBackgroundGray)
             ) {
                 items(
                     items = postcards,
@@ -263,8 +262,8 @@ fun GalleryScreen(
             onDismissRequest = {
                 showDeleteDialog = false
             },
-            containerColor = LavenderSurface,
-            titleContentColor = BrutalDeepViolet,
+            containerColor = SurfaceGray,
+            titleContentColor = BrutalBlack,
             textContentColor = BrutalBlack,
             title = {
                 Text(
@@ -303,7 +302,7 @@ fun GalleryScreen(
                 ) {
                     Text(
                         text = "취소",
-                        color = BrutalViolet,
+                        color = GraphiteAccent,
                         fontWeight = FontWeight.Bold
                     )
                 }

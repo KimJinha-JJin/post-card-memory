@@ -110,11 +110,11 @@ import com.postcardmemory.ui.components.PostcardLayoutStyle
 import com.postcardmemory.ui.components.PostcardTextFont
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalLavender
-import com.postcardmemory.ui.theme.BrutalViolet
+import com.postcardmemory.ui.theme.NeutralLight
+import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.LavenderSoft
+import com.postcardmemory.ui.theme.ScreenBackgroundGray
+import com.postcardmemory.ui.theme.SoftGray
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardRenderSpec
 
@@ -313,7 +313,7 @@ private fun DetailDrawer(
                     .background(
                         color =
                             if (expanded) {
-                                BrutalLavender
+                                NeutralLight
                             } else {
                                 BrutalWhite
                             },
@@ -338,7 +338,7 @@ private fun DetailDrawer(
                 ) {
                     Text(
                         text = title,
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontSize = 16.sp,
                         fontWeight =
                             FontWeight.ExtraBold
@@ -346,7 +346,7 @@ private fun DetailDrawer(
 
                     Text(
                         text = "현재 선택: $summary",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontSize = 12.sp,
                         fontWeight =
                             FontWeight.Medium
@@ -360,7 +360,7 @@ private fun DetailDrawer(
                         } else {
                             "▶"
                         },
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     modifier =
@@ -429,7 +429,7 @@ private fun TextSizeControl(
         ) {
             Text(
                 text = label,
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier.weight(1f)
@@ -467,9 +467,9 @@ private fun TextSizeControl(
                     focusedBorderColor = Color.Transparent,
                     unfocusedBorderColor = Color.Transparent,
                     disabledBorderColor = Color.Transparent,
-                    focusedContainerColor = LavenderSoft,
-                    unfocusedContainerColor = LavenderSoft,
-                    disabledContainerColor = LavenderSoft.copy(alpha = 0.6f)
+                    focusedContainerColor = SoftGray,
+                    unfocusedContainerColor = SoftGray,
+                    disabledContainerColor = SoftGray.copy(alpha = 0.6f)
                 ),
                 modifier = Modifier
                     .width(76.dp)
@@ -482,7 +482,7 @@ private fun TextSizeControl(
 
             Text(
                 text = "%",
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 modifier =
@@ -515,16 +515,16 @@ private fun TextSizeControl(
             enabled = enabled,
             colors =
                 SliderDefaults.colors(
-                    thumbColor = BrutalDeepViolet,
-                    activeTrackColor = BrutalDeepViolet,
-                    inactiveTrackColor = BrutalLavender
+                    thumbColor = BrutalBlack,
+                    activeTrackColor = BrutalBlack,
+                    inactiveTrackColor = NeutralLight
                 ),
             modifier = Modifier.fillMaxWidth()
         )
 
         Text(
             text = "$minPercent% ~ $maxPercent%",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium
         )
@@ -551,7 +551,7 @@ private fun StickerEditModeToolbar(
         modifier = modifier
             .horizontalScroll(rememberScrollState())
             .background(
-                color = BrutalLavender,
+                color = NeutralLight,
                 shape = RoundedCornerShape(14.dp)
             )
             .padding(6.dp),
@@ -650,7 +650,7 @@ private fun StickerEditModeButton(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.4f)
             .background(
-                color = if (selected) BrutalViolet else BrutalWhite,
+                color = if (selected) GraphiteAccent else BrutalWhite,
                 shape = RoundedCornerShape(10.dp)
             )
             .clickable(
@@ -662,7 +662,7 @@ private fun StickerEditModeButton(
     ) {
         Text(
             text = label,
-            color = if (selected) BrutalWhite else BrutalDeepViolet,
+            color = if (selected) BrutalWhite else BrutalBlack,
             fontSize = 13.sp,
             fontWeight = FontWeight.ExtraBold
         )
@@ -1056,7 +1056,7 @@ fun DetailScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BrutalWhite)
+            .background(ScreenBackgroundGray)
     ) {
         Column(
             modifier = Modifier
@@ -1078,6 +1078,7 @@ fun DetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
+                            .clip(RectangleShape)
                             .background(
                                 color = Color(
                                     pc.backgroundColorArgb
@@ -1153,7 +1154,7 @@ fun DetailScreen(
                                             .fillMaxSize()
                                             .border(
                                                 width = 3.dp,
-                                                color = BrutalViolet,
+                                                color = GraphiteAccent,
                                                 shape = RoundedCornerShape(16.dp)
                                             )
                                     sticker.isBackgroundRemoved ->
@@ -1164,7 +1165,7 @@ fun DetailScreen(
                                             .clip(RoundedCornerShape(16.dp))
                                             .border(
                                                 width = 3.dp,
-                                                color = BrutalViolet,
+                                                color = GraphiteAccent,
                                                 shape = RoundedCornerShape(16.dp)
                                             )
                                     else ->
@@ -1550,7 +1551,7 @@ fun DetailScreen(
                                                 )
                                                 .border(
                                                     width = 2.dp,
-                                                    color = BrutalDeepViolet,
+                                                    color = BrutalBlack,
                                                     shape = CircleShape
                                                 )
                                         )
@@ -1773,7 +1774,7 @@ fun DetailScreen(
                                                 )
                                                 .border(
                                                     width = 2.dp,
-                                                    color = BrutalViolet,
+                                                    color = GraphiteAccent,
                                                     shape = CircleShape
                                                 )
                                         )
@@ -1924,7 +1925,7 @@ fun DetailScreen(
                     modifier = Modifier
                         .fillMaxWidth(0.92f)
                         .background(
-                            color = LavenderSoft,
+                            color = SoftGray,
                             shape = RoundedCornerShape(14.dp)
                         )
                         .padding(6.dp),
@@ -1942,7 +1943,7 @@ fun DetailScreen(
                                 .background(
                                     color =
                                         if (groupSelected) {
-                                            BrutalViolet
+                                            GraphiteAccent
                                         } else {
                                             BrutalWhite
                                         },
@@ -1965,7 +1966,7 @@ fun DetailScreen(
                                     if (groupSelected) {
                                         BrutalWhite
                                     } else {
-                                        BrutalDeepViolet
+                                        BrutalBlack
                                     },
                                 fontSize = 14.sp,
                                 fontWeight =
@@ -2149,7 +2150,7 @@ fun DetailScreen(
                             text =
                                 "배경과 글귀, 스티커는 유지하고 " +
                                         "중심 사진만 바꿔.",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -2170,7 +2171,7 @@ fun DetailScreen(
                             },
                             enabled = controlsEnabled,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = BrutalViolet,
+                                containerColor = GraphiteAccent,
                                 contentColor = BrutalWhite
                             ),
                             shape = RoundedCornerShape(14.dp),
@@ -2230,7 +2231,7 @@ fun DetailScreen(
                             text =
                                 "사진 가장자리를 흐리게 만들어서 " +
                                         "부드러운 느낌을 줘.",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -2543,9 +2544,9 @@ fun DetailScreen(
                                             customizationPagerState.currentPage ==
                                             pageIndex
                                         ) {
-                                            BrutalDeepViolet
+                                            BrutalBlack
                                         } else {
-                                            BrutalLavender
+                                            NeutralLight
                                         },
                                     shape = CircleShape
                                 )
@@ -2567,14 +2568,14 @@ fun DetailScreen(
                             Arrangement.spacedBy(10.dp)
                     ) {
                         CircularProgressIndicator(
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             strokeWidth = 3.dp,
                             modifier = Modifier.size(22.dp)
                         )
 
                         Text(
                             text = "날짜 형식 저장 중...",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2595,14 +2596,14 @@ fun DetailScreen(
                             Arrangement.spacedBy(10.dp)
                     ) {
                         CircularProgressIndicator(
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             strokeWidth = 3.dp,
                             modifier = Modifier.size(22.dp)
                         )
 
                         Text(
                             text = "레이아웃 저장 중...",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2623,14 +2624,14 @@ fun DetailScreen(
                             Arrangement.spacedBy(10.dp)
                     ) {
                         CircularProgressIndicator(
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             strokeWidth = 3.dp,
                             modifier = Modifier.size(22.dp)
                         )
 
                         Text(
                             text = "폰트 저장 중...",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2651,14 +2652,14 @@ fun DetailScreen(
                             Arrangement.spacedBy(10.dp)
                     ) {
                         CircularProgressIndicator(
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             strokeWidth = 3.dp,
                             modifier = Modifier.size(22.dp)
                         )
 
                         Text(
                             text = "배경 저장 중...",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2686,13 +2687,13 @@ fun DetailScreen(
                     colors =
                         ButtonDefaults.buttonColors(
                             containerColor =
-                                BrutalViolet,
+                                GraphiteAccent,
                             contentColor =
                                 BrutalWhite,
                             disabledContainerColor =
-                                BrutalLavender,
+                                NeutralLight,
                             disabledContentColor =
-                                BrutalDeepViolet
+                                BrutalBlack
                         ),
                     border = null,
                     shape = RoundedCornerShape(14.dp),
@@ -2753,7 +2754,7 @@ fun DetailScreen(
                             .size(56.dp)
                             .background(
                                 color =
-                                    BrutalLavender,
+                                    NeutralLight,
                                 shape =
                                     CircleShape
                             )
@@ -2764,7 +2765,7 @@ fun DetailScreen(
                             contentDescription =
                                 "글귀 편집",
                             tint =
-                                BrutalDeepViolet
+                                BrutalBlack
                         )
                     }
 
@@ -2800,7 +2801,7 @@ fun DetailScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(BrutalDeepViolet)
+                .background(BrutalBlack)
                 .padding(
                     horizontal = 8.dp,
                     vertical = 8.dp
@@ -2861,7 +2862,7 @@ fun DetailScreen(
             title = {
                 Text(
                     text = "글귀 남기기",
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontWeight =
                         FontWeight.ExtraBold
                 )
@@ -2871,7 +2872,7 @@ fun DetailScreen(
                     Text(
                         text =
                             "이 사진과 함께 기억하고 싶은 말을 적어봐.",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontSize = 14.sp,
                         modifier =
                             Modifier.padding(
@@ -2903,7 +2904,7 @@ fun DetailScreen(
                     Text(
                         text =
                             "${messageDraft.length} / 120",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.End,
@@ -2915,12 +2916,12 @@ fun DetailScreen(
                     Text(
                         text =
                             "글귀를 모두 지운 뒤 저장하면 기존 글귀가 삭제돼.",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontSize = 12.sp,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                color = LavenderSoft,
+                                color = SoftGray,
                                 shape =
                                     RoundedCornerShape(
                                         10.dp
@@ -2942,7 +2943,7 @@ fun DetailScreen(
                 ) {
                     Text(
                         text = "저장",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontWeight =
                             FontWeight.ExtraBold
                     )
@@ -3015,7 +3016,7 @@ fun DetailScreen(
             title = {
                 Text(
                     text = "저장 완료!",
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontWeight =
                         FontWeight.ExtraBold
                 )
@@ -3034,7 +3035,7 @@ fun DetailScreen(
                 ) {
                     Text(
                         text = "확인",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontWeight =
                             FontWeight.ExtraBold
                     )
@@ -3071,7 +3072,7 @@ fun DetailScreen(
                 ) {
                     Text(
                         text = "확인",
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontWeight =
                             FontWeight.ExtraBold
                     )
@@ -3111,7 +3112,7 @@ fun DetailScreen(
                     ) {
                         Text(
                             text = "확인",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight =
                                 FontWeight.ExtraBold
                         )
@@ -3153,7 +3154,7 @@ fun DetailScreen(
                     ) {
                         Text(
                             text = "확인",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight =
                                 FontWeight.ExtraBold
                         )
@@ -3193,7 +3194,7 @@ fun DetailScreen(
                     ) {
                         Text(
                             text = "확인",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight =
                                 FontWeight.ExtraBold
                         )
@@ -3233,7 +3234,7 @@ fun DetailScreen(
                     ) {
                         Text(
                             text = "확인",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight =
                                 FontWeight.ExtraBold
                         )
@@ -3273,7 +3274,7 @@ fun DetailScreen(
                     ) {
                         Text(
                             text = "확인",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontWeight =
                                 FontWeight.ExtraBold
                         )

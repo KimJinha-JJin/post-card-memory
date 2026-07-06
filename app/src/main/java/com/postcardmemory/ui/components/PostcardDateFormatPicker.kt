@@ -27,11 +27,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalLavender
+import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.BrutalYellow
-import com.postcardmemory.ui.theme.LavenderSoft
+import com.postcardmemory.ui.theme.SoftGray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -106,7 +105,7 @@ fun PostcardDateFormatPicker(
                 }
             )
             .background(
-                color = LavenderSoft,
+                color = SoftGray,
                 shape = RoundedCornerShape(18.dp)
             )
             .border(
@@ -121,7 +120,7 @@ fun PostcardDateFormatPicker(
     ) {
         Text(
             text = "날짜 형식",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 17.sp,
             fontWeight = FontWeight.ExtraBold
         )
@@ -132,7 +131,7 @@ fun PostcardDateFormatPicker(
 
         Text(
             text = "날짜 모양을 누르면 엽서 미리보기에 바로 반영돼.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
@@ -173,13 +172,13 @@ fun PostcardDateFormatPicker(
 
         Text(
             text = "선택한 날짜 형식은 자동으로 저장돼.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    color = BrutalLavender,
+                    color = NeutralLight,
                     shape = RoundedCornerShape(10.dp)
                 )
                 .padding(

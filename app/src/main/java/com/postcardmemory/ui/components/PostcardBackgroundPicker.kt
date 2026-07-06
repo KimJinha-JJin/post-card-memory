@@ -46,7 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalDeepViolet
 import com.postcardmemory.ui.theme.BrutalWhite
 
 val postcardBackgroundPalette =
@@ -126,7 +125,7 @@ fun PostcardBackgroundPicker(
     ) {
         Text(
             text = "엽서 배경 꾸미기",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 17.sp,
             fontWeight = FontWeight.ExtraBold
         )
@@ -137,7 +136,7 @@ fun PostcardBackgroundPicker(
 
         Text(
             text = "기본 색상이나 기타 색상에서 원하는 배경색을 골라봐.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 13.sp
         )
 
@@ -234,7 +233,7 @@ fun PostcardBackgroundPicker(
                         .background(
                             color =
                                 if (selectedIsCustomColor) {
-                                    BrutalDeepViolet.copy(alpha = 0.9f)
+                                    BrutalBlack.copy(alpha = 0.9f)
                                 } else {
                                     BrutalWhite.copy(alpha = 0.88f)
                                 },
@@ -248,7 +247,7 @@ fun PostcardBackgroundPicker(
                         if (selectedIsCustomColor) {
                             BrutalWhite
                         } else {
-                            BrutalDeepViolet
+                            BrutalBlack
                         },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.ExtraBold
@@ -262,7 +261,7 @@ fun PostcardBackgroundPicker(
 
         Text(
             text = "배경 패턴",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 15.sp,
             fontWeight = FontWeight.ExtraBold
         )
@@ -273,7 +272,7 @@ fun PostcardBackgroundPicker(
 
         Text(
             text = "색상 위에 얹을 무늬를 골라봐. 패턴 없음도 언제든 선택할 수 있어.",
-            color = BrutalDeepViolet,
+            color = BrutalBlack,
             fontSize = 12.sp
         )
 
@@ -323,7 +322,7 @@ fun PostcardBackgroundPicker(
                                 if (selected) {
                                     BrutalWhite
                                 } else {
-                                    BrutalDeepViolet
+                                    BrutalBlack
                                 },
                             fontSize =
                                 if (pattern == PostcardBackgroundPattern.NONE) {
@@ -341,7 +340,7 @@ fun PostcardBackgroundPicker(
 
                     Text(
                         text = pattern.label,
-                        color = BrutalDeepViolet,
+                        color = BrutalBlack,
                         fontSize = 11.sp,
                         fontWeight =
                             if (selected) {
@@ -464,7 +463,7 @@ private fun CustomColorPickerDialog(
         title = {
             Text(
                 text = "기타 색상 선택",
-                color = BrutalDeepViolet,
+                color = BrutalBlack,
                 fontWeight = FontWeight.ExtraBold
             )
         },
@@ -474,7 +473,7 @@ private fun CustomColorPickerDialog(
             ) {
                 Text(
                     text = "큰 색상판을 눌러 원하는 색의 밝기와 선명도를 골라봐.",
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontSize = 13.sp
                 )
 
@@ -574,7 +573,7 @@ private fun CustomColorPickerDialog(
 
                 Text(
                     text = "색상 계열",
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -683,7 +682,7 @@ private fun CustomColorPickerDialog(
                     Column {
                         Text(
                             text = "선택한 색상",
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontSize = 12.sp
                         )
 
@@ -694,7 +693,7 @@ private fun CustomColorPickerDialog(
                                             .toString(16)
                                             .uppercase()
                                             .padStart(8, '0'),
-                            color = BrutalDeepViolet,
+                            color = BrutalBlack,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -722,7 +721,7 @@ private fun CustomColorPickerDialog(
             ) {
                 Text(
                     text = "취소",
-                    color = BrutalDeepViolet,
+                    color = BrutalBlack,
                     fontWeight = FontWeight.Bold
                 )
             }
