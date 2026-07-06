@@ -3,9 +3,11 @@ package com.postcardmemory.ui.detail
 import android.net.Uri
 import android.widget.Toast
 import java.io.File
+import java.util.UUID
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -102,6 +104,7 @@ import kotlin.math.atan2
 import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
 import com.postcardmemory.ui.components.PostcardBackgroundPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
@@ -816,6 +819,120 @@ fun DetailScreen(
             }
         }
 
+    val postcardFilePicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            if (uri != null) {
+                viewModel.updatePostcardImage(uri)
+            }
+        }
+
+    var showPhotoSourceMenu by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    /*
+     * TakePicture 결과 콜백은 화면 재구성이나
+     * 프로세스 재생성 뒤에도 올 수 있어서,
+     * 임시 촬영 파일 경로를 rememberSaveable로 들고 있는다.
+     */
+    var pendingCameraCapturePath by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+
+    /*
+     * 촬영 성공 후 viewModel.updatePostcardImage()가
+     * 내부 저장을 끝낼 때까지는 임시 파일을 지우면 안 되므로,
+     * imageUpdateState가 Success/Error로 정리된 뒤에만 삭제한다.
+     */
+    var pendingCameraCaptureCleanupPath by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+
+    val postcardCameraCapture =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture()
+        ) { success ->
+            val capturePath =
+                pendingCameraCapturePath
+            pendingCameraCapturePath = null
+
+            if (capturePath == null) {
+                return@rememberLauncherForActivityResult
+            }
+
+            val captureFile = File(capturePath)
+
+            if (success) {
+                val captureUri =
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        captureFile
+                    )
+
+                pendingCameraCaptureCleanupPath =
+                    capturePath
+
+                viewModel.updatePostcardImage(
+                    captureUri
+                )
+            } else {
+                if (captureFile.exists()) {
+                    captureFile.delete()
+                }
+            }
+        }
+
+    fun launchPostcardCameraCapture() {
+        val captureDir =
+            File(
+                context.cacheDir,
+                "camera_capture"
+            )
+
+        if (
+            !captureDir.exists() &&
+            !captureDir.mkdirs()
+        ) {
+            Toast.makeText(
+                context,
+                "임시 촬영 폴더를 만들지 못했어.",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        val captureFile =
+            File(
+                captureDir,
+                "capture_${UUID.randomUUID()}.jpg"
+            )
+
+        pendingCameraCapturePath =
+            captureFile.absolutePath
+
+        val captureUri =
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                captureFile
+            )
+
+        runCatching {
+            postcardCameraCapture.launch(captureUri)
+        }.onFailure {
+            pendingCameraCapturePath = null
+
+            Toast.makeText(
+                context,
+                "카메라 앱을 찾지 못했어.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     var openedDrawerName by rememberSaveable {
         mutableStateOf(
             DetailDrawerSection.LAYOUT.name
@@ -917,6 +1034,26 @@ fun DetailScreen(
     LaunchedEffect(imageUpdateState) {
         if (imageUpdateState is ImageUpdateState.Success) {
             viewModel.resetImageUpdateState()
+        }
+
+        /*
+         * updatePostcardImage()가 Success/Error로 끝났다는 것은
+         * 임시 촬영 파일의 바이트를 이미 다 읽었다는 뜻이라
+         * 이 시점에 지워도 안전하다.
+         */
+        if (
+            imageUpdateState is ImageUpdateState.Success ||
+            imageUpdateState is ImageUpdateState.Error
+        ) {
+            pendingCameraCaptureCleanupPath?.let { cleanupPath ->
+                pendingCameraCaptureCleanupPath = null
+
+                File(cleanupPath).let { cleanupFile ->
+                    if (cleanupFile.exists()) {
+                        cleanupFile.delete()
+                    }
+                }
+            }
         }
     }
 
@@ -2161,13 +2298,7 @@ fun DetailScreen(
 
                         Button(
                             onClick = {
-                                postcardPhotoPicker.launch(
-                                    PickVisualMediaRequest(
-                                        ActivityResultContracts
-                                            .PickVisualMedia
-                                            .ImageOnly
-                                    )
-                                )
+                                showPhotoSourceMenu = true
                             },
                             enabled = controlsEnabled,
                             colors = ButtonDefaults.buttonColors(
@@ -2182,7 +2313,7 @@ fun DetailScreen(
                                 contentDescription = null
                             )
                             Text(
-                                text = "  갤러리에서 사진 선택",
+                                text = "  사진 바꾸기",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -2852,6 +2983,34 @@ fun DetailScreen(
                 )
             }
         }
+    }
+
+    if (showPhotoSourceMenu) {
+        PhotoSourceMenu(
+            onDismiss = {
+                showPhotoSourceMenu = false
+            },
+            onCameraSelected = {
+                showPhotoSourceMenu = false
+                launchPostcardCameraCapture()
+            },
+            onGallerySelected = {
+                showPhotoSourceMenu = false
+                postcardPhotoPicker.launch(
+                    PickVisualMediaRequest(
+                        ActivityResultContracts
+                            .PickVisualMedia
+                            .ImageOnly
+                    )
+                )
+            },
+            onFileSelected = {
+                showPhotoSourceMenu = false
+                postcardFilePicker.launch(
+                    arrayOf("image/*")
+                )
+            }
+        )
     }
 
     if (showMessageDialog) {
