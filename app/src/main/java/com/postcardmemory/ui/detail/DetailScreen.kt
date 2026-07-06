@@ -2621,6 +2621,14 @@ fun DetailScreen(
                                         backgroundRemovalError = null
                                         viewModel.resetStickerBackgroundRemovalState()
                                     },
+                                    onAddFromCamera = { captureFile ->
+                                        backgroundRemovalError = null
+                                        viewModel.resetStickerBackgroundRemovalState()
+                                        viewModel.addCameraPhotoSticker(
+                                            postcardId,
+                                            captureFile
+                                        )
+                                    },
                                     onDeleteSticker = { id ->
                                         val sticker = photoStickers.find { it.id == id }
                                         sticker?.removedBgUri?.let { uri ->
@@ -2628,6 +2636,12 @@ fun DetailScreen(
                                         }
                                         val remaining = photoStickers.filter { it.id != id }
                                         viewModel.setPhotoStickers(remaining)
+                                        sticker?.originalUri?.let { uri ->
+                                            viewModel.deleteStickerOriginalIfUnreferenced(
+                                                uri,
+                                                remaining
+                                            )
+                                        }
                                         stickerSizes = stickerSizes - id
                                         if (selectedStickerId == id) {
                                             viewModel.setSelectedStickerId(

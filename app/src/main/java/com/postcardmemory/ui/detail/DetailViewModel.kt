@@ -14,6 +14,7 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.BackgroundImageStorage
+import com.postcardmemory.utils.PhotoStickerImageStorage
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardImageStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -1492,6 +1493,62 @@ class DetailViewModel @Inject constructor(
                 )
             ) {
                 targetFile.delete()
+            }
+        }
+    }
+
+    fun deleteStickerOriginalIfUnreferenced(
+        uri: Uri?,
+        remainingStickers: List<PhotoStickerItem>
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            PhotoStickerImageStorage
+                .deleteOriginalIfUnreferenced(
+                    context = context,
+                    deletedUri = uri,
+                    remainingStickers = remainingStickers
+                )
+        }
+    }
+
+    fun addCameraPhotoSticker(
+        postcardId: Long,
+        captureFile: File
+    ) {
+        viewModelScope.launch {
+            val originalUri =
+                withContext(Dispatchers.IO) {
+                    try {
+                        PhotoStickerImageStorage
+                            .copyToStickerOriginalStorage(
+                                context = context,
+                                postcardId = postcardId,
+                                sourceFile = captureFile
+                            )
+                    } catch (exception: Exception) {
+                        null
+                    } finally {
+                        if (captureFile.exists()) {
+                            captureFile.delete()
+                        }
+                    }
+                }
+
+            if (originalUri != null) {
+                val newSticker =
+                    PhotoStickerItem(
+                        originalUri = originalUri,
+                        displayedUri = originalUri
+                    )
+
+                _photoStickers.value =
+                    _photoStickers.value + newSticker
+                _selectedStickerId.value =
+                    newSticker.id
+            } else {
+                _textScaleSaveErrors.trySend(
+                    "스티커 사진을 저장하지 못했어."
+                )
             }
         }
     }

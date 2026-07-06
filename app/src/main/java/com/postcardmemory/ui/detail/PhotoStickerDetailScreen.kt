@@ -2,6 +2,7 @@ package com.postcardmemory.ui.detail
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,13 +26,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,13 +46,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.SoftGray
+import java.io.File
+import java.util.UUID
 
 @Composable
 fun PhotoStickerPickerPanel(
@@ -58,6 +66,7 @@ fun PhotoStickerPickerPanel(
     onSelectSticker: (String) -> Unit,
     onAddFromGallery: (Uri) -> Unit,
     onAddFromFile: (Uri) -> Unit,
+    onAddFromCamera: (File) -> Unit,
     onDeleteSticker: (String) -> Unit,
     onDuplicateSticker: (String) -> Unit,
     enabled: Boolean,
@@ -96,6 +105,86 @@ fun PhotoStickerPickerPanel(
                 onAddFromFile(uri)
             }
         }
+
+    var showPhotoSourceMenu by remember {
+        mutableStateOf(false)
+    }
+
+    /*
+     * TakePicture 콜백은 재구성 뒤에도 올 수 있어서
+     * 임시 촬영 경로를 rememberSaveable로 들고 있는다.
+     */
+    var pendingCameraCapturePath by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+
+    val cameraCapture =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture()
+        ) { success ->
+            val capturePath =
+                pendingCameraCapturePath
+            pendingCameraCapturePath = null
+
+            if (capturePath == null) {
+                return@rememberLauncherForActivityResult
+            }
+
+            val captureFile = File(capturePath)
+
+            if (success) {
+                onAddFromCamera(captureFile)
+            } else {
+                if (captureFile.exists()) {
+                    captureFile.delete()
+                }
+            }
+        }
+
+    fun launchStickerCameraCapture() {
+        val captureDir =
+            File(
+                context.cacheDir,
+                "camera_capture"
+            )
+
+        if (
+            !captureDir.exists() &&
+            !captureDir.mkdirs()
+        ) {
+            return
+        }
+
+        val captureFile =
+            File(
+                captureDir,
+                "sticker_capture_" +
+                        UUID.randomUUID() +
+                        ".jpg"
+            )
+
+        pendingCameraCapturePath =
+            captureFile.absolutePath
+
+        val captureUri =
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                captureFile
+            )
+
+        runCatching {
+            cameraCapture.launch(captureUri)
+        }.onFailure {
+            pendingCameraCapturePath = null
+
+            Toast.makeText(
+                context,
+                "카메라 앱을 찾지 못했어.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     val selectedSticker =
         photoStickers.find { it.id == selectedStickerId }
@@ -195,11 +284,7 @@ fun PhotoStickerPickerPanel(
                         shape = RoundedCornerShape(10.dp)
                     )
                     .clickable(enabled = enabled) {
-                        photoPicker.launch(
-                            PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.ImageOnly
-                            )
-                        )
+                        showPhotoSourceMenu = true
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -224,14 +309,9 @@ fun PhotoStickerPickerPanel(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 갤러리/파일 버튼
         Button(
             onClick = {
-                photoPicker.launch(
-                    PickVisualMediaRequest(
-                        ActivityResultContracts.PickVisualMedia.ImageOnly
-                    )
-                )
+                showPhotoSourceMenu = true
             },
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(
@@ -241,31 +321,9 @@ fun PhotoStickerPickerPanel(
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null)
+            Icon(imageVector = Icons.Default.Add, contentDescription = null)
             Text(
-                text = "  갤러리에서 사진 추가",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = {
-                filePicker.launch(arrayOf("image/*"))
-            },
-            enabled = enabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = SoftGray,
-                contentColor = BrutalBlack
-            ),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null)
-            Text(
-                text = "  파일에서 추가",
+                text = "  사진 추가",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold
             )
@@ -375,5 +433,29 @@ fun PhotoStickerPickerPanel(
         }
 
         Spacer(modifier = Modifier.height(4.dp))
+    }
+
+    if (showPhotoSourceMenu) {
+        PhotoSourceMenu(
+            onDismiss = {
+                showPhotoSourceMenu = false
+            },
+            onCameraSelected = {
+                showPhotoSourceMenu = false
+                launchStickerCameraCapture()
+            },
+            onGallerySelected = {
+                showPhotoSourceMenu = false
+                photoPicker.launch(
+                    PickVisualMediaRequest(
+                        ActivityResultContracts.PickVisualMedia.ImageOnly
+                    )
+                )
+            },
+            onFileSelected = {
+                showPhotoSourceMenu = false
+                filePicker.launch(arrayOf("image/*"))
+            }
+        )
     }
 }
