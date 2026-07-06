@@ -301,7 +301,8 @@ private fun createSealOverlayForExport(
     rotationDegrees: Float,
     sealOffset: Offset?,
     postcardSize: IntSize,
-    sealSize: IntSize
+    sealSize: IntSize,
+    capturedAtMillis: Long?
 ): PostcardImageExporter.SealOverlay? {
     if (
         postcardSize.width <= 0 ||
@@ -338,14 +339,16 @@ private fun createSealOverlayForExport(
             sealSize.width.toFloat() /
                     postcardSize.width.toFloat(),
         rotationDegrees = rotationDegrees,
-        colorArgb = colorArgb
+        colorArgb = colorArgb,
+        capturedAtMillis = capturedAtMillis
     )
 }
 
 private fun createSealOverlaysForExport(
     photoSeals: List<PostcardSealItem>,
     postcardSize: IntSize,
-    sealSizes: Map<String, IntSize>
+    sealSizes: Map<String, IntSize>,
+    capturedAtMillis: Long?
 ): List<PostcardImageExporter.SealOverlay> {
     if (
         postcardSize.width <= 0 ||
@@ -365,7 +368,8 @@ private fun createSealOverlaysForExport(
             rotationDegrees = seal.rotationDegrees,
             sealOffset = seal.offset,
             postcardSize = postcardSize,
-            sealSize = sealSize
+            sealSize = sealSize,
+            capturedAtMillis = capturedAtMillis
         )
     }
 }
@@ -2094,9 +2098,17 @@ fun DetailScreen(
                                                                 stickerSize = currentSealSize
                                                             )
 
+                                                    val parentDelta =
+                                                        localStickerDeltaToParent(
+                                                            localDelta = pan,
+                                                            rotationDegrees = currentSeal.rotationDegrees,
+                                                            flipHorizontal = false,
+                                                            flipVertical = false
+                                                        )
+
                                                     val newOffset =
                                                         clampStickerOffset(
-                                                            offset = oldOffset + pan,
+                                                            offset = oldOffset + parentDelta,
                                                             postcardSize = postcardPreviewSize,
                                                             stickerSize = currentSealSize
                                                         )
@@ -2134,6 +2146,7 @@ fun DetailScreen(
                                 SealPreviewContent(
                                     type = seal.type,
                                     color = Color(seal.colorArgb),
+                                    capturedAtMillis = pc.capturedAt,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -3137,7 +3150,9 @@ fun DetailScreen(
                                     postcardSize =
                                         postcardPreviewSize,
                                     sealSizes =
-                                        sealSizes
+                                        sealSizes,
+                                    capturedAtMillis =
+                                        pc.capturedAt
                                 )
                         )
                     },

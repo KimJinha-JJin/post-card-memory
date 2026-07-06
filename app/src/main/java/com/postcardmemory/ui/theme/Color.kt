@@ -56,11 +56,13 @@ val SealInkRed = Color(0xFFB33A32)
 val SealInkNavy = Color(0xFF30415F)
 val SealInkSepia = Color(0xFF704E38)
 val SealInkGreen = Color(0xFF365C4A)
+val SealInkWhite = Color(0xFFFFFFFF)
 
 val sealInkColors = listOf(
     SealInkBlack,
     SealInkRed,
     SealInkNavy,
     SealInkSepia,
-    SealInkGreen
+    SealInkGreen,
+    SealInkWhite
 )

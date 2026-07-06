@@ -68,7 +68,8 @@ object PostcardImageExporter {
         val normalizedY: Float,
         val sizeRatio: Float,
         val rotationDegrees: Float = 0f,
-        val colorArgb: Long
+        val colorArgb: Long,
+        val capturedAtMillis: Long? = null
     )
 
     fun exportToGallery(
@@ -1378,7 +1379,12 @@ object PostcardImageExporter {
 
         when (sealOverlay.type) {
             "CIRCLE_POSTMARK" ->
-                drawCirclePostmarkOverlay(canvas, sealBounds, paint)
+                drawCirclePostmarkOverlay(
+                    canvas,
+                    sealBounds,
+                    paint,
+                    sealOverlay.capturedAtMillis
+                )
 
             "WAVE_CANCEL" ->
                 drawWaveCancelOverlay(canvas, sealBounds, paint)
@@ -1396,7 +1402,8 @@ object PostcardImageExporter {
     private fun drawCirclePostmarkOverlay(
         canvas: Canvas,
         bounds: RectF,
-        paint: Paint
+        paint: Paint,
+        capturedAtMillis: Long?
     ) {
         val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
         paint.strokeWidth = strokeWidth
@@ -1429,6 +1436,28 @@ object PostcardImageExporter {
                 cy + toRadius * sin(angle),
                 tickPaint
             )
+        }
+
+        if (capturedAtMillis != null) {
+            val textPaint =
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = paint.color
+                    typeface = Typeface.create(
+                        Typeface.SANS_SERIF,
+                        Typeface.BOLD
+                    )
+                    textSize = innerRadius * 0.42f
+                    textAlign = Paint.Align.CENTER
+                }
+
+            val dateText =
+                SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
+                    .format(Date(capturedAtMillis))
+
+            val textY =
+                cy - (textPaint.descent() + textPaint.ascent()) / 2f
+
+            canvas.drawText(dateText, cx, textY, textPaint)
         }
     }
 

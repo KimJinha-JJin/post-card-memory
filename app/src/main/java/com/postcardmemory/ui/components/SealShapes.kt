@@ -15,6 +15,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import com.postcardmemory.ui.detail.SealType
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -24,6 +27,7 @@ import kotlin.math.sin
 fun SealPreviewContent(
     type: SealType,
     color: Color,
+    capturedAtMillis: Long? = null,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier) {
@@ -31,7 +35,7 @@ fun SealPreviewContent(
 
         when (type) {
             SealType.CIRCLE_POSTMARK ->
-                drawCirclePostmark(color, strokeWidth)
+                drawCirclePostmark(color, strokeWidth, capturedAtMillis)
 
             SealType.WAVE_CANCEL ->
                 drawWaveCancel(color, strokeWidth)
@@ -47,7 +51,8 @@ fun SealPreviewContent(
 
 private fun DrawScope.drawCirclePostmark(
     color: Color,
-    strokeWidth: Float
+    strokeWidth: Float,
+    capturedAtMillis: Long?
 ) {
     val outerRadius = size.minDimension / 2f - strokeWidth
     val innerRadius = outerRadius * 0.72f
@@ -85,6 +90,36 @@ private fun DrawScope.drawCirclePostmark(
             ),
             strokeWidth = strokeWidth * 0.6f
         )
+    }
+
+    if (capturedAtMillis != null) {
+        drawIntoCanvas { canvas ->
+            val paint = Paint().apply {
+                isAntiAlias = true
+                this.color = color.toArgbInt()
+                typeface = Typeface.create(
+                    Typeface.SANS_SERIF,
+                    Typeface.BOLD
+                )
+                textSize = innerRadius * 0.42f
+                textAlign = Paint.Align.CENTER
+            }
+
+            val dateText =
+                SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
+                    .format(Date(capturedAtMillis))
+
+            val textY =
+                center.y -
+                        (paint.descent() + paint.ascent()) / 2f
+
+            canvas.nativeCanvas.drawText(
+                dateText,
+                center.x,
+                textY,
+                paint
+            )
+        }
     }
 }
 

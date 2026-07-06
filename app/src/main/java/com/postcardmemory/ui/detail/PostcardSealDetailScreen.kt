@@ -1,6 +1,7 @@
 package com.postcardmemory.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -289,6 +290,11 @@ fun SealPickerPanel(
                         .size(if (isColorSelected) 34.dp else 28.dp)
                         .background(
                             color = inkColor,
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = BrutalBlack.copy(alpha = 0.25f),
                             shape = CircleShape
                         )
                         .clickable(enabled = enabled) {
