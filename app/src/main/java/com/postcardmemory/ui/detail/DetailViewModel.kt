@@ -236,6 +236,18 @@ class DetailViewModel @Inject constructor(
 
     private var photoEdgeBlurSaveJob: Job? = null
 
+    private var stampPhotoOffsetSaveJob: Job? = null
+
+    private var polaroidPhotoOffsetSaveJob: Job? = null
+
+    private var tapedFilmPhotoOffsetSaveJob: Job? = null
+
+    private var stampPhotoZoomSaveJob: Job? = null
+
+    private var polaroidPhotoZoomSaveJob: Job? = null
+
+    private var tapedFilmPhotoZoomSaveJob: Job? = null
+
     private val _photoStickers =
         MutableStateFlow(listOf<PhotoStickerItem>())
 
@@ -1135,6 +1147,393 @@ class DetailViewModel @Inject constructor(
             }
     }
 
+    fun setStampPhotoOffsetPreview(
+        offsetX: Float,
+        offsetY: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                stampPhotoOffsetX = offsetX.coerceIn(-1f, 1f),
+                stampPhotoOffsetY = offsetY.coerceIn(-1f, 1f)
+            )
+    }
+
+    fun saveStampPhotoOffset(
+        offsetX: Float,
+        offsetY: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousOffsetX =
+            currentPostcard.stampPhotoOffsetX
+        val previousOffsetY =
+            currentPostcard.stampPhotoOffsetY
+        val normalizedOffsetX =
+            offsetX.coerceIn(-1f, 1f)
+        val normalizedOffsetY =
+            offsetY.coerceIn(-1f, 1f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                stampPhotoOffsetX = normalizedOffsetX,
+                stampPhotoOffsetY = normalizedOffsetY
+            )
+
+        stampPhotoOffsetSaveJob?.cancel()
+        stampPhotoOffsetSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardStampPhotoOffset(
+                                id = currentPostcard.id,
+                                stampPhotoOffsetX = normalizedOffsetX,
+                                stampPhotoOffsetY = normalizedOffsetY
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            stampPhotoOffsetX = normalizedOffsetX,
+                            stampPhotoOffsetY = normalizedOffsetY
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            stampPhotoOffsetX = previousOffsetX,
+                            stampPhotoOffsetY = previousOffsetY
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 위치를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setPolaroidPhotoOffsetPreview(
+        offsetX: Float,
+        offsetY: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                polaroidPhotoOffsetX = offsetX.coerceIn(-1f, 1f),
+                polaroidPhotoOffsetY = offsetY.coerceIn(-1f, 1f)
+            )
+    }
+
+    fun savePolaroidPhotoOffset(
+        offsetX: Float,
+        offsetY: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousOffsetX =
+            currentPostcard.polaroidPhotoOffsetX
+        val previousOffsetY =
+            currentPostcard.polaroidPhotoOffsetY
+        val normalizedOffsetX =
+            offsetX.coerceIn(-1f, 1f)
+        val normalizedOffsetY =
+            offsetY.coerceIn(-1f, 1f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                polaroidPhotoOffsetX = normalizedOffsetX,
+                polaroidPhotoOffsetY = normalizedOffsetY
+            )
+
+        polaroidPhotoOffsetSaveJob?.cancel()
+        polaroidPhotoOffsetSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardPolaroidPhotoOffset(
+                                id = currentPostcard.id,
+                                polaroidPhotoOffsetX = normalizedOffsetX,
+                                polaroidPhotoOffsetY = normalizedOffsetY
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            polaroidPhotoOffsetX = normalizedOffsetX,
+                            polaroidPhotoOffsetY = normalizedOffsetY
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            polaroidPhotoOffsetX = previousOffsetX,
+                            polaroidPhotoOffsetY = previousOffsetY
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 위치를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setTapedFilmPhotoOffsetPreview(
+        offsetX: Float,
+        offsetY: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                tapedFilmPhotoOffsetX = offsetX.coerceIn(-1f, 1f),
+                tapedFilmPhotoOffsetY = offsetY.coerceIn(-1f, 1f)
+            )
+    }
+
+    fun saveTapedFilmPhotoOffset(
+        offsetX: Float,
+        offsetY: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousOffsetX =
+            currentPostcard.tapedFilmPhotoOffsetX
+        val previousOffsetY =
+            currentPostcard.tapedFilmPhotoOffsetY
+        val normalizedOffsetX =
+            offsetX.coerceIn(-1f, 1f)
+        val normalizedOffsetY =
+            offsetY.coerceIn(-1f, 1f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                tapedFilmPhotoOffsetX = normalizedOffsetX,
+                tapedFilmPhotoOffsetY = normalizedOffsetY
+            )
+
+        tapedFilmPhotoOffsetSaveJob?.cancel()
+        tapedFilmPhotoOffsetSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardTapedFilmPhotoOffset(
+                                id = currentPostcard.id,
+                                tapedFilmPhotoOffsetX = normalizedOffsetX,
+                                tapedFilmPhotoOffsetY = normalizedOffsetY
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            tapedFilmPhotoOffsetX = normalizedOffsetX,
+                            tapedFilmPhotoOffsetY = normalizedOffsetY
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            tapedFilmPhotoOffsetX = previousOffsetX,
+                            tapedFilmPhotoOffsetY = previousOffsetY
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 위치를 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setStampPhotoZoomPreview(
+        zoom: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                stampPhotoZoom = zoom.coerceIn(1f, 3f)
+            )
+    }
+
+    fun saveStampPhotoZoom(
+        zoom: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousZoom =
+            currentPostcard.stampPhotoZoom
+        val normalizedZoom =
+            zoom.coerceIn(1f, 3f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                stampPhotoZoom = normalizedZoom
+            )
+
+        stampPhotoZoomSaveJob?.cancel()
+        stampPhotoZoomSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardStampPhotoZoom(
+                                id = currentPostcard.id,
+                                stampPhotoZoom = normalizedZoom
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            stampPhotoZoom = normalizedZoom
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            stampPhotoZoom = previousZoom
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 확대 배율을 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setPolaroidPhotoZoomPreview(
+        zoom: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                polaroidPhotoZoom = zoom.coerceIn(1f, 3f)
+            )
+    }
+
+    fun savePolaroidPhotoZoom(
+        zoom: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousZoom =
+            currentPostcard.polaroidPhotoZoom
+        val normalizedZoom =
+            zoom.coerceIn(1f, 3f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                polaroidPhotoZoom = normalizedZoom
+            )
+
+        polaroidPhotoZoomSaveJob?.cancel()
+        polaroidPhotoZoomSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardPolaroidPhotoZoom(
+                                id = currentPostcard.id,
+                                polaroidPhotoZoom = normalizedZoom
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            polaroidPhotoZoom = normalizedZoom
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            polaroidPhotoZoom = previousZoom
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 확대 배율을 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
+    fun setTapedFilmPhotoZoomPreview(
+        zoom: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _postcard.value =
+            currentPostcard.copy(
+                tapedFilmPhotoZoom = zoom.coerceIn(1f, 3f)
+            )
+    }
+
+    fun saveTapedFilmPhotoZoom(
+        zoom: Float
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+        val previousZoom =
+            currentPostcard.tapedFilmPhotoZoom
+        val normalizedZoom =
+            zoom.coerceIn(1f, 3f)
+
+        _postcard.value =
+            currentPostcard.copy(
+                tapedFilmPhotoZoom = normalizedZoom
+            )
+
+        tapedFilmPhotoZoomSaveJob?.cancel()
+        tapedFilmPhotoZoomSaveJob =
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        repository
+                            .updatePostcardTapedFilmPhotoZoom(
+                                id = currentPostcard.id,
+                                tapedFilmPhotoZoom = normalizedZoom
+                            )
+                    }
+
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            tapedFilmPhotoZoom = normalizedZoom
+                        )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            tapedFilmPhotoZoom = previousZoom
+                        )
+                    _textScaleSaveErrors.trySend(
+                        "사진 확대 배율을 저장하지 못했어."
+                    )
+                }
+            }
+    }
+
     fun updateBackgroundColor(
         backgroundColorArgb: Long
     ) {
@@ -1914,7 +2313,8 @@ class DetailViewModel @Inject constructor(
     ): String {
         return when (layoutStyle) {
             "STAMP",
-            "POLAROID" -> layoutStyle
+            "POLAROID",
+            "TAPED_FILM" -> layoutStyle
 
             else -> "STAMP"
         }

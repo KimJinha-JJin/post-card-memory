@@ -45,6 +45,10 @@ enum class PostcardLayoutStyle(
     POLAROID(
         label = "폴라로이드",
         description = "하단 여백이 넓은 즉석사진"
+    ),
+    TAPED_FILM(
+        label = "테이프 필름",
+        description = "필름 조각을 테이프로 붙인 느낌"
     )
 }
 
@@ -338,6 +342,104 @@ private fun LayoutMiniPreview(
                                         RoundedCornerShape(
                                             3.dp
                                         )
+                                )
+                        )
+                    }
+                }
+            }
+
+            PostcardLayoutStyle.TAPED_FILM -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .background(
+                                color = BrutalBlack,
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.TopCenter)
+                                .padding(
+                                    horizontal = 6.dp,
+                                    vertical = 3.dp
+                                ),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween
+                        ) {
+                            repeat(4) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(3.dp)
+                                        .background(
+                                            color = BrutalWhite,
+                                            shape =
+                                                RoundedCornerShape(1.dp)
+                                        )
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .fillMaxWidth(0.8f)
+                                .height(18.dp)
+                                .background(
+                                    color = NeutralLight,
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .padding(
+                                    horizontal = 6.dp,
+                                    vertical = 3.dp
+                                ),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween
+                        ) {
+                            repeat(4) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(3.dp)
+                                        .background(
+                                            color = BrutalWhite,
+                                            shape =
+                                                RoundedCornerShape(1.dp)
+                                        )
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .offset(x = (-2).dp, y = (-4).dp)
+                                .size(width = 16.dp, height = 9.dp)
+                                .background(
+                                    color = SoftGray.copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-4).dp)
+                                .size(width = 16.dp, height = 9.dp)
+                                .background(
+                                    color = SoftGray.copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(2.dp)
                                 )
                         )
                     }

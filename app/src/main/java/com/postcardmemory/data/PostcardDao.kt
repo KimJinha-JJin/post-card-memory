@@ -207,4 +207,82 @@ interface PostcardDao {
         id: Long,
         photoEdgeBlur: Float
     )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET stampPhotoOffsetX = :stampPhotoOffsetX,
+            stampPhotoOffsetY = :stampPhotoOffsetY
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardStampPhotoOffset(
+        id: Long,
+        stampPhotoOffsetX: Float,
+        stampPhotoOffsetY: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET polaroidPhotoOffsetX = :polaroidPhotoOffsetX,
+            polaroidPhotoOffsetY = :polaroidPhotoOffsetY
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPolaroidPhotoOffset(
+        id: Long,
+        polaroidPhotoOffsetX: Float,
+        polaroidPhotoOffsetY: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET tapedFilmPhotoOffsetX = :tapedFilmPhotoOffsetX,
+            tapedFilmPhotoOffsetY = :tapedFilmPhotoOffsetY
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardTapedFilmPhotoOffset(
+        id: Long,
+        tapedFilmPhotoOffsetX: Float,
+        tapedFilmPhotoOffsetY: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET stampPhotoZoom = :stampPhotoZoom
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardStampPhotoZoom(
+        id: Long,
+        stampPhotoZoom: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET polaroidPhotoZoom = :polaroidPhotoZoom
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPolaroidPhotoZoom(
+        id: Long,
+        polaroidPhotoZoom: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET tapedFilmPhotoZoom = :tapedFilmPhotoZoom
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardTapedFilmPhotoZoom(
+        id: Long,
+        tapedFilmPhotoZoom: Float
+    )
 }

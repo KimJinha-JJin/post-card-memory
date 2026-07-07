@@ -149,7 +149,16 @@ object PostcardImageExporter {
                 backgroundPatternDensity = postcard.backgroundPatternDensity,
                 stampPhotoScale = postcard.stampPhotoScale,
                 polaroidPhotoScale = postcard.polaroidPhotoScale,
-                photoEdgeBlur = postcard.photoEdgeBlur
+                photoEdgeBlur = postcard.photoEdgeBlur,
+                stampPhotoOffsetX = postcard.stampPhotoOffsetX,
+                stampPhotoOffsetY = postcard.stampPhotoOffsetY,
+                polaroidPhotoOffsetX = postcard.polaroidPhotoOffsetX,
+                polaroidPhotoOffsetY = postcard.polaroidPhotoOffsetY,
+                tapedFilmPhotoOffsetX = postcard.tapedFilmPhotoOffsetX,
+                tapedFilmPhotoOffsetY = postcard.tapedFilmPhotoOffsetY,
+                stampPhotoZoom = postcard.stampPhotoZoom,
+                polaroidPhotoZoom = postcard.polaroidPhotoZoom,
+                tapedFilmPhotoZoom = postcard.tapedFilmPhotoZoom
             )
 
             for (overlay in stickerOverlays) {

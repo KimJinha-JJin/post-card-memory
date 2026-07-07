@@ -35,5 +35,23 @@ data class Postcard(
     @ColumnInfo(defaultValue = "1.0")
     val polaroidPhotoScale: Float = 1f,
     @ColumnInfo(defaultValue = "0.0")
-    val photoEdgeBlur: Float = 0f
+    val photoEdgeBlur: Float = 0f,
+    @ColumnInfo(defaultValue = "0.0")
+    val stampPhotoOffsetX: Float = 0f,
+    @ColumnInfo(defaultValue = "0.0")
+    val stampPhotoOffsetY: Float = 0f,
+    @ColumnInfo(defaultValue = "0.0")
+    val polaroidPhotoOffsetX: Float = 0f,
+    @ColumnInfo(defaultValue = "0.0")
+    val polaroidPhotoOffsetY: Float = 0f,
+    @ColumnInfo(defaultValue = "0.0")
+    val tapedFilmPhotoOffsetX: Float = 0f,
+    @ColumnInfo(defaultValue = "0.0")
+    val tapedFilmPhotoOffsetY: Float = 0f,
+    @ColumnInfo(defaultValue = "1.0")
+    val stampPhotoZoom: Float = 1f,
+    @ColumnInfo(defaultValue = "1.0")
+    val polaroidPhotoZoom: Float = 1f,
+    @ColumnInfo(defaultValue = "1.0")
+    val tapedFilmPhotoZoom: Float = 1f
 )

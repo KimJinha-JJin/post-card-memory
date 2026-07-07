@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 12,
+    version = 14,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -249,6 +249,89 @@ abstract class PostcardDatabase : RoomDatabase() {
                         """
                         ALTER TABLE postcards
                         ADD COLUMN photoEdgeBlur REAL NOT NULL DEFAULT 0.0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        val MIGRATION_12_13 =
+            object : Migration(
+                startVersion = 12,
+                endVersion = 13
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN stampPhotoOffsetX REAL NOT NULL DEFAULT 0.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN stampPhotoOffsetY REAL NOT NULL DEFAULT 0.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN polaroidPhotoOffsetX REAL NOT NULL DEFAULT 0.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN polaroidPhotoOffsetY REAL NOT NULL DEFAULT 0.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN tapedFilmPhotoOffsetX REAL NOT NULL DEFAULT 0.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN tapedFilmPhotoOffsetY REAL NOT NULL DEFAULT 0.0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        val MIGRATION_13_14 =
+            object : Migration(
+                startVersion = 13,
+                endVersion = 14
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN stampPhotoZoom REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN polaroidPhotoZoom REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN tapedFilmPhotoZoom REAL NOT NULL DEFAULT 1.0
                         """.trimIndent()
                     )
                 }

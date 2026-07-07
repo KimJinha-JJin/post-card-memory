@@ -171,4 +171,70 @@ class PostcardRepository @Inject constructor(
             photoEdgeBlur = photoEdgeBlur
         )
     }
+
+    suspend fun updatePostcardStampPhotoOffset(
+        id: Long,
+        stampPhotoOffsetX: Float,
+        stampPhotoOffsetY: Float
+    ) {
+        dao.updatePostcardStampPhotoOffset(
+            id = id,
+            stampPhotoOffsetX = stampPhotoOffsetX,
+            stampPhotoOffsetY = stampPhotoOffsetY
+        )
+    }
+
+    suspend fun updatePostcardPolaroidPhotoOffset(
+        id: Long,
+        polaroidPhotoOffsetX: Float,
+        polaroidPhotoOffsetY: Float
+    ) {
+        dao.updatePostcardPolaroidPhotoOffset(
+            id = id,
+            polaroidPhotoOffsetX = polaroidPhotoOffsetX,
+            polaroidPhotoOffsetY = polaroidPhotoOffsetY
+        )
+    }
+
+    suspend fun updatePostcardTapedFilmPhotoOffset(
+        id: Long,
+        tapedFilmPhotoOffsetX: Float,
+        tapedFilmPhotoOffsetY: Float
+    ) {
+        dao.updatePostcardTapedFilmPhotoOffset(
+            id = id,
+            tapedFilmPhotoOffsetX = tapedFilmPhotoOffsetX,
+            tapedFilmPhotoOffsetY = tapedFilmPhotoOffsetY
+        )
+    }
+
+    suspend fun updatePostcardStampPhotoZoom(
+        id: Long,
+        stampPhotoZoom: Float
+    ) {
+        dao.updatePostcardStampPhotoZoom(
+            id = id,
+            stampPhotoZoom = stampPhotoZoom
+        )
+    }
+
+    suspend fun updatePostcardPolaroidPhotoZoom(
+        id: Long,
+        polaroidPhotoZoom: Float
+    ) {
+        dao.updatePostcardPolaroidPhotoZoom(
+            id = id,
+            polaroidPhotoZoom = polaroidPhotoZoom
+        )
+    }
+
+    suspend fun updatePostcardTapedFilmPhotoZoom(
+        id: Long,
+        tapedFilmPhotoZoom: Float
+    ) {
+        dao.updatePostcardTapedFilmPhotoZoom(
+            id = id,
+            tapedFilmPhotoZoom = tapedFilmPhotoZoom
+        )
+    }
 }

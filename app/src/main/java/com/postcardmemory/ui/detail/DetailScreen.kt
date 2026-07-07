@@ -767,7 +767,16 @@ private fun PostcardPreviewContent(
     backgroundPatternDensity: Float = 1f,
     stampPhotoScale: Float = 1f,
     polaroidPhotoScale: Float = 1f,
-    photoEdgeBlur: Float = 0f
+    photoEdgeBlur: Float = 0f,
+    stampPhotoOffsetX: Float = 0f,
+    stampPhotoOffsetY: Float = 0f,
+    polaroidPhotoOffsetX: Float = 0f,
+    polaroidPhotoOffsetY: Float = 0f,
+    tapedFilmPhotoOffsetX: Float = 0f,
+    tapedFilmPhotoOffsetY: Float = 0f,
+    stampPhotoZoom: Float = 1f,
+    polaroidPhotoZoom: Float = 1f,
+    tapedFilmPhotoZoom: Float = 1f
 ) {
     val sourceBitmap =
         remember(imagePath) {
@@ -812,7 +821,16 @@ private fun PostcardPreviewContent(
                 backgroundPatternDensity = backgroundPatternDensity,
                 stampPhotoScale = stampPhotoScale,
                 polaroidPhotoScale = polaroidPhotoScale,
-                photoEdgeBlur = photoEdgeBlur
+                photoEdgeBlur = photoEdgeBlur,
+                stampPhotoOffsetX = stampPhotoOffsetX,
+                stampPhotoOffsetY = stampPhotoOffsetY,
+                polaroidPhotoOffsetX = polaroidPhotoOffsetX,
+                polaroidPhotoOffsetY = polaroidPhotoOffsetY,
+                tapedFilmPhotoOffsetX = tapedFilmPhotoOffsetX,
+                tapedFilmPhotoOffsetY = tapedFilmPhotoOffsetY,
+                stampPhotoZoom = stampPhotoZoom,
+                polaroidPhotoZoom = polaroidPhotoZoom,
+                tapedFilmPhotoZoom = tapedFilmPhotoZoom
             )
         }
     }
@@ -854,6 +872,7 @@ fun DetailScreen(
     val photoSeals by viewModel.photoSeals.collectAsState()
     val selectedSealId by viewModel.selectedSealId.collectAsState()
     val latestPhotoSeals by rememberUpdatedState(photoSeals)
+    val latestPostcard by rememberUpdatedState(postcard)
 
     var stickerEditMode by remember {
         mutableStateOf(StickerEditMode.Move)
@@ -1314,6 +1333,114 @@ fun DetailScreen(
                             .onSizeChanged { size ->
                                 postcardPreviewSize = size
                             }
+                            .pointerInput(
+                                selectedLayout
+                            ) {
+                                val panSensitivity = 0.45f
+
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    if (!latestControlsEnabled) {
+                                        return@detectTransformGestures
+                                    }
+
+                                    val current =
+                                        latestPostcard
+                                            ?: return@detectTransformGestures
+
+                                    val oldOffsetX =
+                                        when (selectedLayout) {
+                                            PostcardLayoutStyle.POLAROID ->
+                                                current.polaroidPhotoOffsetX
+                                            PostcardLayoutStyle.TAPED_FILM ->
+                                                current.tapedFilmPhotoOffsetX
+                                            PostcardLayoutStyle.STAMP ->
+                                                current.stampPhotoOffsetX
+                                        }
+                                    val oldOffsetY =
+                                        when (selectedLayout) {
+                                            PostcardLayoutStyle.POLAROID ->
+                                                current.polaroidPhotoOffsetY
+                                            PostcardLayoutStyle.TAPED_FILM ->
+                                                current.tapedFilmPhotoOffsetY
+                                            PostcardLayoutStyle.STAMP ->
+                                                current.stampPhotoOffsetY
+                                        }
+                                    val oldZoom =
+                                        when (selectedLayout) {
+                                            PostcardLayoutStyle.POLAROID ->
+                                                current.polaroidPhotoZoom
+                                            PostcardLayoutStyle.TAPED_FILM ->
+                                                current.tapedFilmPhotoZoom
+                                            PostcardLayoutStyle.STAMP ->
+                                                current.stampPhotoZoom
+                                        }
+
+                                    val newZoom =
+                                        (oldZoom * zoom).coerceIn(1f, 3f)
+
+                                    val newOffsetX =
+                                        if (postcardPreviewSize.width > 0) {
+                                            (
+                                                    oldOffsetX -
+                                                            (pan.x / postcardPreviewSize.width) *
+                                                            panSensitivity * 2f
+                                                    ).coerceIn(-1f, 1f)
+                                        } else {
+                                            oldOffsetX
+                                        }
+                                    val newOffsetY =
+                                        if (postcardPreviewSize.height > 0) {
+                                            (
+                                                    oldOffsetY -
+                                                            (pan.y / postcardPreviewSize.height) *
+                                                            panSensitivity * 2f
+                                                    ).coerceIn(-1f, 1f)
+                                        } else {
+                                            oldOffsetY
+                                        }
+
+                                    when (selectedLayout) {
+                                        PostcardLayoutStyle.POLAROID -> {
+                                            viewModel.setPolaroidPhotoOffsetPreview(
+                                                newOffsetX,
+                                                newOffsetY
+                                            )
+                                            viewModel.savePolaroidPhotoOffset(
+                                                newOffsetX,
+                                                newOffsetY
+                                            )
+                                            viewModel.setPolaroidPhotoZoomPreview(newZoom)
+                                            viewModel.savePolaroidPhotoZoom(newZoom)
+                                        }
+
+                                        PostcardLayoutStyle.TAPED_FILM -> {
+                                            viewModel.setTapedFilmPhotoOffsetPreview(
+                                                newOffsetX,
+                                                newOffsetY
+                                            )
+                                            viewModel.saveTapedFilmPhotoOffset(
+                                                newOffsetX,
+                                                newOffsetY
+                                            )
+                                            viewModel.setTapedFilmPhotoZoomPreview(newZoom)
+                                            viewModel.saveTapedFilmPhotoZoom(newZoom)
+                                        }
+
+                                        PostcardLayoutStyle.STAMP -> {
+                                            viewModel.setStampPhotoOffsetPreview(
+                                                newOffsetX,
+                                                newOffsetY
+                                            )
+                                            viewModel.saveStampPhotoOffset(
+                                                newOffsetX,
+                                                newOffsetY
+                                            )
+                                            viewModel.setStampPhotoZoomPreview(newZoom)
+                                            viewModel.saveStampPhotoZoom(newZoom)
+                                        }
+                                    }
+                                }
+                            }
                     ) {
                         PostcardPreviewContent(
                             imagePath = pc.imagePath,
@@ -1338,7 +1465,25 @@ fun DetailScreen(
                             polaroidPhotoScale =
                                 pc.polaroidPhotoScale,
                             photoEdgeBlur =
-                                pc.photoEdgeBlur
+                                pc.photoEdgeBlur,
+                            stampPhotoOffsetX =
+                                pc.stampPhotoOffsetX,
+                            stampPhotoOffsetY =
+                                pc.stampPhotoOffsetY,
+                            polaroidPhotoOffsetX =
+                                pc.polaroidPhotoOffsetX,
+                            polaroidPhotoOffsetY =
+                                pc.polaroidPhotoOffsetY,
+                            tapedFilmPhotoOffsetX =
+                                pc.tapedFilmPhotoOffsetX,
+                            tapedFilmPhotoOffsetY =
+                                pc.tapedFilmPhotoOffsetY,
+                            stampPhotoZoom =
+                                pc.stampPhotoZoom,
+                            polaroidPhotoZoom =
+                                pc.polaroidPhotoZoom,
+                            tapedFilmPhotoZoom =
+                                pc.tapedFilmPhotoZoom
                         )
 
                         photoStickers.forEach { sticker ->
@@ -2468,12 +2613,21 @@ fun DetailScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
+                        val isTapedFilm =
+                            selectedLayout ==
+                                    PostcardLayoutStyle.TAPED_FILM
+
                         TextSizeControl(
-                            label = "우표 사진 크기",
+                            label =
+                                if (isTapedFilm) {
+                                    "필름 사진 크기"
+                                } else {
+                                    "우표 사진 크기"
+                                },
                             initialPercent =
                                 stampPhotoScalePercent,
-                            minPercent = 70,
-                            maxPercent = 130,
+                            minPercent = if (isTapedFilm) 85 else 70,
+                            maxPercent = if (isTapedFilm) 115 else 130,
                             enabled = controlsEnabled,
                             onPreviewPercentChanged = { percent ->
                                 viewModel

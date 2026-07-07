@@ -45,15 +45,27 @@ object PostcardRenderSpec {
     private const val POLAROID_PHOTO_HALF_WIDTH = 570f
     private const val POLAROID_PHOTO_TOP_OFFSET = 625f
     private const val POLAROID_PHOTO_BOTTOM_OFFSET = 515f
+    private const val TAPED_FILM_ANCHOR_X = 1024f
+    private const val TAPED_FILM_ANCHOR_Y = 720f
+    private const val TAPED_FILM_HALF_WIDTH = 760f
+    private const val TAPED_FILM_HALF_HEIGHT = 290f
+    private const val TAPED_FILM_PHOTO_SIDE_INSET = 50f
+    private const val TAPED_FILM_PHOTO_VERTICAL_INSET = 100f
+    private const val TAPED_FILM_SPROCKET_SIZE = 26f
+    private const val TAPED_FILM_SPROCKET_GAP = 22f
+    private const val TAPED_FILM_TAPE_WIDTH = 210f
+    private const val TAPED_FILM_TAPE_HEIGHT = 92f
 
     enum class LayoutStyle {
         STAMP,
-        POLAROID
+        POLAROID,
+        TAPED_FILM
     }
 
     enum class PhotoFrameStyle {
         PINKING,
-        POLAROID
+        POLAROID,
+        TAPED_FILM
     }
 
     data class RenderLayout(
@@ -64,7 +76,10 @@ object PostcardRenderSpec {
         val photoFrameStyle: PhotoFrameStyle = PhotoFrameStyle.PINKING,
         val compactMessage: Boolean = false,
         val compactDate: Boolean = false,
-        val darkMessageOverlay: Boolean = false
+        val darkMessageOverlay: Boolean = false,
+        val photoOffsetX: Float = 0f,
+        val photoOffsetY: Float = 0f,
+        val photoZoom: Float = 1f
     )
 
     fun resolveLayoutStyle(
@@ -72,6 +87,7 @@ object PostcardRenderSpec {
     ): LayoutStyle {
         return when (layoutStyle) {
             "POLAROID" -> LayoutStyle.POLAROID
+            "TAPED_FILM" -> LayoutStyle.TAPED_FILM
             else -> LayoutStyle.STAMP
         }
     }
@@ -79,7 +95,16 @@ object PostcardRenderSpec {
     fun layoutFor(
         layoutStyle: String,
         stampPhotoScale: Float = 1f,
-        polaroidPhotoScale: Float = 1f
+        polaroidPhotoScale: Float = 1f,
+        stampPhotoOffsetX: Float = 0f,
+        stampPhotoOffsetY: Float = 0f,
+        polaroidPhotoOffsetX: Float = 0f,
+        polaroidPhotoOffsetY: Float = 0f,
+        tapedFilmPhotoOffsetX: Float = 0f,
+        tapedFilmPhotoOffsetY: Float = 0f,
+        stampPhotoZoom: Float = 1f,
+        polaroidPhotoZoom: Float = 1f,
+        tapedFilmPhotoZoom: Float = 1f
     ): RenderLayout {
         return when (resolveLayoutStyle(layoutStyle)) {
             LayoutStyle.STAMP -> {
@@ -99,7 +124,10 @@ object PostcardRenderSpec {
                         centerY + half
                     ),
                     messagePanel = RectF(220f, 1505f, 1828f, 1748f),
-                    datePanel = RectF(544f, 1846f, 1504f, 1932f)
+                    datePanel = RectF(544f, 1846f, 1504f, 1932f),
+                    photoOffsetX = stampPhotoOffsetX,
+                    photoOffsetY = stampPhotoOffsetY,
+                    photoZoom = stampPhotoZoom
                 )
             }
 
@@ -130,7 +158,49 @@ object PostcardRenderSpec {
                     ),
                     photoFrameStyle = PhotoFrameStyle.POLAROID,
                     messagePanel = RectF(220f, 1565f, 1828f, 1798f),
-                    datePanel = RectF(544f, 1860f, 1504f, 1946f)
+                    datePanel = RectF(544f, 1860f, 1504f, 1946f),
+                    photoOffsetX = polaroidPhotoOffsetX,
+                    photoOffsetY = polaroidPhotoOffsetY,
+                    photoZoom = polaroidPhotoZoom
+                )
+            }
+
+            LayoutStyle.TAPED_FILM -> {
+                val clampedScale =
+                    stampPhotoScale.coerceIn(0.85f, 1.15f)
+                val halfWidth =
+                    TAPED_FILM_HALF_WIDTH * clampedScale
+                val halfHeight =
+                    TAPED_FILM_HALF_HEIGHT * clampedScale
+                val sideInset =
+                    TAPED_FILM_PHOTO_SIDE_INSET * clampedScale
+                val verticalInset =
+                    TAPED_FILM_PHOTO_VERTICAL_INSET * clampedScale
+
+                val filmBounds =
+                    RectF(
+                        TAPED_FILM_ANCHOR_X - halfWidth,
+                        TAPED_FILM_ANCHOR_Y - halfHeight,
+                        TAPED_FILM_ANCHOR_X + halfWidth,
+                        TAPED_FILM_ANCHOR_Y + halfHeight
+                    )
+                val photoBounds =
+                    RectF(
+                        filmBounds.left + sideInset,
+                        filmBounds.top + verticalInset,
+                        filmBounds.right - sideInset,
+                        filmBounds.bottom - verticalInset
+                    )
+
+                RenderLayout(
+                    stampBounds = filmBounds,
+                    photoBounds = photoBounds,
+                    photoFrameStyle = PhotoFrameStyle.TAPED_FILM,
+                    messagePanel = RectF(220f, 1300f, 1828f, 1560f),
+                    datePanel = RectF(544f, 1620f, 1504f, 1716f),
+                    photoOffsetX = tapedFilmPhotoOffsetX,
+                    photoOffsetY = tapedFilmPhotoOffsetY,
+                    photoZoom = tapedFilmPhotoZoom
                 )
             }
         }
@@ -152,7 +222,16 @@ object PostcardRenderSpec {
         backgroundPatternDensity: Float = 1f,
         stampPhotoScale: Float = 1f,
         polaroidPhotoScale: Float = 1f,
-        photoEdgeBlur: Float = 0f
+        photoEdgeBlur: Float = 0f,
+        stampPhotoOffsetX: Float = 0f,
+        stampPhotoOffsetY: Float = 0f,
+        polaroidPhotoOffsetX: Float = 0f,
+        polaroidPhotoOffsetY: Float = 0f,
+        tapedFilmPhotoOffsetX: Float = 0f,
+        tapedFilmPhotoOffsetY: Float = 0f,
+        stampPhotoZoom: Float = 1f,
+        polaroidPhotoZoom: Float = 1f,
+        tapedFilmPhotoZoom: Float = 1f
     ) {
         val scale =
             targetSize / LOGICAL_SIZE
@@ -164,7 +243,16 @@ object PostcardRenderSpec {
             layoutFor(
                 layoutStyle = layoutStyle,
                 stampPhotoScale = stampPhotoScale,
-                polaroidPhotoScale = polaroidPhotoScale
+                polaroidPhotoScale = polaroidPhotoScale,
+                stampPhotoOffsetX = stampPhotoOffsetX,
+                stampPhotoOffsetY = stampPhotoOffsetY,
+                polaroidPhotoOffsetX = polaroidPhotoOffsetX,
+                polaroidPhotoOffsetY = polaroidPhotoOffsetY,
+                tapedFilmPhotoOffsetX = tapedFilmPhotoOffsetX,
+                tapedFilmPhotoOffsetY = tapedFilmPhotoOffsetY,
+                stampPhotoZoom = stampPhotoZoom,
+                polaroidPhotoZoom = polaroidPhotoZoom,
+                tapedFilmPhotoZoom = tapedFilmPhotoZoom
             )
 
         drawBackground(
@@ -179,7 +267,10 @@ object PostcardRenderSpec {
                     canvas = canvas,
                     sourceBitmap = sourceBitmap,
                     stampBounds = layout.stampBounds,
-                    edgeBlur = photoEdgeBlur
+                    edgeBlur = photoEdgeBlur,
+                    offsetX = layout.photoOffsetX,
+                    offsetY = layout.photoOffsetY,
+                    zoom = layout.photoZoom
                 )
             }
 
@@ -189,7 +280,23 @@ object PostcardRenderSpec {
                     sourceBitmap = sourceBitmap,
                     paperBounds = layout.stampBounds,
                     photoBounds = layout.photoBounds,
-                    edgeBlur = photoEdgeBlur
+                    edgeBlur = photoEdgeBlur,
+                    offsetX = layout.photoOffsetX,
+                    offsetY = layout.photoOffsetY,
+                    zoom = layout.photoZoom
+                )
+            }
+
+            PhotoFrameStyle.TAPED_FILM -> {
+                drawTapedFilmPhoto(
+                    canvas = canvas,
+                    sourceBitmap = sourceBitmap,
+                    filmBounds = layout.stampBounds,
+                    photoBounds = layout.photoBounds,
+                    edgeBlur = photoEdgeBlur,
+                    offsetX = layout.photoOffsetX,
+                    offsetY = layout.photoOffsetY,
+                    zoom = layout.photoZoom
                 )
             }
         }
@@ -246,7 +353,10 @@ object PostcardRenderSpec {
         canvas: Canvas,
         bitmap: Bitmap,
         destinationRect: RectF,
-        edgeBlur: Float = 0f
+        edgeBlur: Float = 0f,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        zoom: Float = 1f
     ) {
         val sourceWidth =
             bitmap.width.toFloat()
@@ -268,37 +378,49 @@ object PostcardRenderSpec {
             bitmap.width
         val sourceHeightInt =
             bitmap.height
+        val clampedOffsetX = offsetX.coerceIn(-1f, 1f)
+        val clampedOffsetY = offsetY.coerceIn(-1f, 1f)
+        val clampedZoom = zoom.coerceIn(1f, 3f)
+
+        // Base crop is the largest window matching destinationRatio that
+        // still fits inside the source bitmap; zoom then shrinks it further
+        // (both dimensions, keeping the ratio), which is what opens up pan
+        // room on whichever axis had none at zoom = 1.
+        val baseCroppedWidth: Float
+        val baseCroppedHeight: Float
+
+        if (sourceRatio > destinationRatio) {
+            baseCroppedHeight = sourceHeight
+            baseCroppedWidth = sourceHeight * destinationRatio
+        } else {
+            baseCroppedWidth = sourceWidth
+            baseCroppedHeight = sourceWidth / destinationRatio
+        }
+
+        val croppedWidth = baseCroppedWidth / clampedZoom
+        val croppedHeight = baseCroppedHeight / clampedZoom
+
+        val slackX = (sourceWidth - croppedWidth).coerceAtLeast(0f)
+        val slackY = (sourceHeight - croppedHeight).coerceAtLeast(0f)
+
+        val left =
+            (slackX / 2f + clampedOffsetX * (slackX / 2f))
+                .coerceIn(0f, slackX)
+        val top =
+            (slackY / 2f + clampedOffsetY * (slackY / 2f))
+                .coerceIn(0f, slackY)
 
         val sourceRect =
-            if (sourceRatio > destinationRatio) {
-                val croppedWidth =
-                    sourceHeight * destinationRatio
-                val left =
-                    (sourceWidth - croppedWidth) / 2f
-
-                Rect(
-                    left.toInt()
-                        .coerceIn(0, sourceWidthInt),
-                    0,
-                    (left + croppedWidth).toInt()
-                        .coerceIn(0, sourceWidthInt),
-                    sourceHeightInt
-                )
-            } else {
-                val croppedHeight =
-                    sourceWidth / destinationRatio
-                val top =
-                    (sourceHeight - croppedHeight) / 2f
-
-                Rect(
-                    0,
-                    top.toInt()
-                        .coerceIn(0, sourceHeightInt),
-                    sourceWidthInt,
-                    (top + croppedHeight).toInt()
-                        .coerceIn(0, sourceHeightInt)
-                )
-            }
+            Rect(
+                left.toInt()
+                    .coerceIn(0, sourceWidthInt),
+                top.toInt()
+                    .coerceIn(0, sourceHeightInt),
+                (left + croppedWidth).toInt()
+                    .coerceIn(0, sourceWidthInt),
+                (top + croppedHeight).toInt()
+                    .coerceIn(0, sourceHeightInt)
+            )
 
         val paint =
             Paint(
@@ -795,7 +917,10 @@ object PostcardRenderSpec {
         canvas: Canvas,
         sourceBitmap: Bitmap,
         stampBounds: RectF,
-        edgeBlur: Float = 0f
+        edgeBlur: Float = 0f,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        zoom: Float = 1f
     ) {
         val stampPath =
             createPinkingPath(
@@ -827,7 +952,10 @@ object PostcardRenderSpec {
             canvas = canvas,
             bitmap = sourceBitmap,
             destinationRect = stampBounds,
-            edgeBlur = edgeBlur
+            edgeBlur = edgeBlur,
+            offsetX = offsetX,
+            offsetY = offsetY,
+            zoom = zoom
         )
         canvas.restore()
 
@@ -848,7 +976,10 @@ object PostcardRenderSpec {
         sourceBitmap: Bitmap,
         paperBounds: RectF,
         photoBounds: RectF,
-        edgeBlur: Float = 0f
+        edgeBlur: Float = 0f,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        zoom: Float = 1f
     ) {
         val paperCornerRadius = 18f
         val shadowBounds =
@@ -915,7 +1046,10 @@ object PostcardRenderSpec {
             canvas = canvas,
             bitmap = sourceBitmap,
             destinationRect = photoBounds,
-            edgeBlur = edgeBlur
+            edgeBlur = edgeBlur,
+            offsetX = offsetX,
+            offsetY = offsetY,
+            zoom = zoom
         )
         canvas.restore()
 
@@ -932,6 +1066,150 @@ object PostcardRenderSpec {
             photoCornerRadius,
             photoBorderPaint
         )
+    }
+
+    private fun drawTapedFilmPhoto(
+        canvas: Canvas,
+        sourceBitmap: Bitmap,
+        filmBounds: RectF,
+        photoBounds: RectF,
+        edgeBlur: Float = 0f,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        zoom: Float = 1f
+    ) {
+        val frameCornerRadius = 16f
+
+        val shadowBounds =
+            RectF(
+                filmBounds.left + 18f,
+                filmBounds.top + 22f,
+                filmBounds.right + 18f,
+                filmBounds.bottom + 22f
+            )
+        val shadowPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(70, 18, 12, 28)
+                style = Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(shadowBounds, frameCornerRadius, frameCornerRadius, shadowPaint)
+
+        val filmPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(28, 24, 26)
+                style = Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(filmBounds, frameCornerRadius, frameCornerRadius, filmPaint)
+
+        canvas.save()
+        canvas.clipRect(photoBounds)
+        drawCenterCroppedBitmap(
+            canvas = canvas,
+            bitmap = sourceBitmap,
+            destinationRect = photoBounds,
+            edgeBlur = edgeBlur,
+            offsetX = offsetX,
+            offsetY = offsetY,
+            zoom = zoom
+        )
+        canvas.restore()
+
+        val photoBorderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(160, 255, 255, 255)
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+            }
+
+        canvas.drawRect(photoBounds, photoBorderPaint)
+
+        drawFilmSprocketRow(
+            canvas = canvas,
+            filmBounds = filmBounds,
+            centerY = (filmBounds.top + photoBounds.top) / 2f
+        )
+        drawFilmSprocketRow(
+            canvas = canvas,
+            filmBounds = filmBounds,
+            centerY = (photoBounds.bottom + filmBounds.bottom) / 2f
+        )
+
+        drawMaskingTape(
+            canvas = canvas,
+            centerX = filmBounds.left + TAPED_FILM_TAPE_WIDTH * 0.55f,
+            centerY = filmBounds.top
+        )
+        drawMaskingTape(
+            canvas = canvas,
+            centerX = filmBounds.right - TAPED_FILM_TAPE_WIDTH * 0.55f,
+            centerY = filmBounds.top
+        )
+    }
+
+    private fun drawFilmSprocketRow(
+        canvas: Canvas,
+        filmBounds: RectF,
+        centerY: Float
+    ) {
+        val holePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(250, 248, 244)
+                style = Paint.Style.FILL
+            }
+
+        val margin = TAPED_FILM_PHOTO_SIDE_INSET
+        val usableWidth = filmBounds.width() - margin * 2f
+        val step = TAPED_FILM_SPROCKET_SIZE + TAPED_FILM_SPROCKET_GAP
+        val holeCount = (usableWidth / step).toInt().coerceAtLeast(1)
+        val totalHolesWidth = holeCount * step - TAPED_FILM_SPROCKET_GAP
+        var x = filmBounds.left + margin + (usableWidth - totalHolesWidth) / 2f
+
+        repeat(holeCount) {
+            canvas.drawRoundRect(
+                RectF(
+                    x,
+                    centerY - TAPED_FILM_SPROCKET_SIZE / 2f,
+                    x + TAPED_FILM_SPROCKET_SIZE,
+                    centerY + TAPED_FILM_SPROCKET_SIZE / 2f
+                ),
+                6f,
+                6f,
+                holePaint
+            )
+            x += step
+        }
+    }
+
+    private fun drawMaskingTape(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float
+    ) {
+        val tapeBounds =
+            RectF(
+                centerX - TAPED_FILM_TAPE_WIDTH / 2f,
+                centerY - TAPED_FILM_TAPE_HEIGHT / 2f,
+                centerX + TAPED_FILM_TAPE_WIDTH / 2f,
+                centerY + TAPED_FILM_TAPE_HEIGHT / 2f
+            )
+        val tapePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(150, 214, 201, 178)
+                style = Paint.Style.FILL
+            }
+
+        canvas.drawRoundRect(tapeBounds, 4f, 4f, tapePaint)
+
+        val tapeEdgePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(90, 255, 255, 255)
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+            }
+
+        canvas.drawRoundRect(tapeBounds, 4f, 4f, tapeEdgePaint)
     }
 
     private fun drawMessage(
