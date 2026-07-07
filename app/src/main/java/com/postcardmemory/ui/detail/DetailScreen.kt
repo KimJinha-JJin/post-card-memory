@@ -2049,10 +2049,19 @@ fun DetailScreen(
                                     }
                                     .then(
                                         if (isSealSelected) {
+                                            val selectionShape =
+                                                when (seal.type) {
+                                                    SealType.CIRCLE_POSTMARK,
+                                                    SealType.STAR -> CircleShape
+                                                    SealType.WAVE_CANCEL,
+                                                    SealType.AIR_MAIL ->
+                                                        RoundedCornerShape(8.dp)
+                                                }
+
                                             Modifier.border(
                                                 width = 2.dp,
                                                 color = GraphiteAccent,
-                                                shape = RoundedCornerShape(8.dp)
+                                                shape = selectionShape
                                             )
                                         } else {
                                             Modifier

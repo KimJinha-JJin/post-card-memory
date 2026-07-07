@@ -226,7 +226,7 @@ fun PhotoStickerPickerPanel(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "갤러리 사진을 골라서 포스트카드 위에 바로 올려뵐아.",
+            text = "갤러리 사진을 골라서 포스트카드 위에 바로 올려봐.",
             color = BrutalBlack,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium

@@ -40,6 +40,7 @@ import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
+import com.postcardmemory.ui.theme.SealInkWhite
 import com.postcardmemory.ui.theme.SoftGray
 import com.postcardmemory.ui.theme.sealInkColors
 
@@ -161,7 +162,7 @@ fun SealPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "사용할 도장을 선택해 추가해 주세요.",
+                text = "위에서 마음에 드는 도장을 눌러서 추가해봐.",
                 color = BrutalBlack,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -188,12 +189,18 @@ fun SealPickerPanel(
         ) {
             photoSeals.forEach { seal ->
                 val isSelected = seal.id == selectedSealId
+                val isWhiteInk =
+                    (seal.colorArgb == (SealInkWhite.toArgb().toLong() and 0xFFFFFFFFL))
 
                 Box(
                     modifier = Modifier
                         .size(56.dp)
                         .background(
-                            color = if (isSelected) GraphiteAccent else BrutalWhite,
+                            color = when {
+                                isSelected -> GraphiteAccent
+                                isWhiteInk -> NeutralLight
+                                else -> BrutalWhite
+                            },
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))
@@ -215,7 +222,7 @@ fun SealPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "미리보기에서 편집할 도장을 선택해 주세요.",
+                text = "추가한 도장을 눌러서 선택하면 여기서 꾸밀 수 있어.",
                 color = BrutalBlack,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -243,11 +250,31 @@ fun SealPickerPanel(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
+            text = "선택된 도장",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = "이동은 미리보기에서 드래그하고, 크기·회전은 아래에서도 세밀하게 조절할 수 있어.",
+            color = BrutalBlack,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
             text = "크기",
             color = BrutalBlack,
             fontSize = 13.sp,
             fontWeight = FontWeight.ExtraBold
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Slider(
             value = selectedSeal.scale,
@@ -293,8 +320,8 @@ fun SealPickerPanel(
                             shape = CircleShape
                         )
                         .border(
-                            width = 1.dp,
-                            color = BrutalBlack.copy(alpha = 0.25f),
+                            width = 1.5.dp,
+                            color = BrutalBlack.copy(alpha = 0.35f),
                             shape = CircleShape
                         )
                         .clickable(enabled = enabled) {
