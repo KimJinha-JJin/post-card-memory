@@ -21,6 +21,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +38,7 @@ import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.ScreenBackgroundGray
+import kotlinx.coroutines.launch
 
 /** 카메라·갤러리·파일 중 사진 출처를 고르는 공용 바텀시트 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,9 +49,23 @@ fun PhotoSourceMenu(
     onGallerySelected: () -> Unit,
     onFileSelected: () -> Unit
 ) {
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    var isClosing by remember { mutableStateOf(false) }
+
+    fun hideThenRun(action: () -> Unit) {
+        if (isClosing) return
+        isClosing = true
+
+        scope.launch {
+            sheetState.hide()
+            action()
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
+        sheetState = sheetState,
         containerColor = ScreenBackgroundGray
     ) {
         Column(
@@ -65,7 +85,7 @@ fun PhotoSourceMenu(
             PhotoSourceMenuItem(
                 icon = Icons.Default.CameraAlt,
                 label = "카메라로 촬영",
-                onClick = onCameraSelected
+                onClick = { hideThenRun(onCameraSelected) }
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -73,7 +93,7 @@ fun PhotoSourceMenu(
             PhotoSourceMenuItem(
                 icon = Icons.Default.PhotoLibrary,
                 label = "갤러리에서 선택",
-                onClick = onGallerySelected
+                onClick = { hideThenRun(onGallerySelected) }
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -81,7 +101,7 @@ fun PhotoSourceMenu(
             PhotoSourceMenuItem(
                 icon = Icons.Default.FolderOpen,
                 label = "파일에서 선택",
-                onClick = onFileSelected
+                onClick = { hideThenRun(onFileSelected) }
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -89,7 +109,7 @@ fun PhotoSourceMenu(
             PhotoSourceMenuItem(
                 icon = Icons.Default.Close,
                 label = "취소",
-                onClick = onDismiss,
+                onClick = { hideThenRun(onDismiss) },
                 emphasized = false
             )
 
