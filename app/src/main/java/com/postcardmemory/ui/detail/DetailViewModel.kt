@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
+private const val SEAL_HISTORY_LIMIT = 50
+
 sealed interface ExportState {
 
     data object Idle : ExportState
@@ -394,6 +396,8 @@ class DetailViewModel @Inject constructor(
     fun loadPhotoSealsState(
         postcardId: Long
     ) {
+        clearSealHistory()
+
         viewModelScope.launch(Dispatchers.IO) {
             val file =
                 File(
@@ -413,6 +417,84 @@ class DetailViewModel @Inject constructor(
                 _photoSeals.value = seals
             }
         }
+    }
+
+    private data class SealSnapshot(
+        val seals: List<PostcardSealItem>,
+        val selectedSealId: String?
+    )
+
+    private val sealUndoStack =
+        ArrayDeque<SealSnapshot>()
+
+    private val sealRedoStack =
+        ArrayDeque<SealSnapshot>()
+
+    private val _canUndoSeal =
+        MutableStateFlow(false)
+
+    val canUndoSeal: StateFlow<Boolean> =
+        _canUndoSeal
+
+    private val _canRedoSeal =
+        MutableStateFlow(false)
+
+    val canRedoSeal: StateFlow<Boolean> =
+        _canRedoSeal
+
+    private fun updateSealHistoryAvailability() {
+        _canUndoSeal.value = sealUndoStack.isNotEmpty()
+        _canRedoSeal.value = sealRedoStack.isNotEmpty()
+    }
+
+    private fun clearSealHistory() {
+        sealUndoStack.clear()
+        sealRedoStack.clear()
+        updateSealHistoryAvailability()
+    }
+
+    fun recordSealSnapshotForUndo() {
+        sealUndoStack.addLast(
+            SealSnapshot(
+                seals = _photoSeals.value,
+                selectedSealId = _selectedSealId.value
+            )
+        )
+        if (sealUndoStack.size > SEAL_HISTORY_LIMIT) {
+            sealUndoStack.removeFirst()
+        }
+        sealRedoStack.clear()
+        updateSealHistoryAvailability()
+    }
+
+    fun undoSealChange() {
+        val previous =
+            sealUndoStack.removeLastOrNull() ?: return
+
+        sealRedoStack.addLast(
+            SealSnapshot(
+                seals = _photoSeals.value,
+                selectedSealId = _selectedSealId.value
+            )
+        )
+        _photoSeals.value = previous.seals
+        _selectedSealId.value = previous.selectedSealId
+        updateSealHistoryAvailability()
+    }
+
+    fun redoSealChange() {
+        val next =
+            sealRedoStack.removeLastOrNull() ?: return
+
+        sealUndoStack.addLast(
+            SealSnapshot(
+                seals = _photoSeals.value,
+                selectedSealId = _selectedSealId.value
+            )
+        )
+        _photoSeals.value = next.seals
+        _selectedSealId.value = next.selectedSealId
+        updateSealHistoryAvailability()
     }
 
     private var subjectSegmenter: SubjectSegmenter? =

@@ -897,6 +897,11 @@ fun DetailScreen(
     val photoSeals by viewModel.photoSeals.collectAsState()
     val selectedSealId by viewModel.selectedSealId.collectAsState()
     val latestPhotoSeals by rememberUpdatedState(photoSeals)
+    val canUndoSeal by viewModel.canUndoSeal.collectAsState()
+    val canRedoSeal by viewModel.canRedoSeal.collectAsState()
+    var sealScaleDragSnapshotTaken by remember {
+        mutableStateOf(false)
+    }
     val latestPostcard by rememberUpdatedState(postcard)
 
     var stickerEditMode by remember {
@@ -2274,7 +2279,17 @@ fun DetailScreen(
                                         seal.id,
                                         postcardPreviewSize
                                     ) {
+                                        var sealGestureSnapshotPending = true
+
                                         coroutineScope {
+                                            launch {
+                                                awaitEachGesture {
+                                                    awaitFirstDown(
+                                                        requireUnconsumed = false
+                                                    )
+                                                    sealGestureSnapshotPending = true
+                                                }
+                                            }
                                             launch {
                                                 detectTapGestures(
                                                     onTap = {
@@ -2298,6 +2313,11 @@ fun DetailScreen(
                                                         latestPhotoSeals.find {
                                                             it.id == seal.id
                                                         } ?: return@detectTransformGestures
+
+                                                    if (sealGestureSnapshotPending) {
+                                                        viewModel.recordSealSnapshotForUndo()
+                                                        sealGestureSnapshotPending = false
+                                                    }
 
                                                     val currentSealSize =
                                                         sealSizes[seal.id]
@@ -3129,6 +3149,7 @@ fun DetailScreen(
                                         )
                                     },
                                     onAddSeal = { type ->
+                                        viewModel.recordSealSnapshotForUndo()
                                         val newSeal =
                                             PostcardSealItem(type = type)
                                         viewModel.setPhotoSeals(
@@ -3139,6 +3160,7 @@ fun DetailScreen(
                                         )
                                     },
                                     onDeleteSeal = { id ->
+                                        viewModel.recordSealSnapshotForUndo()
                                         val remaining =
                                             photoSeals.filter {
                                                 it.id != id
@@ -3152,6 +3174,10 @@ fun DetailScreen(
                                         }
                                     },
                                     onScaleChanged = { id, newScale ->
+                                        if (!sealScaleDragSnapshotTaken) {
+                                            viewModel.recordSealSnapshotForUndo()
+                                            sealScaleDragSnapshotTaken = true
+                                        }
                                         viewModel.setPhotoSeals(
                                             photoSeals.map {
                                                 if (it.id == id) {
@@ -3162,7 +3188,11 @@ fun DetailScreen(
                                             }
                                         )
                                     },
+                                    onScaleChangeFinished = {
+                                        sealScaleDragSnapshotTaken = false
+                                    },
                                     onRotateBy = { id, deltaDegrees ->
+                                        viewModel.recordSealSnapshotForUndo()
                                         viewModel.setPhotoSeals(
                                             photoSeals.map {
                                                 if (it.id == id) {
@@ -3180,6 +3210,7 @@ fun DetailScreen(
                                         )
                                     },
                                     onColorSelected = { id, colorArgb ->
+                                        viewModel.recordSealSnapshotForUndo()
                                         viewModel.setPhotoSeals(
                                             photoSeals.map {
                                                 if (it.id == id) {
@@ -3190,6 +3221,14 @@ fun DetailScreen(
                                             }
                                         )
                                     },
+                                    onUndoSeal = {
+                                        viewModel.undoSealChange()
+                                    },
+                                    onRedoSeal = {
+                                        viewModel.redoSealChange()
+                                    },
+                                    canUndoSeal = canUndoSeal,
+                                    canRedoSeal = canRedoSeal,
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 )

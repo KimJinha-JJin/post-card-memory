@@ -18,10 +18,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -52,8 +55,13 @@ fun SealPickerPanel(
     onAddSeal: (SealType) -> Unit,
     onDeleteSeal: (String) -> Unit,
     onScaleChanged: (String, Float) -> Unit,
+    onScaleChangeFinished: () -> Unit,
     onRotateBy: (String, Float) -> Unit,
     onColorSelected: (String, Long) -> Unit,
+    onUndoSeal: () -> Unit,
+    onRedoSeal: () -> Unit,
+    canUndoSeal: Boolean,
+    canRedoSeal: Boolean,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -80,18 +88,45 @@ fun SealPickerPanel(
                 fontWeight = FontWeight.ExtraBold
             )
 
-            Text(
-                text = "${photoSeals.size}개",
-                color = BrutalBlack,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier
-                    .background(
-                        color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy((-4).dp)
+            ) {
+                IconButton(
+                    onClick = onUndoSeal,
+                    enabled = enabled && canUndoSeal
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = "되돌리기",
+                        tint = if (canUndoSeal) BrutalBlack else SoftGray
                     )
-                    .padding(horizontal = 9.dp, vertical = 5.dp)
-            )
+                }
+
+                IconButton(
+                    onClick = onRedoSeal,
+                    enabled = enabled && canRedoSeal
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Redo,
+                        contentDescription = "다시 실행",
+                        tint = if (canRedoSeal) BrutalBlack else SoftGray
+                    )
+                }
+
+                Text(
+                    text = "${photoSeals.size}개",
+                    color = BrutalBlack,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier
+                        .background(
+                            color = BrutalWhite,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -281,6 +316,7 @@ fun SealPickerPanel(
             onValueChange = { newValue ->
                 onScaleChanged(selectedSeal.id, newValue)
             },
+            onValueChangeFinished = onScaleChangeFinished,
             valueRange = 0.5f..3f,
             enabled = enabled,
             colors = SliderDefaults.colors(
