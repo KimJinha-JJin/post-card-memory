@@ -18,6 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -56,6 +61,10 @@ enum class PostcardLayoutStyle(
 fun PostcardLayoutPicker(
     selectedLayout: PostcardLayoutStyle,
     onLayoutSelected: (PostcardLayoutStyle) -> Unit,
+    onUndoPhotoTransform: () -> Unit,
+    onRedoPhotoTransform: () -> Unit,
+    canUndoPhotoTransform: Boolean,
+    canRedoPhotoTransform: Boolean,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -77,12 +86,55 @@ fun PostcardLayoutPicker(
                 vertical = 16.dp
             )
     ) {
-        Text(
-            text = "엽서 레이아웃",
-            color = BrutalBlack,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "엽서 레이아웃",
+                color = BrutalBlack,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy((-4).dp)
+            ) {
+                IconButton(
+                    onClick = onUndoPhotoTransform,
+                    enabled = enabled && canUndoPhotoTransform
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = "사진 되돌리기",
+                        tint =
+                            if (canUndoPhotoTransform) {
+                                BrutalBlack
+                            } else {
+                                SoftGray
+                            }
+                    )
+                }
+
+                IconButton(
+                    onClick = onRedoPhotoTransform,
+                    enabled = enabled && canRedoPhotoTransform
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Redo,
+                        contentDescription = "사진 다시 실행",
+                        tint =
+                            if (canRedoPhotoTransform) {
+                                BrutalBlack
+                            } else {
+                                SoftGray
+                            }
+                    )
+                }
+            }
+        }
 
         Spacer(
             modifier = Modifier.height(4.dp)

@@ -39,6 +39,7 @@ import kotlinx.coroutines.withContext
 
 private const val SEAL_HISTORY_LIMIT = 50
 private const val STICKER_HISTORY_LIMIT = 30
+private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
 
 sealed interface ExportState {
 
@@ -621,12 +622,168 @@ class DetailViewModel @Inject constructor(
         sweepStickerCleanupCandidates()
     }
 
+    private data class PhotoTransformSnapshot(
+        val stampPhotoScale: Float,
+        val polaroidPhotoScale: Float,
+        val stampPhotoOffsetX: Float,
+        val stampPhotoOffsetY: Float,
+        val polaroidPhotoOffsetX: Float,
+        val polaroidPhotoOffsetY: Float,
+        val tapedFilmPhotoOffsetX: Float,
+        val tapedFilmPhotoOffsetY: Float,
+        val stampPhotoZoom: Float,
+        val polaroidPhotoZoom: Float,
+        val tapedFilmPhotoZoom: Float
+    )
+
+    private val photoTransformUndoStack =
+        ArrayDeque<PhotoTransformSnapshot>()
+
+    private val photoTransformRedoStack =
+        ArrayDeque<PhotoTransformSnapshot>()
+
+    private val _canUndoPhotoTransform =
+        MutableStateFlow(false)
+
+    val canUndoPhotoTransform: StateFlow<Boolean> =
+        _canUndoPhotoTransform
+
+    private val _canRedoPhotoTransform =
+        MutableStateFlow(false)
+
+    val canRedoPhotoTransform: StateFlow<Boolean> =
+        _canRedoPhotoTransform
+
+    private fun currentPhotoTransformSnapshot(): PhotoTransformSnapshot? {
+        val current =
+            _postcard.value ?: return null
+
+        return PhotoTransformSnapshot(
+            stampPhotoScale = current.stampPhotoScale,
+            polaroidPhotoScale = current.polaroidPhotoScale,
+            stampPhotoOffsetX = current.stampPhotoOffsetX,
+            stampPhotoOffsetY = current.stampPhotoOffsetY,
+            polaroidPhotoOffsetX = current.polaroidPhotoOffsetX,
+            polaroidPhotoOffsetY = current.polaroidPhotoOffsetY,
+            tapedFilmPhotoOffsetX = current.tapedFilmPhotoOffsetX,
+            tapedFilmPhotoOffsetY = current.tapedFilmPhotoOffsetY,
+            stampPhotoZoom = current.stampPhotoZoom,
+            polaroidPhotoZoom = current.polaroidPhotoZoom,
+            tapedFilmPhotoZoom = current.tapedFilmPhotoZoom
+        )
+    }
+
+    private fun updatePhotoTransformHistoryAvailability() {
+        _canUndoPhotoTransform.value =
+            photoTransformUndoStack.isNotEmpty()
+        _canRedoPhotoTransform.value =
+            photoTransformRedoStack.isNotEmpty()
+    }
+
+    private fun clearPhotoTransformHistory() {
+        photoTransformUndoStack.clear()
+        photoTransformRedoStack.clear()
+        updatePhotoTransformHistoryAvailability()
+    }
+
+    fun recordPhotoTransformSnapshotForUndo() {
+        val snapshot =
+            currentPhotoTransformSnapshot() ?: return
+
+        photoTransformUndoStack.addLast(snapshot)
+        if (photoTransformUndoStack.size > PHOTO_TRANSFORM_HISTORY_LIMIT) {
+            photoTransformUndoStack.removeFirst()
+        }
+        photoTransformRedoStack.clear()
+        updatePhotoTransformHistoryAvailability()
+    }
+
+    private fun applyPhotoTransformSnapshot(
+        snapshot: PhotoTransformSnapshot
+    ) {
+        val current =
+            _postcard.value ?: return
+
+        if (current.stampPhotoScale != snapshot.stampPhotoScale) {
+            saveStampPhotoScale(snapshot.stampPhotoScale)
+        }
+        if (current.polaroidPhotoScale != snapshot.polaroidPhotoScale) {
+            savePolaroidPhotoScale(snapshot.polaroidPhotoScale)
+        }
+        if (
+            current.stampPhotoOffsetX != snapshot.stampPhotoOffsetX ||
+            current.stampPhotoOffsetY != snapshot.stampPhotoOffsetY
+        ) {
+            saveStampPhotoOffset(
+                snapshot.stampPhotoOffsetX,
+                snapshot.stampPhotoOffsetY
+            )
+        }
+        if (
+            current.polaroidPhotoOffsetX != snapshot.polaroidPhotoOffsetX ||
+            current.polaroidPhotoOffsetY != snapshot.polaroidPhotoOffsetY
+        ) {
+            savePolaroidPhotoOffset(
+                snapshot.polaroidPhotoOffsetX,
+                snapshot.polaroidPhotoOffsetY
+            )
+        }
+        if (
+            current.tapedFilmPhotoOffsetX != snapshot.tapedFilmPhotoOffsetX ||
+            current.tapedFilmPhotoOffsetY != snapshot.tapedFilmPhotoOffsetY
+        ) {
+            saveTapedFilmPhotoOffset(
+                snapshot.tapedFilmPhotoOffsetX,
+                snapshot.tapedFilmPhotoOffsetY
+            )
+        }
+        if (current.stampPhotoZoom != snapshot.stampPhotoZoom) {
+            saveStampPhotoZoom(snapshot.stampPhotoZoom)
+        }
+        if (current.polaroidPhotoZoom != snapshot.polaroidPhotoZoom) {
+            savePolaroidPhotoZoom(snapshot.polaroidPhotoZoom)
+        }
+        if (current.tapedFilmPhotoZoom != snapshot.tapedFilmPhotoZoom) {
+            saveTapedFilmPhotoZoom(snapshot.tapedFilmPhotoZoom)
+        }
+    }
+
+    fun undoPhotoTransformChange() {
+        val previous =
+            photoTransformUndoStack.removeLastOrNull() ?: return
+        val current =
+            currentPhotoTransformSnapshot()
+
+        if (current != null) {
+            photoTransformRedoStack.addLast(current)
+        }
+
+        applyPhotoTransformSnapshot(previous)
+        updatePhotoTransformHistoryAvailability()
+    }
+
+    fun redoPhotoTransformChange() {
+        val next =
+            photoTransformRedoStack.removeLastOrNull() ?: return
+        val current =
+            currentPhotoTransformSnapshot()
+
+        if (current != null) {
+            photoTransformUndoStack.addLast(current)
+        }
+
+        applyPhotoTransformSnapshot(next)
+        updatePhotoTransformHistoryAvailability()
+    }
+
     private var subjectSegmenter: SubjectSegmenter? =
         null
 
     fun loadPostcard(
         postcardId: Long
     ) {
+        clearPhotoTransformHistory()
+
         viewModelScope.launch {
             val loadedPostcard =
                 withContext(Dispatchers.IO) {

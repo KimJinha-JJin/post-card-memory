@@ -904,6 +904,14 @@ fun DetailScreen(
     var sealScaleDragSnapshotTaken by remember {
         mutableStateOf(false)
     }
+    val canUndoPhotoTransform by viewModel.canUndoPhotoTransform.collectAsState()
+    val canRedoPhotoTransform by viewModel.canRedoPhotoTransform.collectAsState()
+    var stampPhotoScaleDragSnapshotTaken by remember {
+        mutableStateOf(false)
+    }
+    var polaroidPhotoScaleDragSnapshotTaken by remember {
+        mutableStateOf(false)
+    }
     val latestPostcard by rememberUpdatedState(postcard)
 
     var stickerEditMode by remember {
@@ -1370,6 +1378,7 @@ fun DetailScreen(
                             ) {
                                 val panSensitivity = 0.45f
                                 var tapedFilmDragArmed = true
+                                var photoTransformGestureSnapshotPending = true
 
                                 coroutineScope {
                                     launch {
@@ -1389,6 +1398,7 @@ fun DetailScreen(
                                                                     ?.stampPhotoScale
                                                                     ?: 1f
                                                         )
+                                            photoTransformGestureSnapshotPending = true
                                         }
                                     }
 
@@ -1409,6 +1419,11 @@ fun DetailScreen(
                                         val current =
                                             latestPostcard
                                                 ?: return@detectTransformGestures
+
+                                        if (photoTransformGestureSnapshotPending) {
+                                            viewModel.recordPhotoTransformSnapshotForUndo()
+                                            photoTransformGestureSnapshotPending = false
+                                        }
 
                                         val oldOffsetX =
                                             when (selectedLayout) {
@@ -2650,6 +2665,14 @@ fun DetailScreen(
                                 layout.name
                             )
                         },
+                        onUndoPhotoTransform = {
+                            viewModel.undoPhotoTransformChange()
+                        },
+                        onRedoPhotoTransform = {
+                            viewModel.redoPhotoTransformChange()
+                        },
+                        canUndoPhotoTransform = canUndoPhotoTransform,
+                        canRedoPhotoTransform = canRedoPhotoTransform,
                         enabled = controlsEnabled,
                         modifier =
                             Modifier.fillMaxWidth()
@@ -2707,12 +2730,20 @@ fun DetailScreen(
                             maxPercent = 105,
                             enabled = controlsEnabled,
                             onPreviewPercentChanged = { percent ->
+                                if (!polaroidPhotoScaleDragSnapshotTaken) {
+                                    viewModel.recordPhotoTransformSnapshotForUndo()
+                                    polaroidPhotoScaleDragSnapshotTaken = true
+                                }
                                 viewModel
                                     .setPolaroidPhotoScalePreview(
                                         percent / 100f
                                     )
                             },
                             onPercentConfirmed = { percent ->
+                                if (!polaroidPhotoScaleDragSnapshotTaken) {
+                                    viewModel.recordPhotoTransformSnapshotForUndo()
+                                }
+                                polaroidPhotoScaleDragSnapshotTaken = false
                                 viewModel
                                     .savePolaroidPhotoScale(
                                         percent / 100f
@@ -2738,12 +2769,20 @@ fun DetailScreen(
                             maxPercent = if (isTapedFilm) 115 else 130,
                             enabled = controlsEnabled,
                             onPreviewPercentChanged = { percent ->
+                                if (!stampPhotoScaleDragSnapshotTaken) {
+                                    viewModel.recordPhotoTransformSnapshotForUndo()
+                                    stampPhotoScaleDragSnapshotTaken = true
+                                }
                                 viewModel
                                     .setStampPhotoScalePreview(
                                         percent / 100f
                                     )
                             },
                             onPercentConfirmed = { percent ->
+                                if (!stampPhotoScaleDragSnapshotTaken) {
+                                    viewModel.recordPhotoTransformSnapshotForUndo()
+                                }
+                                stampPhotoScaleDragSnapshotTaken = false
                                 viewModel
                                     .saveStampPhotoScale(
                                         percent / 100f
