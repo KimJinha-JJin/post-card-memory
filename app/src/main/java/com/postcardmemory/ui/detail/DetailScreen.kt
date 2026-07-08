@@ -2422,6 +2422,49 @@ fun DetailScreen(
                                     capturedAtMillis = pc.capturedAt,
                                     modifier = Modifier.fillMaxSize()
                                 )
+
+                                if (isSealSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 8.dp, y = (-8).dp)
+                                            .size(26.dp)
+                                            .background(
+                                                color = BrutalCoral,
+                                                shape = CircleShape
+                                            )
+                                            .border(
+                                                width = 1.5.dp,
+                                                color = BrutalBlack,
+                                                shape = CircleShape
+                                            )
+                                            .clickable(
+                                                enabled = controlsEnabled
+                                            ) {
+                                                viewModel.recordSealSnapshotForUndo()
+                                                val remaining =
+                                                    photoSeals.filter {
+                                                        it.id != seal.id
+                                                    }
+                                                viewModel.setPhotoSeals(remaining)
+                                                sealSizes =
+                                                    sealSizes - seal.id
+                                                if (selectedSealId == seal.id) {
+                                                    viewModel.setSelectedSealId(
+                                                        remaining.lastOrNull()?.id
+                                                    )
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "도장 삭제",
+                                            tint = BrutalWhite,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
