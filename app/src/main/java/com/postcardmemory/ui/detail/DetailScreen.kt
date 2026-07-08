@@ -893,6 +893,8 @@ fun DetailScreen(
     val photoStickers by viewModel.photoStickers.collectAsState()
     val selectedStickerId by viewModel.selectedStickerId.collectAsState()
     val latestPhotoStickers by rememberUpdatedState(photoStickers)
+    val canUndoSticker by viewModel.canUndoSticker.collectAsState()
+    val canRedoSticker by viewModel.canRedoSticker.collectAsState()
 
     val photoSeals by viewModel.photoSeals.collectAsState()
     val selectedSealId by viewModel.selectedSealId.collectAsState()
@@ -1641,7 +1643,17 @@ fun DetailScreen(
                                             postcardPreviewSize,
                                             perStickerEditMode
                                         ) {
+                                            var stickerGestureSnapshotPending = true
+
                                             coroutineScope {
+                                            launch {
+                                                awaitEachGesture {
+                                                    awaitFirstDown(
+                                                        requireUnconsumed = false
+                                                    )
+                                                    stickerGestureSnapshotPending = true
+                                                }
+                                            }
                                             launch {
                                                 detectTapGestures(
                                                     onTap = {
@@ -1664,6 +1676,7 @@ fun DetailScreen(
                                                             viewModel.setSelectedStickerId(
                                                                 sticker.id
                                                             )
+                                                            viewModel.recordStickerSnapshotForUndo()
                                                         },
                                                         onDrag = { change, dragAmount ->
                                                             change.consume()
@@ -1728,6 +1741,11 @@ fun DetailScreen(
                                                             latestPhotoStickers.find {
                                                                 it.id == sticker.id
                                                             } ?: return@detectTransformGestures
+
+                                                        if (stickerGestureSnapshotPending) {
+                                                            viewModel.recordStickerSnapshotForUndo()
+                                                            stickerGestureSnapshotPending = false
+                                                        }
 
                                                         val oldScale = currentSticker.scale
                                                         val newScale =
@@ -1807,6 +1825,11 @@ fun DetailScreen(
                                                                 it.id == sticker.id
                                                             } ?: return@detectTransformGestures
 
+                                                        if (stickerGestureSnapshotPending) {
+                                                            viewModel.recordStickerSnapshotForUndo()
+                                                            stickerGestureSnapshotPending = false
+                                                        }
+
                                                         val newRotation =
                                                             normalizeStickerRotation(
                                                                 currentSticker.rotationDegrees +
@@ -1872,6 +1895,7 @@ fun DetailScreen(
                                                             viewModel.setSelectedStickerId(
                                                                 sticker.id
                                                             )
+                                                            viewModel.recordStickerSnapshotForUndo()
 
                                                             gestureStartRotation =
                                                                 currentSticker.rotationDegrees
@@ -2014,6 +2038,7 @@ fun DetailScreen(
                                                     photoStickers.find {
                                                         it.id == sticker.id
                                                     }
+                                                viewModel.recordStickerSnapshotForUndo()
                                                 toDelete?.removedBgUri?.let { uri ->
                                                     viewModel
                                                         .deleteStickerCacheUri(uri)
@@ -2078,6 +2103,7 @@ fun DetailScreen(
                                                             viewModel.setSelectedStickerId(
                                                                 sticker.id
                                                             )
+                                                            viewModel.recordStickerSnapshotForUndo()
 
                                                             gestureStartScale =
                                                                 currentSticker.scale
@@ -2427,6 +2453,7 @@ fun DetailScreen(
                         isRemovingBackground = isRemovingBackground,
                         onToggleBackgroundRemoval = {
                             if (selectedSticker.isBackgroundRemoved) {
+                                viewModel.recordStickerSnapshotForUndo()
                                 viewModel.setPhotoStickers(
                                     photoStickers.map {
                                         if (it.id == selectedSticker.id) {
@@ -2445,6 +2472,7 @@ fun DetailScreen(
                                 val removedBgUri =
                                     selectedSticker.removedBgUri
                                 if (removedBgUri != null) {
+                                    viewModel.recordStickerSnapshotForUndo()
                                     viewModel.setPhotoStickers(
                                         photoStickers.map {
                                             if (it.id == selectedSticker.id) {
@@ -2466,6 +2494,7 @@ fun DetailScreen(
                             }
                         },
                         onToggleFlipHorizontal = {
+                            viewModel.recordStickerSnapshotForUndo()
                             viewModel.setPhotoStickers(
                                 photoStickers.map {
                                     if (it.id == selectedSticker.id) {
@@ -2479,6 +2508,7 @@ fun DetailScreen(
                             )
                         },
                         onToggleFlipVertical = {
+                            viewModel.recordStickerSnapshotForUndo()
                             viewModel.setPhotoStickers(
                                 photoStickers.map {
                                     if (it.id == selectedSticker.id) {
@@ -3075,6 +3105,7 @@ fun DetailScreen(
                                         viewModel.setSelectedStickerId(id)
                                     },
                                     onAddFromGallery = { uri ->
+                                        viewModel.recordStickerSnapshotForUndo()
                                         val newSticker = PhotoStickerItem(
                                             originalUri = uri,
                                             displayedUri = uri
@@ -3085,6 +3116,7 @@ fun DetailScreen(
                                         viewModel.resetStickerBackgroundRemovalState()
                                     },
                                     onAddFromFile = { uri ->
+                                        viewModel.recordStickerSnapshotForUndo()
                                         val newSticker = PhotoStickerItem(
                                             originalUri = uri,
                                             displayedUri = uri
@@ -3104,6 +3136,7 @@ fun DetailScreen(
                                     },
                                     onDeleteSticker = { id ->
                                         val sticker = photoStickers.find { it.id == id }
+                                        viewModel.recordStickerSnapshotForUndo()
                                         sticker?.removedBgUri?.let { uri ->
                                             viewModel.deleteStickerCacheUri(uri)
                                         }
@@ -3125,6 +3158,14 @@ fun DetailScreen(
                                     onDuplicateSticker = { id ->
                                         viewModel.duplicateSticker(id)
                                     },
+                                    onUndoSticker = {
+                                        viewModel.undoStickerChange()
+                                    },
+                                    onRedoSticker = {
+                                        viewModel.redoStickerChange()
+                                    },
+                                    canUndoSticker = canUndoSticker,
+                                    canRedoSticker = canRedoSticker,
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 )

@@ -24,11 +24,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,6 +72,10 @@ fun PhotoStickerPickerPanel(
     onAddFromCamera: (File) -> Unit,
     onDeleteSticker: (String) -> Unit,
     onDuplicateSticker: (String) -> Unit,
+    onUndoSticker: () -> Unit,
+    onRedoSticker: () -> Unit,
+    canUndoSticker: Boolean,
+    canRedoSticker: Boolean,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -209,18 +216,45 @@ fun PhotoStickerPickerPanel(
                 fontWeight = FontWeight.ExtraBold
             )
 
-            Text(
-                text = "${photoStickers.size}장",
-                color = BrutalBlack,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier
-                    .background(
-                        color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy((-4).dp)
+            ) {
+                IconButton(
+                    onClick = onUndoSticker,
+                    enabled = enabled && canUndoSticker
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = "되돌리기",
+                        tint = if (canUndoSticker) BrutalBlack else SoftGray
                     )
-                    .padding(horizontal = 9.dp, vertical = 5.dp)
-            )
+                }
+
+                IconButton(
+                    onClick = onRedoSticker,
+                    enabled = enabled && canRedoSticker
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Redo,
+                        contentDescription = "다시 실행",
+                        tint = if (canRedoSticker) BrutalBlack else SoftGray
+                    )
+                }
+
+                Text(
+                    text = "${photoStickers.size}장",
+                    color = BrutalBlack,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier
+                        .background(
+                            color = BrutalWhite,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(4.dp))

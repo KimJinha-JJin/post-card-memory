@@ -38,6 +38,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 private const val SEAL_HISTORY_LIMIT = 50
+private const val STICKER_HISTORY_LIMIT = 30
 
 sealed interface ExportState {
 
@@ -308,6 +309,8 @@ class DetailViewModel @Inject constructor(
                 _photoStickers.value = updatedStickers
             }
 
+            clearStickerHistory()
+
             val stateDir =
                 File(context.filesDir, "sticker_states")
             if (!stateDir.exists()) stateDir.mkdirs()
@@ -322,6 +325,8 @@ class DetailViewModel @Inject constructor(
     fun loadPhotoStickersState(
         postcardId: Long
     ) {
+        clearStickerHistory()
+
         viewModelScope.launch(Dispatchers.IO) {
             val file =
                 File(
@@ -495,6 +500,125 @@ class DetailViewModel @Inject constructor(
         _photoSeals.value = next.seals
         _selectedSealId.value = next.selectedSealId
         updateSealHistoryAvailability()
+    }
+
+    private data class StickerSnapshot(
+        val stickers: List<PhotoStickerItem>,
+        val selectedStickerId: String?
+    )
+
+    private val stickerUndoStack =
+        ArrayDeque<StickerSnapshot>()
+
+    private val stickerRedoStack =
+        ArrayDeque<StickerSnapshot>()
+
+    private val _canUndoSticker =
+        MutableStateFlow(false)
+
+    val canUndoSticker: StateFlow<Boolean> =
+        _canUndoSticker
+
+    private val _canRedoSticker =
+        MutableStateFlow(false)
+
+    val canRedoSticker: StateFlow<Boolean> =
+        _canRedoSticker
+
+    /*
+     * 삭제/배경제거 재실행으로 파일이 삭제될 뻔했지만
+     * undo/redo 스택이 아직 참조 중이라 미룬 파일들.
+     * 스택에서 완전히 밀려나야 실제로 지운다.
+     */
+    private val stickerCleanupCandidates =
+        mutableSetOf<Uri>()
+
+    private fun updateStickerHistoryAvailability() {
+        _canUndoSticker.value = stickerUndoStack.isNotEmpty()
+        _canRedoSticker.value = stickerRedoStack.isNotEmpty()
+    }
+
+    private fun isStickerFileStillReferenced(
+        uri: Uri
+    ): Boolean {
+        val allReachableStickers =
+            _photoStickers.value +
+                    stickerUndoStack.flatMap { it.stickers } +
+                    stickerRedoStack.flatMap { it.stickers }
+
+        return allReachableStickers.any {
+            it.originalUri == uri || it.removedBgUri == uri
+        }
+    }
+
+    private fun sweepStickerCleanupCandidates() {
+        val stillPending =
+            stickerCleanupCandidates.toList()
+
+        stillPending.forEach { uri ->
+            if (!isStickerFileStillReferenced(uri)) {
+                stickerCleanupCandidates.remove(uri)
+                deleteStickerCacheUri(uri)
+                deleteStickerOriginalIfUnreferenced(
+                    uri = uri,
+                    remainingStickers = _photoStickers.value
+                )
+            }
+        }
+    }
+
+    private fun clearStickerHistory() {
+        stickerUndoStack.clear()
+        stickerRedoStack.clear()
+        updateStickerHistoryAvailability()
+        sweepStickerCleanupCandidates()
+    }
+
+    fun recordStickerSnapshotForUndo() {
+        stickerUndoStack.addLast(
+            StickerSnapshot(
+                stickers = _photoStickers.value,
+                selectedStickerId = _selectedStickerId.value
+            )
+        )
+        if (stickerUndoStack.size > STICKER_HISTORY_LIMIT) {
+            stickerUndoStack.removeFirst()
+            sweepStickerCleanupCandidates()
+        }
+        stickerRedoStack.clear()
+        updateStickerHistoryAvailability()
+    }
+
+    fun undoStickerChange() {
+        val previous =
+            stickerUndoStack.removeLastOrNull() ?: return
+
+        stickerRedoStack.addLast(
+            StickerSnapshot(
+                stickers = _photoStickers.value,
+                selectedStickerId = _selectedStickerId.value
+            )
+        )
+        _photoStickers.value = previous.stickers
+        _selectedStickerId.value = previous.selectedStickerId
+        updateStickerHistoryAvailability()
+        sweepStickerCleanupCandidates()
+    }
+
+    fun redoStickerChange() {
+        val next =
+            stickerRedoStack.removeLastOrNull() ?: return
+
+        stickerUndoStack.addLast(
+            StickerSnapshot(
+                stickers = _photoStickers.value,
+                selectedStickerId = _selectedStickerId.value
+            )
+        )
+        _photoStickers.value = next.stickers
+        _selectedStickerId.value = next.selectedStickerId
+        updateStickerHistoryAvailability()
+        sweepStickerCleanupCandidates()
     }
 
     private var subjectSegmenter: SubjectSegmenter? =
@@ -1936,6 +2060,8 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        recordStickerSnapshotForUndo()
+
         _stickerBackgroundRemovalState.value =
             StickerBackgroundRemovalState.Removing(
                 stickerId = stickerId,
@@ -2014,6 +2140,13 @@ class DetailViewModel @Inject constructor(
                 }
                 ?: return
 
+        if (isStickerFileStillReferenced(uri)) {
+            stickerCleanupCandidates.add(uri)
+            return
+        }
+
+        stickerCleanupCandidates.remove(uri)
+
         viewModelScope.launch(Dispatchers.IO) {
             val stickerCacheDir =
                 File(
@@ -2045,12 +2178,28 @@ class DetailViewModel @Inject constructor(
         uri: Uri?,
         remainingStickers: List<PhotoStickerItem>
     ) {
+        if (uri != null && isStickerFileStillReferenced(uri)) {
+            stickerCleanupCandidates.add(uri)
+            return
+        }
+
+        if (uri != null) {
+            stickerCleanupCandidates.remove(uri)
+        }
+
+        val reachableStickers =
+            (
+                remainingStickers +
+                        stickerUndoStack.flatMap { it.stickers } +
+                        stickerRedoStack.flatMap { it.stickers }
+                ).distinctBy { it.id }
+
         viewModelScope.launch(Dispatchers.IO) {
             PhotoStickerImageStorage
                 .deleteOriginalIfUnreferenced(
                     context = context,
                     deletedUri = uri,
-                    remainingStickers = remainingStickers
+                    remainingStickers = reachableStickers
                 )
         }
     }
@@ -2059,6 +2208,8 @@ class DetailViewModel @Inject constructor(
         postcardId: Long,
         captureFile: File
     ) {
+        recordStickerSnapshotForUndo()
+
         viewModelScope.launch {
             val originalUri =
                 withContext(Dispatchers.IO) {
@@ -2104,6 +2255,8 @@ class DetailViewModel @Inject constructor(
             _photoStickers.value.find {
                 it.id == stickerId
             } ?: return
+
+        recordStickerSnapshotForUndo()
 
         val newId =
             UUID.randomUUID().toString()
@@ -2233,6 +2386,8 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        recordStickerSnapshotForUndo()
+
         _photoStickers.value =
             stickers.toMutableList().apply {
                 val temp = this[index]
@@ -2251,6 +2406,8 @@ class DetailViewModel @Inject constructor(
         if (index <= 0) {
             return
         }
+
+        recordStickerSnapshotForUndo()
 
         _photoStickers.value =
             stickers.toMutableList().apply {
