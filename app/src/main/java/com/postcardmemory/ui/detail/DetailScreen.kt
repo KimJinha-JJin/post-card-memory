@@ -109,8 +109,10 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.PhotoSourceMenu
+import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
-import com.postcardmemory.ui.components.PostcardBackgroundPicker
+import com.postcardmemory.ui.components.PostcardBackgroundPatternPicker
+import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.components.PostcardLayoutPicker
 import com.postcardmemory.ui.components.PostcardLayoutStyle
@@ -132,7 +134,10 @@ private enum class DetailDrawerSection {
     PHOTO_CHANGE,
     PHOTO_EDGE_BLUR,
     BACKGROUND,
+    CUSTOM_COLOR,
+    PATTERN,
     PATTERN_INTENSITY,
+    PHOTO_COLOR_EXTRACT,
     TEXT_SIZE,
     MESSAGE_EDIT
 }
@@ -878,6 +883,7 @@ fun DetailScreen(
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
     val layoutUpdateState by viewModel.layoutUpdateState.collectAsState()
     val dateFormatUpdateState by viewModel.dateFormatUpdateState.collectAsState()
+    val photoColorExtractionState by viewModel.photoColorExtractionState.collectAsState()
     val stickerBackgroundRemovalState by
         viewModel.stickerBackgroundRemovalState.collectAsState()
 
@@ -3036,8 +3042,16 @@ fun DetailScreen(
                                     Alignment.CenterHorizontally
                             ) {
                 DetailDrawer(
-                    title = "배경 꾸미기",
-                    summary = selectedPattern.label,
+                    title = "색상",
+                    summary =
+                        "#" +
+                                (
+                                        pc.backgroundColorArgb and
+                                                0xFFFFFFL
+                                        )
+                                    .toString(16)
+                                    .uppercase()
+                                    .padStart(6, '0'),
                     expanded =
                         openedDrawerName ==
                                 DetailDrawerSection
@@ -3062,19 +3076,270 @@ fun DetailScreen(
                     modifier =
                         Modifier.fillMaxWidth(0.92f)
                 ) {
-                    PostcardBackgroundPicker(
+                    PostcardBackgroundColorPicker(
                         selectedColorArgb =
                             pc.backgroundColorArgb,
-                        hasBackgroundImage = false,
                         enabled = controlsEnabled,
                         onColorSelected = { colorArgb ->
                             viewModel.updateBackgroundColor(
                                 colorArgb
                             )
                         },
-                        onPickImage = {},
-                        onRemoveImage = {},
+                        modifier =
+                            Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
+                    title = "기타 색상",
+                    summary =
+                        "#" +
+                                (
+                                        pc.backgroundColorArgb and
+                                                0xFFFFFFL
+                                        )
+                                    .toString(16)
+                                    .uppercase()
+                                    .padStart(6, '0'),
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .CUSTOM_COLOR
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .CUSTOM_COLOR
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .CUSTOM_COLOR
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    PostcardCustomColorPicker(
+                        selectedColorArgb =
+                            pc.backgroundColorArgb,
+                        enabled = controlsEnabled,
+                        onColorSelected = { colorArgb ->
+                            viewModel.updateBackgroundColor(
+                                colorArgb
+                            )
+                        },
+                        modifier =
+                            Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
+                    title = "사진 색상 추출",
+                    summary =
+                        when (photoColorExtractionState) {
+                            is PhotoColorExtractionState.Success ->
+                                "${(photoColorExtractionState as PhotoColorExtractionState.Success).colors.size}개 색 찾음"
+                            is PhotoColorExtractionState.Extracting ->
+                                "추출 중..."
+                            is PhotoColorExtractionState.Error ->
+                                "다시 시도해봐"
+                            PhotoColorExtractionState.Idle ->
+                                "사진 속 색을 배경색으로"
+                        },
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_COLOR_EXTRACT
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .PHOTO_COLOR_EXTRACT
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .PHOTO_COLOR_EXTRACT
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text =
+                                "사진 속 색을 뽑아서 배경색으로 써봐.",
+                            color = BrutalBlack,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(12.dp)
+                        )
+
+                        Button(
+                            onClick = {
+                                viewModel
+                                    .extractBackgroundColorsFromPhoto()
+                            },
+                            enabled =
+                                controlsEnabled &&
+                                        photoColorExtractionState !is
+                                                PhotoColorExtractionState.Extracting,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = GraphiteAccent,
+                                contentColor = BrutalWhite
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (
+                                photoColorExtractionState is
+                                        PhotoColorExtractionState.Extracting
+                            ) {
+                                CircularProgressIndicator(
+                                    color = BrutalWhite,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp)
+                                )
+
+                                Spacer(
+                                    modifier = Modifier.size(10.dp)
+                                )
+
+                                Text(
+                                    text = "색 추출 중...",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            } else {
+                                Text(
+                                    text = "사진에서 색 추출하기",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+
+                        (
+                                photoColorExtractionState as?
+                                        PhotoColorExtractionState.Success
+                                )?.let { successState ->
+                            Spacer(
+                                modifier = Modifier.height(14.dp)
+                            )
+
+                            Row(
+                                horizontalArrangement =
+                                    Arrangement.spacedBy(12.dp)
+                            ) {
+                                successState.colors.forEach { extractedColor ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .background(
+                                                color =
+                                                    Color(
+                                                        extractedColor
+                                                            .colorArgb
+                                                    ),
+                                                shape = CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = BrutalBlack,
+                                                shape = CircleShape
+                                            )
+                                            .clickable(
+                                                enabled = controlsEnabled
+                                            ) {
+                                                viewModel
+                                                    .updateBackgroundColor(
+                                                        extractedColor
+                                                            .colorArgb
+                                                    )
+                                            }
+                                    )
+                                }
+                            }
+                        }
+
+                        (
+                                photoColorExtractionState as?
+                                        PhotoColorExtractionState.Error
+                                )?.let { errorState ->
+                            Spacer(
+                                modifier = Modifier.height(10.dp)
+                            )
+
+                            Text(
+                                text = errorState.message,
+                                color = BrutalCoral,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
+                    title = "패턴",
+                    summary = selectedPattern.label,
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .PATTERN
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .PATTERN
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .PATTERN
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    PostcardBackgroundPatternPicker(
+                        selectedColorArgb =
+                            pc.backgroundColorArgb,
                         selectedPattern = selectedPattern,
+                        enabled = controlsEnabled,
                         onPatternSelected = { pattern ->
                             viewModel
                                 .updateBackgroundPattern(
@@ -3091,7 +3356,7 @@ fun DetailScreen(
                 )
 
                 DetailDrawer(
-                    title = "무늬 세기",
+                    title = "패턴 세기",
                     summary = "$backgroundPatternDensityPercent%",
                     expanded =
                         openedDrawerName ==
@@ -3118,7 +3383,7 @@ fun DetailScreen(
                         Modifier.fillMaxWidth(0.92f)
                 ) {
                     TextSizeControl(
-                        label = "무늬 세기",
+                        label = "패턴 세기",
                         initialPercent =
                             backgroundPatternDensityPercent,
                         minPercent = 70,

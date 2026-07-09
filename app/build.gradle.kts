@@ -84,6 +84,7 @@ dependencies {
     )
     implementation(libs.androidx.exifinterface)
     implementation(libs.mlkit.subject.segmentation)
+    implementation(libs.androidx.palette)
 
     testImplementation(libs.junit)
 

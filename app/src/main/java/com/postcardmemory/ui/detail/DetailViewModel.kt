@@ -14,6 +14,7 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.BackgroundImageStorage
+import com.postcardmemory.utils.PhotoColorExtractor
 import com.postcardmemory.utils.PhotoStickerImageStorage
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardImageStorage
@@ -142,6 +143,21 @@ sealed interface StickerBackgroundRemovalState {
     ) : StickerBackgroundRemovalState
 }
 
+sealed interface PhotoColorExtractionState {
+
+    data object Idle : PhotoColorExtractionState
+
+    data object Extracting : PhotoColorExtractionState
+
+    data class Success(
+        val colors: List<PhotoColorExtractor.ExtractedColor>
+    ) : PhotoColorExtractionState
+
+    data class Error(
+        val message: String
+    ) : PhotoColorExtractionState
+}
+
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repository: PostcardRepository,
@@ -221,6 +237,15 @@ class DetailViewModel @Inject constructor(
     val stickerBackgroundRemovalState:
             StateFlow<StickerBackgroundRemovalState> =
         _stickerBackgroundRemovalState
+
+    private val _photoColorExtractionState =
+        MutableStateFlow<PhotoColorExtractionState>(
+            PhotoColorExtractionState.Idle
+        )
+
+    val photoColorExtractionState:
+            StateFlow<PhotoColorExtractionState> =
+        _photoColorExtractionState
 
     private val _textScaleSaveErrors =
         Channel<String>(Channel.BUFFERED)
@@ -1940,6 +1965,42 @@ class DetailViewModel @Inject constructor(
                     BackgroundUpdateState.Error(
                         exception.message
                             ?: "배경색을 저장하지 못했습니다."
+                    )
+            }
+        }
+    }
+
+    fun extractBackgroundColorsFromPhoto() {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        _photoColorExtractionState.value =
+            PhotoColorExtractionState.Extracting
+
+        viewModelScope.launch {
+            try {
+                val colors = withContext(Dispatchers.IO) {
+                    PhotoColorExtractor.extractColors(
+                        currentPostcard.imagePath
+                    )
+                }
+
+                _photoColorExtractionState.value =
+                    if (colors.isEmpty()) {
+                        PhotoColorExtractionState.Error(
+                            "사진에서 색을 찾지 못했어."
+                        )
+                    } else {
+                        PhotoColorExtractionState.Success(
+                            colors
+                        )
+                    }
+            } catch (exception: Exception) {
+                _photoColorExtractionState.value =
+                    PhotoColorExtractionState.Error(
+                        exception.message
+                            ?: "색을 추출하지 못했어."
                     )
             }
         }
