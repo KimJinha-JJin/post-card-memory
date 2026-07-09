@@ -1,6 +1,7 @@
 package com.postcardmemory.ui.gallery
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -35,11 +34,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.postcardmemory.R
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
@@ -150,33 +152,20 @@ fun GalleryScreen(
 
         floatingActionButton = {
             if (!selectionMode) {
-                Box {
-                    Box(
+                FloatingActionButton(
+                    onClick = onNavigateToCamera,
+                    containerColor = GraphiteAccent,
+                    contentColor = BrutalWhite,
+                    shape = CircleShape,
+                    modifier = Modifier.size(60.dp)
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_camera_button),
+                        contentDescription = "카메라",
                         modifier = Modifier
-                            .size(60.dp)
-                            .offset(
-                                x = 4.dp,
-                                y = 4.dp
-                            )
-                            .background(
-                                color = BrutalBlack,
-                                shape = CircleShape
-                            )
+                            .size(36.dp)
+                            .clip(CircleShape)
                     )
-
-                    FloatingActionButton(
-                        onClick = onNavigateToCamera,
-                        containerColor = GraphiteAccent,
-                        contentColor = BrutalWhite,
-                        shape = CircleShape,
-                        modifier = Modifier.size(60.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "카메라",
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
                 }
             }
         }
