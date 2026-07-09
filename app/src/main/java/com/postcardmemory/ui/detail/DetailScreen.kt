@@ -72,6 +72,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -96,6 +97,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -131,7 +133,8 @@ private enum class DetailDrawerSection {
     PHOTO_EDGE_BLUR,
     BACKGROUND,
     PATTERN_INTENSITY,
-    TEXT_SIZE
+    TEXT_SIZE,
+    MESSAGE_EDIT
 }
 
 private enum class CustomizationGroup(
@@ -1093,8 +1096,12 @@ fun DetailScreen(
     }
 
     val customizationPagerState = rememberPagerState(
-        pageCount = { 3 }
+        pageCount = { 5 }
     )
+    val customizationPagerScope = rememberCoroutineScope()
+    val customizationPageLabels = remember {
+        listOf("사진", "배경", "텍스트", "스티커", "도장 꾸미기")
+    }
     val selectedLayout =
         remember(postcard?.layoutStyle) {
             PostcardLayoutStyle.entries
@@ -1352,12 +1359,12 @@ fun DetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(
-                modifier = Modifier.height(92.dp)
+                modifier = Modifier.height(72.dp)
             )
 
             postcard?.let { pc ->
                 Box(
-                    modifier = Modifier.fillMaxWidth(0.88f)
+                    modifier = Modifier.fillMaxWidth(0.8f)
                 ) {
                     Box(
                         modifier = Modifier
@@ -2596,6 +2603,109 @@ fun DetailScreen(
                     modifier = Modifier.height(28.dp)
                 )
 
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .background(
+                            color = SoftGray,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .padding(6.dp),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(6.dp)
+                ) {
+                    customizationPageLabels.forEachIndexed { pageIndex, pageLabel ->
+                        val pageSelected =
+                            customizationPagerState.currentPage ==
+                                    pageIndex
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    color =
+                                        if (pageSelected) {
+                                            GraphiteAccent
+                                        } else {
+                                            BrutalWhite
+                                        },
+                                    shape =
+                                        RoundedCornerShape(10.dp)
+                                )
+                                .clickable(
+                                    enabled = controlsEnabled
+                                ) {
+                                    customizationPagerScope.launch {
+                                        customizationPagerState
+                                            .animateScrollToPage(pageIndex)
+                                    }
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment =
+                                Alignment.Center
+                        ) {
+                            Text(
+                                text = pageLabel,
+                                color =
+                                    if (pageSelected) {
+                                        BrutalWhite
+                                    } else {
+                                        BrutalBlack
+                                    },
+                                fontSize = 11.sp,
+                                fontWeight =
+                                    FontWeight.ExtraBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                Row(
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp),
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
+                    repeat(5) { pageIndex ->
+                        Box(
+                            modifier = Modifier
+                                .size(
+                                    if (
+                                        customizationPagerState.currentPage ==
+                                        pageIndex
+                                    ) {
+                                        11.dp
+                                    } else {
+                                        8.dp
+                                    }
+                                )
+                                .background(
+                                    color =
+                                        if (
+                                            customizationPagerState.currentPage ==
+                                            pageIndex
+                                        ) {
+                                            BrutalBlack
+                                        } else {
+                                            NeutralLight
+                                        },
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
                 HorizontalPager(
                     state = customizationPagerState,
                     modifier = Modifier
@@ -2610,69 +2720,6 @@ fun DetailScreen(
                                 horizontalAlignment =
                                     Alignment.CenterHorizontally
                             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(0.92f)
-                        .background(
-                            color = SoftGray,
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                        .padding(6.dp),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(6.dp)
-                ) {
-                    CustomizationGroup.entries.forEach { group ->
-                        val groupSelected =
-                            selectedCustomizationGroup ==
-                                    group.name
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(
-                                    color =
-                                        if (groupSelected) {
-                                            GraphiteAccent
-                                        } else {
-                                            BrutalWhite
-                                        },
-                                    shape =
-                                        RoundedCornerShape(10.dp)
-                                )
-                                .clickable(
-                                    enabled = controlsEnabled
-                                ) {
-                                    selectedCustomizationGroup =
-                                        group.name
-                                }
-                                .padding(vertical = 10.dp),
-                            contentAlignment =
-                                Alignment.Center
-                        ) {
-                            Text(
-                                text = group.label,
-                                color =
-                                    if (groupSelected) {
-                                        BrutalWhite
-                                    } else {
-                                        BrutalBlack
-                                    },
-                                fontSize = 14.sp,
-                                fontWeight =
-                                    FontWeight.ExtraBold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
-                if (
-                    selectedCustomizationGroup ==
-                    CustomizationGroup.PHOTO.name
-                ) {
                 DetailDrawer(
                     title = "레이아웃 꾸미기",
                     summary = selectedLayout.label,
@@ -2979,12 +3026,15 @@ fun DetailScreen(
                         )
                     }
                 }
-                }
+                            }
+                        }
 
-                if (
-                    selectedCustomizationGroup ==
-                    CustomizationGroup.DESIGN.name
-                ) {
+                        1 -> {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment =
+                                    Alignment.CenterHorizontally
+                            ) {
                 DetailDrawer(
                     title = "배경 꾸미기",
                     summary = selectedPattern.label,
@@ -3089,11 +3139,15 @@ fun DetailScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                            }
+                        }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
+                        2 -> {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment =
+                                    Alignment.CenterHorizontally
+                            ) {
                 DetailDrawer(
                     title = "글자 크기",
                     summary =
@@ -3169,12 +3223,85 @@ fun DetailScreen(
                         )
                     }
                 }
-                }
 
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                DetailDrawer(
+                    title = "문구 편집",
+                    summary =
+                        if (pc.message.isBlank()) {
+                            "글귀 없음"
+                        } else {
+                            pc.message
+                        },
+                    expanded =
+                        openedDrawerName ==
+                                DetailDrawerSection
+                                    .MESSAGE_EDIT
+                                    .name,
+                    enabled = controlsEnabled,
+                    onClick = {
+                        openedDrawerName =
+                            if (
+                                openedDrawerName ==
+                                DetailDrawerSection
+                                    .MESSAGE_EDIT
+                                    .name
+                            ) {
+                                ""
+                            } else {
+                                DetailDrawerSection
+                                    .MESSAGE_EDIT
+                                    .name
+                            }
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(0.92f)
+                ) {
+                    Column {
+                        Text(
+                            text =
+                                "이 사진과 함께 기억하고 싶은 말을 적어봐.",
+                            color = BrutalBlack,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(12.dp)
+                        )
+
+                        Button(
+                            onClick = {
+                                messageDraft = pc.message
+                                showMessageDialog = true
+                            },
+                            enabled = controlsEnabled,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = GraphiteAccent,
+                                contentColor = BrutalWhite
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null
+                            )
+                            Text(
+                                text = "  문구 편집",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
                             }
                         }
 
-                        1 -> {
+                        3 -> {
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter
@@ -3254,7 +3381,7 @@ fun DetailScreen(
                             }
                         }
 
-                        2 -> {
+                        4 -> {
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter
@@ -3363,41 +3490,6 @@ fun DetailScreen(
                 Spacer(
                     modifier = Modifier.height(14.dp)
                 )
-
-                Row(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp),
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-                    repeat(3) { pageIndex ->
-                        Box(
-                            modifier = Modifier
-                                .size(
-                                    if (
-                                        customizationPagerState.currentPage ==
-                                        pageIndex
-                                    ) {
-                                        11.dp
-                                    } else {
-                                        8.dp
-                                    }
-                                )
-                                .background(
-                                    color =
-                                        if (
-                                            customizationPagerState.currentPage ==
-                                            pageIndex
-                                        ) {
-                                            BrutalBlack
-                                        } else {
-                                            NeutralLight
-                                        },
-                                    shape = CircleShape
-                                )
-                        )
-                    }
-                }
                 if (
                     dateFormatUpdateState
                             is DateFormatUpdateState.Saving
@@ -3597,34 +3689,6 @@ fun DetailScreen(
                     verticalAlignment =
                         Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            messageDraft =
-                                pc.message
-
-                            showMessageDialog =
-                                true
-                        },
-                        enabled = controlsEnabled,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                color =
-                                    NeutralLight,
-                                shape =
-                                    CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector =
-                                Icons.Default.Edit,
-                            contentDescription =
-                                "글귀 편집",
-                            tint =
-                                BrutalBlack
-                        )
-                    }
-
                     IconButton(
                         onClick = {
                             showDeleteDialog = true
