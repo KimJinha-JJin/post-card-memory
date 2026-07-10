@@ -1286,21 +1286,21 @@ fun DetailScreen(
             is StickerBackgroundRemovalState.Success -> {
                 val targetId = removalState.stickerId
 
-                viewModel.setPhotoStickers(photoStickers.map { sticker ->
+                val cacheUrisToDelete = mutableListOf<Uri>()
+
+                val updatedStickers = photoStickers.map { sticker ->
                     if (sticker.id != targetId) {
                         return@map sticker
                     }
 
                     if (sticker.originalUri != removalState.sourceUri) {
-                        viewModel.deleteStickerCacheUri(
-                            removalState.resultUri
-                        )
+                        cacheUrisToDelete += removalState.resultUri
                         return@map sticker
                     }
 
                     sticker.removedBgUri?.let { oldUri ->
                         if (oldUri != removalState.resultUri) {
-                            viewModel.deleteStickerCacheUri(oldUri)
+                            cacheUrisToDelete += oldUri
                         }
                     }
 
@@ -1309,7 +1309,13 @@ fun DetailScreen(
                         displayedUri = removalState.resultUri,
                         isBackgroundRemoved = true
                     )
-                })
+                }
+
+                viewModel.setPhotoStickers(updatedStickers)
+
+                cacheUrisToDelete.distinct().forEach { uri ->
+                    viewModel.deleteStickerCacheUri(uri)
+                }
 
                 backgroundRemovalError = null
                 viewModel.resetStickerBackgroundRemovalState()
@@ -2066,16 +2072,21 @@ fun DetailScreen(
                                                     photoStickers.find {
                                                         it.id == sticker.id
                                                     }
+                                                val removedBgUriToDelete =
+                                                    toDelete?.removedBgUri
+
                                                 viewModel.recordStickerSnapshotForUndo()
-                                                toDelete?.removedBgUri?.let { uri ->
-                                                    viewModel
-                                                        .deleteStickerCacheUri(uri)
-                                                }
+
                                                 val remaining =
                                                     photoStickers.filter {
                                                         it.id != sticker.id
                                                     }
                                                 viewModel.setPhotoStickers(remaining)
+
+                                                removedBgUriToDelete?.let { uri ->
+                                                    viewModel
+                                                        .deleteStickerCacheUri(uri)
+                                                }
                                                 stickerSizes =
                                                     stickerSizes - sticker.id
                                                 if (selectedStickerId == sticker.id) {
@@ -3610,12 +3621,16 @@ fun DetailScreen(
                                     },
                                     onDeleteSticker = { id ->
                                         val sticker = photoStickers.find { it.id == id }
+                                        val removedBgUriToDelete = sticker?.removedBgUri
+
                                         viewModel.recordStickerSnapshotForUndo()
-                                        sticker?.removedBgUri?.let { uri ->
-                                            viewModel.deleteStickerCacheUri(uri)
-                                        }
+
                                         val remaining = photoStickers.filter { it.id != id }
                                         viewModel.setPhotoStickers(remaining)
+
+                                        removedBgUriToDelete?.let { uri ->
+                                            viewModel.deleteStickerCacheUri(uri)
+                                        }
                                         sticker?.originalUri?.let { uri ->
                                             viewModel.deleteStickerOriginalIfUnreferenced(
                                                 uri,
