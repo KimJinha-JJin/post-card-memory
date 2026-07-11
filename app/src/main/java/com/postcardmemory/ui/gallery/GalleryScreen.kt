@@ -114,7 +114,7 @@ fun GalleryScreen(
     }
 
     fun handleItemClick(id: Long) {
-        if (selectionMode) {
+        if (selectedIds.isNotEmpty()) {
             toggleSelection(id)
         } else {
             onNavigateToDetail(id)

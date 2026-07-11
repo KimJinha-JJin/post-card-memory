@@ -1,9 +1,10 @@
 package com.postcardmemory.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,9 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -24,7 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
-import com.postcardmemory.ui.theme.pastelColors
+import com.postcardmemory.ui.theme.BrutalWhite
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,61 +44,57 @@ fun StampCard(
         (abs(seed) % 70 - 35) / 10f
     }
 
-    val cardColor = remember(postcard.id) {
-        pastelColors[abs(postcard.id.toInt()) % pastelColors.size]
-    }
-
     val dateFormatter = remember {
         SimpleDateFormat(
-            "MM.dd.yyyy",
+            "yyyy-MM-dd",
             Locale.getDefault()
         )
     }
-
-    val displayedCardColor =
-        if (isSelected) {
-            BrutalCoral.copy(alpha = 0.22f)
-        } else {
-            cardColor
-        }
 
     Box(
         modifier = modifier
             .rotate(rotation)
             .padding(4.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = displayedCardColor,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .pointerInput(
-                    onClick,
-                    onLongClick
-                ) {
-                    detectTapGestures(
-                        onTap = {
-                            onClick()
-                        },
-                        onLongPress = {
-                            onLongClick()
-                        }
-                    )
-                }
-                .padding(8.dp),
-            horizontalAlignment =
-                Alignment.CenterHorizontally
-        ) {
-            StampPhoto(
-                imagePath = postcard.imagePath,
-                contentDescription = postcard.title,
-                modifier = Modifier.fillMaxWidth(),
-                outlineColor = Color.White,
-                outlineWidth = 3f
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
             )
+    ) {
+        StampPhoto(
+            imagePath = postcard.imagePath,
+            contentDescription = postcard.title,
+            modifier = Modifier.fillMaxWidth(),
+            outlineColor = Color.White,
+            outlineWidth = 3f
+        )
 
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(PinkingPhotoShape)
+                    .background(
+                        color = BrutalCoral.copy(alpha = 0.3f)
+                    )
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 6.dp)
+                .background(
+                    color = BrutalWhite,
+                    shape = RoundedCornerShape(6.dp)
+                )
+                .padding(
+                    horizontal = 6.dp,
+                    vertical = 2.dp
+                )
+        ) {
             Text(
                 text = dateFormatter.format(
                     Date(postcard.capturedAt)
@@ -106,8 +103,7 @@ fun StampCard(
                 fontWeight = FontWeight.Bold,
                 color = BrutalBlack,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp)
+                overflow = TextOverflow.Ellipsis
             )
         }
 
