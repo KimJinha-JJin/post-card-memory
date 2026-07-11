@@ -49,7 +49,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -3885,115 +3887,6 @@ fun DetailScreen(
                 Spacer(
                     modifier = Modifier.height(24.dp)
                 )
-
-                Button(
-                    onClick = {
-                        viewModel.exportPostcardToGallery(
-                            stickerOverlays =
-                                createStickerOverlaysForExport(
-                                    photoStickers =
-                                        photoStickers,
-                                    postcardSize =
-                                        postcardPreviewSize,
-                                    stickerSizes =
-                                        stickerSizes
-                                ),
-                            sealOverlays =
-                                createSealOverlaysForExport(
-                                    photoSeals =
-                                        photoSeals,
-                                    postcardSize =
-                                        postcardPreviewSize,
-                                    sealSizes =
-                                        sealSizes,
-                                    capturedAtMillis =
-                                        pc.capturedAt
-                                )
-                        )
-                    },
-                    enabled = controlsEnabled,
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor =
-                                GraphiteAccent,
-                            contentColor =
-                                BrutalWhite,
-                            disabledContainerColor =
-                                NeutralLight,
-                            disabledContentColor =
-                                BrutalBlack
-                        ),
-                    border = null,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth(0.84f)
-                        .height(56.dp)
-                ) {
-                    if (
-                        exportState
-                                is ExportState.Exporting
-                    ) {
-                        CircularProgressIndicator(
-                            color = BrutalWhite,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(22.dp)
-                        )
-
-                        Spacer(
-                            modifier = Modifier.size(10.dp)
-                        )
-
-                        Text(
-                            text = "이미지 만드는 중...",
-                            fontWeight =
-                                FontWeight.ExtraBold
-                        )
-                    } else {
-                        Text(
-                            text =
-                                "1:1 이미지로 갤러리에 저장",
-                            fontWeight =
-                                FontWeight.ExtraBold,
-                            fontSize = 15.sp
-                        )
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(22.dp)
-                )
-
-                Row(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(18.dp),
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = {
-                            showDeleteDialog = true
-                        },
-                        enabled = controlsEnabled,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                color = BrutalCoral,
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector =
-                                Icons.Default.Delete,
-                            contentDescription =
-                                "삭제",
-                            tint = BrutalBlack
-                        )
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(40.dp)
-                )
             }
             }
         }
@@ -4031,7 +3924,20 @@ fun DetailScreen(
                     .padding(start = 8.dp)
             )
 
-            TextButton(
+            IconButton(
+                onClick = {
+                    showDeleteDialog = true
+                },
+                enabled = controlsEnabled
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "삭제",
+                    tint = BrutalCoral
+                )
+            }
+
+            IconButton(
                 onClick = {
                     viewModel.savePhotoStickersState(
                         postcardId
@@ -4041,18 +3947,66 @@ fun DetailScreen(
                     )
                     Toast.makeText(
                         context,
-                        "스티커 배치를 저장했어!",
+                        "현재 편집 상태를 저장했어!",
                         Toast.LENGTH_SHORT
                     ).show()
                 },
                 enabled = controlsEnabled
             ) {
-                Text(
-                    text = "저장",
-                    color = BrutalWhite,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 15.sp
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = "편집 상태 저장",
+                    tint = BrutalWhite
                 )
+            }
+
+            IconButton(
+                onClick = {
+                    postcard?.let { pc ->
+                        viewModel.exportPostcardToGallery(
+                            stickerOverlays =
+                                createStickerOverlaysForExport(
+                                    photoStickers =
+                                        photoStickers,
+                                    postcardSize =
+                                        postcardPreviewSize,
+                                    stickerSizes =
+                                        stickerSizes
+                                ),
+                            sealOverlays =
+                                createSealOverlaysForExport(
+                                    photoSeals =
+                                        photoSeals,
+                                    postcardSize =
+                                        postcardPreviewSize,
+                                    sealSizes =
+                                        sealSizes,
+                                    capturedAtMillis =
+                                        pc.capturedAt
+                                )
+                        )
+                    }
+                },
+                enabled = controlsEnabled
+            ) {
+                if (
+                    exportState
+                            is ExportState.Exporting
+                ) {
+                    CircularProgressIndicator(
+                        color = BrutalWhite,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector =
+                            Icons.Default.Download,
+                        contentDescription =
+                            "갤러리에 저장",
+                        tint = BrutalWhite
+                    )
+                }
             }
         }
     }
