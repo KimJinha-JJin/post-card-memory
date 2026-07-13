@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,9 +56,10 @@ import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
-import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.ScreenBackgroundGray
+import com.postcardmemory.ui.theme.GalleryDangerRed
+import com.postcardmemory.ui.theme.GalleryPaperWhite
+import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.SurfaceGray
 
 private val ViewModeSaver = Saver<GalleryViewMode, String>(
@@ -130,152 +132,160 @@ fun GalleryScreen(
     }
 
     Scaffold(
-        containerColor = ScreenBackgroundGray,
+        containerColor = GalleryPaperWhite,
 
         topBar = {
             if (selectionMode) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(GraphiteAccent)
-                        .padding(
-                            horizontal = 8.dp,
-                            vertical = 8.dp
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = {
-                            selectedIds = emptySet()
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "선택 취소",
-                            tint = BrutalWhite
-                        )
-                    }
-
-                    Text(
-                        text = "${selectedIds.size}개 선택",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = BrutalWhite,
+                Column {
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 8.dp)
-                    )
-
-                    IconButton(
-                        onClick = {
-                            showDeleteDialog = true
-                        }
+                            .fillMaxWidth()
+                            .background(GalleryPaperWhite)
+                            .padding(
+                                horizontal = 8.dp,
+                                vertical = 8.dp
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "선택 항목 삭제",
-                            tint = BrutalCoral
+                        IconButton(
+                            onClick = {
+                                selectedIds = emptySet()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "선택 취소",
+                                tint = BrutalBlack
+                            )
+                        }
+
+                        Text(
+                            text = "${selectedIds.size}개 선택",
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrutalCoral,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 8.dp)
                         )
+
+                        IconButton(
+                            onClick = {
+                                showDeleteDialog = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "선택 항목 삭제",
+                                tint = GalleryDangerRed
+                            )
+                        }
                     }
+
+                    HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
             } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(BrutalBlack)
-                        .padding(
-                            horizontal = 16.dp,
-                            vertical = 8.dp
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "📮 포스트카드 메모리",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = BrutalWhite,
-                        modifier = Modifier.weight(1f)
-                    )
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(GalleryPaperWhite)
+                            .padding(
+                                horizontal = 16.dp,
+                                vertical = 8.dp
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "포스트카드 메모리",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrutalBlack,
+                            modifier = Modifier.weight(1f)
+                        )
 
-                    Box {
-                        IconButton(
-                            onClick = {
-                                viewMenuExpanded = true
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    viewMenuExpanded = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.GridView,
+                                    contentDescription = "보기 방식 변경",
+                                    tint = BrutalBlack
+                                )
                             }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.GridView,
-                                contentDescription = "보기 방식 변경",
-                                tint = BrutalWhite
-                            )
+
+                            DropdownMenu(
+                                expanded = viewMenuExpanded,
+                                onDismissRequest = {
+                                    viewMenuExpanded = false
+                                }
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("3열 그리드 보기")
+                                    },
+                                    onClick = {
+                                        viewMode = GalleryViewMode.COMPACT_GRID
+                                        viewMenuExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("세부 기록 보기")
+                                    },
+                                    onClick = {
+                                        viewMode = GalleryViewMode.DETAIL_LIST
+                                        viewMenuExpanded = false
+                                    }
+                                )
+                            }
                         }
 
-                        DropdownMenu(
-                            expanded = viewMenuExpanded,
-                            onDismissRequest = {
-                                viewMenuExpanded = false
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    sortMenuExpanded = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sort,
+                                    contentDescription = "정렬 방식 변경",
+                                    tint = BrutalBlack
+                                )
                             }
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text("3열 그리드 보기")
-                                },
-                                onClick = {
-                                    viewMode = GalleryViewMode.COMPACT_GRID
-                                    viewMenuExpanded = false
+
+                            DropdownMenu(
+                                expanded = sortMenuExpanded,
+                                onDismissRequest = {
+                                    sortMenuExpanded = false
                                 }
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Text("세부 기록 보기")
-                                },
-                                onClick = {
-                                    viewMode = GalleryViewMode.DETAIL_LIST
-                                    viewMenuExpanded = false
-                                }
-                            )
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("날짜 최신순")
+                                    },
+                                    onClick = {
+                                        sortOrder = GallerySortOrder.NEWEST
+                                        sortMenuExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("날짜 오래된 순")
+                                    },
+                                    onClick = {
+                                        sortOrder = GallerySortOrder.OLDEST
+                                        sortMenuExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
 
-                    Box {
-                        IconButton(
-                            onClick = {
-                                sortMenuExpanded = true
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Sort,
-                                contentDescription = "정렬 방식 변경",
-                                tint = BrutalWhite
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = sortMenuExpanded,
-                            onDismissRequest = {
-                                sortMenuExpanded = false
-                            }
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text("날짜 최신순")
-                                },
-                                onClick = {
-                                    sortOrder = GallerySortOrder.NEWEST
-                                    sortMenuExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Text("날짜 오래된 순")
-                                },
-                                onClick = {
-                                    sortOrder = GallerySortOrder.OLDEST
-                                    sortMenuExpanded = false
-                                }
-                            )
-                        }
-                    }
+                    HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
             }
         },
@@ -284,16 +294,19 @@ fun GalleryScreen(
             if (!selectionMode) {
                 FloatingActionButton(
                     onClick = onNavigateToCamera,
-                    containerColor = GraphiteAccent,
-                    contentColor = BrutalWhite,
+                    containerColor = BrutalWhite,
                     shape = CircleShape,
-                    modifier = Modifier.size(60.dp)
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 3.dp,
+                        pressedElevation = 6.dp
+                    ),
+                    modifier = Modifier.size(56.dp)
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_camera_button),
                         contentDescription = "카메라",
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(46.dp)
                             .clip(CircleShape)
                     )
                 }
@@ -305,7 +318,7 @@ fun GalleryScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(ScreenBackgroundGray)
+                    .background(GalleryPaperWhite)
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
@@ -445,7 +458,7 @@ private fun GalleryGrid(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .fillMaxSize()
-            .background(ScreenBackgroundGray)
+            .background(GalleryPaperWhite)
     ) {
         lazyGridItems(
             items = postcards,
@@ -482,7 +495,7 @@ private fun GalleryDetailList(
         ),
         modifier = Modifier
             .fillMaxSize()
-            .background(ScreenBackgroundGray)
+            .background(GalleryPaperWhite)
     ) {
         item {
             Row(

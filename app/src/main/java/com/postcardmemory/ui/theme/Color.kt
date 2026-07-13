@@ -32,6 +32,16 @@ val SurfaceGray = Color(0xFFE0DFE5)
 val SoftGray = Color(0xFFF5F4F7)
 
 /*
+ * 갤러리 크롬 전용 색상
+ *
+ * GalleryPaperWhite: 우표를 올려두는 따뜻한 종이 배경.
+ * GalleryDangerRed: 삭제 전용 색. 코랄은 카메라 등
+ * 주요 행동에 이미 쓰이므로 위험 행동과 구분하기 위해 별도로 둔다.
+ */
+val GalleryPaperWhite = Color(0xFFFAF3E8)
+val GalleryDangerRed = Color(0xFFC0392B)
+
+/*
  * 포스트카드 배경색 목록
  *
  * 앱 전체가 흑백·회색조 테마이므로
