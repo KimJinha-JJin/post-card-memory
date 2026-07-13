@@ -39,8 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SealInkWhite
@@ -85,7 +85,7 @@ fun SealPickerPanel(
                 text = "도장 꾸미기",
                 color = BrutalBlack,
                 fontSize = 17.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.SemiBold
             )
 
             Row(
@@ -118,7 +118,7 @@ fun SealPickerPanel(
                     text = "${photoSeals.size}개",
                     color = BrutalBlack,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
                         .background(
                             color = BrutalWhite,
@@ -144,7 +144,7 @@ fun SealPickerPanel(
             text = "도장 종류",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -187,7 +187,7 @@ fun SealPickerPanel(
                         text = type.label,
                         color = BrutalBlack,
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -288,7 +288,7 @@ fun SealPickerPanel(
             text = "선택된 도장",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -306,7 +306,7 @@ fun SealPickerPanel(
             text = "크기",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -333,7 +333,7 @@ fun SealPickerPanel(
             text = "색상",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -373,7 +373,7 @@ fun SealPickerPanel(
             text = "회전",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -396,7 +396,7 @@ fun SealPickerPanel(
                 Text(
                     text = "왼쪽으로 15°",
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -415,7 +415,7 @@ fun SealPickerPanel(
                 Text(
                     text = "오른쪽으로 15°",
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
@@ -426,8 +426,8 @@ fun SealPickerPanel(
             onClick = { onDeleteSeal(selectedSeal.id) },
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(
-                containerColor = BrutalCoral.copy(alpha = 0.16f),
-                contentColor = BrutalCoral
+                containerColor = GalleryDangerRed.copy(alpha = 0.16f),
+                contentColor = GalleryDangerRed
             ),
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
@@ -435,12 +435,12 @@ fun SealPickerPanel(
             Icon(
                 imageVector = Icons.Default.Delete,
                 contentDescription = null,
-                tint = BrutalCoral
+                tint = GalleryDangerRed
             )
             Text(
                 text = "  선택한 도장 삭제",
-                color = BrutalCoral,
-                fontWeight = FontWeight.ExtraBold
+                color = GalleryDangerRed,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }

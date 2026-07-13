@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,6 +49,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -773,7 +776,7 @@ private fun StickerEditModeButton(
             text = label,
             color = if (selected) BrutalWhite else BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
@@ -2086,7 +2089,7 @@ fun DetailScreen(
                                             .offset(x = 8.dp, y = (-8).dp)
                                             .size(26.dp)
                                             .background(
-                                                color = BrutalCoral,
+                                                color = GalleryDangerRed,
                                                 shape = CircleShape
                                             )
                                             .border(
@@ -2483,7 +2486,7 @@ fun DetailScreen(
                                             .offset(x = 8.dp, y = (-8).dp)
                                             .size(26.dp)
                                             .background(
-                                                color = BrutalCoral,
+                                                color = GalleryDangerRed,
                                                 shape = CircleShape
                                             )
                                             .border(
@@ -2530,7 +2533,8 @@ fun DetailScreen(
                     .weight(1f)
                     .verticalScroll(
                         rememberScrollState()
-                    ),
+                    )
+                    .imePadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
             postcard?.let { pc ->
@@ -3302,17 +3306,33 @@ fun DetailScreen(
                                         modifier = Modifier.height(4.dp)
                                     )
 
-                                    Text(
-                                        text = font.label,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color =
-                                            if (fontSelected) {
-                                                BrutalWhite
-                                            } else {
-                                                GraphiteAccent
-                                            }
-                                    )
+                                    Row(
+                                        verticalAlignment =
+                                            Alignment.CenterVertically,
+                                        horizontalArrangement =
+                                            Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        if (fontSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = BrutalWhite,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+
+                                        Text(
+                                            text = font.label,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color =
+                                                if (fontSelected) {
+                                                    BrutalWhite
+                                                } else {
+                                                    GraphiteAccent
+                                                }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -3414,17 +3434,33 @@ fun DetailScreen(
                                         vertical = 12.dp
                                     )
                             ) {
-                                Text(
-                                    text = format.format(pc.capturedAt),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color =
-                                        if (formatSelected) {
-                                            BrutalWhite
-                                        } else {
-                                            BrutalBlack
-                                        }
-                                )
+                                Row(
+                                    verticalAlignment =
+                                        Alignment.CenterVertically,
+                                    horizontalArrangement =
+                                        Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (formatSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = BrutalWhite,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+
+                                    Text(
+                                        text = format.format(pc.capturedAt),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color =
+                                            if (formatSelected) {
+                                                BrutalWhite
+                                            } else {
+                                                BrutalBlack
+                                            }
+                                    )
+                                }
                             }
                         }
                     }
@@ -3937,7 +3973,7 @@ fun DetailScreen(
                     text = "글귀 남기기",
                     color = BrutalBlack,
                     fontWeight =
-                        FontWeight.ExtraBold
+                        FontWeight.SemiBold
                 )
             },
             text = {
@@ -4018,7 +4054,7 @@ fun DetailScreen(
                         text = "저장",
                         color = BrutalBlack,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 }
             },
@@ -4063,7 +4099,7 @@ fun DetailScreen(
                 ) {
                     Text(
                         text = "삭제",
-                        color = BrutalCoral,
+                        color = GalleryDangerRed,
                         fontWeight =
                             FontWeight.Bold
                     )
@@ -4360,6 +4396,7 @@ fun DetailScreen(
             hostState = textScaleSnackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
                 .padding(bottom = 24.dp)
         )
     }

@@ -54,6 +54,7 @@ import coil.compose.AsyncImage
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
+import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
@@ -213,7 +214,7 @@ fun PhotoStickerPickerPanel(
                 text = "스티커 사진",
                 color = BrutalBlack,
                 fontSize = 17.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.SemiBold
             )
 
             Row(
@@ -246,7 +247,7 @@ fun PhotoStickerPickerPanel(
                     text = "${photoStickers.size}장",
                     color = BrutalBlack,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
                         .background(
                             color = BrutalWhite,
@@ -335,7 +336,7 @@ fun PhotoStickerPickerPanel(
                         text = "추가",
                         color = BrutalBlack,
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -359,7 +360,7 @@ fun PhotoStickerPickerPanel(
             Text(
                 text = "  사진 추가",
                 fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.SemiBold
             )
         }
 
@@ -380,7 +381,7 @@ fun PhotoStickerPickerPanel(
                 text = "선택된 스티커",
                 color = BrutalBlack,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.SemiBold
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -418,7 +419,7 @@ fun PhotoStickerPickerPanel(
                 Text(
                     text = "선택한 스티커 복제",
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -428,8 +429,8 @@ fun PhotoStickerPickerPanel(
                 onClick = { onDeleteSticker(selectedSticker.id) },
                 enabled = enabled,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BrutalCoral.copy(alpha = 0.16f),
-                    contentColor = BrutalCoral
+                    containerColor = GalleryDangerRed.copy(alpha = 0.16f),
+                    contentColor = GalleryDangerRed
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -437,12 +438,12 @@ fun PhotoStickerPickerPanel(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = null,
-                    tint = BrutalCoral
+                    tint = GalleryDangerRed
                 )
                 Text(
                     text = "  선택한 스티커 삭제",
-                    color = BrutalCoral,
-                    fontWeight = FontWeight.ExtraBold
+                    color = GalleryDangerRed,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
