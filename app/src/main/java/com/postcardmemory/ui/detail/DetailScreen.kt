@@ -436,7 +436,7 @@ private fun DetailDrawer(
                         color = BrutalBlack,
                         fontSize = 16.sp,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
 
                     Text(
@@ -444,7 +444,7 @@ private fun DetailDrawer(
                         color = BrutalBlack,
                         fontSize = 12.sp,
                         fontWeight =
-                            FontWeight.Medium
+                            FontWeight.Normal
                     )
                 }
 
@@ -1108,7 +1108,7 @@ fun DetailScreen(
     )
     val customizationPagerScope = rememberCoroutineScope()
     val customizationPageLabels = remember {
-        listOf("사진", "배경", "텍스트", "스티커", "도장 꾸미기")
+        listOf("사진", "배경", "텍스트", "스티커", "도장")
     }
     val selectedLayout =
         remember(postcard?.layoutStyle) {
@@ -2673,7 +2673,7 @@ fun DetailScreen(
                                     },
                                 fontSize = 11.sp,
                                 fontWeight =
-                                    FontWeight.ExtraBold,
+                                    FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 textAlign = TextAlign.Center
@@ -3915,7 +3915,7 @@ fun DetailScreen(
             }
 
             Text(
-                text = "우표 보기",
+                text = "엽서 꾸미기",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = BrutalWhite,

@@ -192,7 +192,7 @@ fun GalleryScreen(
                     Text(
                         text = "📮 포스트카드 메모리",
                         fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Bold,
                         color = BrutalWhite,
                         modifier = Modifier.weight(1f)
                     )
