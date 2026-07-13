@@ -2752,33 +2752,10 @@ fun DetailScreen(
                                 horizontalAlignment =
                                     Alignment.CenterHorizontally
                             ) {
-                DetailDrawer(
-                    title = "레이아웃 꾸미기",
-                    summary = selectedLayout.label,
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .LAYOUT
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .LAYOUT
-                                    .name
+                            Column(
+                                modifier =
+                                    Modifier.fillMaxWidth(0.92f)
                             ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .LAYOUT
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
                     PostcardLayoutPicker(
                         selectedLayout =
                             selectedLayout,
@@ -2799,47 +2776,11 @@ fun DetailScreen(
                         modifier =
                             Modifier.fillMaxWidth()
                     )
-                }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
 
-                DetailDrawer(
-                    title = "사진 크기",
-                    summary =
-                        if (
-                            selectedLayout ==
-                            PostcardLayoutStyle.POLAROID
-                        ) {
-                            "$polaroidPhotoScalePercent%"
-                        } else {
-                            "$stampPhotoScalePercent%"
-                        },
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_SIZE
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_SIZE
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .PHOTO_SIZE
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
                     if (
                         selectedLayout ==
                         PostcardLayoutStyle.POLAROID
@@ -2913,151 +2854,86 @@ fun DetailScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
 
-                DetailDrawer(
-                    title = "사진 바꾸기",
-                    summary = "현재 사진을 다른 사진으로 교체",
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_CHANGE
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_CHANGE
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .PHOTO_CHANGE
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    Column {
-                        Text(
-                            text =
-                                "배경과 글귀, 스티커는 유지하고 " +
-                                        "중심 사진만 바꿔.",
-                            color = BrutalBlack,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                    Text(
+                        text =
+                            "사진 가장자리를 흐리게 만들어서 " +
+                                    "부드러운 느낌을 줘.",
+                        color = BrutalBlack,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
 
-                        Spacer(
-                            modifier = Modifier.height(12.dp)
-                        )
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
 
-                        Button(
-                            onClick = {
-                                showPhotoSourceMenu = true
-                            },
-                            enabled = controlsEnabled,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GraphiteAccent,
-                                contentColor = BrutalWhite
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = null
-                            )
-                            Text(
-                                text = "  사진 바꾸기",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
-                DetailDrawer(
-                    title = "가장자리 블러",
-                    summary =
-                        if (photoEdgeBlurPercent <= 0) {
-                            "없음"
-                        } else {
-                            "$photoEdgeBlurPercent%"
+                    TextSizeControl(
+                        label = "흐림 정도",
+                        initialPercent =
+                            photoEdgeBlurPercent,
+                        minPercent = 0,
+                        maxPercent = 100,
+                        enabled = controlsEnabled,
+                        onPreviewPercentChanged = { percent ->
+                            viewModel
+                                .setPhotoEdgeBlurPreview(
+                                    percent / 100f
+                                )
                         },
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_EDGE_BLUR
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_EDGE_BLUR
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .PHOTO_EDGE_BLUR
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    Column {
+                        onPercentConfirmed = { percent ->
+                            viewModel
+                                .savePhotoEdgeBlur(
+                                    percent / 100f
+                                )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
+
+                    Text(
+                        text =
+                            "배경과 글귀, 스티커는 유지하고 " +
+                                    "중심 사진만 바꿔.",
+                        color = BrutalBlack,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Button(
+                        onClick = {
+                            showPhotoSourceMenu = true
+                        },
+                        enabled = controlsEnabled,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GraphiteAccent,
+                            contentColor = BrutalWhite
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null
+                        )
                         Text(
-                            text =
-                                "사진 가장자리를 흐리게 만들어서 " +
-                                        "부드러운 느낌을 줘.",
-                            color = BrutalBlack,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(12.dp)
-                        )
-
-                        TextSizeControl(
-                            label = "흐림 정도",
-                            initialPercent =
-                                photoEdgeBlurPercent,
-                            minPercent = 0,
-                            maxPercent = 100,
-                            enabled = controlsEnabled,
-                            onPreviewPercentChanged = { percent ->
-                                viewModel
-                                    .setPhotoEdgeBlurPreview(
-                                        percent / 100f
-                                    )
-                            },
-                            onPercentConfirmed = { percent ->
-                                viewModel
-                                    .savePhotoEdgeBlur(
-                                        percent / 100f
-                                    )
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                            text = "  사진 바꾸기",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
-                }
+                            }
                             }
                         }
 
@@ -3067,41 +2943,10 @@ fun DetailScreen(
                                 horizontalAlignment =
                                     Alignment.CenterHorizontally
                             ) {
-                DetailDrawer(
-                    title = "색상",
-                    summary =
-                        "#" +
-                                (
-                                        pc.backgroundColorArgb and
-                                                0xFFFFFFL
-                                        )
-                                    .toString(16)
-                                    .uppercase()
-                                    .padStart(6, '0'),
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .BACKGROUND
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .BACKGROUND
-                                    .name
+                            Column(
+                                modifier =
+                                    Modifier.fillMaxWidth(0.92f)
                             ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .BACKGROUND
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
                     PostcardBackgroundColorPicker(
                         selectedColorArgb =
                             pc.backgroundColorArgb,
@@ -3114,11 +2959,174 @@ fun DetailScreen(
                         modifier =
                             Modifier.fillMaxWidth()
                     )
-                }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
+
+                    Text(
+                        text =
+                            "사진 속 색을 뽑아서 배경색으로 써봐.",
+                        color = BrutalBlack,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Button(
+                        onClick = {
+                            viewModel
+                                .extractBackgroundColorsFromPhoto()
+                        },
+                        enabled =
+                            controlsEnabled &&
+                                    photoColorExtractionState !is
+                                            PhotoColorExtractionState.Extracting,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GraphiteAccent,
+                            contentColor = BrutalWhite
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (
+                            photoColorExtractionState is
+                                    PhotoColorExtractionState.Extracting
+                        ) {
+                            CircularProgressIndicator(
+                                color = BrutalWhite,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+
+                            Spacer(
+                                modifier = Modifier.size(10.dp)
+                            )
+
+                            Text(
+                                text = "색 추출 중...",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        } else {
+                            Text(
+                                text = "사진에서 색 추출하기",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    (
+                            photoColorExtractionState as?
+                                    PhotoColorExtractionState.Success
+                            )?.let { successState ->
+                        Spacer(
+                            modifier = Modifier.height(14.dp)
+                        )
+
+                        Row(
+                            horizontalArrangement =
+                                Arrangement.spacedBy(12.dp)
+                        ) {
+                            successState.colors.forEach { extractedColor ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(
+                                            color =
+                                                Color(
+                                                    extractedColor
+                                                        .colorArgb
+                                                ),
+                                            shape = CircleShape
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = BrutalBlack,
+                                            shape = CircleShape
+                                        )
+                                        .clickable(
+                                            enabled = controlsEnabled
+                                        ) {
+                                            viewModel
+                                                .updateBackgroundColor(
+                                                    extractedColor
+                                                        .colorArgb
+                                                )
+                                        }
+                                )
+                            }
+                        }
+                    }
+
+                    (
+                            photoColorExtractionState as?
+                                    PhotoColorExtractionState.Error
+                            )?.let { errorState ->
+                        Spacer(
+                            modifier = Modifier.height(10.dp)
+                        )
+
+                        Text(
+                            text = errorState.message,
+                            color = BrutalCoral,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
+
+                    PostcardBackgroundPatternPicker(
+                        selectedColorArgb =
+                            pc.backgroundColorArgb,
+                        selectedPattern = selectedPattern,
+                        enabled = controlsEnabled,
+                        onPatternSelected = { pattern ->
+                            viewModel
+                                .updateBackgroundPattern(
+                                    pattern.name
+                                )
+                        },
+                        modifier =
+                            Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
+
+                    TextSizeControl(
+                        label = "패턴 세기",
+                        initialPercent =
+                            backgroundPatternDensityPercent,
+                        minPercent = 70,
+                        maxPercent = 150,
+                        enabled = controlsEnabled,
+                        onPreviewPercentChanged = { percent ->
+                            viewModel
+                                .setBackgroundPatternDensityPreview(
+                                    percent / 100f
+                                )
+                        },
+                        onPercentConfirmed = { percent ->
+                            viewModel
+                                .saveBackgroundPatternDensity(
+                                    percent / 100f
+                                )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
 
                 DetailDrawer(
                     title = "기타 색상",
@@ -3153,7 +3161,7 @@ fun DetailScreen(
                             }
                     },
                     modifier =
-                        Modifier.fillMaxWidth(0.92f)
+                        Modifier.fillMaxWidth()
                 ) {
                     PostcardCustomColorPicker(
                         selectedColorArgb =
@@ -3168,268 +3176,7 @@ fun DetailScreen(
                             Modifier.fillMaxWidth()
                     )
                 }
-
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
-                DetailDrawer(
-                    title = "사진 색상 추출",
-                    summary =
-                        when (photoColorExtractionState) {
-                            is PhotoColorExtractionState.Success ->
-                                "${(photoColorExtractionState as PhotoColorExtractionState.Success).colors.size}개 색 찾음"
-                            is PhotoColorExtractionState.Extracting ->
-                                "추출 중..."
-                            is PhotoColorExtractionState.Error ->
-                                "다시 시도해봐"
-                            PhotoColorExtractionState.Idle ->
-                                "사진 속 색을 배경색으로"
-                        },
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_COLOR_EXTRACT
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .PHOTO_COLOR_EXTRACT
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .PHOTO_COLOR_EXTRACT
-                                    .name
                             }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text =
-                                "사진 속 색을 뽑아서 배경색으로 써봐.",
-                            color = BrutalBlack,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(12.dp)
-                        )
-
-                        Button(
-                            onClick = {
-                                viewModel
-                                    .extractBackgroundColorsFromPhoto()
-                            },
-                            enabled =
-                                controlsEnabled &&
-                                        photoColorExtractionState !is
-                                                PhotoColorExtractionState.Extracting,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GraphiteAccent,
-                                contentColor = BrutalWhite
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (
-                                photoColorExtractionState is
-                                        PhotoColorExtractionState.Extracting
-                            ) {
-                                CircularProgressIndicator(
-                                    color = BrutalWhite,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(18.dp)
-                                )
-
-                                Spacer(
-                                    modifier = Modifier.size(10.dp)
-                                )
-
-                                Text(
-                                    text = "색 추출 중...",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            } else {
-                                Text(
-                                    text = "사진에서 색 추출하기",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-                        }
-
-                        (
-                                photoColorExtractionState as?
-                                        PhotoColorExtractionState.Success
-                                )?.let { successState ->
-                            Spacer(
-                                modifier = Modifier.height(14.dp)
-                            )
-
-                            Row(
-                                horizontalArrangement =
-                                    Arrangement.spacedBy(12.dp)
-                            ) {
-                                successState.colors.forEach { extractedColor ->
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .background(
-                                                color =
-                                                    Color(
-                                                        extractedColor
-                                                            .colorArgb
-                                                    ),
-                                                shape = CircleShape
-                                            )
-                                            .border(
-                                                width = 1.dp,
-                                                color = BrutalBlack,
-                                                shape = CircleShape
-                                            )
-                                            .clickable(
-                                                enabled = controlsEnabled
-                                            ) {
-                                                viewModel
-                                                    .updateBackgroundColor(
-                                                        extractedColor
-                                                            .colorArgb
-                                                    )
-                                            }
-                                    )
-                                }
-                            }
-                        }
-
-                        (
-                                photoColorExtractionState as?
-                                        PhotoColorExtractionState.Error
-                                )?.let { errorState ->
-                            Spacer(
-                                modifier = Modifier.height(10.dp)
-                            )
-
-                            Text(
-                                text = errorState.message,
-                                color = BrutalCoral,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
-                DetailDrawer(
-                    title = "패턴",
-                    summary = selectedPattern.label,
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .PATTERN
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .PATTERN
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .PATTERN
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    PostcardBackgroundPatternPicker(
-                        selectedColorArgb =
-                            pc.backgroundColorArgb,
-                        selectedPattern = selectedPattern,
-                        enabled = controlsEnabled,
-                        onPatternSelected = { pattern ->
-                            viewModel
-                                .updateBackgroundPattern(
-                                    pattern.name
-                                )
-                        },
-                        modifier =
-                            Modifier.fillMaxWidth()
-                    )
-                }
-
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
-                DetailDrawer(
-                    title = "패턴 세기",
-                    summary = "$backgroundPatternDensityPercent%",
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .PATTERN_INTENSITY
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .PATTERN_INTENSITY
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .PATTERN_INTENSITY
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    TextSizeControl(
-                        label = "패턴 세기",
-                        initialPercent =
-                            backgroundPatternDensityPercent,
-                        minPercent = 70,
-                        maxPercent = 150,
-                        enabled = controlsEnabled,
-                        onPreviewPercentChanged = { percent ->
-                            viewModel
-                                .setBackgroundPatternDensityPreview(
-                                    percent / 100f
-                                )
-                        },
-                        onPercentConfirmed = { percent ->
-                            viewModel
-                                .saveBackgroundPatternDensity(
-                                    percent / 100f
-                                )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
                             }
                         }
 
@@ -3439,156 +3186,249 @@ fun DetailScreen(
                                 horizontalAlignment =
                                     Alignment.CenterHorizontally
                             ) {
-                DetailDrawer(
-                    title = "글자 크기",
-                    summary =
-                        "글귀 ${messageTextScalePercent}% · " +
-                                "날짜 ${dateTextScalePercent}%",
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .TEXT_SIZE
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .TEXT_SIZE
-                                    .name
+                            Column(
+                                modifier =
+                                    Modifier.fillMaxWidth(0.92f)
                             ) {
-                                ""
+                    Text(
+                        text =
+                            if (pc.message.isBlank()) {
+                                "아직 글귀가 없어. 하고 싶은 말을 적어봐."
                             } else {
-                                DetailDrawerSection
-                                    .TEXT_SIZE
-                                    .name
-                            }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    Column(
+                                pc.message
+                            },
+                        color = BrutalBlack,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Button(
+                        onClick = {
+                            messageDraft = pc.message
+                            showMessageDialog = true
+                        },
+                        enabled = controlsEnabled,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GraphiteAccent,
+                            contentColor = BrutalWhite
+                        ),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        TextSizeControl(
-                            label = "글귀 크기",
-                            initialPercent = messageTextScalePercent,
-                            minPercent = 60,
-                            maxPercent = 140,
-                            enabled = controlsEnabled,
-                            onPreviewPercentChanged = { percent ->
-                                viewModel.setMessageTextScalePreview(
-                                    percent / 100f
-                                )
-                            },
-                            onPercentConfirmed = { percent ->
-                                viewModel.saveMessageTextScale(
-                                    percent / 100f
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null
                         )
-
-                        Spacer(
-                            modifier = Modifier.height(18.dp)
-                        )
-
-                        TextSizeControl(
-                            label = "날짜 크기",
-                            initialPercent = dateTextScalePercent,
-                            minPercent = 60,
-                            maxPercent = 180,
-                            enabled = controlsEnabled,
-                            onPreviewPercentChanged = { percent ->
-                                viewModel.setDateTextScalePreview(
-                                    percent / 100f
-                                )
-                            },
-                            onPercentConfirmed = { percent ->
-                                viewModel.saveDateTextScale(
-                                    percent / 100f
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                        Text(
+                            text = "  문구 편집",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
-                }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
 
-                DetailDrawer(
-                    title = "문구 편집",
-                    summary =
-                        if (pc.message.isBlank()) {
-                            "글귀 없음"
-                        } else {
-                            pc.message
-                        },
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .MESSAGE_EDIT
-                                    .name,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .MESSAGE_EDIT
-                                    .name
+                    Text(
+                        text = "글꼴",
+                        color = BrutalBlack,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(10.dp)
+                    ) {
+                        PostcardTextFont.entries.forEach { font ->
+                            val fontSelected =
+                                font == selectedFont
+
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        color =
+                                            if (fontSelected) {
+                                                GraphiteAccent
+                                            } else {
+                                                BrutalWhite
+                                            },
+                                        shape =
+                                            RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable(
+                                        enabled = controlsEnabled
+                                    ) {
+                                        viewModel.updateMessageFont(
+                                            font.name
+                                        )
+                                    }
+                                    .padding(
+                                        horizontal = 16.dp,
+                                        vertical = 12.dp
+                                    )
                             ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .MESSAGE_EDIT
-                                    .name
+                                Column(
+                                    horizontalAlignment =
+                                        Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = font.previewText,
+                                        fontFamily = font.fontFamily,
+                                        fontSize = 16.sp,
+                                        color =
+                                            if (fontSelected) {
+                                                BrutalWhite
+                                            } else {
+                                                BrutalBlack
+                                            }
+                                    )
+
+                                    Spacer(
+                                        modifier = Modifier.height(4.dp)
+                                    )
+
+                                    Text(
+                                        text = font.label,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color =
+                                            if (fontSelected) {
+                                                BrutalWhite
+                                            } else {
+                                                GraphiteAccent
+                                            }
+                                    )
+                                }
                             }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(0.92f)
-                ) {
-                    Column {
-                        Text(
-                            text =
-                                "이 사진과 함께 기억하고 싶은 말을 적어봐.",
-                            color = BrutalBlack,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(12.dp)
-                        )
-
-                        Button(
-                            onClick = {
-                                messageDraft = pc.message
-                                showMessageDialog = true
-                            },
-                            enabled = controlsEnabled,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GraphiteAccent,
-                                contentColor = BrutalWhite
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = null
-                            )
-                            Text(
-                                text = "  문구 편집",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
                         }
                     }
-                }
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
+
+                    TextSizeControl(
+                        label = "글귀 크기",
+                        initialPercent = messageTextScalePercent,
+                        minPercent = 60,
+                        maxPercent = 140,
+                        enabled = controlsEnabled,
+                        onPreviewPercentChanged = { percent ->
+                            viewModel.setMessageTextScalePreview(
+                                percent / 100f
+                            )
+                        },
+                        onPercentConfirmed = { percent ->
+                            viewModel.saveMessageTextScale(
+                                percent / 100f
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(18.dp)
+                    )
+
+                    TextSizeControl(
+                        label = "날짜 크기",
+                        initialPercent = dateTextScalePercent,
+                        minPercent = 60,
+                        maxPercent = 180,
+                        enabled = controlsEnabled,
+                        onPreviewPercentChanged = { percent ->
+                            viewModel.setDateTextScalePreview(
+                                percent / 100f
+                            )
+                        },
+                        onPercentConfirmed = { percent ->
+                            viewModel.saveDateTextScale(
+                                percent / 100f
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(20.dp)
+                    )
+
+                    Text(
+                        text = "날짜 형식",
+                        color = BrutalBlack,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(10.dp)
+                    ) {
+                        PostcardDateFormat.entries.forEach { format ->
+                            val formatSelected =
+                                format == selectedDateFormat
+
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        color =
+                                            if (formatSelected) {
+                                                GraphiteAccent
+                                            } else {
+                                                BrutalWhite
+                                            },
+                                        shape =
+                                            RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable(
+                                        enabled = controlsEnabled
+                                    ) {
+                                        viewModel.updateDateFormat(
+                                            format.name
+                                        )
+                                    }
+                                    .padding(
+                                        horizontal = 14.dp,
+                                        vertical = 12.dp
+                                    )
+                            ) {
+                                Text(
+                                    text = format.format(pc.capturedAt),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color =
+                                        if (formatSelected) {
+                                            BrutalWhite
+                                        } else {
+                                            BrutalBlack
+                                        }
+                                )
+                            }
+                        }
+                    }
+                            }
                             }
                         }
 
