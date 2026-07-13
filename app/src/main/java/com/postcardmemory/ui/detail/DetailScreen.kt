@@ -51,8 +51,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -99,6 +104,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -1120,6 +1127,15 @@ fun DetailScreen(
     val customizationPagerScope = rememberCoroutineScope()
     val customizationPageLabels = remember {
         listOf("사진", "배경", "텍스트", "스티커", "도장")
+    }
+    val customizationPageIcons = remember {
+        listOf(
+            Icons.Default.Image,
+            Icons.Default.Wallpaper,
+            Icons.Default.TextFields,
+            Icons.Default.EmojiEmotions,
+            Icons.Default.Verified
+        )
     }
     val selectedLayout =
         remember(postcard?.layoutStyle) {
@@ -2634,34 +2650,22 @@ fun DetailScreen(
                 )
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth(0.92f)
-                        .background(
-                            color = SoftGray,
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                        .padding(6.dp),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(0.92f)
                 ) {
                     customizationPageLabels.forEachIndexed { pageIndex, pageLabel ->
                         val pageSelected =
                             customizationPagerState.currentPage ==
                                     pageIndex
+                        val tabColor =
+                            if (pageSelected) {
+                                BrutalCoral
+                            } else {
+                                GraphiteAccent
+                            }
 
-                        Box(
+                        Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .background(
-                                    color =
-                                        if (pageSelected) {
-                                            GraphiteAccent
-                                        } else {
-                                            BrutalWhite
-                                        },
-                                    shape =
-                                        RoundedCornerShape(10.dp)
-                                )
                                 .clickable(
                                     enabled = controlsEnabled
                                 ) {
@@ -2670,18 +2674,29 @@ fun DetailScreen(
                                             .animateScrollToPage(pageIndex)
                                     }
                                 }
-                                .padding(vertical = 10.dp),
-                            contentAlignment =
-                                Alignment.Center
+                                .semantics {
+                                    contentDescription =
+                                        "$pageLabel 편집"
+                                }
+                                .padding(vertical = 8.dp),
+                            horizontalAlignment =
+                                Alignment.CenterHorizontally
                         ) {
+                            Icon(
+                                imageVector =
+                                    customizationPageIcons[pageIndex],
+                                contentDescription = null,
+                                tint = tabColor,
+                                modifier = Modifier.size(22.dp)
+                            )
+
+                            Spacer(
+                                modifier = Modifier.height(3.dp)
+                            )
+
                             Text(
                                 text = pageLabel,
-                                color =
-                                    if (pageSelected) {
-                                        BrutalWhite
-                                    } else {
-                                        BrutalBlack
-                                    },
+                                color = tabColor,
                                 fontSize = 11.sp,
                                 fontWeight =
                                     FontWeight.SemiBold,
@@ -2689,51 +2704,38 @@ fun DetailScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 textAlign = TextAlign.Center
                             )
+
+                            Spacer(
+                                modifier = Modifier.height(5.dp)
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .height(2.dp)
+                                    .fillMaxWidth(0.5f)
+                                    .background(
+                                        color =
+                                            if (pageSelected) {
+                                                BrutalCoral
+                                            } else {
+                                                Color.Transparent
+                                            },
+                                        shape =
+                                            RoundedCornerShape(1.dp)
+                                    )
+                            )
                         }
                     }
                 }
 
-                Spacer(
-                    modifier = Modifier.height(14.dp)
+                HorizontalDivider(
+                    color = SurfaceGray,
+                    thickness = 1.dp,
+                    modifier = Modifier.fillMaxWidth(0.92f)
                 )
 
-                Row(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp),
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-                    repeat(5) { pageIndex ->
-                        Box(
-                            modifier = Modifier
-                                .size(
-                                    if (
-                                        customizationPagerState.currentPage ==
-                                        pageIndex
-                                    ) {
-                                        11.dp
-                                    } else {
-                                        8.dp
-                                    }
-                                )
-                                .background(
-                                    color =
-                                        if (
-                                            customizationPagerState.currentPage ==
-                                            pageIndex
-                                        ) {
-                                            BrutalBlack
-                                        } else {
-                                            NeutralLight
-                                        },
-                                    shape = CircleShape
-                                )
-                        )
-                    }
-                }
-
                 Spacer(
-                    modifier = Modifier.height(14.dp)
+                    modifier = Modifier.height(16.dp)
                 )
 
                 HorizontalPager(
