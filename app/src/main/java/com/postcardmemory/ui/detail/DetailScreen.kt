@@ -147,27 +147,6 @@ import com.postcardmemory.ui.theme.SurfaceGray
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardRenderSpec
 
-private enum class DetailDrawerSection {
-    LAYOUT,
-    PHOTO_SIZE,
-    PHOTO_CHANGE,
-    PHOTO_EDGE_BLUR,
-    BACKGROUND,
-    CUSTOM_COLOR,
-    PATTERN,
-    PATTERN_INTENSITY,
-    PHOTO_COLOR_EXTRACT,
-    TEXT_SIZE,
-    MESSAGE_EDIT
-}
-
-private enum class CustomizationGroup(
-    val label: String
-) {
-    PHOTO(label = "사진"),
-    DESIGN(label = "디자인")
-}
-
 private enum class StickerEditMode {
     Move,
     Scale,
@@ -1112,16 +1091,8 @@ fun DetailScreen(
         }
     }
 
-    var openedDrawerName by rememberSaveable {
-        mutableStateOf(
-            DetailDrawerSection.LAYOUT.name
-        )
-    }
-
-    var selectedCustomizationGroup by rememberSaveable {
-        mutableStateOf(
-            CustomizationGroup.PHOTO.name
-        )
+    var customColorDrawerExpanded by rememberSaveable {
+        mutableStateOf(false)
     }
 
     val customizationPagerState = rememberPagerState(
@@ -3143,26 +3114,11 @@ fun DetailScreen(
                                     .toString(16)
                                     .uppercase()
                                     .padStart(6, '0'),
-                    expanded =
-                        openedDrawerName ==
-                                DetailDrawerSection
-                                    .CUSTOM_COLOR
-                                    .name,
+                    expanded = customColorDrawerExpanded,
                     enabled = controlsEnabled,
                     onClick = {
-                        openedDrawerName =
-                            if (
-                                openedDrawerName ==
-                                DetailDrawerSection
-                                    .CUSTOM_COLOR
-                                    .name
-                            ) {
-                                ""
-                            } else {
-                                DetailDrawerSection
-                                    .CUSTOM_COLOR
-                                    .name
-                            }
+                        customColorDrawerExpanded =
+                            !customColorDrawerExpanded
                     },
                     modifier =
                         Modifier.fillMaxWidth()
@@ -3430,7 +3386,7 @@ fun DetailScreen(
                                         )
                                     }
                                     .padding(
-                                        horizontal = 14.dp,
+                                        horizontal = 16.dp,
                                         vertical = 12.dp
                                     )
                             ) {
@@ -3445,7 +3401,7 @@ fun DetailScreen(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
                                             tint = BrutalWhite,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(12.dp)
                                         )
                                     }
 

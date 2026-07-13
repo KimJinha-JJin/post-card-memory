@@ -395,7 +395,7 @@ fun GalleryScreen(
             title = {
                 Text(
                     text = "${selectedIds.size}개를 삭제할까요?",
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
@@ -416,8 +416,8 @@ fun GalleryScreen(
                 ) {
                     Text(
                         text = "삭제",
-                        color = BrutalCoral,
-                        fontWeight = FontWeight.ExtraBold
+                        color = GalleryDangerRed,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             },

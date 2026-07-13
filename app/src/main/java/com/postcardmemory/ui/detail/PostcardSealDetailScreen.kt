@@ -18,13 +18,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -37,6 +34,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.ui.components.EditorEmptyHint
+import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
@@ -92,27 +91,15 @@ fun SealPickerPanel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy((-4).dp)
             ) {
-                IconButton(
-                    onClick = onUndoSeal,
-                    enabled = enabled && canUndoSeal
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Undo,
-                        contentDescription = "되돌리기",
-                        tint = if (canUndoSeal) BrutalBlack else SoftGray
-                    )
-                }
-
-                IconButton(
-                    onClick = onRedoSeal,
-                    enabled = enabled && canRedoSeal
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Redo,
-                        contentDescription = "다시 실행",
-                        tint = if (canRedoSeal) BrutalBlack else SoftGray
-                    )
-                }
+                EditorUndoRedoButtons(
+                    canUndo = canUndoSeal,
+                    canRedo = canRedoSeal,
+                    onUndo = onUndoSeal,
+                    onRedo = onRedoSeal,
+                    enabled = enabled,
+                    undoContentDescription = "도장 되돌리기",
+                    redoContentDescription = "도장 다시 실행"
+                )
 
                 Text(
                     text = "${photoSeals.size}개",
@@ -196,18 +183,8 @@ fun SealPickerPanel(
         if (photoSeals.isEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = "위에서 마음에 드는 도장을 눌러서 추가해봐.",
-                color = BrutalBlack,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            EditorEmptyHint(
+                text = "위에서 마음에 드는 도장을 눌러서 추가해봐."
             )
 
             return@Column
@@ -256,18 +233,8 @@ fun SealPickerPanel(
         if (selectedSeal == null) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = "추가한 도장을 눌러서 선택하면 여기서 꾸밀 수 있어.",
-                color = BrutalBlack,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            EditorEmptyHint(
+                text = "추가한 도장을 눌러서 선택하면 여기서 꾸밀 수 있어."
             )
 
             return@Column
