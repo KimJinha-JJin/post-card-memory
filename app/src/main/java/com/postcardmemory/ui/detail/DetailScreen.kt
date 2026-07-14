@@ -2621,7 +2621,7 @@ fun DetailScreen(
                 }
 
                 Spacer(
-                    modifier = Modifier.height(28.dp)
+                    modifier = Modifier.height(14.dp)
                 )
 
                 Row(
@@ -2653,7 +2653,7 @@ fun DetailScreen(
                                     contentDescription =
                                         "$pageLabel 편집"
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 6.dp),
                             horizontalAlignment =
                                 Alignment.CenterHorizontally
                         ) {
@@ -2662,11 +2662,11 @@ fun DetailScreen(
                                     customizationPageIcons[pageIndex],
                                 contentDescription = null,
                                 tint = tabColor,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(16.dp)
                             )
 
                             Spacer(
-                                modifier = Modifier.height(3.dp)
+                                modifier = Modifier.height(1.dp)
                             )
 
                             Text(
@@ -2681,7 +2681,7 @@ fun DetailScreen(
                             )
 
                             Spacer(
-                                modifier = Modifier.height(5.dp)
+                                modifier = Modifier.height(4.dp)
                             )
 
                             Box(
