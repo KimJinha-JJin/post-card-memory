@@ -129,8 +129,8 @@ fun PostcardBackgroundColorPicker(
                             shape = CircleShape
                         )
                         .border(
-                            width = if (selected) 2.dp else 0.dp,
-                            color = if (selected) SunsetCoral else Color.Transparent,
+                            width = 1.dp,
+                            color = BrutalBlack,
                             shape = CircleShape
                         )
                         .clickable(
@@ -143,9 +143,14 @@ fun PostcardBackgroundColorPicker(
                     if (selected) {
                         Box(
                             modifier = Modifier
-                                .size(14.dp)
+                                .size(16.dp)
                                 .background(
-                                    color = BrutalWhite,
+                                    color = SunsetCoral,
+                                    shape = CircleShape
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = BrutalBlack,
                                     shape = CircleShape
                                 )
                         )
