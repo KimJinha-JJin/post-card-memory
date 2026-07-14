@@ -22,8 +22,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -35,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorEmptyHint
+import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
@@ -279,7 +278,7 @@ fun SealPickerPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Slider(
+        EditorSlider(
             value = selectedSeal.scale,
             onValueChange = { newValue ->
                 onScaleChanged(selectedSeal.id, newValue)
@@ -287,11 +286,6 @@ fun SealPickerPanel(
             onValueChangeFinished = onScaleChangeFinished,
             valueRange = 0.5f..3f,
             enabled = enabled,
-            colors = SliderDefaults.colors(
-                thumbColor = BrutalBlack,
-                activeTrackColor = BrutalBlack,
-                inactiveTrackColor = SoftGray
-            ),
             modifier = Modifier.fillMaxWidth()
         )
 

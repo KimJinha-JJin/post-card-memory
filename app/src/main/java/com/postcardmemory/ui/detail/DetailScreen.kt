@@ -72,8 +72,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -124,6 +122,7 @@ import kotlin.math.atan2
 import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
@@ -521,7 +520,7 @@ private fun TextSizeControl(
             Text(
                 text = label,
                 color = BrutalBlack,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
@@ -585,7 +584,7 @@ private fun TextSizeControl(
             modifier = Modifier.height(4.dp)
         )
 
-        Slider(
+        EditorSlider(
             value = currentPercent.toFloat(),
             onValueChange = { newValue ->
                 val snappedPercent =
@@ -604,12 +603,6 @@ private fun TextSizeControl(
             steps =
                 ((maxPercent - minPercent) / 5) - 1,
             enabled = enabled,
-            colors =
-                SliderDefaults.colors(
-                    thumbColor = BrutalBlack,
-                    activeTrackColor = BrutalBlack,
-                    inactiveTrackColor = NeutralLight
-                ),
             modifier = Modifier.fillMaxWidth()
         )
 
