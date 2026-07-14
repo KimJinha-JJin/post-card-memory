@@ -286,6 +286,7 @@ fun SealPickerPanel(
             onValueChangeFinished = onScaleChangeFinished,
             valueRange = 0.5f..3f,
             enabled = enabled,
+            inactiveTrackColor = SoftGray,
             modifier = Modifier.fillMaxWidth()
         )
 

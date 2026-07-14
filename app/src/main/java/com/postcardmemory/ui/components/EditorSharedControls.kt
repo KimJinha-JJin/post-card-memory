@@ -21,14 +21,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.PaperDivider
+import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SoftGray
-import com.postcardmemory.ui.theme.SunsetCoral
 
 @Composable
 fun EditorUndoRedoButtons(
@@ -92,8 +92,9 @@ fun EditorEmptyHint(
 /**
  * 편집 패널 공통 슬라이더.
  *
- * 오래된 종이 톤에 맞춰 얇은 트랙(코랄 활성 / PaperDivider 비활성)과
- * 작은 코랄 원형 손잡이로 통일한다. value·valueRange·steps·콜백은
+ * 얇은 4dp 트랙과 작은 16dp 원형 손잡이로 통일한다. 색상은 개편 전
+ * 기존 값을 유지한다(활성·손잡이 = BrutalBlack, 비활성 = 호출부가 넘기는
+ * inactiveTrackColor, 기본 NeutralLight). value·valueRange·steps·콜백은
  * 호출부에서 그대로 전달받아 기능·저장 동작은 바뀌지 않는다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,7 +106,8 @@ fun EditorSlider(
     modifier: Modifier = Modifier,
     onValueChangeFinished: (() -> Unit)? = null,
     steps: Int = 0,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    inactiveTrackColor: Color = NeutralLight
 ) {
     val span = valueRange.endInclusive - valueRange.start
     val fraction =
@@ -114,7 +116,7 @@ fun EditorSlider(
         } else {
             0f
         }
-    val accentColor = if (enabled) SunsetCoral else PaperDivider
+    val accentColor = if (enabled) BrutalBlack else inactiveTrackColor
 
     Slider(
         value = value,
@@ -145,7 +147,7 @@ fun EditorSlider(
                         .fillMaxWidth()
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(PaperDivider)
+                        .background(inactiveTrackColor)
                 )
                 Box(
                     modifier = Modifier
