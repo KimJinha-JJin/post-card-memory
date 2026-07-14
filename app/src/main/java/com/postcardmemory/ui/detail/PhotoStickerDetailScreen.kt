@@ -196,9 +196,9 @@ fun PhotoStickerPickerPanel(
         modifier = modifier
             .background(
                 color = NeutralLight,
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(16.dp)
             )
-            .padding(16.dp)
+            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -208,7 +208,7 @@ fun PhotoStickerPickerPanel(
             Text(
                 text = "스티커 사진",
                 color = BrutalBlack,
-                fontSize = 17.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
@@ -265,7 +265,7 @@ fun PhotoStickerPickerPanel(
 
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
+                        .size(56.dp)
                         .background(
                             color = if (isSelected) GraphiteAccent else BrutalWhite,
                             shape = RoundedCornerShape(10.dp)
@@ -296,7 +296,7 @@ fun PhotoStickerPickerPanel(
             // 추가 버튼
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(56.dp)
                     .background(
                         color = BrutalWhite,
                         shape = RoundedCornerShape(10.dp)
@@ -313,7 +313,7 @@ fun PhotoStickerPickerPanel(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
                         tint = GraphiteAccent,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                     Text(
                         text = "추가",

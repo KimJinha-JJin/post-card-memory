@@ -71,9 +71,9 @@ fun SealPickerPanel(
         modifier = modifier
             .background(
                 color = NeutralLight,
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(16.dp)
             )
-            .padding(16.dp)
+            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -83,7 +83,7 @@ fun SealPickerPanel(
             Text(
                 text = "도장 꾸미기",
                 color = BrutalBlack,
-                fontSize = 17.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
             )
 

@@ -521,8 +521,8 @@ private fun TextSizeControl(
             Text(
                 text = label,
                 color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
 
@@ -2753,7 +2753,7 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     if (
@@ -2831,7 +2831,7 @@ fun DetailScreen(
                     }
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     Text(
@@ -2870,7 +2870,7 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     Text(
@@ -2905,7 +2905,7 @@ fun DetailScreen(
                         Text(
                             text = "  사진 바꾸기",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                             }
@@ -2936,7 +2936,7 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     Text(
@@ -2984,13 +2984,13 @@ fun DetailScreen(
                             Text(
                                 text = "색 추출 중...",
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontWeight = FontWeight.SemiBold
                             )
                         } else {
                             Text(
                                 text = "사진에서 색 추출하기",
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
@@ -3055,7 +3055,7 @@ fun DetailScreen(
                     }
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     PostcardBackgroundPatternPicker(
@@ -3074,7 +3074,7 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     TextSizeControl(
@@ -3100,7 +3100,7 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                 DetailDrawer(
@@ -3188,12 +3188,12 @@ fun DetailScreen(
                         Text(
                             text = "  문구 편집",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     Text(
@@ -3295,7 +3295,7 @@ fun DetailScreen(
                     }
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     TextSizeControl(
@@ -3318,7 +3318,7 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(18.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     TextSizeControl(
@@ -3341,7 +3341,7 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
 
                     Text(
