@@ -20,11 +20,11 @@ private val LightColorScheme = lightColorScheme(
     tertiary = BrutalCoral,
     onTertiary = BrutalBlack,
 
-    background = ScreenBackgroundGray,
-    onBackground = BrutalBlack,
+    background = PaperCanvas,
+    onBackground = InkPrimary,
 
-    surface = SoftGray,
-    onSurface = BrutalBlack,
+    surface = PaperSurface,
+    onSurface = InkPrimary,
 
     surfaceVariant = SurfaceGray,
     onSurfaceVariant = BrutalBlack,

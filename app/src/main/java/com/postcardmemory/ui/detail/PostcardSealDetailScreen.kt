@@ -40,10 +40,10 @@ import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
-import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SealInkWhite
 import com.postcardmemory.ui.theme.SoftGray
+import com.postcardmemory.ui.theme.SunsetCoral
 import com.postcardmemory.ui.theme.sealInkColors
 
 @Composable
@@ -83,7 +83,7 @@ fun SealPickerPanel(
             Text(
                 text = "도장 꾸미기",
                 color = BrutalBlack,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
@@ -208,22 +208,23 @@ fun SealPickerPanel(
                     modifier = Modifier
                         .size(56.dp)
                         .background(
-                            color = when {
-                                isSelected -> GraphiteAccent
-                                isWhiteInk -> NeutralLight
-                                else -> BrutalWhite
-                            },
+                            color = if (isWhiteInk) NeutralLight else BrutalWhite,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .border(
+                            width = if (isSelected) 2.dp else 0.dp,
+                            color = if (isSelected) SunsetCoral else Color.Transparent,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))
                         .clickable(enabled = enabled) {
                             onSelectSeal(seal.id)
                         }
-                        .padding(if (isSelected) 10.dp else 6.dp)
+                        .padding(6.dp)
                 ) {
                     SealPreviewContent(
                         type = seal.type,
-                        color = if (isSelected) BrutalWhite else Color(seal.colorArgb),
+                        color = Color(seal.colorArgb),
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -317,14 +318,18 @@ fun SealPickerPanel(
 
                 Box(
                     modifier = Modifier
-                        .size(if (isColorSelected) 34.dp else 28.dp)
+                        .size(30.dp)
                         .background(
                             color = inkColor,
                             shape = CircleShape
                         )
                         .border(
-                            width = 1.5.dp,
-                            color = BrutalBlack.copy(alpha = 0.35f),
+                            width = if (isColorSelected) 2.dp else 1.5.dp,
+                            color = if (isColorSelected) {
+                                SunsetCoral
+                            } else {
+                                BrutalBlack.copy(alpha = 0.35f)
+                            },
                             shape = CircleShape
                         )
                         .clickable(enabled = enabled) {

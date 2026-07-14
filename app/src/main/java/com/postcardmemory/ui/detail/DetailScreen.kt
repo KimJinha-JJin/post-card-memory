@@ -430,7 +430,7 @@ private fun DetailDrawer(
                     Text(
                         text = title,
                         color = BrutalBlack,
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontWeight =
                             FontWeight.SemiBold
                     )
@@ -3900,7 +3900,7 @@ fun DetailScreen(
                     text = "저장 완료!",
                     color = BrutalBlack,
                     fontWeight =
-                        FontWeight.ExtraBold
+                        FontWeight.SemiBold
                 )
             },
             text = {
@@ -3919,7 +3919,7 @@ fun DetailScreen(
                         text = "확인",
                         color = BrutalBlack,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 }
             }
@@ -3938,7 +3938,7 @@ fun DetailScreen(
                     text = "저장하지 못했어",
                     color = BrutalCoral,
                     fontWeight =
-                        FontWeight.ExtraBold
+                        FontWeight.SemiBold
                 )
             },
             text = {
@@ -3956,7 +3956,7 @@ fun DetailScreen(
                         text = "확인",
                         color = BrutalBlack,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 }
             }
@@ -3977,7 +3977,7 @@ fun DetailScreen(
                         text = "배경을 저장하지 못했어",
                         color = BrutalCoral,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 },
                 text = {
@@ -3996,7 +3996,7 @@ fun DetailScreen(
                             text = "확인",
                             color = BrutalBlack,
                             fontWeight =
-                                FontWeight.ExtraBold
+                                FontWeight.SemiBold
                         )
                     }
                 }
@@ -4017,7 +4017,7 @@ fun DetailScreen(
                         text = "사진을 바꾸지 못했어",
                         color = BrutalCoral,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 },
                 text = {
@@ -4038,7 +4038,7 @@ fun DetailScreen(
                             text = "확인",
                             color = BrutalBlack,
                             fontWeight =
-                                FontWeight.ExtraBold
+                                FontWeight.SemiBold
                         )
                     }
                 }
@@ -4059,7 +4059,7 @@ fun DetailScreen(
                         text = "폰트를 저장하지 못했어",
                         color = BrutalCoral,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 },
                 text = {
@@ -4078,7 +4078,7 @@ fun DetailScreen(
                             text = "확인",
                             color = BrutalBlack,
                             fontWeight =
-                                FontWeight.ExtraBold
+                                FontWeight.SemiBold
                         )
                     }
                 }
@@ -4099,7 +4099,7 @@ fun DetailScreen(
                         text = "레이아웃을 저장하지 못했어",
                         color = BrutalCoral,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 },
                 text = {
@@ -4118,7 +4118,7 @@ fun DetailScreen(
                             text = "확인",
                             color = BrutalBlack,
                             fontWeight =
-                                FontWeight.ExtraBold
+                                FontWeight.SemiBold
                         )
                     }
                 }
@@ -4139,7 +4139,7 @@ fun DetailScreen(
                         text = "날짜 형식을 저장하지 못했어",
                         color = BrutalCoral,
                         fontWeight =
-                            FontWeight.ExtraBold
+                            FontWeight.SemiBold
                     )
                 },
                 text = {
@@ -4158,7 +4158,7 @@ fun DetailScreen(
                             text = "확인",
                             color = BrutalBlack,
                             fontWeight =
-                                FontWeight.ExtraBold
+                                FontWeight.SemiBold
                         )
                     }
                 }

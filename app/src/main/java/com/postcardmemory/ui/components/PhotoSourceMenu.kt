@@ -77,7 +77,7 @@ fun PhotoSourceMenu(
                 text = "사진 가져오기",
                 color = BrutalBlack,
                 fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.SemiBold
             )
 
             Spacer(modifier = Modifier.height(16.dp))

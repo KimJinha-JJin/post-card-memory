@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items as lazyColumnItems
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -60,6 +61,8 @@ import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
+import com.postcardmemory.ui.theme.PaperSurface
+import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.SurfaceGray
 
 private val ViewModeSaver = Saver<GalleryViewMode, String>(
@@ -198,7 +201,7 @@ fun GalleryScreen(
                     ) {
                         Text(
                             text = "포스트카드 메모리",
-                            fontSize = 22.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = BrutalBlack,
                             modifier = Modifier.weight(1f)
@@ -326,7 +329,7 @@ fun GalleryScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .background(
-                            color = SurfaceGray,
+                            color = PaperTray,
                             shape = CircleShape
                         )
                         .padding(
@@ -389,7 +392,7 @@ fun GalleryScreen(
             onDismissRequest = {
                 showDeleteDialog = false
             },
-            containerColor = SurfaceGray,
+            containerColor = PaperSurface,
             titleContentColor = BrutalBlack,
             textContentColor = BrutalBlack,
             title = {
@@ -509,15 +512,15 @@ private fun GalleryDetailList(
                 Text(
                     text = "날짜",
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.SemiBold,
                     color = GraphiteAccent,
-                    modifier = Modifier.size(width = 96.dp, height = 16.dp)
+                    modifier = Modifier.width(96.dp)
                 )
 
                 Text(
                     text = "내용",
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.SemiBold,
                     color = GraphiteAccent
                 )
             }

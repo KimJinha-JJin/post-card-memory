@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -208,7 +210,7 @@ fun PhotoStickerPickerPanel(
             Text(
                 text = "스티커 사진",
                 color = BrutalBlack,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
@@ -267,14 +269,19 @@ fun PhotoStickerPickerPanel(
                     modifier = Modifier
                         .size(56.dp)
                         .background(
-                            color = if (isSelected) GraphiteAccent else BrutalWhite,
+                            color = BrutalWhite,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .border(
+                            width = if (isSelected) 2.dp else 0.dp,
+                            color = if (isSelected) BrutalCoral else Color.Transparent,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))
                         .clickable(enabled = enabled) {
                             onSelectSticker(sticker.id)
                         }
-                        .padding(if (isSelected) 4.dp else 0.dp),
+                        .padding(3.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -288,7 +295,7 @@ fun PhotoStickerPickerPanel(
                             },
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(if (isSelected) 6.dp else 10.dp))
+                            .clip(RoundedCornerShape(8.dp))
                     )
                 }
             }

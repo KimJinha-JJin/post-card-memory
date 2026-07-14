@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.PaperField
+import com.postcardmemory.ui.theme.SunsetCoral
 
 val postcardBackgroundPalette =
     listOf(
@@ -83,33 +85,27 @@ fun PostcardBackgroundColorPicker(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                color = BrutalWhite,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
         Text(
             text = "배경 색상",
             color = BrutalBlack,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(
-            modifier = Modifier.height(6.dp)
+            modifier = Modifier.height(8.dp)
         )
 
         Text(
             text = "기본 색상 중에서 원하는 배경색을 골라봐.",
             color = BrutalBlack,
-            fontSize = 13.sp
+            fontSize = 12.sp
         )
 
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier = Modifier.height(14.dp)
         )
 
         Row(
@@ -127,15 +123,14 @@ fun PostcardBackgroundColorPicker(
 
                 Box(
                     modifier = Modifier
-                        .size(
-                            if (selected) {
-                                54.dp
-                            } else {
-                                48.dp
-                            }
-                        )
+                        .size(48.dp)
                         .background(
                             color = Color(colorArgb),
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = if (selected) 2.dp else 0.dp,
+                            color = if (selected) SunsetCoral else Color.Transparent,
                             shape = CircleShape
                         )
                         .clickable(
@@ -183,33 +178,27 @@ fun PostcardBackgroundPatternPicker(
         } ?: PostcardBackgroundPattern.NONE
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                color = BrutalWhite,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
         Text(
             text = "배경 패턴",
             color = BrutalBlack,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(
-            modifier = Modifier.height(6.dp)
+            modifier = Modifier.height(8.dp)
         )
 
         Text(
             text = "색상 위에 얹을 무늬를 골라봐. 패턴 없음도 언제든 선택할 수 있어.",
             color = BrutalBlack,
-            fontSize = 13.sp
+            fontSize = 12.sp
         )
 
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier = Modifier.height(14.dp)
         )
 
         Row(
@@ -236,9 +225,14 @@ fun PostcardBackgroundPatternPicker(
                                     if (selected) {
                                         Color(selectedColorArgb)
                                     } else {
-                                        Color(0xFFF7F2FF)
+                                        PaperField
                                     },
-                                shape = RoundedCornerShape(14.dp)
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .border(
+                                width = if (selected) 2.dp else 0.dp,
+                                color = if (selected) SunsetCoral else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
                             )
                             .clickable(
                                 enabled = enabled
@@ -262,7 +256,7 @@ fun PostcardBackgroundPatternPicker(
                                 } else {
                                     22.sp
                                 },
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.Bold
                         )
                     }
 
@@ -276,7 +270,7 @@ fun PostcardBackgroundPatternPicker(
                         fontSize = 11.sp,
                         fontWeight =
                             if (selected) {
-                                FontWeight.ExtraBold
+                                FontWeight.SemiBold
                             } else {
                                 FontWeight.Medium
                             }
@@ -403,8 +397,8 @@ fun PostcardCustomColorPicker(
         Text(
             text = "기타 색상",
             color = BrutalBlack,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(
@@ -635,7 +629,7 @@ fun PostcardCustomColorPicker(
                                     .takeLast(6),
                     color = BrutalBlack,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }

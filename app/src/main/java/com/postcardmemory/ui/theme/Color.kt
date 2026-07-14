@@ -3,61 +3,50 @@ package com.postcardmemory.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /*
- * 기본 글자와 외곽선
+ * ── 웜 페이퍼 디자인 토큰 (역할 중심) ──
  *
- * BrutalWhite는 카드·칩 표면과 루트 바탕에 쓰는 종이 화이트라
- * 순백 대신 아주 옅은 웜 페이퍼 톤을 머금는다.
+ * 해질녘 노을빛이 밴 오래된 종이 세계관. 갤러리·상세 등 모든 화면이
+ * 이 토큰을 공유한다. 신규/수정 코드는 아래 역할 토큰을 직접 사용한다.
+ *
+ * 명도 램프: PaperCanvas < PaperTray < PaperField < PaperSurface
  */
-val BrutalBlack = Color(0xFF1A1324)
-val BrutalWhite = Color(0xFFFFFBF3)
+val PaperCanvas = Color(0xFFF4ECDE)  // 앱 전체 화면 배경 (갤러리·상세 공통)
+val PaperTray = Color(0xFFE8DCC6)    // 편집 트레이·슬라이더 트랙·보조 표면
+val PaperSurface = Color(0xFFFFFBF3) // 카드·칩·다이얼로그 표면 (종이 화이트)
+val PaperField = Color(0xFFFAF4E9)   // 입력창·옵션 칩의 옅은 표면
+val PaperDivider = Color(0xFFDBCBB0)  // 경계선·구분선 전용
+val InkPrimary = Color(0xFF1A1324)   // 본문·주요 아이콘
+val InkSecondary = Color(0xFF5B5046) // 보조 텍스트·비활성·선택 채움
+val SunsetCoral = Color(0xFFFF7F8E)  // 선택 상태·주요 포인트
+val DangerRed = Color(0xFFC0392B)    // 삭제·위험 행동
 
 /*
- * 포스트카드에 사용하는 파스텔 색상
+ * 포스트카드 콘텐츠(엽서 배경)용 파스텔 — UI 토큰과 무관한 콘텐츠 색
  */
 val BrutalMint = Color(0xFF8FFFDA)
-val BrutalCoral = Color(0xFFFF7F8E)
 val BrutalYellow = Color(0xFFFFE566)
 val BrutalPink = Color(0xFFFFB3E1)
 val BrutalBlue = Color(0xFFAAD4FF)
 
 /*
- * 앱 전체 중성 톤 (선택/강조 상태와 보조 표면)
+ * 레거시 이름 호환 별칭
  *
- * 원래 냉회색이었으나 갤러리의 종이 감성과 한 세계관으로 묶기 위해
- * 해질녘 노을빛이 밴 웜 페이퍼 계열로 조정했다. (val 이름은 호환을 위해 유지)
- *
- * NeutralLight  : 편집 패널 트레이·슬라이더 트랙 등 배경 위 웜 베이지 표면
- * GraphiteAccent: 선택 채움과 보조 텍스트·비활성 아이콘에 쓰는 따뜻한 잉크 회갈색
+ * 기존 참조가 그대로 컴파일되도록 역할 토큰에 연결한다.
+ * (예전 냉회색 이름이 남아 있지만 값은 전부 위의 웜 토큰을 가리킨다)
  */
-val NeutralLight = Color(0xFFE8DCC6)
-val GraphiteAccent = Color(0xFF5B5046)
+val BrutalBlack = InkPrimary
+val BrutalWhite = PaperSurface
+val NeutralLight = PaperTray
+val GraphiteAccent = InkSecondary
+val ScreenBackgroundGray = PaperCanvas
+val SurfaceGray = PaperDivider
+val SoftGray = PaperField
+val GalleryPaperWhite = PaperCanvas
+val BrutalCoral = SunsetCoral
+val GalleryDangerRed = DangerRed
 
 /*
- * 화면 배경과 카드 표면 (웜 페이퍼 램프: 배경 < 표면 < 종이 화이트)
- *
- * ScreenBackgroundGray: 편지를 펼쳐두는 따뜻한 작업대 크림 배경
- * SurfaceGray         : 회색 대신 옅은 로즈 베이지 경계선·디바이더
- * SoftGray            : 칩·입력창에 쓰는 웜 오프화이트
- */
-val ScreenBackgroundGray = Color(0xFFF4ECDE)
-val SurfaceGray = Color(0xFFDBCBB0)
-val SoftGray = Color(0xFFFAF4E9)
-
-/*
- * 갤러리 크롬 전용 색상
- *
- * GalleryPaperWhite: 우표를 올려두는 따뜻한 종이 배경.
- * GalleryDangerRed: 삭제 전용 색. 코랄은 카메라 등
- * 주요 행동에 이미 쓰이므로 위험 행동과 구분하기 위해 별도로 둔다.
- */
-val GalleryPaperWhite = Color(0xFFFAF3E8)
-val GalleryDangerRed = Color(0xFFC0392B)
-
-/*
- * 포스트카드 배경색 목록
- *
- * 앱 전체가 흑백·회색조 테마이므로
- * 카드 색상 목록에서는 무채색을 제외한다.
+ * 포스트카드 배경색 목록 (엽서 콘텐츠 전용)
  */
 val pastelColors = listOf(
     BrutalMint,

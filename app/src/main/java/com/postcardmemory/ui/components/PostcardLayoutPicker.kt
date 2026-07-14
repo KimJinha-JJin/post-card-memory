@@ -77,14 +77,6 @@ fun PostcardLayoutPicker(
                     0.55f
                 }
             )
-            .background(
-                color = SoftGray,
-                shape = RoundedCornerShape(18.dp)
-            )
-            .padding(
-                horizontal = 16.dp,
-                vertical = 16.dp
-            )
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -94,8 +86,8 @@ fun PostcardLayoutPicker(
             Text(
                 text = "엽서 레이아웃",
                 color = BrutalBlack,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
             )
 
             Row(
@@ -231,9 +223,9 @@ private fun LayoutOption(
             fontSize = 13.sp,
             fontWeight =
                 if (selected) {
-                    FontWeight.ExtraBold
-                } else {
                     FontWeight.Bold
+                } else {
+                    FontWeight.Medium
                 },
             textAlign = TextAlign.Center
         )
