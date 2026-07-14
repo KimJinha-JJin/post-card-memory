@@ -4,9 +4,12 @@ import androidx.compose.ui.graphics.Color
 
 /*
  * 기본 글자와 외곽선
+ *
+ * BrutalWhite는 카드·칩 표면과 루트 바탕에 쓰는 종이 화이트라
+ * 순백 대신 아주 옅은 웜 페이퍼 톤을 머금는다.
  */
 val BrutalBlack = Color(0xFF1A1324)
-val BrutalWhite = Color(0xFFFFFBFF)
+val BrutalWhite = Color(0xFFFFFBF3)
 
 /*
  * 포스트카드에 사용하는 파스텔 색상
@@ -18,18 +21,27 @@ val BrutalPink = Color(0xFFFFB3E1)
 val BrutalBlue = Color(0xFFAAD4FF)
 
 /*
- * 앱 전체 흑백·회색조 테마
- * (선택/강조 상태와 보조 배경)
+ * 앱 전체 중성 톤 (선택/강조 상태와 보조 표면)
+ *
+ * 원래 냉회색이었으나 갤러리의 종이 감성과 한 세계관으로 묶기 위해
+ * 해질녘 노을빛이 밴 웜 페이퍼 계열로 조정했다. (val 이름은 호환을 위해 유지)
+ *
+ * NeutralLight  : 편집 패널 트레이·슬라이더 트랙 등 배경 위 웜 베이지 표면
+ * GraphiteAccent: 선택 채움과 보조 텍스트·비활성 아이콘에 쓰는 따뜻한 잉크 회갈색
  */
-val NeutralLight = Color(0xFFCFCED6)
-val GraphiteAccent = Color(0xFF57545C)
+val NeutralLight = Color(0xFFE8DCC6)
+val GraphiteAccent = Color(0xFF5B5046)
 
 /*
- * 화면 배경과 카드 표면
+ * 화면 배경과 카드 표면 (웜 페이퍼 램프: 배경 < 표면 < 종이 화이트)
+ *
+ * ScreenBackgroundGray: 편지를 펼쳐두는 따뜻한 작업대 크림 배경
+ * SurfaceGray         : 회색 대신 옅은 로즈 베이지 경계선·디바이더
+ * SoftGray            : 칩·입력창에 쓰는 웜 오프화이트
  */
-val ScreenBackgroundGray = Color(0xFFEDEBF2)
-val SurfaceGray = Color(0xFFE0DFE5)
-val SoftGray = Color(0xFFF5F4F7)
+val ScreenBackgroundGray = Color(0xFFF4ECDE)
+val SurfaceGray = Color(0xFFDBCBB0)
+val SoftGray = Color(0xFFFAF4E9)
 
 /*
  * 갤러리 크롬 전용 색상
