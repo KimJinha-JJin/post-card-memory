@@ -2856,25 +2856,16 @@ fun DetailScreen(
 
                         Row(
                             horizontalArrangement =
-                                Arrangement.spacedBy(12.dp)
+                                Arrangement.spacedBy(5.dp)
                         ) {
                             successState.colors.forEach { extractedColor ->
+                                val extractedSelected =
+                                    pc.backgroundColorArgb ==
+                                            extractedColor.colorArgb
+
                                 Box(
                                     modifier = Modifier
-                                        .size(40.dp)
-                                        .background(
-                                            color =
-                                                Color(
-                                                    extractedColor
-                                                        .colorArgb
-                                                ),
-                                            shape = CircleShape
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = BrutalBlack,
-                                            shape = CircleShape
-                                        )
+                                        .size(44.dp)
                                         .clickable(
                                             enabled = controlsEnabled
                                         ) {
@@ -2883,8 +2874,33 @@ fun DetailScreen(
                                                     extractedColor
                                                         .colorArgb
                                                 )
-                                        }
-                                )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(
+                                                color =
+                                                    Color(
+                                                        extractedColor
+                                                            .colorArgb
+                                                    ),
+                                                shape = CircleShape
+                                            )
+                                            .border(
+                                                width =
+                                                    if (extractedSelected) 2.dp else 1.dp,
+                                                color =
+                                                    if (extractedSelected) {
+                                                        SunsetGold
+                                                    } else {
+                                                        SurfaceGray
+                                                    },
+                                                shape = CircleShape
+                                            )
+                                    )
+                                }
                             }
                         }
                     }

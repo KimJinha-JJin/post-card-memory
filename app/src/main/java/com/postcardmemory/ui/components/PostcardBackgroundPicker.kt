@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.SunsetGold
 
@@ -104,7 +105,7 @@ fun PostcardBackgroundColorPicker(
                 .horizontalScroll(
                     rememberScrollState()
                 ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             postcardBackgroundPalette.forEach { colorArgb ->
@@ -113,16 +114,7 @@ fun PostcardBackgroundColorPicker(
 
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            color = Color(colorArgb),
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = BrutalBlack,
-                            shape = CircleShape
-                        )
+                        .size(44.dp)
                         .clickable(
                             enabled = enabled
                         ) {
@@ -130,21 +122,24 @@ fun PostcardBackgroundColorPicker(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (selected) {
-                        Box(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .background(
-                                    color = SunsetGold,
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = BrutalBlack,
-                                    shape = CircleShape
-                                )
-                        )
-                    }
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(
+                                color = Color(colorArgb),
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = if (selected) 2.dp else 1.dp,
+                                color =
+                                    if (selected) {
+                                        SunsetGold
+                                    } else {
+                                        PaperDivider
+                                    },
+                                shape = CircleShape
+                            )
+                    )
                 }
             }
         }
