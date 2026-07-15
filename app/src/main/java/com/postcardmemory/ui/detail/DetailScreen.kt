@@ -99,6 +99,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -750,6 +751,93 @@ private fun StickerEditModeButton(
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+/**
+ * 상세 편집 화면 하단에 고정되는 다섯 카테고리(사진·배경·텍스트·스티커·도장)
+ * 전환용 도크. 스크롤 콘텐츠 밖 루트 Box에 얹혀 편집 내용을 위아래로
+ * 움직여도 위치가 바뀌지 않는다. Pager 상태·선택 표현·탭 이동 콜백은
+ * 기존 인라인 탭 바와 동일하게 유지한다.
+ */
+@Composable
+private fun EditorBottomTabBar(
+    selectedPage: Int,
+    labels: List<String>,
+    icons: List<ImageVector>,
+    enabled: Boolean,
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth(0.86f)
+            .background(
+                color = BrutalWhite,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = SurfaceGray,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 4.dp, vertical = 4.dp)
+    ) {
+        labels.forEachIndexed { pageIndex, pageLabel ->
+            val pageSelected = selectedPage == pageIndex
+            val tabColor =
+                if (pageSelected) BrutalCoral else GraphiteAccent
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = enabled) {
+                        onTabSelected(pageIndex)
+                    }
+                    .semantics {
+                        contentDescription = "$pageLabel 편집"
+                    }
+                    .padding(vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = icons[pageIndex],
+                    contentDescription = null,
+                    tint = tabColor,
+                    modifier = Modifier.size(16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = pageLabel,
+                    color = tabColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                Box(
+                    modifier = Modifier
+                        .height(2.dp)
+                        .fillMaxWidth(0.5f)
+                        .background(
+                            color =
+                                if (pageSelected) {
+                                    BrutalCoral
+                                } else {
+                                    Color.Transparent
+                                },
+                            shape = RoundedCornerShape(1.dp)
+                        )
+                )
+            }
+        }
     }
 }
 
@@ -2617,95 +2705,6 @@ fun DetailScreen(
                     modifier = Modifier.height(14.dp)
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(0.92f)
-                ) {
-                    customizationPageLabels.forEachIndexed { pageIndex, pageLabel ->
-                        val pageSelected =
-                            customizationPagerState.currentPage ==
-                                    pageIndex
-                        val tabColor =
-                            if (pageSelected) {
-                                BrutalCoral
-                            } else {
-                                GraphiteAccent
-                            }
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable(
-                                    enabled = controlsEnabled
-                                ) {
-                                    customizationPagerScope.launch {
-                                        customizationPagerState
-                                            .animateScrollToPage(pageIndex)
-                                    }
-                                }
-                                .semantics {
-                                    contentDescription =
-                                        "$pageLabel 편집"
-                                }
-                                .padding(vertical = 6.dp),
-                            horizontalAlignment =
-                                Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector =
-                                    customizationPageIcons[pageIndex],
-                                contentDescription = null,
-                                tint = tabColor,
-                                modifier = Modifier.size(16.dp)
-                            )
-
-                            Spacer(
-                                modifier = Modifier.height(1.dp)
-                            )
-
-                            Text(
-                                text = pageLabel,
-                                color = tabColor,
-                                fontSize = 11.sp,
-                                fontWeight =
-                                    FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Spacer(
-                                modifier = Modifier.height(4.dp)
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .height(2.dp)
-                                    .fillMaxWidth(0.5f)
-                                    .background(
-                                        color =
-                                            if (pageSelected) {
-                                                BrutalCoral
-                                            } else {
-                                                Color.Transparent
-                                            },
-                                        shape =
-                                            RoundedCornerShape(1.dp)
-                                    )
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(
-                    color = SurfaceGray,
-                    thickness = 1.dp,
-                    modifier = Modifier.fillMaxWidth(0.92f)
-                )
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
                 HorizontalPager(
                     state = customizationPagerState,
                     modifier = Modifier
@@ -3540,7 +3539,7 @@ fun DetailScreen(
                 }
 
                 Spacer(
-                    modifier = Modifier.height(24.dp)
+                    modifier = Modifier.height(96.dp)
                 )
             }
             }
@@ -4158,12 +4157,31 @@ fun DetailScreen(
             )
         }
 
+        if (postcard != null) {
+            EditorBottomTabBar(
+                selectedPage = customizationPagerState.currentPage,
+                labels = customizationPageLabels,
+                icons = customizationPageIcons,
+                enabled = controlsEnabled,
+                onTabSelected = { pageIndex ->
+                    customizationPagerScope.launch {
+                        customizationPagerState
+                            .animateScrollToPage(pageIndex)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 8.dp)
+            )
+        }
+
         SnackbarHost(
             hostState = textScaleSnackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 24.dp)
+                .padding(bottom = 64.dp)
         )
     }
 }
