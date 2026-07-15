@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,8 +32,8 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.BrutalYellow
 import com.postcardmemory.ui.theme.SoftGray
+import com.postcardmemory.ui.theme.SunsetGold
 
 enum class PostcardLayoutStyle(
     val label: String,
@@ -149,10 +150,15 @@ private fun LayoutOption(
             .background(
                 color =
                     if (selected) {
-                        BrutalYellow
+                        SunsetGold.copy(alpha = 0.16f)
                     } else {
                         BrutalWhite
                     },
+                shape = cardShape
+            )
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = if (selected) SunsetGold else Color.Transparent,
                 shape = cardShape
             )
             .clickable(

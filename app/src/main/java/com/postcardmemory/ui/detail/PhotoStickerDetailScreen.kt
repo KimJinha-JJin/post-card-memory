@@ -50,7 +50,7 @@ import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
-import com.postcardmemory.ui.theme.SunsetCoral
+import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
 import java.io.File
@@ -251,7 +251,7 @@ fun PhotoStickerPickerPanel(
                         )
                         .border(
                             width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) SunsetCoral else Color.Transparent,
+                            color = if (isSelected) SunsetGold else Color.Transparent,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))

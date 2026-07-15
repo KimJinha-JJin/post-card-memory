@@ -130,6 +130,7 @@ import com.postcardmemory.ui.components.PostcardTextFont
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
+import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GalleryPaperWhite
@@ -656,7 +657,7 @@ private fun EditorBottomTabBar(
         labels.forEachIndexed { pageIndex, pageLabel ->
             val pageSelected = selectedPage == pageIndex
             val tabColor =
-                if (pageSelected) BrutalCoral else GraphiteAccent
+                if (pageSelected) SunsetGold else GraphiteAccent
 
             Column(
                 modifier = Modifier
@@ -698,7 +699,7 @@ private fun EditorBottomTabBar(
                         .background(
                             color =
                                 if (pageSelected) {
-                                    BrutalCoral
+                                    SunsetGold
                                 } else {
                                     Color.Transparent
                                 },
@@ -3058,7 +3059,7 @@ fun DetailScreen(
                                     text = targetLabel,
                                     color =
                                         if (targetSelected) {
-                                            BrutalCoral
+                                            SunsetGold
                                         } else {
                                             GraphiteAccent
                                         },
@@ -3082,7 +3083,7 @@ fun DetailScreen(
                                         .background(
                                             color =
                                                 if (targetSelected) {
-                                                    BrutalCoral
+                                                    SunsetGold
                                                 } else {
                                                     Color.Transparent
                                                 },

@@ -17,7 +17,8 @@ val PaperField = Color(0xFFFAF4E9)   // 입력창·옵션 칩의 옅은 표면
 val PaperDivider = Color(0xFFDBCBB0)  // 경계선·구분선 전용
 val InkPrimary = Color(0xFF1A1324)   // 본문·주요 아이콘
 val InkSecondary = Color(0xFF5B5046) // 보조 텍스트·비활성·선택 채움
-val SunsetCoral = Color(0xFFFF7F8E)  // 선택 상태·주요 포인트
+val SunsetGold = Color(0xFF8C5F00)   // 선택 상태·활성 강조 (편집 UI)
+val SunsetCoral = Color(0xFFFF7F8E)  // 콘텐츠 팔레트·장식 포인트
 val DangerRed = Color(0xFFC0392B)    // 삭제·위험 행동
 
 /*

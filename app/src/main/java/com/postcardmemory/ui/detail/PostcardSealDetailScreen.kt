@@ -42,7 +42,7 @@ import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SealInkWhite
 import com.postcardmemory.ui.theme.SoftGray
-import com.postcardmemory.ui.theme.SunsetCoral
+import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.sealInkColors
 import kotlin.math.roundToInt
 
@@ -202,7 +202,7 @@ fun SealPickerPanel(
                         )
                         .border(
                             width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) SunsetCoral else Color.Transparent,
+                            color = if (isSelected) SunsetGold else Color.Transparent,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))
@@ -306,7 +306,7 @@ fun SealPickerPanel(
                         .border(
                             width = if (isColorSelected) 2.dp else 1.5.dp,
                             color = if (isColorSelected) {
-                                SunsetCoral
+                                SunsetGold
                             } else {
                                 BrutalBlack.copy(alpha = 0.35f)
                             },

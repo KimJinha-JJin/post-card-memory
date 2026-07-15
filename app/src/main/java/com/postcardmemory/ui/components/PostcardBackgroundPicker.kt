@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.PaperField
-import com.postcardmemory.ui.theme.SunsetCoral
+import com.postcardmemory.ui.theme.SunsetGold
 
 val postcardBackgroundPalette =
     listOf(
@@ -135,7 +135,7 @@ fun PostcardBackgroundColorPicker(
                             modifier = Modifier
                                 .size(16.dp)
                                 .background(
-                                    color = SunsetCoral,
+                                    color = SunsetGold,
                                     shape = CircleShape
                                 )
                                 .border(
@@ -216,7 +216,7 @@ fun PostcardBackgroundPatternPicker(
                             )
                             .border(
                                 width = if (selected) 2.dp else 0.dp,
-                                color = if (selected) SunsetCoral else Color.Transparent,
+                                color = if (selected) SunsetGold else Color.Transparent,
                                 shape = RoundedCornerShape(10.dp)
                             )
                             .clickable(
