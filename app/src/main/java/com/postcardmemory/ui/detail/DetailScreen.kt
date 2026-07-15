@@ -4146,22 +4146,28 @@ fun DetailScreen(
         }
 
         if (postcard != null) {
-            EditorBottomTabBar(
-                selectedPage = customizationPagerState.currentPage,
-                labels = customizationPageLabels,
-                icons = customizationPageIcons,
-                enabled = controlsEnabled,
-                onTabSelected = { pageIndex ->
-                    customizationPagerScope.launch {
-                        customizationPagerState
-                            .animateScrollToPage(pageIndex)
-                    }
-                },
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(ScreenBackgroundGray)
                     .navigationBarsPadding()
-                    .padding(bottom = 8.dp)
-            )
+                    .padding(top = 4.dp, bottom = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                EditorBottomTabBar(
+                    selectedPage = customizationPagerState.currentPage,
+                    labels = customizationPageLabels,
+                    icons = customizationPageIcons,
+                    enabled = controlsEnabled,
+                    onTabSelected = { pageIndex ->
+                        customizationPagerScope.launch {
+                            customizationPagerState
+                                .animateScrollToPage(pageIndex)
+                        }
+                    }
+                )
+            }
         }
 
         SnackbarHost(
