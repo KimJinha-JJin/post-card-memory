@@ -50,8 +50,8 @@ import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.GalleryDangerRed
+import com.postcardmemory.ui.theme.SunsetCoral
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
@@ -224,8 +224,8 @@ fun PhotoStickerPickerPanel(
                     onUndo = onUndoSticker,
                     onRedo = onRedoSticker,
                     enabled = enabled,
-                    undoContentDescription = "스티커 되돌리기",
-                    redoContentDescription = "스티커 다시 실행"
+                    undoContentDescription = "실행 취소",
+                    redoContentDescription = "다시 실행"
                 )
 
                 Text(
@@ -274,7 +274,7 @@ fun PhotoStickerPickerPanel(
                         )
                         .border(
                             width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) BrutalCoral else Color.Transparent,
+                            color = if (isSelected) SunsetCoral else Color.Transparent,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clip(RoundedCornerShape(10.dp))
@@ -377,8 +377,7 @@ fun PhotoStickerPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "이동·크기·회전·대칭·배경 제거·레이어 순서는 " +
-                        "위쪽 캔버스 바로 아래 도구막대에서 조절할 수 있어.",
+                text = "이동·크기·회전은 위쪽 도구막대에서 조절할 수 있어.",
                 color = BrutalBlack,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
@@ -388,7 +387,7 @@ fun PhotoStickerPickerPanel(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = errorMessage,
-                    color = BrutalCoral,
+                    color = GalleryDangerRed,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -442,7 +441,7 @@ fun PhotoStickerPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             EditorEmptyHint(
-                text = "갤러리 사진을 추가하면 포스트카드 위에서 바로 이동하고 크기를 조절할 수 있어."
+                text = "아직 추가한 스티커가 없어."
             )
         }
 

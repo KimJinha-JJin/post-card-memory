@@ -96,8 +96,8 @@ fun SealPickerPanel(
                     onUndo = onUndoSeal,
                     onRedo = onRedoSeal,
                     enabled = enabled,
-                    undoContentDescription = "도장 되돌리기",
-                    redoContentDescription = "도장 다시 실행"
+                    undoContentDescription = "실행 취소",
+                    redoContentDescription = "다시 실행"
                 )
 
                 Text(
@@ -183,7 +183,7 @@ fun SealPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             EditorEmptyHint(
-                text = "위에서 마음에 드는 도장을 눌러서 추가해봐."
+                text = "아직 추가한 도장이 없어."
             )
 
             return@Column
@@ -234,7 +234,7 @@ fun SealPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             EditorEmptyHint(
-                text = "추가한 도장을 눌러서 선택하면 여기서 꾸밀 수 있어."
+                text = "도장을 선택하면 편집 도구가 나와."
             )
 
             return@Column
@@ -261,7 +261,7 @@ fun SealPickerPanel(
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "이동은 미리보기에서 드래그하고, 크기·회전은 아래에서도 세밀하게 조절할 수 있어.",
+            text = "이동은 미리보기에서 드래그하고, 크기·회전은 아래에서 조절해봐.",
             color = BrutalBlack,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium

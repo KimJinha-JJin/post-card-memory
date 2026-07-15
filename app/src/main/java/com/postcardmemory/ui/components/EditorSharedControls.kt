@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
-import com.postcardmemory.ui.theme.SoftGray
 
 @Composable
 fun EditorUndoRedoButtons(
@@ -52,7 +52,8 @@ fun EditorUndoRedoButtons(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Undo,
                 contentDescription = undoContentDescription,
-                tint = if (canUndo) BrutalBlack else SoftGray
+                tint = if (canUndo) BrutalBlack else GraphiteAccent,
+                modifier = Modifier.size(18.dp)
             )
         }
 
@@ -63,7 +64,8 @@ fun EditorUndoRedoButtons(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Redo,
                 contentDescription = redoContentDescription,
-                tint = if (canRedo) BrutalBlack else SoftGray
+                tint = if (canRedo) BrutalBlack else GraphiteAccent,
+                modifier = Modifier.size(18.dp)
             )
         }
     }
