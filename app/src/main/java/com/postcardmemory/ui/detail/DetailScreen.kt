@@ -770,18 +770,7 @@ private fun EditorBottomTabBar(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth(0.86f)
-            .background(
-                color = BrutalWhite,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .border(
-                width = 1.dp,
-                color = SurfaceGray,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(horizontal = 4.dp, vertical = 4.dp)
+        modifier = modifier.fillMaxWidth(0.86f)
     ) {
         labels.forEachIndexed { pageIndex, pageLabel ->
             val pageSelected = selectedPage == pageIndex
@@ -791,7 +780,6 @@ private fun EditorBottomTabBar(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
                     .clickable(enabled = enabled) {
                         onTabSelected(pageIndex)
                     }
