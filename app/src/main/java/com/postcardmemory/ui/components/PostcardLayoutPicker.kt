@@ -129,18 +129,7 @@ fun PostcardLayoutPicker(
         }
 
         Spacer(
-            modifier = Modifier.height(4.dp)
-        )
-
-        Text(
-            text = "배치를 누르면 위 엽서에서 바로 확인할 수 있어.",
-            color = BrutalBlack,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(
-            modifier = Modifier.height(14.dp)
+            modifier = Modifier.height(12.dp)
         )
 
         Row(

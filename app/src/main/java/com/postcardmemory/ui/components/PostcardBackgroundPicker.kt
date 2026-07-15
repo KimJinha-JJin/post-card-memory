@@ -95,17 +95,7 @@ fun PostcardBackgroundColorPicker(
         )
 
         Spacer(
-            modifier = Modifier.height(8.dp)
-        )
-
-        Text(
-            text = "기본 색상 중에서 원하는 배경색을 골라봐.",
-            color = BrutalBlack,
-            fontSize = 12.sp
-        )
-
-        Spacer(
-            modifier = Modifier.height(14.dp)
+            modifier = Modifier.height(12.dp)
         )
 
         Row(
@@ -193,17 +183,7 @@ fun PostcardBackgroundPatternPicker(
         )
 
         Spacer(
-            modifier = Modifier.height(8.dp)
-        )
-
-        Text(
-            text = "색상 위에 얹을 무늬를 골라봐. 패턴 없음도 언제든 선택할 수 있어.",
-            color = BrutalBlack,
-            fontSize = 12.sp
-        )
-
-        Spacer(
-            modifier = Modifier.height(14.dp)
+            modifier = Modifier.height(12.dp)
         )
 
         Row(

@@ -13,6 +13,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,8 +45,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -62,7 +61,6 @@ import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -70,8 +68,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -92,7 +90,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -105,12 +102,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -151,6 +145,11 @@ private enum class StickerEditMode {
     Move,
     Scale,
     Rotate
+}
+
+private enum class TextScaleTarget {
+    Message,
+    Date
 }
 
 private fun clampStickerOffset(
@@ -382,108 +381,19 @@ private fun createSealOverlaysForExport(
     }
 }
 
+/**
+ * 사진·배경·텍스트 패널이 공유하는 퍼센트 조절 슬라이더.
+ *
+ * 라벨과 현재값을 한 줄에 두고 그 아래 얇은 EditorSlider만 둔다. 숫자
+ * 직접 입력창과 최소·최대 범위 안내 문구는 없앴다. 드래그 중에는 로컬
+ * 값을 보여 주고, 손을 떼면 외부 percent(저장 결과)를 그대로 따른다.
+ * onPreviewPercentChanged·onPercentConfirmed 계약은 기존 TextSizeControl과
+ * 동일해 미리보기·저장·Undo 스냅샷 로직이 그대로 유지된다.
+ */
 @Composable
-private fun DetailDrawer(
-    title: String,
-    summary: String,
-    expanded: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    Column(
-        modifier = modifier
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color =
-                            if (expanded) {
-                                NeutralLight
-                            } else {
-                                BrutalWhite
-                            },
-                        shape =
-                            RoundedCornerShape(
-                                16.dp
-                            )
-                    )
-                    .clickable(
-                        enabled = enabled,
-                        onClick = onClick
-                    )
-                    .padding(
-                        horizontal = 16.dp,
-                        vertical = 15.dp
-                    ),
-                verticalAlignment =
-                    Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = title,
-                        color = BrutalBlack,
-                        fontSize = 14.sp,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-
-                    Text(
-                        text = "현재 선택: $summary",
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight =
-                            FontWeight.Normal
-                    )
-                }
-
-                Text(
-                    text =
-                        if (expanded) {
-                            "▼"
-                        } else {
-                            "▶"
-                        },
-                    color = BrutalBlack,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    modifier =
-                        Modifier.padding(start = 12.dp)
-                )
-            }
-        }
-
-        AnimatedVisibility(
-            visible = expanded,
-            enter =
-                expandVertically() +
-                        fadeIn(),
-            exit =
-                shrinkVertically() +
-                        fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-            ) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
-private fun TextSizeControl(
+private fun EditorPercentSlider(
     label: String,
-    initialPercent: Int,
+    percent: Int,
     minPercent: Int,
     maxPercent: Int,
     enabled: Boolean,
@@ -491,32 +401,15 @@ private fun TextSizeControl(
     onPercentConfirmed: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var currentPercent by remember {
-        mutableIntStateOf(initialPercent)
-    }
-    var textValue by remember {
-        mutableStateOf(initialPercent.toString())
-    }
-    val focusManager = LocalFocusManager.current
-
-    fun confirmTextValue() {
-        val parsedPercent =
-            textValue.toIntOrNull()
-                ?: currentPercent
-        val clampedPercent =
-            parsedPercent.coerceIn(minPercent, maxPercent)
-
-        currentPercent = clampedPercent
-        textValue = clampedPercent.toString()
-        onPercentConfirmed(clampedPercent)
-    }
+    var isDragging by remember { mutableStateOf(false) }
+    var draggingPercent by remember { mutableIntStateOf(percent) }
+    val shownPercent = if (isDragging) draggingPercent else percent
 
     Column(
         modifier = modifier
     ) {
         Row(
-            verticalAlignment =
-                Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = label,
@@ -526,58 +419,11 @@ private fun TextSizeControl(
                 modifier = Modifier.weight(1f)
             )
 
-            OutlinedTextField(
-                value = textValue,
-                onValueChange = { newValue ->
-                    if (
-                        newValue.isEmpty() ||
-                        (
-                            newValue.length <= 3 &&
-                                    newValue.all { it.isDigit() }
-                            )
-                    ) {
-                        textValue = newValue
-                    }
-                },
-                enabled = enabled,
-                singleLine = true,
-                keyboardOptions =
-                    KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done
-                    ),
-                keyboardActions =
-                    KeyboardActions(
-                        onDone = {
-                            confirmTextValue()
-                            focusManager.clearFocus()
-                        }
-                    ),
-                shape = RoundedCornerShape(10.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    disabledBorderColor = Color.Transparent,
-                    focusedContainerColor = SoftGray,
-                    unfocusedContainerColor = SoftGray,
-                    disabledContainerColor = SoftGray.copy(alpha = 0.6f)
-                ),
-                modifier = Modifier
-                    .width(76.dp)
-                    .onFocusChanged { focusState ->
-                        if (!focusState.isFocused) {
-                            confirmTextValue()
-                        }
-                    }
-            )
-
             Text(
-                text = "%",
-                color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                modifier =
-                    Modifier.padding(start = 6.dp)
+                text = "$shownPercent%",
+                color = GraphiteAccent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
 
@@ -586,18 +432,19 @@ private fun TextSizeControl(
         )
 
         EditorSlider(
-            value = currentPercent.toFloat(),
+            value = shownPercent.toFloat(),
             onValueChange = { newValue ->
                 val snappedPercent =
                     ((newValue / 5f).roundToInt() * 5)
                         .coerceIn(minPercent, maxPercent)
 
-                currentPercent = snappedPercent
-                textValue = snappedPercent.toString()
+                isDragging = true
+                draggingPercent = snappedPercent
                 onPreviewPercentChanged(snappedPercent)
             },
             onValueChangeFinished = {
-                onPercentConfirmed(currentPercent)
+                isDragging = false
+                onPercentConfirmed(draggingPercent)
             },
             valueRange =
                 minPercent.toFloat()..maxPercent.toFloat(),
@@ -606,12 +453,46 @@ private fun TextSizeControl(
             enabled = enabled,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
+
+/**
+ * 세 패널의 보조 행동(사진 바꾸기·색 가져오기·직접 고르기·문구 편집)에
+ * 쓰는 가벼운 외곽선 버튼. 주요 선택지와 달리 검은 풀폭 버튼으로 강조하지
+ * 않고, 아이콘+라벨만 얇은 테두리로 보여 준다.
+ */
+@Composable
+private fun EditorSecondaryButton(
+    text: String,
+    icon: ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, SurfaceGray),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = BrutalBlack
+        ),
+        modifier = modifier
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+
+        Spacer(
+            modifier = Modifier.size(6.dp)
+        )
 
         Text(
-            text = "$minPercent% ~ $maxPercent%",
-            color = BrutalBlack,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
+            text = text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
@@ -1162,6 +1043,10 @@ fun DetailScreen(
 
     var customColorDrawerExpanded by rememberSaveable {
         mutableStateOf(false)
+    }
+
+    var textScaleTarget by rememberSaveable {
+        mutableStateOf(TextScaleTarget.Message)
     }
 
     val customizationPagerState = rememberPagerState(
@@ -2740,9 +2625,9 @@ fun DetailScreen(
                         selectedLayout ==
                         PostcardLayoutStyle.POLAROID
                     ) {
-                        TextSizeControl(
-                            label = "폴라로이드 사진 크기",
-                            initialPercent =
+                        EditorPercentSlider(
+                            label = "사진 크기",
+                            percent =
                                 polaroidPhotoScalePercent,
                             minPercent = 75,
                             maxPercent = 105,
@@ -2774,14 +2659,9 @@ fun DetailScreen(
                             selectedLayout ==
                                     PostcardLayoutStyle.TAPED_FILM
 
-                        TextSizeControl(
-                            label =
-                                if (isTapedFilm) {
-                                    "필름 사진 크기"
-                                } else {
-                                    "우표 사진 크기"
-                                },
-                            initialPercent =
+                        EditorPercentSlider(
+                            label = "사진 크기",
+                            percent =
                                 stampPhotoScalePercent,
                             minPercent = if (isTapedFilm) 85 else 70,
                             maxPercent = if (isTapedFilm) 115 else 130,
@@ -2814,22 +2694,9 @@ fun DetailScreen(
                         modifier = Modifier.height(14.dp)
                     )
 
-                    Text(
-                        text =
-                            "사진 가장자리를 흐리게 만들어서 " +
-                                    "부드러운 느낌을 줘.",
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    TextSizeControl(
-                        label = "흐림 정도",
-                        initialPercent =
+                    EditorPercentSlider(
+                        label = "가장자리 흐림",
+                        percent =
                             photoEdgeBlurPercent,
                         minPercent = 0,
                         maxPercent = 100,
@@ -2853,41 +2720,15 @@ fun DetailScreen(
                         modifier = Modifier.height(14.dp)
                     )
 
-                    Text(
-                        text =
-                            "배경과 글귀, 스티커는 유지하고 " +
-                                    "중심 사진만 바꿔.",
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    Button(
+                    EditorSecondaryButton(
+                        text = "사진 바꾸기",
+                        icon = Icons.Default.Edit,
+                        enabled = controlsEnabled,
                         onClick = {
                             showPhotoSourceMenu = true
                         },
-                        enabled = controlsEnabled,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = GraphiteAccent,
-                            contentColor = BrutalWhite
-                        ),
-                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null
-                        )
-                        Text(
-                            text = "  사진 바꾸기",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    )
                             }
                             }
                         }
@@ -2916,64 +2757,93 @@ fun DetailScreen(
                     )
 
                     Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
-                    Text(
-                        text =
-                            "사진 속 색을 뽑아서 배경색으로 써봐.",
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(
                         modifier = Modifier.height(8.dp)
                     )
 
-                    Button(
+                    TextButton(
                         onClick = {
-                            viewModel
-                                .extractBackgroundColorsFromPhoto()
+                            customColorDrawerExpanded =
+                                !customColorDrawerExpanded
                         },
+                        enabled = controlsEnabled,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = BrutalBlack
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(
+                            modifier = Modifier.size(6.dp)
+                        )
+
+                        Text(
+                            text =
+                                if (customColorDrawerExpanded) {
+                                    "직접 고르기 닫기"
+                                } else {
+                                    "직접 고르기"
+                                },
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = customColorDrawerExpanded,
+                        enter =
+                            expandVertically() + fadeIn(),
+                        exit =
+                            shrinkVertically() + fadeOut()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            PostcardCustomColorPicker(
+                                selectedColorArgb =
+                                    pc.backgroundColorArgb,
+                                enabled = controlsEnabled,
+                                onColorSelected = { colorArgb ->
+                                    viewModel.updateBackgroundColor(
+                                        colorArgb
+                                    )
+                                },
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    Spacer(
+                        modifier = Modifier.height(14.dp)
+                    )
+
+                    EditorSecondaryButton(
+                        text =
+                            if (
+                                photoColorExtractionState is
+                                        PhotoColorExtractionState.Extracting
+                            ) {
+                                "색 추출 중..."
+                            } else {
+                                "사진에서 색 가져오기"
+                            },
+                        icon = Icons.Default.Palette,
                         enabled =
                             controlsEnabled &&
                                     photoColorExtractionState !is
                                             PhotoColorExtractionState.Extracting,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = GraphiteAccent,
-                            contentColor = BrutalWhite
-                        ),
-                        shape = RoundedCornerShape(14.dp),
+                        onClick = {
+                            viewModel
+                                .extractBackgroundColorsFromPhoto()
+                        },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (
-                            photoColorExtractionState is
-                                    PhotoColorExtractionState.Extracting
-                        ) {
-                            CircularProgressIndicator(
-                                color = BrutalWhite,
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(18.dp)
-                            )
-
-                            Spacer(
-                                modifier = Modifier.size(10.dp)
-                            )
-
-                            Text(
-                                text = "색 추출 중...",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        } else {
-                            Text(
-                                text = "사진에서 색 추출하기",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
+                    )
 
                     (
                             photoColorExtractionState as?
@@ -3028,7 +2898,7 @@ fun DetailScreen(
 
                         Text(
                             text = errorState.message,
-                            color = BrutalCoral,
+                            color = GalleryDangerRed,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -3057,9 +2927,9 @@ fun DetailScreen(
                         modifier = Modifier.height(14.dp)
                     )
 
-                    TextSizeControl(
+                    EditorPercentSlider(
                         label = "패턴 세기",
-                        initialPercent =
+                        percent =
                             backgroundPatternDensityPercent,
                         minPercent = 70,
                         maxPercent = 150,
@@ -3078,44 +2948,6 @@ fun DetailScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
-
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
-                DetailDrawer(
-                    title = "기타 색상",
-                    summary =
-                        "#" +
-                                (
-                                        pc.backgroundColorArgb and
-                                                0xFFFFFFL
-                                        )
-                                    .toString(16)
-                                    .uppercase()
-                                    .padStart(6, '0'),
-                    expanded = customColorDrawerExpanded,
-                    enabled = controlsEnabled,
-                    onClick = {
-                        customColorDrawerExpanded =
-                            !customColorDrawerExpanded
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth()
-                ) {
-                    PostcardCustomColorPicker(
-                        selectedColorArgb =
-                            pc.backgroundColorArgb,
-                        enabled = controlsEnabled,
-                        onColorSelected = { colorArgb ->
-                            viewModel.updateBackgroundColor(
-                                colorArgb
-                            )
-                        },
-                        modifier =
-                            Modifier.fillMaxWidth()
-                    )
-                }
                             }
                             }
                         }
@@ -3130,90 +2962,178 @@ fun DetailScreen(
                                 modifier =
                                     Modifier.fillMaxWidth(0.92f)
                             ) {
-                    Text(
-                        text =
-                            if (pc.message.isBlank()) {
-                                "아직 글귀가 없어. 하고 싶은 말을 적어봐."
-                            } else {
-                                pc.message
-                            },
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    Button(
-                        onClick = {
-                            messageDraft = pc.message
-                            showMessageDialog = true
-                        },
-                        enabled = controlsEnabled,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = GraphiteAccent,
-                            contentColor = BrutalWhite
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null
-                        )
                         Text(
-                            text = "  문구 편집",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
+                            text =
+                                if (pc.message.isBlank()) {
+                                    "글귀가 비어 있어."
+                                } else {
+                                    pc.message
+                                },
+                            color =
+                                if (pc.message.isBlank()) {
+                                    GraphiteAccent
+                                } else {
+                                    BrutalBlack
+                                },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
+
+                        TextButton(
+                            onClick = {
+                                messageDraft = pc.message
+                                showMessageDialog = true
+                            },
+                            enabled = controlsEnabled,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = BrutalBlack
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+
+                            Spacer(
+                                modifier = Modifier.size(6.dp)
+                            )
+
+                            Text(
+                                text = "편집",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
 
                     Spacer(
                         modifier = Modifier.height(14.dp)
                     )
 
-                    TextSizeControl(
-                        label = "글귀 크기",
-                        initialPercent = messageTextScalePercent,
-                        minPercent = 60,
-                        maxPercent = 140,
-                        enabled = controlsEnabled,
-                        onPreviewPercentChanged = { percent ->
-                            viewModel.setMessageTextScalePreview(
-                                percent / 100f
-                            )
-                        },
-                        onPercentConfirmed = { percent ->
-                            viewModel.saveMessageTextScale(
-                                percent / 100f
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = "조절 대상",
+                        color = BrutalBlack,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
 
                     Spacer(
-                        modifier = Modifier.height(14.dp)
+                        modifier = Modifier.height(8.dp)
                     )
 
-                    TextSizeControl(
-                        label = "날짜 크기",
-                        initialPercent = dateTextScalePercent,
+                    Row(
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            TextScaleTarget.Message to "글귀",
+                            TextScaleTarget.Date to "날짜"
+                        ).forEach { (target, targetLabel) ->
+                            val targetSelected =
+                                textScaleTarget == target
+
+                            Column(
+                                modifier = Modifier
+                                    .clickable(
+                                        enabled = controlsEnabled
+                                    ) {
+                                        textScaleTarget = target
+                                    }
+                                    .padding(
+                                        horizontal = 6.dp,
+                                        vertical = 4.dp
+                                    ),
+                                horizontalAlignment =
+                                    Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = targetLabel,
+                                    color =
+                                        if (targetSelected) {
+                                            BrutalCoral
+                                        } else {
+                                            GraphiteAccent
+                                        },
+                                    fontSize = 14.sp,
+                                    fontWeight =
+                                        if (targetSelected) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Medium
+                                        }
+                                )
+
+                                Spacer(
+                                    modifier = Modifier.height(3.dp)
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .height(2.dp)
+                                        .width(28.dp)
+                                        .background(
+                                            color =
+                                                if (targetSelected) {
+                                                    BrutalCoral
+                                                } else {
+                                                    Color.Transparent
+                                                },
+                                            shape =
+                                                RoundedCornerShape(1.dp)
+                                        )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(
+                        modifier = Modifier.height(12.dp)
+                    )
+
+                    val messageTargetSelected =
+                        textScaleTarget == TextScaleTarget.Message
+
+                    EditorPercentSlider(
+                        label = "크기",
+                        percent =
+                            if (messageTargetSelected) {
+                                messageTextScalePercent
+                            } else {
+                                dateTextScalePercent
+                            },
                         minPercent = 60,
-                        maxPercent = 180,
+                        maxPercent =
+                            if (messageTargetSelected) 140 else 180,
                         enabled = controlsEnabled,
                         onPreviewPercentChanged = { percent ->
-                            viewModel.setDateTextScalePreview(
-                                percent / 100f
-                            )
+                            if (messageTargetSelected) {
+                                viewModel.setMessageTextScalePreview(
+                                    percent / 100f
+                                )
+                            } else {
+                                viewModel.setDateTextScalePreview(
+                                    percent / 100f
+                                )
+                            }
                         },
                         onPercentConfirmed = { percent ->
-                            viewModel.saveDateTextScale(
-                                percent / 100f
-                            )
+                            if (messageTargetSelected) {
+                                viewModel.saveMessageTextScale(
+                                    percent / 100f
+                                )
+                            } else {
+                                viewModel.saveDateTextScale(
+                                    percent / 100f
+                                )
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
