@@ -19,8 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,17 +31,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorEmptyHint
+import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
+import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SealInkWhite
 import com.postcardmemory.ui.theme.SoftGray
 import com.postcardmemory.ui.theme.SunsetCoral
 import com.postcardmemory.ui.theme.sealInkColors
+import kotlin.math.roundToInt
 
 @Composable
 fun SealPickerPanel(
@@ -68,11 +69,6 @@ fun SealPickerPanel(
 
     Column(
         modifier = modifier
-            .background(
-                color = NeutralLight,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -80,7 +76,7 @@ fun SealPickerPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "도장 꾸미기",
+                text = "도장",
                 color = BrutalBlack,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
@@ -102,32 +98,17 @@ fun SealPickerPanel(
 
                 Text(
                     text = "${photoSeals.size}개",
-                    color = BrutalBlack,
+                    color = GraphiteAccent,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .background(
-                            color = BrutalWhite,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "우편 소인 느낌의 도장을 골라서 포스트카드 위에 찍어봐.",
-            color = BrutalBlack,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Text(
-            text = "도장 종류",
+            text = "새 도장",
             color = BrutalBlack,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
@@ -191,6 +172,15 @@ fun SealPickerPanel(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        Text(
+            text = "추가한 도장",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -234,47 +224,42 @@ fun SealPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             EditorEmptyHint(
-                text = "도장을 선택하면 편집 도구가 나와."
+                text = "편집할 도장을 선택해."
             )
 
             return@Column
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(BrutalBlack.copy(alpha = 0.15f))
+        Text(
+            text = "선택한 도장",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "선택된 도장",
-            color = BrutalBlack,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "크기",
+                color = BrutalBlack,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "이동은 미리보기에서 드래그하고, 크기·회전은 아래에서 조절해봐.",
-            color = BrutalBlack,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Text(
-            text = "크기",
-            color = BrutalBlack,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+            Text(
+                text = "${(selectedSeal.scale * 100f).roundToInt()}%",
+                color = GraphiteAccent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -336,79 +321,53 @@ fun SealPickerPanel(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        Text(
-            text = "회전",
-            color = BrutalBlack,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "회전",
+                color = BrutalBlack,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            Text(
+                text = "${selectedSeal.rotationDegrees.roundToInt()}°",
+                color = GraphiteAccent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Button(
-                onClick = {
-                    onRotateBy(selectedSeal.id, -15f)
-                },
-                enabled = enabled,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SoftGray,
-                    contentColor = BrutalBlack
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = "왼쪽으로 15°",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            EditorOutlineButton(
+                text = "−15°",
+                onClick = { onRotateBy(selectedSeal.id, -15f) },
+                enabled = enabled
+            )
 
-            Button(
-                onClick = {
-                    onRotateBy(selectedSeal.id, 15f)
-                },
-                enabled = enabled,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SoftGray,
-                    contentColor = BrutalBlack
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = "오른쪽으로 15°",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            EditorOutlineButton(
+                text = "+15°",
+                onClick = { onRotateBy(selectedSeal.id, 15f) },
+                enabled = enabled
+            )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        Button(
+        EditorOutlineButton(
+            text = "삭제",
+            icon = Icons.Default.Delete,
             onClick = { onDeleteSeal(selectedSeal.id) },
             enabled = enabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = GalleryDangerRed.copy(alpha = 0.16f),
-                contentColor = GalleryDangerRed
-            ),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = null,
-                tint = GalleryDangerRed
-            )
-            Text(
-                text = "  선택한 도장 삭제",
-                color = GalleryDangerRed,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+            contentColor = GalleryDangerRed,
+            borderColor = GalleryDangerRed
+        )
     }
 }

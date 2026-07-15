@@ -25,8 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,15 +45,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.postcardmemory.ui.components.EditorEmptyHint
+import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.SunsetCoral
-import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.SoftGray
 import java.io.File
 import java.util.UUID
 
@@ -196,11 +193,6 @@ fun PhotoStickerPickerPanel(
 
     Column(
         modifier = modifier
-            .background(
-                color = NeutralLight,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -208,7 +200,7 @@ fun PhotoStickerPickerPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "스티커 사진",
+                text = "스티커",
                 color = BrutalBlack,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
@@ -230,29 +222,14 @@ fun PhotoStickerPickerPanel(
 
                 Text(
                     text = "${photoStickers.size}장",
-                    color = BrutalBlack,
+                    color = GraphiteAccent,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .background(
-                            color = BrutalWhite,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "갤러리 사진을 골라서 포스트카드 위에 바로 올려봐.",
-            color = BrutalBlack,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 스티커 목록 (가로 스크롤)
         Row(
@@ -332,43 +309,12 @@ fun PhotoStickerPickerPanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Button(
-            onClick = {
-                showPhotoSourceMenu = true
-            },
-            enabled = enabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = GraphiteAccent,
-                contentColor = BrutalWhite
-            ),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = null)
-            Text(
-                text = "  사진 추가",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
         // 선택된 스티커 조작 영역
         if (selectedSticker != null) {
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(BrutalBlack.copy(alpha = 0.15f))
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "선택된 스티커",
+                text = "선택한 스티커",
                 color = BrutalBlack,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
@@ -376,63 +322,32 @@ fun PhotoStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = "이동·크기·회전은 위쪽 도구막대에서 조절할 수 있어.",
-                color = BrutalBlack,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                EditorOutlineButton(
+                    text = "복제",
+                    onClick = { onDuplicateSticker(selectedSticker.id) },
+                    enabled = enabled
+                )
+
+                EditorOutlineButton(
+                    text = "삭제",
+                    icon = Icons.Default.Delete,
+                    onClick = { onDeleteSticker(selectedSticker.id) },
+                    enabled = enabled,
+                    contentColor = GalleryDangerRed,
+                    borderColor = GalleryDangerRed
+                )
+            }
 
             backgroundRemovalError?.let { errorMessage ->
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = errorMessage,
                     color = GalleryDangerRed,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Button(
-                onClick = { onDuplicateSticker(selectedSticker.id) },
-                enabled = enabled,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SoftGray,
-                    contentColor = BrutalBlack
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "선택한 스티커 복제",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = { onDeleteSticker(selectedSticker.id) },
-                enabled = enabled,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = GalleryDangerRed.copy(alpha = 0.16f),
-                    contentColor = GalleryDangerRed
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = GalleryDangerRed
-                )
-                Text(
-                    text = "  선택한 스티커 삭제",
-                    color = GalleryDangerRed,
-                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
