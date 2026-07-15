@@ -69,6 +69,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -135,8 +136,13 @@ import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.InkPrimary
+import com.postcardmemory.ui.theme.InkSecondary
+import com.postcardmemory.ui.theme.PaperDivider
+import com.postcardmemory.ui.theme.PaperField
+import com.postcardmemory.ui.theme.PaperSurface
+import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.ScreenBackgroundGray
-import com.postcardmemory.ui.theme.SoftGray
 import com.postcardmemory.ui.theme.SurfaceGray
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardRenderSpec
@@ -3656,10 +3662,15 @@ fun DetailScreen(
             onDismissRequest = {
                 showMessageDialog = false
             },
+            containerColor = PaperSurface,
+            titleContentColor = InkPrimary,
+            textContentColor = InkPrimary,
+            shape = RoundedCornerShape(20.dp),
             title = {
                 Text(
                     text = "글귀 남기기",
-                    color = BrutalBlack,
+                    color = InkPrimary,
+                    fontSize = 18.sp,
                     fontWeight =
                         FontWeight.SemiBold
                 )
@@ -3668,8 +3679,8 @@ fun DetailScreen(
                 Column {
                     Text(
                         text =
-                            "이 사진과 함께 기억하고 싶은 말을 적어봐.",
-                        color = BrutalBlack,
+                            "기억하고 싶은 말을 적어봐.",
+                        color = InkSecondary,
                         fontSize = 14.sp,
                         modifier =
                             Modifier.padding(
@@ -3689,11 +3700,29 @@ fun DetailScreen(
                         },
                         placeholder = {
                             Text(
-                                "오늘의 순간을 한 줄로 남겨봐"
+                                "오늘의 순간을 남겨봐"
                             )
                         },
                         minLines = 3,
                         maxLines = 5,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = PaperField,
+                            unfocusedContainerColor = PaperField,
+                            disabledContainerColor =
+                                PaperField.copy(alpha = 0.6f),
+                            focusedBorderColor = SunsetGold,
+                            unfocusedBorderColor = PaperDivider,
+                            disabledBorderColor =
+                                PaperDivider.copy(alpha = 0.6f),
+                            focusedLabelColor = SunsetGold,
+                            unfocusedLabelColor = InkSecondary,
+                            focusedTextColor = InkPrimary,
+                            unfocusedTextColor = InkPrimary,
+                            focusedPlaceholderColor = InkSecondary,
+                            unfocusedPlaceholderColor = InkSecondary,
+                            cursorColor = SunsetGold
+                        ),
                         modifier =
                             Modifier.fillMaxWidth()
                     )
@@ -3701,9 +3730,9 @@ fun DetailScreen(
                     Text(
                         text =
                             "${messageDraft.length} / 120",
-                        color = BrutalBlack,
+                        color = InkSecondary,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.End,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3712,16 +3741,19 @@ fun DetailScreen(
 
                     Text(
                         text =
-                            "글귀를 모두 지운 뒤 저장하면 기존 글귀가 삭제돼.",
-                        color = BrutalBlack,
+                            "글귀를 비우고 저장하면 기존 글귀가 삭제돼.",
+                        color = InkSecondary,
                         fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(top = 12.dp)
                             .background(
-                                color = SoftGray,
+                                color =
+                                    PaperTray.copy(alpha = 0.65f),
                                 shape =
                                     RoundedCornerShape(
-                                        10.dp
+                                        12.dp
                                     )
                             )
                             .padding(10.dp)
@@ -3740,9 +3772,9 @@ fun DetailScreen(
                 ) {
                     Text(
                         text = "저장",
-                        color = BrutalBlack,
+                        color = SunsetGold,
                         fontWeight =
-                            FontWeight.SemiBold
+                            FontWeight.Bold
                     )
                 }
             },
@@ -3754,7 +3786,8 @@ fun DetailScreen(
                 ) {
                     Text(
                         text = "취소",
-                        color = BrutalBlack
+                        color = InkSecondary,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
