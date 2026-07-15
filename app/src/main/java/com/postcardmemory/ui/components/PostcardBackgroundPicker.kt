@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,36 +107,48 @@ fun PostcardBackgroundColorPicker(
                     rememberScrollState()
                 ),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             postcardBackgroundPalette.forEach { colorArgb ->
                 val selected =
                     selectedColorArgb == colorArgb
 
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clickable(
-                            enabled = enabled
-                        ) {
-                            onColorSelected(colorArgb)
-                        },
-                    contentAlignment = Alignment.Center
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable(
+                        enabled = enabled
+                    ) {
+                        onColorSelected(colorArgb)
+                    }
                 ) {
                     Box(
+                        modifier = Modifier.size(44.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(
+                                    color = Color(colorArgb),
+                                    shape = CircleShape
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = PaperDivider,
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+
+                    Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(5.dp)
                             .background(
-                                color = Color(colorArgb),
-                                shape = CircleShape
-                            )
-                            .border(
-                                width = if (selected) 2.dp else 1.dp,
                                 color =
                                     if (selected) {
                                         SunsetGold
                                     } else {
-                                        PaperDivider
+                                        Color.Transparent
                                     },
                                 shape = CircleShape
                             )
@@ -209,11 +222,6 @@ fun PostcardBackgroundPatternPicker(
                                     },
                                 shape = RoundedCornerShape(10.dp)
                             )
-                            .border(
-                                width = if (selected) 2.dp else 0.dp,
-                                color = if (selected) SunsetGold else Color.Transparent,
-                                shape = RoundedCornerShape(10.dp)
-                            )
                             .clickable(
                                 enabled = enabled
                             ) {
@@ -254,6 +262,25 @@ fun PostcardBackgroundPatternPicker(
                             } else {
                                 FontWeight.Medium
                             }
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .height(2.dp)
+                            .width(24.dp)
+                            .background(
+                                color =
+                                    if (selected) {
+                                        SunsetGold
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                shape = RoundedCornerShape(1.dp)
+                            )
                     )
                 }
             }

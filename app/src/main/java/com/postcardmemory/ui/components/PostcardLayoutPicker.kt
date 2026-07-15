@@ -125,8 +125,8 @@ private fun LayoutOption(
                 shape = cardShape
             )
             .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) SunsetGold else PaperDivider,
+                width = 1.dp,
+                color = PaperDivider,
                 shape = cardShape
             )
             .clickable(
@@ -147,7 +147,7 @@ private fun LayoutOption(
                 if (selected) {
                     FontWeight.Bold
                 } else {
-                    FontWeight.SemiBold
+                    FontWeight.Medium
                 },
             textAlign = TextAlign.Center
         )

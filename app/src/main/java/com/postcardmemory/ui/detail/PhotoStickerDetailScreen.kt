@@ -7,7 +7,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -237,42 +237,53 @@ fun PhotoStickerPickerPanel(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             photoStickers.forEach { sticker ->
                 val isSelected = sticker.id == selectedStickerId
 
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(
-                            color = BrutalWhite,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .border(
-                            width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) SunsetGold else Color.Transparent,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = enabled) {
-                            onSelectSticker(sticker.id)
-                        }
-                        .padding(3.dp),
-                    contentAlignment = Alignment.Center
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    AsyncImage(
-                        model = sticker.displayedUri,
-                        contentDescription = null,
-                        contentScale =
-                            if (sticker.isBackgroundRemoved) {
-                                ContentScale.Fit
-                            } else {
-                                ContentScale.Crop
-                            },
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(8.dp))
+                            .size(56.dp)
+                            .background(
+                                color = BrutalWhite,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = enabled) {
+                                onSelectSticker(sticker.id)
+                            }
+                            .padding(3.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = sticker.displayedUri,
+                            contentDescription = null,
+                            contentScale =
+                                if (sticker.isBackgroundRemoved) {
+                                    ContentScale.Fit
+                                } else {
+                                    ContentScale.Crop
+                                },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .height(2.dp)
+                            .width(24.dp)
+                            .background(
+                                color = if (isSelected) SunsetGold else Color.Transparent,
+                                shape = RoundedCornerShape(1.dp)
+                            )
                     )
                 }
             }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -186,35 +187,46 @@ fun SealPickerPanel(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             photoSeals.forEach { seal ->
                 val isSelected = seal.id == selectedSealId
                 val isWhiteInk =
                     (seal.colorArgb == (SealInkWhite.toArgb().toLong() and 0xFFFFFFFFL))
 
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(
-                            color = if (isWhiteInk) NeutralLight else BrutalWhite,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .border(
-                            width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) SunsetGold else Color.Transparent,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = enabled) {
-                            onSelectSeal(seal.id)
-                        }
-                        .padding(6.dp)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    SealPreviewContent(
-                        type = seal.type,
-                        color = Color(seal.colorArgb),
-                        modifier = Modifier.fillMaxSize()
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                color = if (isWhiteInk) NeutralLight else BrutalWhite,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = enabled) {
+                                onSelectSeal(seal.id)
+                            }
+                            .padding(6.dp)
+                    ) {
+                        SealPreviewContent(
+                            type = seal.type,
+                            color = Color(seal.colorArgb),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .height(2.dp)
+                            .width(24.dp)
+                            .background(
+                                color = if (isSelected) SunsetGold else Color.Transparent,
+                                shape = RoundedCornerShape(1.dp)
+                            )
                     )
                 }
             }
@@ -287,8 +299,8 @@ fun SealPickerPanel(
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
         ) {
             sealInkColors.forEach { inkColor ->
                 val inkArgb =
@@ -296,26 +308,42 @@ fun SealPickerPanel(
                 val isColorSelected =
                     selectedSeal.colorArgb == inkArgb
 
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(
-                            color = inkColor,
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = if (isColorSelected) 2.dp else 1.5.dp,
-                            color = if (isColorSelected) {
-                                SunsetGold
-                            } else {
-                                BrutalBlack.copy(alpha = 0.35f)
-                            },
-                            shape = CircleShape
-                        )
-                        .clickable(enabled = enabled) {
-                            onColorSelected(selectedSeal.id, inkArgb)
-                        }
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable(enabled = enabled) {
+                        onColorSelected(selectedSeal.id, inkArgb)
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(
+                                color = inkColor,
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = BrutalBlack.copy(alpha = 0.35f),
+                                shape = CircleShape
+                            )
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .background(
+                                color =
+                                    if (isColorSelected) {
+                                        SunsetGold
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                shape = CircleShape
+                            )
+                    )
+                }
             }
         }
 

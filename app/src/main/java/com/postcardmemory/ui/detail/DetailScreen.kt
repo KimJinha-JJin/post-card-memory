@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -2856,46 +2855,59 @@ fun DetailScreen(
 
                         Row(
                             horizontalArrangement =
-                                Arrangement.spacedBy(5.dp)
+                                Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.Top
                         ) {
                             successState.colors.forEach { extractedColor ->
                                 val extractedSelected =
                                     pc.backgroundColorArgb ==
                                             extractedColor.colorArgb
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clickable(
-                                            enabled = controlsEnabled
-                                        ) {
-                                            viewModel
-                                                .updateBackgroundColor(
-                                                    extractedColor
-                                                        .colorArgb
-                                                )
-                                        },
-                                    contentAlignment = Alignment.Center
+                                Column(
+                                    horizontalAlignment =
+                                        Alignment.CenterHorizontally,
+                                    modifier = Modifier.clickable(
+                                        enabled = controlsEnabled
+                                    ) {
+                                        viewModel
+                                            .updateBackgroundColor(
+                                                extractedColor
+                                                    .colorArgb
+                                            )
+                                    }
                                 ) {
                                     Box(
+                                        modifier = Modifier.size(44.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .background(
+                                                    color =
+                                                        Color(
+                                                            extractedColor
+                                                                .colorArgb
+                                                        ),
+                                                    shape = CircleShape
+                                                )
+                                                .border(
+                                                    width = 1.dp,
+                                                    color = SurfaceGray,
+                                                    shape = CircleShape
+                                                )
+                                        )
+                                    }
+
+                                    Box(
                                         modifier = Modifier
-                                            .size(32.dp)
+                                            .size(5.dp)
                                             .background(
-                                                color =
-                                                    Color(
-                                                        extractedColor
-                                                            .colorArgb
-                                                    ),
-                                                shape = CircleShape
-                                            )
-                                            .border(
-                                                width =
-                                                    if (extractedSelected) 2.dp else 1.dp,
                                                 color =
                                                     if (extractedSelected) {
                                                         SunsetGold
                                                     } else {
-                                                        SurfaceGray
+                                                        Color.Transparent
                                                     },
                                                 shape = CircleShape
                                             )
@@ -3057,19 +3069,25 @@ fun DetailScreen(
                             val targetSelected =
                                 textScaleTarget == target
 
-                            Column(
+                            Box(
                                 modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (targetSelected) {
+                                            SunsetGold.copy(alpha = 0.16f)
+                                        } else {
+                                            Color.Transparent
+                                        }
+                                    )
                                     .clickable(
                                         enabled = controlsEnabled
                                     ) {
                                         textScaleTarget = target
                                     }
                                     .padding(
-                                        horizontal = 6.dp,
-                                        vertical = 4.dp
-                                    ),
-                                horizontalAlignment =
-                                    Alignment.CenterHorizontally
+                                        horizontal = 16.dp,
+                                        vertical = 7.dp
+                                    )
                             ) {
                                 Text(
                                     text = targetLabel,
@@ -3086,26 +3104,6 @@ fun DetailScreen(
                                         } else {
                                             FontWeight.Medium
                                         }
-                                )
-
-                                Spacer(
-                                    modifier = Modifier.height(3.dp)
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .height(2.dp)
-                                        .width(28.dp)
-                                        .background(
-                                            color =
-                                                if (targetSelected) {
-                                                    SunsetGold
-                                                } else {
-                                                    Color.Transparent
-                                                },
-                                            shape =
-                                                RoundedCornerShape(1.dp)
-                                        )
                                 )
                             }
                         }
