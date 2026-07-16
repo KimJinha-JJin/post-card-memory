@@ -97,6 +97,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -220,6 +221,9 @@ private fun localStickerDeltaToParent(
         y = flippedX * sin + flippedY * cos
     )
 }
+
+/** 렌더 크기와 무관하게 도장 선택 판정에 확보하는 최소 터치 영역. 미리보기/저장 이미지 모양에는 영향 없음. */
+private val SEAL_MIN_HIT_TARGET_SIZE = 56.dp
 
 private fun createStickerOverlayForExport(
     stickerUri: Uri?,
@@ -2251,6 +2255,12 @@ fun DetailScreen(
                             val currentSealOffset =
                                 seal.offset
 
+                            val sealVisualSize = 90.dp * seal.scale
+                            val sealHitAreaSize =
+                                maxOf(sealVisualSize, SEAL_MIN_HIT_TARGET_SIZE)
+                            val sealHitAreaPadding =
+                                (sealHitAreaSize - sealVisualSize) / 2f
+
                             val sealPositionModifier =
                                 if (currentSealOffset == null) {
                                     Modifier.align(
@@ -2262,10 +2272,12 @@ fun DetailScreen(
                                             Alignment.TopStart
                                         )
                                         .offset {
+                                            val paddingPx =
+                                                sealHitAreaPadding.toPx()
                                             IntOffset(
-                                                x = currentSealOffset.x
+                                                x = (currentSealOffset.x - paddingPx)
                                                     .roundToInt(),
-                                                y = currentSealOffset.y
+                                                y = (currentSealOffset.y - paddingPx)
                                                     .roundToInt()
                                             )
                                         }
@@ -2273,45 +2285,17 @@ fun DetailScreen(
 
                             Box(
                                 modifier = sealPositionModifier
-                                    .size(90.dp * seal.scale)
-                                    .onSizeChanged { size ->
-                                        sealSizes =
-                                            sealSizes +
-                                                    (seal.id to size)
-                                    }
+                                    .size(sealHitAreaSize)
                                     .graphicsLayer {
                                         rotationZ =
                                             seal.rotationDegrees
                                     }
-                                    .then(
-                                        if (isSealSelected) {
-                                            val selectionShape =
-                                                when (seal.type) {
-                                                    SealType.CIRCLE_POSTMARK,
-                                                    SealType.STAR,
-                                                    SealType.DOG_PAW,
-                                                    SealType.PIGEON_TRACK,
-                                                    SealType.HEART,
-                                                    SealType.STAR_STAMP -> CircleShape
-                                                    SealType.WAVE_CANCEL,
-                                                    SealType.AIR_MAIL ->
-                                                        RoundedCornerShape(8.dp)
-                                                }
-
-                                            Modifier.border(
-                                                width = 2.dp,
-                                                color = GraphiteAccent,
-                                                shape = selectionShape
-                                            )
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
                                     .pointerInput(
                                         seal.id,
                                         postcardPreviewSize
                                     ) {
                                         var sealGestureSnapshotPending = true
+                                        var activeSealPointerCount = 0
 
                                         coroutineScope {
                                             launch {
@@ -2320,6 +2304,20 @@ fun DetailScreen(
                                                         requireUnconsumed = false
                                                     )
                                                     sealGestureSnapshotPending = true
+                                                }
+                                            }
+                                            launch {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        val event =
+                                                            awaitPointerEvent(
+                                                                PointerEventPass.Initial
+                                                            )
+                                                        activeSealPointerCount =
+                                                            event.changes.count {
+                                                                it.pressed
+                                                            }
+                                                    }
                                                 }
                                             }
                                             launch {
@@ -2351,31 +2349,40 @@ fun DetailScreen(
                                                         sealGestureSnapshotPending = false
                                                     }
 
-                                                    val currentSealSize =
-                                                        sealSizes[seal.id]
-                                                            ?: IntSize.Zero
+                                                    // 두 손가락 이상일 때는 중심점 이동(pan)으로
+                                                    // 위치를 바꾸지 않는다 — 확대·축소·회전만 적용.
+                                                    val isMultiTouch =
+                                                        activeSealPointerCount >= 2
 
-                                                    val oldOffset =
-                                                        currentSeal.offset
-                                                            ?: centeredStickerOffset(
+                                                    val newOffset =
+                                                        if (isMultiTouch) {
+                                                            currentSeal.offset
+                                                        } else {
+                                                            val currentSealSize =
+                                                                sealSizes[seal.id]
+                                                                    ?: IntSize.Zero
+
+                                                            val oldOffset =
+                                                                currentSeal.offset
+                                                                    ?: centeredStickerOffset(
+                                                                        postcardSize = postcardPreviewSize,
+                                                                        stickerSize = currentSealSize
+                                                                    )
+
+                                                            val parentDelta =
+                                                                localStickerDeltaToParent(
+                                                                    localDelta = pan,
+                                                                    rotationDegrees = currentSeal.rotationDegrees,
+                                                                    flipHorizontal = false,
+                                                                    flipVertical = false
+                                                                )
+
+                                                            clampStickerOffset(
+                                                                offset = oldOffset + parentDelta,
                                                                 postcardSize = postcardPreviewSize,
                                                                 stickerSize = currentSealSize
                                                             )
-
-                                                    val parentDelta =
-                                                        localStickerDeltaToParent(
-                                                            localDelta = pan,
-                                                            rotationDegrees = currentSeal.rotationDegrees,
-                                                            flipHorizontal = false,
-                                                            flipVertical = false
-                                                        )
-
-                                                    val newOffset =
-                                                        clampStickerOffset(
-                                                            offset = oldOffset + parentDelta,
-                                                            postcardSize = postcardPreviewSize,
-                                                            stickerSize = currentSealSize
-                                                        )
+                                                        }
 
                                                     val newScale =
                                                         (currentSeal.scale * zoom)
@@ -2407,53 +2414,88 @@ fun DetailScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                SealPreviewContent(
-                                    type = seal.type,
-                                    color = Color(seal.colorArgb),
-                                    capturedAtMillis = pc.capturedAt,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-
-                                if (isSealSelected) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .offset(x = 8.dp, y = (-8).dp)
-                                            .size(26.dp)
-                                            .background(
-                                                color = GalleryDangerRed,
-                                                shape = CircleShape
-                                            )
-                                            .border(
-                                                width = 1.5.dp,
-                                                color = BrutalBlack,
-                                                shape = CircleShape
-                                            )
-                                            .clickable(
-                                                enabled = controlsEnabled
-                                            ) {
-                                                viewModel.recordSealSnapshotForUndo()
-                                                val remaining =
-                                                    photoSeals.filter {
-                                                        it.id != seal.id
+                                Box(
+                                    modifier = Modifier
+                                        .size(sealVisualSize)
+                                        .onSizeChanged { size ->
+                                            sealSizes =
+                                                sealSizes +
+                                                        (seal.id to size)
+                                        }
+                                        .then(
+                                            if (isSealSelected) {
+                                                val selectionShape =
+                                                    when (seal.type) {
+                                                        SealType.CIRCLE_POSTMARK,
+                                                        SealType.STAR,
+                                                        SealType.DOG_PAW,
+                                                        SealType.PIGEON_TRACK,
+                                                        SealType.HEART,
+                                                        SealType.STAR_STAMP -> CircleShape
+                                                        SealType.WAVE_CANCEL,
+                                                        SealType.AIR_MAIL ->
+                                                            RoundedCornerShape(8.dp)
                                                     }
-                                                viewModel.setPhotoSeals(remaining)
-                                                sealSizes =
-                                                    sealSizes - seal.id
-                                                if (selectedSealId == seal.id) {
-                                                    viewModel.setSelectedSealId(
-                                                        remaining.lastOrNull()?.id
-                                                    )
-                                                }
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "도장 삭제",
-                                            tint = BrutalWhite,
-                                            modifier = Modifier.size(14.dp)
-                                        )
+
+                                                Modifier.border(
+                                                    width = 2.dp,
+                                                    color = GraphiteAccent,
+                                                    shape = selectionShape
+                                                )
+                                            } else {
+                                                Modifier
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    SealPreviewContent(
+                                        type = seal.type,
+                                        color = Color(seal.colorArgb),
+                                        capturedAtMillis = pc.capturedAt,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+
+                                    if (isSealSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = 8.dp, y = (-8).dp)
+                                                .size(26.dp)
+                                                .background(
+                                                    color = GalleryDangerRed,
+                                                    shape = CircleShape
+                                                )
+                                                .border(
+                                                    width = 1.5.dp,
+                                                    color = BrutalBlack,
+                                                    shape = CircleShape
+                                                )
+                                                .clickable(
+                                                    enabled = controlsEnabled
+                                                ) {
+                                                    viewModel.recordSealSnapshotForUndo()
+                                                    val remaining =
+                                                        photoSeals.filter {
+                                                            it.id != seal.id
+                                                        }
+                                                    viewModel.setPhotoSeals(remaining)
+                                                    sealSizes =
+                                                        sealSizes - seal.id
+                                                    if (selectedSealId == seal.id) {
+                                                        viewModel.setSelectedSealId(
+                                                            remaining.lastOrNull()?.id
+                                                        )
+                                                    }
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "도장 삭제",
+                                                tint = BrutalWhite,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
