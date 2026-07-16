@@ -10,6 +10,8 @@ import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -22,6 +24,7 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.exifinterface.media.ExifInterface
+import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
 import java.io.File
 import java.io.IOException
@@ -171,6 +174,7 @@ object PostcardImageExporter {
 
             for (overlay in sealOverlays) {
                 drawSealOverlay(
+                    context = context,
                     canvas = canvas,
                     sealOverlay = overlay
                 )
@@ -1349,6 +1353,7 @@ object PostcardImageExporter {
     }
 
     private fun drawSealOverlay(
+        context: Context,
         canvas: Canvas,
         sealOverlay: SealOverlay
     ) {
@@ -1403,9 +1408,74 @@ object PostcardImageExporter {
 
             "STAR" ->
                 drawSealStarOverlay(canvas, sealBounds, paint)
+
+            "DOG_PAW",
+            "PIGEON_TRACK",
+            "HEART",
+            "STAR_STAMP" ->
+                drawImageSealOverlay(
+                    context,
+                    canvas,
+                    sealBounds,
+                    sealOverlay
+                )
         }
 
         canvas.restore()
+    }
+
+    private fun sealImageDrawableRes(type: String): Int? =
+        when (type) {
+            "DOG_PAW" -> R.drawable.seal_dog_paw
+            "PIGEON_TRACK" -> R.drawable.seal_pigeon_track
+            "HEART" -> R.drawable.seal_heart
+            "STAR_STAMP" -> R.drawable.seal_star
+            else -> null
+        }
+
+    /** 미니 스탬프(강아지·비둘기·하트·별)는 코드로 그리지 않고 res/drawable 실루엣 이미지를 잉크색으로 틴트해서 그린다. */
+    private fun drawImageSealOverlay(
+        context: Context,
+        canvas: Canvas,
+        bounds: RectF,
+        sealOverlay: SealOverlay
+    ) {
+        val resId =
+            sealImageDrawableRes(sealOverlay.type)
+                ?: return
+
+        val bitmap =
+            runCatching {
+                BitmapFactory.decodeResource(
+                    context.resources,
+                    resId
+                )
+            }.getOrNull() ?: return
+
+        try {
+            val paint =
+                Paint(
+                    Paint.ANTI_ALIAS_FLAG or
+                            Paint.FILTER_BITMAP_FLAG
+                ).apply {
+                    colorFilter =
+                        PorterDuffColorFilter(
+                            sealOverlay.colorArgb.toInt(),
+                            PorterDuff.Mode.SRC_IN
+                        )
+                }
+
+            drawFitCenteredBitmap(
+                canvas = canvas,
+                bitmap = bitmap,
+                destinationRect = bounds,
+                paint = paint
+            )
+        } finally {
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
     }
 
     private fun drawCirclePostmarkOverlay(
@@ -1593,7 +1663,11 @@ object PostcardImageExporter {
     private fun drawFitCenteredBitmap(
         canvas: Canvas,
         bitmap: Bitmap,
-        destinationRect: RectF
+        destinationRect: RectF,
+        paint: Paint = Paint(
+            Paint.ANTI_ALIAS_FLAG or
+                    Paint.FILTER_BITMAP_FLAG
+        )
     ) {
         val sourceWidth =
             bitmap.width.toFloat()
@@ -1636,10 +1710,7 @@ object PostcardImageExporter {
                 left + fittedWidth,
                 top + fittedHeight
             ),
-            Paint(
-                Paint.ANTI_ALIAS_FLAG or
-                        Paint.FILTER_BITMAP_FLAG
-            )
+            paint
         )
     }
 

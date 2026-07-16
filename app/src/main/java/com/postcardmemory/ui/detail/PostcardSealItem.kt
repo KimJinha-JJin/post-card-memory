@@ -4,12 +4,18 @@ import androidx.compose.ui.geometry.Offset
 import java.util.UUID
 
 enum class SealType(
-    val label: String
+    val label: String,
+    val isMiniStamp: Boolean = false,
+    val defaultScale: Float = 1f
 ) {
     CIRCLE_POSTMARK("원형 소인"),
     WAVE_CANCEL("물결 취소선"),
     AIR_MAIL("AIR MAIL"),
-    STAR("별 도장")
+    STAR("별 도장"),
+    DOG_PAW("강아지", isMiniStamp = true, defaultScale = 0.55f),
+    PIGEON_TRACK("비둘기", isMiniStamp = true, defaultScale = 0.55f),
+    HEART("하트", isMiniStamp = true, defaultScale = 0.55f),
+    STAR_STAMP("별", isMiniStamp = true, defaultScale = 0.55f)
 }
 
 private const val DEFAULT_SEAL_INK_ARGB = 0xFF252525L

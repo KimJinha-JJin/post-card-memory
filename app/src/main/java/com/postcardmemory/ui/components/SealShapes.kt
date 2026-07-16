@@ -3,17 +3,22 @@ package com.postcardmemory.ui.components
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.postcardmemory.R
 import com.postcardmemory.ui.detail.SealType
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -21,6 +26,16 @@ import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+/** 미니 스탬프(고양이 발바닥 등)는 벡터/Path 대신 res/drawable 이미지를 틴트해서 그린다. */
+private fun sealImageRes(type: SealType): Int? =
+    when (type) {
+        SealType.DOG_PAW -> R.drawable.seal_dog_paw
+        SealType.PIGEON_TRACK -> R.drawable.seal_pigeon_track
+        SealType.HEART -> R.drawable.seal_heart
+        SealType.STAR_STAMP -> R.drawable.seal_star
+        else -> null
+    }
 
 /** 도장 종류에 맞는 모양을 정사각형 영역 안에 그린다. 미리보기 전용(저장본은 PostcardImageExporter에서 별도로 그림) */
 @Composable
@@ -30,6 +45,19 @@ fun SealPreviewContent(
     capturedAtMillis: Long? = null,
     modifier: Modifier = Modifier
 ) {
+    val imageRes = sealImageRes(type)
+
+    if (imageRes != null) {
+        Image(
+            painter = painterResource(id = imageRes),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(color),
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
+        return
+    }
+
     Canvas(modifier = modifier) {
         val strokeWidth = size.minDimension * 0.035f
 
@@ -45,6 +73,8 @@ fun SealPreviewContent(
 
             SealType.STAR ->
                 drawSealStar(color, strokeWidth)
+
+            else -> Unit
         }
     }
 }

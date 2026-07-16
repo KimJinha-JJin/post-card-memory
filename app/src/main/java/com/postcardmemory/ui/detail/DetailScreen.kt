@@ -2288,7 +2288,11 @@ fun DetailScreen(
                                             val selectionShape =
                                                 when (seal.type) {
                                                     SealType.CIRCLE_POSTMARK,
-                                                    SealType.STAR -> CircleShape
+                                                    SealType.STAR,
+                                                    SealType.DOG_PAW,
+                                                    SealType.PIGEON_TRACK,
+                                                    SealType.HEART,
+                                                    SealType.STAR_STAMP -> CircleShape
                                                     SealType.WAVE_CANCEL,
                                                     SealType.AIR_MAIL ->
                                                         RoundedCornerShape(8.dp)
@@ -3266,7 +3270,10 @@ fun DetailScreen(
                                     onAddSeal = { type ->
                                         viewModel.recordSealSnapshotForUndo()
                                         val newSeal =
-                                            PostcardSealItem(type = type)
+                                            PostcardSealItem(
+                                                type = type,
+                                                scale = type.defaultScale
+                                            )
                                         viewModel.setPhotoSeals(
                                             photoSeals + newSeal
                                         )

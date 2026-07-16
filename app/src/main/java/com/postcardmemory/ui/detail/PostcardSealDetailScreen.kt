@@ -115,51 +115,39 @@ fun SealPickerPanel(
             fontWeight = FontWeight.SemiBold
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            SealType.entries.forEach { type ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(enabled = enabled) {
-                            onAddSeal(type)
-                        }
-                        .padding(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .background(
-                                color = BrutalWhite,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .padding(6.dp)
-                    ) {
-                        SealPreviewContent(
-                            type = type,
-                            color = BrutalBlack,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+        Text(
+            text = "우편 도장",
+            color = GraphiteAccent,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-                    Text(
-                        text = type.label,
-                        color = BrutalBlack,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
+        SealTypeTileRow(
+            types = SealType.entries.filter { !it.isMiniStamp },
+            enabled = enabled,
+            onAddSeal = onAddSeal
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "작은 스탬프",
+            color = GraphiteAccent,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        SealTypeTileRow(
+            types = SealType.entries.filter { it.isMiniStamp },
+            enabled = enabled,
+            onAddSeal = onAddSeal
+        )
 
         if (photoSeals.isEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
@@ -397,5 +385,56 @@ fun SealPickerPanel(
             contentColor = GalleryDangerRed,
             borderColor = GalleryDangerRed
         )
+    }
+}
+
+@Composable
+private fun SealTypeTileRow(
+    types: List<SealType>,
+    enabled: Boolean,
+    onAddSeal: (SealType) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        types.forEach { type ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = enabled) {
+                        onAddSeal(type)
+                    }
+                    .padding(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            color = BrutalWhite,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(6.dp)
+                ) {
+                    SealPreviewContent(
+                        type = type,
+                        color = BrutalBlack,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = type.label,
+                    color = BrutalBlack,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
     }
 }
