@@ -61,8 +61,11 @@ import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
+import com.postcardmemory.ui.theme.InkPrimary
+import com.postcardmemory.ui.theme.InkSecondary
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.PaperTray
+import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.SurfaceGray
 
 private val ViewModeSaver = Saver<GalleryViewMode, String>(
@@ -164,8 +167,8 @@ fun GalleryScreen(
 
                         Text(
                             text = "${selectedIds.size}개 선택",
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = BrutalCoral,
                             modifier = Modifier
                                 .weight(1f)
@@ -195,15 +198,15 @@ fun GalleryScreen(
                             .background(GalleryPaperWhite)
                             .padding(
                                 horizontal = 16.dp,
-                                vertical = 8.dp
+                                vertical = 10.dp
                             ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "포스트카드 메모리",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BrutalBlack,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = InkPrimary,
                             modifier = Modifier.weight(1f)
                         )
 
@@ -216,7 +219,8 @@ fun GalleryScreen(
                                 Icon(
                                     imageVector = Icons.Default.GridView,
                                     contentDescription = "보기 방식 변경",
-                                    tint = BrutalBlack
+                                    tint = InkSecondary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
 
@@ -228,7 +232,20 @@ fun GalleryScreen(
                             ) {
                                 DropdownMenuItem(
                                     text = {
-                                        Text("3열 그리드 보기")
+                                        Text(
+                                            text = "3열 그리드 보기",
+                                            color = InkPrimary,
+                                            fontWeight = if (viewMode == GalleryViewMode.COMPACT_GRID) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            }
+                                        )
+                                    },
+                                    modifier = if (viewMode == GalleryViewMode.COMPACT_GRID) {
+                                        Modifier.background(SunsetGold.copy(alpha = 0.16f))
+                                    } else {
+                                        Modifier
                                     },
                                     onClick = {
                                         viewMode = GalleryViewMode.COMPACT_GRID
@@ -237,7 +254,20 @@ fun GalleryScreen(
                                 )
                                 DropdownMenuItem(
                                     text = {
-                                        Text("세부 기록 보기")
+                                        Text(
+                                            text = "세부 기록 보기",
+                                            color = InkPrimary,
+                                            fontWeight = if (viewMode == GalleryViewMode.DETAIL_LIST) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            }
+                                        )
+                                    },
+                                    modifier = if (viewMode == GalleryViewMode.DETAIL_LIST) {
+                                        Modifier.background(SunsetGold.copy(alpha = 0.16f))
+                                    } else {
+                                        Modifier
                                     },
                                     onClick = {
                                         viewMode = GalleryViewMode.DETAIL_LIST
@@ -256,7 +286,8 @@ fun GalleryScreen(
                                 Icon(
                                     imageVector = Icons.Default.Sort,
                                     contentDescription = "정렬 방식 변경",
-                                    tint = BrutalBlack
+                                    tint = InkSecondary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
 
@@ -268,7 +299,20 @@ fun GalleryScreen(
                             ) {
                                 DropdownMenuItem(
                                     text = {
-                                        Text("날짜 최신순")
+                                        Text(
+                                            text = "날짜 최신순",
+                                            color = InkPrimary,
+                                            fontWeight = if (sortOrder == GallerySortOrder.NEWEST) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            }
+                                        )
+                                    },
+                                    modifier = if (sortOrder == GallerySortOrder.NEWEST) {
+                                        Modifier.background(SunsetGold.copy(alpha = 0.16f))
+                                    } else {
+                                        Modifier
                                     },
                                     onClick = {
                                         sortOrder = GallerySortOrder.NEWEST
@@ -277,7 +321,20 @@ fun GalleryScreen(
                                 )
                                 DropdownMenuItem(
                                     text = {
-                                        Text("날짜 오래된 순")
+                                        Text(
+                                            text = "날짜 오래된 순",
+                                            color = InkPrimary,
+                                            fontWeight = if (sortOrder == GallerySortOrder.OLDEST) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            }
+                                        )
+                                    },
+                                    modifier = if (sortOrder == GallerySortOrder.OLDEST) {
+                                        Modifier.background(SunsetGold.copy(alpha = 0.16f))
+                                    } else {
+                                        Modifier
                                     },
                                     onClick = {
                                         sortOrder = GallerySortOrder.OLDEST
