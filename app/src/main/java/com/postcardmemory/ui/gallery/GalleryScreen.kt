@@ -1,5 +1,10 @@
 package com.postcardmemory.ui.gallery
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -36,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,6 +74,7 @@ import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.SurfaceGray
+import kotlin.math.sqrt
 
 private val ViewModeSaver = Saver<GalleryViewMode, String>(
     save = { it.name },
@@ -78,6 +86,61 @@ private val SortOrderSaver = Saver<GallerySortOrder, String>(
     restore = { GallerySortOrder.valueOf(it) }
 )
 
+private const val SHAKE_THRESHOLD_G = 2.7f
+private const val SHAKE_DEBOUNCE_MS = 1000L
+
+/**
+ * 가속도계로 흔들기를 감지해, 흔들릴 때마다 값이 1씩 증가하는 트리거를 반환한다.
+ * 초기값 0은 "아직 흔들리지 않음"을 의미한다.
+ */
+@Composable
+private fun rememberShakeTrigger(): Int {
+    val context = LocalContext.current
+    var triggerCount by remember { mutableStateOf(0) }
+
+    DisposableEffect(Unit) {
+        val sensorManager =
+            context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val accelerometer =
+            sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        var lastShakeAtMillis = 0L
+
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val gX = event.values[0] / SensorManager.GRAVITY_EARTH
+                val gY = event.values[1] / SensorManager.GRAVITY_EARTH
+                val gZ = event.values[2] / SensorManager.GRAVITY_EARTH
+                val gForce = sqrt(gX * gX + gY * gY + gZ * gZ)
+
+                if (gForce > SHAKE_THRESHOLD_G) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastShakeAtMillis > SHAKE_DEBOUNCE_MS) {
+                        lastShakeAtMillis = now
+                        triggerCount++
+                    }
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+
+        if (sensorManager != null && accelerometer != null) {
+            sensorManager.registerListener(
+                listener,
+                accelerometer,
+                SensorManager.SENSOR_DELAY_GAME
+            )
+        }
+
+        onDispose {
+            sensorManager?.unregisterListener(listener)
+        }
+    }
+
+    return triggerCount
+}
+
 @Composable
 fun GalleryScreen(
     onNavigateToCamera: () -> Unit,
@@ -85,6 +148,8 @@ fun GalleryScreen(
     viewModel: GalleryViewModel = hiltViewModel()
 ) {
     val postcards by viewModel.postcards.collectAsState()
+
+    val shakeTrigger = rememberShakeTrigger()
 
     var selectedIds by remember {
         mutableStateOf<Set<Long>>(emptySet())
@@ -425,6 +490,7 @@ fun GalleryScreen(
                     GalleryGrid(
                         postcards = displayedPostcards,
                         selectedIds = selectedIds,
+                        shakeTrigger = shakeTrigger,
                         paddingValues = paddingValues,
                         onItemClick = ::handleItemClick,
                         onItemLongClick = ::handleItemLongClick
@@ -502,6 +568,7 @@ fun GalleryScreen(
 private fun GalleryGrid(
     postcards: List<Postcard>,
     selectedIds: Set<Long>,
+    shakeTrigger: Int,
     paddingValues: PaddingValues,
     onItemClick: (Long) -> Unit,
     onItemLongClick: (Long) -> Unit
@@ -529,6 +596,7 @@ private fun GalleryGrid(
             StampCard(
                 postcard = postcard,
                 isSelected = postcard.id in selectedIds,
+                shakeTrigger = shakeTrigger,
                 onClick = {
                     onItemClick(postcard.id)
                 },
