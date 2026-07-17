@@ -225,6 +225,12 @@ private fun localStickerDeltaToParent(
 /** 렌더 크기와 무관하게 도장 선택 판정에 확보하는 최소 터치 영역. 미리보기/저장 이미지 모양에는 영향 없음. */
 private val SEAL_MIN_HIT_TARGET_SIZE = 56.dp
 
+/** 선택된 도장에 한해 확보하는 최소 멀티터치(핀치·회전) 영역. 작은 도장도 두 손가락을 올릴 여유를 준다. */
+private val SEAL_SELECTED_MIN_GESTURE_SIZE = 120.dp
+
+/** 엽서 한 장에 추가할 수 있는 도장 총 개수(종류 무관 합산). */
+private const val MAX_SEAL_COUNT = 2
+
 private fun createStickerOverlayForExport(
     stickerUri: Uri?,
     originalStickerUri: Uri?,
@@ -2257,7 +2263,11 @@ fun DetailScreen(
 
                             val sealVisualSize = 90.dp * seal.scale
                             val sealHitAreaSize =
-                                maxOf(sealVisualSize, SEAL_MIN_HIT_TARGET_SIZE)
+                                if (isSealSelected) {
+                                    maxOf(sealVisualSize, SEAL_SELECTED_MIN_GESTURE_SIZE)
+                                } else {
+                                    maxOf(sealVisualSize, SEAL_MIN_HIT_TARGET_SIZE)
+                                }
                             val sealHitAreaPadding =
                                 (sealHitAreaSize - sealVisualSize) / 2f
 
@@ -2454,49 +2464,6 @@ fun DetailScreen(
                                         capturedAtMillis = pc.capturedAt,
                                         modifier = Modifier.fillMaxSize()
                                     )
-
-                                    if (isSealSelected) {
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .offset(x = 8.dp, y = (-8).dp)
-                                                .size(26.dp)
-                                                .background(
-                                                    color = GalleryDangerRed,
-                                                    shape = CircleShape
-                                                )
-                                                .border(
-                                                    width = 1.5.dp,
-                                                    color = BrutalBlack,
-                                                    shape = CircleShape
-                                                )
-                                                .clickable(
-                                                    enabled = controlsEnabled
-                                                ) {
-                                                    viewModel.recordSealSnapshotForUndo()
-                                                    val remaining =
-                                                        photoSeals.filter {
-                                                            it.id != seal.id
-                                                        }
-                                                    viewModel.setPhotoSeals(remaining)
-                                                    sealSizes =
-                                                        sealSizes - seal.id
-                                                    if (selectedSealId == seal.id) {
-                                                        viewModel.setSelectedSealId(
-                                                            remaining.lastOrNull()?.id
-                                                        )
-                                                    }
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "도장 삭제",
-                                                tint = BrutalWhite,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -3310,18 +3277,26 @@ fun DetailScreen(
                                         )
                                     },
                                     onAddSeal = { type ->
-                                        viewModel.recordSealSnapshotForUndo()
-                                        val newSeal =
-                                            PostcardSealItem(
-                                                type = type,
-                                                scale = type.defaultScale
+                                        if (photoSeals.size >= MAX_SEAL_COUNT) {
+                                            Toast.makeText(
+                                                context,
+                                                "도장은 엽서 한 장에 최대 ${MAX_SEAL_COUNT}개까지만 붙일 수 있어.",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            viewModel.recordSealSnapshotForUndo()
+                                            val newSeal =
+                                                PostcardSealItem(
+                                                    type = type,
+                                                    scale = type.defaultScale
+                                                )
+                                            viewModel.setPhotoSeals(
+                                                photoSeals + newSeal
                                             )
-                                        viewModel.setPhotoSeals(
-                                            photoSeals + newSeal
-                                        )
-                                        viewModel.setSelectedSealId(
-                                            newSeal.id
-                                        )
+                                            viewModel.setSelectedSealId(
+                                                newSeal.id
+                                            )
+                                        }
                                     },
                                     onDeleteSeal = { id ->
                                         viewModel.recordSealSnapshotForUndo()
