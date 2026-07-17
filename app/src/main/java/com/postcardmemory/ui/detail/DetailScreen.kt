@@ -229,7 +229,7 @@ private val SEAL_MIN_HIT_TARGET_SIZE = 56.dp
 private val SEAL_SELECTED_MIN_GESTURE_SIZE = 120.dp
 
 /** 엽서 한 장에 추가할 수 있는 도장 총 개수(종류 무관 합산). */
-private const val MAX_SEAL_COUNT = 2
+const val MAX_SEAL_COUNT = 2
 
 private fun createStickerOverlayForExport(
     stickerUri: Uri?,
@@ -878,9 +878,6 @@ fun DetailScreen(
     val latestPhotoSeals by rememberUpdatedState(photoSeals)
     val canUndoSeal by viewModel.canUndoSeal.collectAsState()
     val canRedoSeal by viewModel.canRedoSeal.collectAsState()
-    var sealScaleDragSnapshotTaken by remember {
-        mutableStateOf(false)
-    }
     val canUndoPhotoTransform by viewModel.canUndoPhotoTransform.collectAsState()
     val canRedoPhotoTransform by viewModel.canRedoPhotoTransform.collectAsState()
     var stampPhotoScaleDragSnapshotTaken by remember {
@@ -3311,42 +3308,6 @@ fun DetailScreen(
                                                 remaining.lastOrNull()?.id
                                             )
                                         }
-                                    },
-                                    onScaleChanged = { id, newScale ->
-                                        if (!sealScaleDragSnapshotTaken) {
-                                            viewModel.recordSealSnapshotForUndo()
-                                            sealScaleDragSnapshotTaken = true
-                                        }
-                                        viewModel.setPhotoSeals(
-                                            photoSeals.map {
-                                                if (it.id == id) {
-                                                    it.copy(scale = newScale)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onScaleChangeFinished = {
-                                        sealScaleDragSnapshotTaken = false
-                                    },
-                                    onRotateBy = { id, deltaDegrees ->
-                                        viewModel.recordSealSnapshotForUndo()
-                                        viewModel.setPhotoSeals(
-                                            photoSeals.map {
-                                                if (it.id == id) {
-                                                    it.copy(
-                                                        rotationDegrees =
-                                                            normalizeStickerRotation(
-                                                                it.rotationDegrees +
-                                                                        deltaDegrees
-                                                            )
-                                                    )
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
                                     },
                                     onColorSelected = { id, colorArgb ->
                                         viewModel.recordSealSnapshotForUndo()

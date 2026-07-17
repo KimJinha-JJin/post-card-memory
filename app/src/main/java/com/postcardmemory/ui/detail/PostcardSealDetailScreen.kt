@@ -1,5 +1,10 @@
 package com.postcardmemory.ui.detail
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,10 +24,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
-import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
@@ -42,10 +54,8 @@ import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SealInkWhite
-import com.postcardmemory.ui.theme.SoftGray
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.sealInkColors
-import kotlin.math.roundToInt
 
 @Composable
 fun SealPickerPanel(
@@ -54,9 +64,6 @@ fun SealPickerPanel(
     onSelectSeal: (String) -> Unit,
     onAddSeal: (SealType) -> Unit,
     onDeleteSeal: (String) -> Unit,
-    onScaleChanged: (String, Float) -> Unit,
-    onScaleChangeFinished: () -> Unit,
-    onRotateBy: (String, Float) -> Unit,
     onColorSelected: (String, Long) -> Unit,
     onUndoSeal: () -> Unit,
     onRedoSeal: () -> Unit,
@@ -67,6 +74,16 @@ fun SealPickerPanel(
 ) {
     val selectedSeal =
         photoSeals.find { it.id == selectedSealId }
+
+    var isAddListExpanded by remember {
+        mutableStateOf(photoSeals.size < MAX_SEAL_COUNT)
+    }
+
+    LaunchedEffect(photoSeals.size) {
+        if (photoSeals.size >= MAX_SEAL_COUNT) {
+            isAddListExpanded = false
+        }
+    }
 
     Column(
         modifier = modifier
@@ -108,46 +125,52 @@ fun SealPickerPanel(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "새 도장",
-            color = BrutalBlack,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "우편 도장",
-            color = GraphiteAccent,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        SealTypeTileRow(
-            types = SealType.entries.filter { !it.isMiniStamp },
+        TextButton(
+            onClick = {
+                isAddListExpanded = !isAddListExpanded
+            },
             enabled = enabled,
-            onAddSeal = onAddSeal
-        )
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = BrutalBlack
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.size(6.dp))
 
-        Text(
-            text = "작은 스탬프",
-            color = GraphiteAccent,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+            Text(
+                text =
+                    if (isAddListExpanded) {
+                        "새 도장 목록 닫기"
+                    } else {
+                        "새 도장 추가"
+                    },
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        SealTypeTileRow(
-            types = SealType.entries.filter { it.isMiniStamp },
-            enabled = enabled,
-            onAddSeal = onAddSeal
-        )
+        AnimatedVisibility(
+            visible = isAddListExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            ) {
+                SealTypeTileRow(
+                    types = SealType.entries,
+                    enabled = enabled,
+                    onAddSeal = onAddSeal
+                )
+            }
+        }
 
         if (photoSeals.isEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
@@ -241,42 +264,6 @@ fun SealPickerPanel(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "크기",
-                color = BrutalBlack,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
-
-            Text(
-                text = "${(selectedSeal.scale * 100f).roundToInt()}%",
-                color = GraphiteAccent,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        EditorSlider(
-            value = selectedSeal.scale,
-            onValueChange = { newValue ->
-                onScaleChanged(selectedSeal.id, newValue)
-            },
-            onValueChangeFinished = onScaleChangeFinished,
-            valueRange = 0.5f..3f,
-            enabled = enabled,
-            inactiveTrackColor = SoftGray,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
         Text(
             text = "색상",
             color = BrutalBlack,
@@ -333,46 +320,6 @@ fun SealPickerPanel(
                     )
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "회전",
-                color = BrutalBlack,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
-
-            Text(
-                text = "${selectedSeal.rotationDegrees.roundToInt()}°",
-                color = GraphiteAccent,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            EditorOutlineButton(
-                text = "−15°",
-                onClick = { onRotateBy(selectedSeal.id, -15f) },
-                enabled = enabled
-            )
-
-            EditorOutlineButton(
-                text = "+15°",
-                onClick = { onRotateBy(selectedSeal.id, 15f) },
-                enabled = enabled
-            )
         }
 
         Spacer(modifier = Modifier.height(14.dp))
