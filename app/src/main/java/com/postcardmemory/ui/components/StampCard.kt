@@ -78,7 +78,7 @@ private const val SCATTER_STAGGER_MAX_MS = 120
 private const val SCATTER_HOLD_MS = 180L
 
 // 〈엽서의 연못〉 새총 발사 튜닝값 — 전부 화면 한정 임시 상태에만 쓰인다.
-private val POND_MAX_PULL = 120.dp
+private val POND_MAX_PULL = 200.dp
 private val POND_MIN_LAUNCH = 16.dp
 private const val POND_MAX_LAUNCH_SPEED_DP_PER_S = 1500f
 private const val POND_MIN_SPEED_DP_PER_S = 60f

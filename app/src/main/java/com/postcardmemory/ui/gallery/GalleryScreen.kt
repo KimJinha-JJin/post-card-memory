@@ -51,12 +51,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -99,6 +102,13 @@ private val SortOrderSaver = Saver<GallerySortOrder, String>(
 
 private const val SHAKE_THRESHOLD_G = 2.7f
 private const val SHAKE_DEBOUNCE_MS = 1000L
+
+// 빈 화면 탭·드래그로 만드는 파문 튜닝값 — 카드 발사와는 무관, 그냥 배경 반응.
+private val EMPTY_TAP_MAX_MOVE = 18.dp
+private const val EMPTY_TAP_MAX_HOLD_MS = 300L
+private val EMPTY_TRAIL_MIN_DISTANCE = 26.dp
+private val EMPTY_TRAIL_RIPPLE_RADIUS = 22.dp
+private val EMPTY_TAP_RIPPLE_RADIUS = 34.dp
 
 /**
  * 가속도계로 흔들기를 감지해, 흔들릴 때마다 값이 1씩 증가하는 트리거를 반환한다.
@@ -656,17 +666,6 @@ private fun GalleryGrid(
     var originInWindow by remember { mutableStateOf(Offset.Zero) }
     val gridState = rememberLazyGridState()
 
-    LaunchedEffect(isPondModeOn, gridState) {
-        if (!isPondModeOn) return@LaunchedEffect
-
-        snapshotFlow { gridState.isScrollInProgress }
-            .collect { scrolling ->
-                if (scrolling) {
-                    pondController.clearRipples()
-                }
-            }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -677,6 +676,77 @@ private fun GalleryGrid(
                     pondController.gridBoundsInWindow = coordinates.boundsInWindow()
                 }
             }
+            .then(
+                if (isPondModeOn) {
+                    Modifier.pointerInput(pondController) {
+                        val tapMaxMovePx = EMPTY_TAP_MAX_MOVE.toPx()
+                        val trailMinDistancePx = EMPTY_TRAIL_MIN_DISTANCE.toPx()
+                        val trailRipplePx = EMPTY_TRAIL_RIPPLE_RADIUS.toPx()
+                        val tapRipplePx = EMPTY_TAP_RIPPLE_RADIUS.toPx()
+
+                        // 카드나 스크롤 제스처를 가로채지 않도록 Initial 패스로 살짝
+                        // 엿보기만 하고 절대 consume하지 않는다 — 순수 배경 장식용.
+                        awaitPointerEventScope {
+                            var downPosition: Offset? = null
+                            var downTimeMillis = 0L
+                            var lastTrailPosition: Offset? = null
+
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val change = event.changes.firstOrNull() ?: continue
+
+                                when {
+                                    change.changedToDownIgnoreConsumed() -> {
+                                        downPosition = change.position
+                                        downTimeMillis = System.currentTimeMillis()
+                                        lastTrailPosition = change.position
+                                    }
+
+                                    change.changedToUpIgnoreConsumed() -> {
+                                        val start = downPosition
+                                        if (start != null) {
+                                            val totalMove =
+                                                (change.position - start).getDistance()
+                                            val heldMs =
+                                                System.currentTimeMillis() - downTimeMillis
+                                            if (
+                                                totalMove < tapMaxMovePx &&
+                                                heldMs < EMPTY_TAP_MAX_HOLD_MS
+                                            ) {
+                                                pondController.addRipple(
+                                                    change.position + originInWindow,
+                                                    tapRipplePx,
+                                                    700L
+                                                )
+                                            }
+                                        }
+                                        downPosition = null
+                                        lastTrailPosition = null
+                                    }
+
+                                    change.pressed -> {
+                                        val current = change.position
+                                        val last = lastTrailPosition
+                                        if (
+                                            last != null &&
+                                            (current - last).getDistance() > trailMinDistancePx
+                                        ) {
+                                            pondController.addRipple(
+                                                current + originInWindow,
+                                                trailRipplePx,
+                                                450L
+                                            )
+                                            lastTrailPosition = current
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                }
+            )
     ) {
         if (isPondModeOn) {
             PondRippleOverlay(
