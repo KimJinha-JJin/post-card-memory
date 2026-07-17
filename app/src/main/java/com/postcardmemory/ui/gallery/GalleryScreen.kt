@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items as lazyColumnItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as lazyGridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -42,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,11 +51,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -92,13 +103,20 @@ private const val SHAKE_DEBOUNCE_MS = 1000L
 /**
  * 가속도계로 흔들기를 감지해, 흔들릴 때마다 값이 1씩 증가하는 트리거를 반환한다.
  * 초기값 0은 "아직 흔들리지 않음"을 의미한다.
+ *
+ * enabled가 false인 동안은 센서를 등록하지 않는다 — 〈엽서의 연못〉 모드가 꺼져
+ * 있을 때는 흔들기에 전혀 반응하지 않아야 하고, 배터리도 아낀다.
  */
 @Composable
-private fun rememberShakeTrigger(): Int {
+private fun rememberShakeTrigger(enabled: Boolean): Int {
     val context = LocalContext.current
     var triggerCount by remember { mutableStateOf(0) }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(enabled) {
+        if (!enabled) {
+            return@DisposableEffect onDispose { }
+        }
+
         val sensorManager =
             context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val accelerometer =
@@ -149,7 +167,23 @@ fun GalleryScreen(
 ) {
     val postcards by viewModel.postcards.collectAsState()
 
-    val shakeTrigger = rememberShakeTrigger()
+    var isPondModeOn by rememberSaveable { mutableStateOf(false) }
+
+    val shakeTrigger = rememberShakeTrigger(enabled = isPondModeOn)
+
+    val pondController = remember { PondController() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            pondController.reset()
+        }
+    }
+
+    LaunchedEffect(isPondModeOn) {
+        if (!isPondModeOn) {
+            pondController.reset()
+        }
+    }
 
     var selectedIds by remember {
         mutableStateOf<Set<Long>>(emptySet())
@@ -274,6 +308,48 @@ fun GalleryScreen(
                             color = InkPrimary,
                             modifier = Modifier.weight(1f)
                         )
+
+                        IconButton(
+                            onClick = {
+                                isPondModeOn = !isPondModeOn
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(
+                                        color = if (isPondModeOn) {
+                                            PondAccentTeal.copy(alpha = 0.18f)
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "💧",
+                                    fontSize = 16.sp,
+                                    color = if (isPondModeOn) {
+                                        PondAccentTeal
+                                    } else {
+                                        InkSecondary
+                                    },
+                                    modifier = Modifier.semantics {
+                                        contentDescription = if (isPondModeOn) {
+                                            "엽서의 연못 끄기"
+                                        } else {
+                                            "엽서의 연못 켜기"
+                                        }
+                                        stateDescription = if (isPondModeOn) {
+                                            "켜짐"
+                                        } else {
+                                            "꺼짐"
+                                        }
+                                    }
+                                )
+                            }
+                        }
 
                         Box {
                             IconButton(
@@ -491,6 +567,8 @@ fun GalleryScreen(
                         postcards = displayedPostcards,
                         selectedIds = selectedIds,
                         shakeTrigger = shakeTrigger,
+                        isPondModeOn = isPondModeOn,
+                        pondController = pondController,
                         paddingValues = paddingValues,
                         onItemClick = ::handleItemClick,
                         onItemLongClick = ::handleItemLongClick
@@ -569,41 +647,78 @@ private fun GalleryGrid(
     postcards: List<Postcard>,
     selectedIds: Set<Long>,
     shakeTrigger: Int,
+    isPondModeOn: Boolean,
+    pondController: PondController,
     paddingValues: PaddingValues,
     onItemClick: (Long) -> Unit,
     onItemLongClick: (Long) -> Unit
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(
-            start = 12.dp,
-            end = 12.dp,
-            top = paddingValues.calculateTopPadding() + 14.dp,
-            bottom = paddingValues.calculateBottomPadding() + 88.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    var originInWindow by remember { mutableStateOf(Offset.Zero) }
+    val gridState = rememberLazyGridState()
+
+    LaunchedEffect(isPondModeOn, gridState) {
+        if (!isPondModeOn) return@LaunchedEffect
+
+        snapshotFlow { gridState.isScrollInProgress }
+            .collect { scrolling ->
+                if (scrolling) {
+                    pondController.clearRipples()
+                }
+            }
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(GalleryPaperWhite)
-    ) {
-        lazyGridItems(
-            items = postcards,
-            key = { postcard ->
-                postcard.id
-            }
-        ) { postcard ->
-            StampCard(
-                postcard = postcard,
-                isSelected = postcard.id in selectedIds,
-                shakeTrigger = shakeTrigger,
-                onClick = {
-                    onItemClick(postcard.id)
-                },
-                onLongClick = {
-                    onItemLongClick(postcard.id)
+            .onGloballyPositioned { coordinates ->
+                if (isPondModeOn) {
+                    originInWindow = coordinates.positionInWindow()
+                    pondController.gridBoundsInWindow = coordinates.boundsInWindow()
                 }
+            }
+    ) {
+        if (isPondModeOn) {
+            PondRippleOverlay(
+                controller = pondController,
+                originInWindow = originInWindow,
+                modifier = Modifier.fillMaxSize()
             )
+        }
+
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(
+                start = 12.dp,
+                end = 12.dp,
+                top = paddingValues.calculateTopPadding() + 14.dp,
+                bottom = paddingValues.calculateBottomPadding() + 88.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            lazyGridItems(
+                items = postcards,
+                key = { postcard ->
+                    postcard.id
+                }
+            ) { postcard ->
+                StampCard(
+                    postcard = postcard,
+                    isSelected = postcard.id in selectedIds,
+                    shakeTrigger = shakeTrigger,
+                    isPondModeOn = isPondModeOn,
+                    pondController = if (isPondModeOn) pondController else null,
+                    onClick = {
+                        onItemClick(postcard.id)
+                    },
+                    onLongClick = {
+                        onItemLongClick(postcard.id)
+                    }
+                )
+            }
         }
     }
 }
