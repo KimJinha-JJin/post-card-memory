@@ -222,6 +222,85 @@ private fun localStickerDeltaToParent(
     )
 }
 
+/** 도장이 화면 밖으로 완전히 사라지지 않도록 남겨두는 가로·세로 최소 가시 길이. */
+private val SEAL_MIN_VISIBLE_EDGE = 24.dp
+private const val SEAL_MIN_VISIBLE_FRACTION = 0.30f
+
+/**
+ * 회전·확대가 반영된 도장의 최종 시각 경계(AABB)를 기준으로, 도장이 최소 가시 영역
+ * 밑으로 사라지는 경우에만 가장 가까운 안전 위치로 offset(회전 전 좌상단 좌표)을
+ * 보정한다. 이미 안전하면 원래 offset을 그대로 반환한다.
+ */
+private fun correctSealOffsetForMinimumVisibility(
+    offset: Offset,
+    sealSize: IntSize,
+    rotationDegrees: Float,
+    postcardSize: IntSize,
+    minimumVisibleEdgePx: Float
+): Offset {
+    if (
+        sealSize == IntSize.Zero ||
+        postcardSize == IntSize.Zero
+    ) {
+        return offset
+    }
+
+    val radians =
+        Math.toRadians(rotationDegrees.toDouble())
+    val absCos =
+        kotlin.math.abs(kotlin.math.cos(radians)).toFloat()
+    val absSin =
+        kotlin.math.abs(kotlin.math.sin(radians)).toFloat()
+
+    val rotatedWidth =
+        sealSize.width * absCos + sealSize.height * absSin
+    val rotatedHeight =
+        sealSize.width * absSin + sealSize.height * absCos
+
+    val minVisibleWidth =
+        minOf(
+            rotatedWidth,
+            maxOf(rotatedWidth * SEAL_MIN_VISIBLE_FRACTION, minimumVisibleEdgePx)
+        )
+    val minVisibleHeight =
+        minOf(
+            rotatedHeight,
+            maxOf(rotatedHeight * SEAL_MIN_VISIBLE_FRACTION, minimumVisibleEdgePx)
+        )
+
+    val centerX = offset.x + sealSize.width / 2f
+    val centerY = offset.y + sealSize.height / 2f
+
+    val aabbLeft = centerX - rotatedWidth / 2f
+    val aabbTop = centerY - rotatedHeight / 2f
+
+    val minAabbLeft = minVisibleWidth - rotatedWidth
+    val maxAabbLeft = postcardSize.width - minVisibleWidth
+    val correctedAabbLeft =
+        if (minAabbLeft <= maxAabbLeft) {
+            aabbLeft.coerceIn(minAabbLeft, maxAabbLeft)
+        } else {
+            (postcardSize.width - rotatedWidth) / 2f
+        }
+
+    val minAabbTop = minVisibleHeight - rotatedHeight
+    val maxAabbTop = postcardSize.height - minVisibleHeight
+    val correctedAabbTop =
+        if (minAabbTop <= maxAabbTop) {
+            aabbTop.coerceIn(minAabbTop, maxAabbTop)
+        } else {
+            (postcardSize.height - rotatedHeight) / 2f
+        }
+
+    val correctedCenterX = correctedAabbLeft + rotatedWidth / 2f
+    val correctedCenterY = correctedAabbTop + rotatedHeight / 2f
+
+    return Offset(
+        x = correctedCenterX - sealSize.width / 2f,
+        y = correctedCenterY - sealSize.height / 2f
+    )
+}
+
 /** 렌더 크기와 무관하게 도장 선택 판정에 확보하는 최소 터치 영역. 미리보기/저장 이미지 모양에는 영향 없음. */
 private val SEAL_MIN_HIT_TARGET_SIZE = 56.dp
 
@@ -922,6 +1001,10 @@ fun DetailScreen(
 
     val baseStickerPx = with(LocalDensity.current) {
         120.dp.toPx()
+    }
+
+    val sealMinVisibleEdgePx = with(LocalDensity.current) {
+        SEAL_MIN_VISIBLE_EDGE.toPx()
     }
     val stickerScaleHandleTouchSize = 44.dp
     val stickerScaleHandleVisibleSize = 24.dp
@@ -2320,10 +2403,55 @@ fun DetailScreen(
                                                             awaitPointerEvent(
                                                                 PointerEventPass.Initial
                                                             )
-                                                        activeSealPointerCount =
+                                                        val pressedCount =
                                                             event.changes.count {
                                                                 it.pressed
                                                             }
+
+                                                        // 마지막 손가락이 방금 떨어진 순간(제스처 종료) —
+                                                        // 최소 가시 영역을 벗어났다면 가장 가까운 안전
+                                                        // 위치로만 즉시 보정한다(새 Undo 스냅샷 없음).
+                                                        if (
+                                                            activeSealPointerCount > 0 &&
+                                                            pressedCount == 0
+                                                        ) {
+                                                            val currentSeal =
+                                                                latestPhotoSeals.find {
+                                                                    it.id == seal.id
+                                                                }
+                                                            val currentSealSize =
+                                                                sealSizes[seal.id]
+
+                                                            if (
+                                                                currentSeal?.offset != null &&
+                                                                currentSealSize != null &&
+                                                                postcardPreviewSize != IntSize.Zero
+                                                            ) {
+                                                                val correctedOffset =
+                                                                    correctSealOffsetForMinimumVisibility(
+                                                                        offset = currentSeal.offset,
+                                                                        sealSize = currentSealSize,
+                                                                        rotationDegrees = currentSeal.rotationDegrees,
+                                                                        postcardSize = postcardPreviewSize,
+                                                                        minimumVisibleEdgePx =
+                                                                            SEAL_MIN_VISIBLE_EDGE.toPx()
+                                                                    )
+
+                                                                if (correctedOffset != currentSeal.offset) {
+                                                                    viewModel.setPhotoSeals(
+                                                                        latestPhotoSeals.map {
+                                                                            if (it.id == seal.id) {
+                                                                                it.copy(offset = correctedOffset)
+                                                                            } else {
+                                                                                it
+                                                                            }
+                                                                        }
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+
+                                                        activeSealPointerCount = pressedCount
                                                     }
                                                 }
                                             }
@@ -2384,11 +2512,10 @@ fun DetailScreen(
                                                                     flipVertical = false
                                                                 )
 
-                                                            clampStickerOffset(
-                                                                offset = oldOffset + parentDelta,
-                                                                postcardSize = postcardPreviewSize,
-                                                                stickerSize = currentSealSize
-                                                            )
+                                                            // 제스처 도중에는 벽에 막힌 느낌을 주지 않도록
+                                                            // 손가락을 그대로 따라간다 — 경계 보정은 제스처
+                                                            // 종료 시점(위 포인터 카운트 감시부)에서 한다.
+                                                            oldOffset + parentDelta
                                                         }
 
                                                     val newScale =
@@ -3257,6 +3384,21 @@ fun DetailScreen(
                         }
 
                         4 -> {
+                            val selectedSealForBoundsCheck =
+                                photoSeals.find { it.id == selectedSealId }
+                            val selectedSealOutOfBounds =
+                                selectedSealForBoundsCheck?.offset != null &&
+                                        postcardPreviewSize != IntSize.Zero &&
+                                        sealSizes[selectedSealForBoundsCheck.id]?.let { sealSize ->
+                                            correctSealOffsetForMinimumVisibility(
+                                                offset = selectedSealForBoundsCheck.offset,
+                                                sealSize = sealSize,
+                                                rotationDegrees = selectedSealForBoundsCheck.rotationDegrees,
+                                                postcardSize = postcardPreviewSize,
+                                                minimumVisibleEdgePx = sealMinVisibleEdgePx
+                                            ) != selectedSealForBoundsCheck.offset
+                                        } == true
+
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter
@@ -3264,6 +3406,30 @@ fun DetailScreen(
                                 SealPickerPanel(
                                     photoSeals = photoSeals,
                                     selectedSealId = selectedSealId,
+                                    isSelectedSealOutOfBounds = selectedSealOutOfBounds,
+                                    onRestoreSealPosition = {
+                                        val target = selectedSealForBoundsCheck
+                                        val targetSize =
+                                            target?.let { sealSizes[it.id] }
+
+                                        if (target != null && targetSize != null) {
+                                            viewModel.recordSealSnapshotForUndo()
+                                            val restoredOffset =
+                                                centeredStickerOffset(
+                                                    postcardSize = postcardPreviewSize,
+                                                    stickerSize = targetSize
+                                                )
+                                            viewModel.setPhotoSeals(
+                                                photoSeals.map {
+                                                    if (it.id == target.id) {
+                                                        it.copy(offset = restoredOffset)
+                                                    } else {
+                                                        it
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    },
                                     onSelectSeal = { id ->
                                         viewModel.setSelectedSealId(
                                             if (selectedSealId == id) {

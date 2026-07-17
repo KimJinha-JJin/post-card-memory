@@ -65,6 +65,8 @@ fun SealPickerPanel(
     onAddSeal: (SealType) -> Unit,
     onDeleteSeal: (String) -> Unit,
     onColorSelected: (String, Long) -> Unit,
+    isSelectedSealOutOfBounds: Boolean,
+    onRestoreSealPosition: () -> Unit,
     onUndoSeal: () -> Unit,
     onRedoSeal: () -> Unit,
     canUndoSeal: Boolean,
@@ -320,6 +322,16 @@ fun SealPickerPanel(
                     )
                 }
             }
+        }
+
+        if (isSelectedSealOutOfBounds) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            EditorOutlineButton(
+                text = "위치 되돌리기",
+                onClick = onRestoreSealPosition,
+                enabled = enabled
+            )
         }
 
         Spacer(modifier = Modifier.height(14.dp))
