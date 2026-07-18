@@ -3,12 +3,15 @@ package com.postcardmemory.ui.gallery
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -21,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -55,6 +60,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.time.Duration.Companion.milliseconds
@@ -75,6 +81,10 @@ private const val RANCH_SHADOW_MIN_ALPHA = 0.055f
 private const val RANCH_SHADOW_PARALLAX = 0.88f
 private const val RANCH_TAP_PRESS_SCALE = 0.97f
 private const val RANCH_TAP_BOUNCE_SCALE = 1.035f
+private const val RANCH_MAX_STRETCH_X = 1.4f
+private const val RANCH_MAX_STRETCH_Y = 1.32f
+private const val RANCH_STRETCH_RESISTANCE = 1.55f
+private const val RANCH_STRETCH_CENTER_FOLLOW = 0.28f
 
 @Composable
 fun SheepRanchStage(
@@ -85,6 +95,9 @@ fun SheepRanchStage(
 ) {
     val positions = remember(postcards.map { it.id }) {
         mutableStateMapOf<Long, Float>()
+    }
+    val stretchingCardId = remember {
+        mutableStateOf<Long?>(null)
     }
 
     BoxWithConstraints(
@@ -105,6 +118,10 @@ fun SheepRanchStage(
         val cardHeightPx = with(density) { (cardWidth + 36.dp).toPx() }
         val stagePaddingPx = with(density) { RanchStagePadding.toPx() }
         val bottomReservedPx = with(density) { RanchBottomReserved.toPx() }
+
+        SheepRanchCloudLayer(
+            modifier = Modifier.matchParentSize()
+        )
 
         RanchBackground(
             modifier = Modifier.matchParentSize()
@@ -137,6 +154,7 @@ fun SheepRanchStage(
                 stagePaddingPx = stagePaddingPx,
                 bottomReservedPx = bottomReservedPx,
                 positions = positions,
+                stretchingCardId = stretchingCardId,
                 onPostcardClick = onPostcardClick,
                 modifier = Modifier.size(width = cardWidth, height = cardWidth + 36.dp)
             )
@@ -190,6 +208,7 @@ private fun SheepRanchCard(
     stagePaddingPx: Float,
     bottomReservedPx: Float,
     positions: MutableMap<Long, Float>,
+    stretchingCardId: MutableState<Long?>,
     onPostcardClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -205,28 +224,33 @@ private fun SheepRanchCard(
     val landingScaleY = remember(postcard.id) { Animatable(1f) }
     val depthOvershootScale = remember(postcard.id) { Animatable(1f) }
     val tapScale = remember(postcard.id) { Animatable(1f) }
+    val landingWobbleRotation = remember(postcard.id) { Animatable(0f) }
+    var stretchScaleX by remember(postcard.id) { mutableFloatStateOf(1f) }
+    var stretchScaleY by remember(postcard.id) { mutableFloatStateOf(1f) }
+    var stretchOffsetX by remember(postcard.id) { mutableFloatStateOf(0f) }
+    var stretchOffsetY by remember(postcard.id) { mutableFloatStateOf(0f) }
+    var stretchRotation by remember(postcard.id) { mutableFloatStateOf(0f) }
     var direction by remember(postcard.id) { mutableIntStateOf(spec.direction) }
     var walkCount by remember(postcard.id) { mutableIntStateOf(0) }
     var isGrabbed by remember(postcard.id) { mutableStateOf(false) }
     var isDropping by remember(postcard.id) { mutableStateOf(false) }
+    var isStretching by remember(postcard.id) { mutableStateOf(false) }
     var suppressTap by remember(postcard.id) { mutableStateOf(false) }
-    var dragLean by remember(postcard.id) { mutableStateOf(0f) }
-    var dragTiltY by remember(postcard.id) { mutableStateOf(0f) }
-    var resistanceShakeX by remember(postcard.id) { mutableStateOf(0f) }
-    var resistanceRotation by remember(postcard.id) { mutableStateOf(0f) }
+    var dragLean by remember(postcard.id) { mutableFloatStateOf(0f) }
+    var dragTiltY by remember(postcard.id) { mutableFloatStateOf(0f) }
+    var resistanceShakeX by remember(postcard.id) { mutableFloatStateOf(0f) }
+    var resistanceRotation by remember(postcard.id) { mutableFloatStateOf(0f) }
 
-    val minX = stagePaddingPx
-    val maxX = (stageWidthPx - cardWidthPx - stagePaddingPx).coerceAtLeast(minX)
+    val maxX = (stageWidthPx - cardWidthPx - stagePaddingPx).coerceAtLeast(stagePaddingPx)
     val maxLiftHeight = (stageHeightPx * RANCH_MAX_LIFT_FRACTION)
         .coerceAtLeast(cardHeightPx)
-    val minY = stagePaddingPx
     val floorTopMin = (stageHeightPx * 0.60f).coerceAtLeast(stagePaddingPx)
     val floorTopMax = (stageHeightPx - bottomReservedPx - cardHeightPx)
         .coerceAtLeast(floorTopMin)
     val floorY = lerp(floorTopMin, floorTopMax, spec.startJitter)
     val liftHeight = (floorY - y.value + jump.value).coerceAtLeast(0f)
     val depthProgress = (liftHeight / maxLiftHeight).coerceIn(0f, 1f)
-    val currentDepthProgress by rememberUpdatedState(depthProgress)
+    val latestDepthProgress = rememberUpdatedState(depthProgress)
     val depthScale = lerp(1f, RANCH_MAX_DEPTH_SCALE, depthProgress)
     val shadowScale = lerp(1f, RANCH_SHADOW_MIN_SCALE, depthProgress)
     val shadowAlpha = lerp(0.22f, RANCH_SHADOW_MIN_ALPHA, depthProgress)
@@ -240,7 +264,7 @@ private fun SheepRanchCard(
     )
 
     LaunchedEffect(stageWidthPx, stageHeightPx, cardWidthPx, postcard.id) {
-        val startX = lerp(minX, maxX, spec.startBias)
+        val startX = lerp(stagePaddingPx, maxX, spec.startBias)
         x.snapTo(startX)
         y.snapTo(floorY)
         jump.snapTo(0f)
@@ -249,11 +273,17 @@ private fun SheepRanchCard(
         landingScaleY.snapTo(1f)
         depthOvershootScale.snapTo(1f)
         tapScale.snapTo(1f)
+        landingWobbleRotation.snapTo(0f)
+        stretchScaleX = 1f
+        stretchScaleY = 1f
+        stretchOffsetX = 0f
+        stretchOffsetY = 0f
+        stretchRotation = 0f
         positions[postcard.id] = startX
     }
 
-    LaunchedEffect(postcard.id, stageWidthPx, stageHeightPx, isGrabbed, isDropping) {
-        if (isGrabbed || isDropping || stageWidthPx <= 0f || stageHeightPx <= 0f) {
+    LaunchedEffect(postcard.id, stageWidthPx, stageHeightPx, isGrabbed, isDropping, isStretching) {
+        if (isGrabbed || isDropping || isStretching || stageWidthPx <= 0f || stageHeightPx <= 0f) {
             return@LaunchedEffect
         }
 
@@ -261,25 +291,25 @@ private fun SheepRanchCard(
 
         while (isActive) {
             delay(spec.pauseMillis.milliseconds)
-            if (isGrabbed || isDropping) break
+            if (isGrabbed || isDropping || isStretching) break
 
             val distancePx = with(density) {
                 (spec.speedDpPerSecond * spec.walkMillis / 1000f).dp.toPx()
             }
             val nearEdge =
-                (direction < 0 && x.value <= minX + cardWidthPx * 0.3f) ||
+                (direction < 0 && x.value <= stagePaddingPx + cardWidthPx * 0.3f) ||
                         (direction > 0 && x.value >= maxX - cardWidthPx * 0.3f)
             if (nearEdge) {
                 direction *= -1
             }
 
-            var targetX = (x.value + distancePx * direction).coerceIn(minX, maxX)
+            var targetX = (x.value + distancePx * direction).coerceIn(stagePaddingPx, maxX)
             val tooClose = positions
                 .filterKeys { it != postcard.id }
                 .values
                 .any { otherX -> abs(otherX - targetX) < cardWidthPx * 0.72f }
             if (tooClose) {
-                targetX = (x.value - distancePx * direction * 0.75f).coerceIn(minX, maxX)
+                targetX = (x.value - distancePx * direction * 0.75f).coerceIn(stagePaddingPx, maxX)
                 direction *= -1
             }
 
@@ -293,7 +323,7 @@ private fun SheepRanchCard(
             positions[postcard.id] = targetX
             walkCount++
 
-            if (walkCount % spec.jumpEvery == 0 && !isGrabbed && !isDropping) {
+            if (walkCount % spec.jumpEvery == 0 && !isGrabbed && !isDropping && !isStretching) {
                 val jumpHeightPx = with(density) { spec.jumpHeightDp.dp.toPx() }
                 jump.animateTo(
                     jumpHeightPx,
@@ -308,7 +338,7 @@ private fun SheepRanchCard(
                 )
             }
 
-            if (targetX <= minX + 1f || targetX >= maxX - 1f) {
+            if (targetX <= stagePaddingPx + 1f || targetX >= maxX - 1f) {
                 direction *= -1
             }
         }
@@ -326,60 +356,98 @@ private fun SheepRanchCard(
         while (isActive) {
             val now = withFrameMillis { it }
             val amplitudePx = with(density) {
-                lerp(0.6f, 2.4f, currentDepthProgress).dp.toPx()
+                lerp(0.6f, 2.4f, latestDepthProgress.value).dp.toPx()
             }
-            val rotationAmplitude = lerp(0.5f, 1.8f, currentDepthProgress)
+            val rotationAmplitude = lerp(0.5f, 1.8f, latestDepthProgress.value)
             val phase = (now % 120L) / 120f * 2f * PI.toFloat()
             resistanceShakeX = sin(phase) * amplitudePx
             resistanceRotation = sin(phase * 1.35f) * rotationAmplitude
         }
     }
 
-    suspend fun dropToFloor() {
+    suspend fun dropToFloor(impactStrength: Float) {
+        val impact = impactStrength.coerceIn(0f, 1f)
         isDropping = true
-        val firstBounce = with(density) { (6f + spec.seed % 7).dp.toPx() }
-        val secondBounce = with(density) { (2f + spec.seed % 4).dp.toPx() }
+        val firstBounceDp = lerp(7f, 20f, impact)
+        val secondBounceDp = firstBounceDp * lerp(0.42f, 0.54f, impact)
+        val thirdBounceDp = firstBounceDp * lerp(0.16f, 0.24f, impact)
+        val firstBounce = with(density) { firstBounceDp.dp.toPx() }
+        val secondBounce = with(density) { secondBounceDp.dp.toPx() }
+        val thirdBounce = with(density) { thirdBounceDp.dp.toPx() }
+        val dropMillis = lerp(220f, 280f, impact).roundToInt()
+        val firstRiseMillis = lerp(105f, 135f, impact).roundToInt()
+        val firstLandMillis = lerp(90f, 110f, impact).roundToInt()
+        val secondRiseMillis = lerp(70f, 90f, impact).roundToInt()
+        val secondLandMillis = lerp(60f, 80f, impact).roundToInt()
+        val thirdRiseMillis = lerp(45f, 65f, impact).roundToInt()
+        val finalLandMillis = lerp(50f, 60f, impact).roundToInt()
+        val restMillis = lerp(150f, 230f, impact).roundToInt()
+        val firstSquashX = lerp(1.035f, 1.075f, impact)
+        val firstSquashY = lerp(0.955f, 0.925f, impact)
+        val stretchX = lerp(0.99f, 0.975f, impact)
+        val stretchY = lerp(1.025f, 1.065f, impact)
+        val secondSquashX = lerp(1.018f, 1.045f, impact)
+        val secondSquashY = lerp(0.985f, 0.955f, impact)
+        val finalStretchY = lerp(1.01f, 1.02f, impact)
+        val wobbleDegrees = lerp(0.35f, 0.95f, impact)
+
         y.animateTo(
             floorY,
-            animationSpec = tween(durationMillis = 260)
+            animationSpec = tween(durationMillis = dropMillis)
         )
         coroutineScope {
-            launch { depthOvershootScale.animateTo(1.035f, tween(durationMillis = 55)) }
-            launch { landingSquash.animateTo(1f, tween(durationMillis = 55)) }
-            launch { landingScaleX.animateTo(1.025f, tween(durationMillis = 55)) }
-            launch { landingScaleY.animateTo(0.93f, tween(durationMillis = 55)) }
+            launch { depthOvershootScale.animateTo(1.02f, tween(durationMillis = 45)) }
+            launch { landingSquash.animateTo(1f, tween(durationMillis = 45)) }
+            launch { landingScaleX.animateTo(firstSquashX, tween(durationMillis = 45)) }
+            launch { landingScaleY.animateTo(firstSquashY, tween(durationMillis = 45)) }
         }
         coroutineScope {
             launch { landingSquash.animateTo(0.35f, tween(durationMillis = 90)) }
-            launch { landingScaleX.animateTo(0.985f, tween(durationMillis = 90)) }
-            launch { landingScaleY.animateTo(1.035f, tween(durationMillis = 90)) }
-            launch { y.animateTo(floorY - firstBounce, tween(durationMillis = 120)) }
+            launch { landingScaleX.animateTo(stretchX, tween(durationMillis = firstRiseMillis)) }
+            launch { landingScaleY.animateTo(stretchY, tween(durationMillis = firstRiseMillis)) }
+            launch { y.animateTo(floorY - firstBounce, tween(durationMillis = firstRiseMillis)) }
         }
         coroutineScope {
-            launch {
-                y.animateTo(
-                    floorY,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                )
-            }
-            launch { depthOvershootScale.animateTo(1f, tween(durationMillis = 120)) }
-            launch { landingScaleX.animateTo(1.015f, tween(durationMillis = 90)) }
-            launch { landingScaleY.animateTo(0.99f, tween(durationMillis = 90)) }
+            launch { y.animateTo(floorY, tween(durationMillis = firstLandMillis)) }
+            launch { depthOvershootScale.animateTo(1f, tween(durationMillis = firstLandMillis)) }
+            launch { landingSquash.animateTo(0.48f, tween(durationMillis = firstLandMillis)) }
+            launch { landingScaleX.animateTo(secondSquashX, tween(durationMillis = firstLandMillis)) }
+            launch { landingScaleY.animateTo(secondSquashY, tween(durationMillis = firstLandMillis)) }
         }
         coroutineScope {
-            launch { y.animateTo(floorY - secondBounce, tween(durationMillis = 90)) }
-            launch { landingScaleX.animateTo(1f, tween(durationMillis = 90)) }
-            launch { landingScaleY.animateTo(1.015f, tween(durationMillis = 90)) }
+            launch { y.animateTo(floorY - secondBounce, tween(durationMillis = secondRiseMillis)) }
+            launch { landingSquash.animateTo(0.16f, tween(durationMillis = secondRiseMillis)) }
+            launch { landingScaleX.animateTo(0.99f, tween(durationMillis = secondRiseMillis)) }
+            launch { landingScaleY.animateTo(finalStretchY, tween(durationMillis = secondRiseMillis)) }
         }
         coroutineScope {
-            launch { y.animateTo(floorY, tween(durationMillis = 110)) }
-            launch { landingSquash.animateTo(0f, tween(durationMillis = 110)) }
-            launch { landingScaleX.animateTo(1f, tween(durationMillis = 110)) }
-            launch { landingScaleY.animateTo(1f, tween(durationMillis = 110)) }
-            launch { depthOvershootScale.animateTo(1f, tween(durationMillis = 110)) }
+            launch { y.animateTo(floorY, tween(durationMillis = secondLandMillis)) }
+            launch { landingSquash.animateTo(0.24f, tween(durationMillis = secondLandMillis)) }
+            launch { landingScaleX.animateTo(1.025f, tween(durationMillis = secondLandMillis)) }
+            launch { landingScaleY.animateTo(0.985f, tween(durationMillis = secondLandMillis)) }
+        }
+        coroutineScope {
+            launch { y.animateTo(floorY - thirdBounce, tween(durationMillis = thirdRiseMillis)) }
+            launch { landingSquash.animateTo(0.08f, tween(durationMillis = thirdRiseMillis)) }
+            launch { landingScaleX.animateTo(0.995f, tween(durationMillis = thirdRiseMillis)) }
+            launch { landingScaleY.animateTo(finalStretchY, tween(durationMillis = thirdRiseMillis)) }
+        }
+        coroutineScope {
+            launch { y.animateTo(floorY, tween(durationMillis = finalLandMillis)) }
+            launch { landingSquash.animateTo(0.12f, tween(durationMillis = finalLandMillis)) }
+            launch { landingScaleX.animateTo(1.012f, tween(durationMillis = finalLandMillis)) }
+            launch { landingScaleY.animateTo(0.992f, tween(durationMillis = finalLandMillis)) }
+        }
+        coroutineScope {
+            launch { landingWobbleRotation.animateTo(wobbleDegrees * direction, tween(durationMillis = 70)) }
+            launch { landingScaleX.animateTo(1f, tween(durationMillis = 70)) }
+            launch { landingScaleY.animateTo(1f, tween(durationMillis = 70)) }
+            launch { landingSquash.animateTo(0f, tween(durationMillis = 70)) }
+        }
+        landingWobbleRotation.animateTo(-wobbleDegrees * 0.65f * direction, tween(durationMillis = 75))
+        landingWobbleRotation.animateTo(0f, tween(durationMillis = 95))
+        if (restMillis > 0) {
+            delay(restMillis.milliseconds)
         }
         coroutineScope {
             launch {
@@ -389,6 +457,11 @@ private fun SheepRanchCard(
                 resistanceRotation = 0f
                 tapScale.snapTo(1f)
                 jump.snapTo(0f)
+                landingScaleX.snapTo(1f)
+                landingScaleY.snapTo(1f)
+                landingSquash.snapTo(0f)
+                depthOvershootScale.snapTo(1f)
+                landingWobbleRotation.snapTo(0f)
                 suppressTap = false
             }
         }
@@ -396,14 +469,84 @@ private fun SheepRanchCard(
         positions[postcard.id] = x.value
     }
 
+    suspend fun releaseStretch() {
+        suspend fun animateStretchValue(
+            from: Float,
+            to: Float,
+            durationMillis: Int,
+            setter: (Float) -> Unit
+        ) {
+            animate(
+                initialValue = from,
+                targetValue = to,
+                animationSpec = tween(durationMillis = durationMillis)
+            ) { value, _ ->
+                setter(value)
+            }
+        }
+
+        val wasHorizontal = stretchScaleX >= stretchScaleY
+        val contractX = if (wasHorizontal) 0.94f else 1.03f
+        val contractY = if (wasHorizontal) 1.04f else 0.95f
+
+        coroutineScope {
+            launch { animateStretchValue(stretchScaleX, contractX, 120) { stretchScaleX = it } }
+            launch { animateStretchValue(stretchScaleY, contractY, 120) { stretchScaleY = it } }
+            launch { animateStretchValue(stretchOffsetX, 0f, 150) { stretchOffsetX = it } }
+            launch { animateStretchValue(stretchOffsetY, 0f, 150) { stretchOffsetY = it } }
+            launch {
+                animateStretchValue(
+                    stretchRotation,
+                    -stretchRotation * 0.45f,
+                    120
+                ) { stretchRotation = it }
+            }
+        }
+        coroutineScope {
+            launch {
+                animateStretchValue(
+                    stretchScaleX,
+                    if (wasHorizontal) 1.025f else 0.99f,
+                    115
+                ) { stretchScaleX = it }
+            }
+            launch {
+                animateStretchValue(
+                    stretchScaleY,
+                    if (wasHorizontal) 0.985f else 1.02f,
+                    115
+                ) { stretchScaleY = it }
+            }
+            launch {
+                animateStretchValue(
+                    stretchRotation,
+                    stretchRotation * 0.35f,
+                    90
+                ) { stretchRotation = it }
+            }
+        }
+        coroutineScope {
+            launch { animateStretchValue(stretchScaleX, 1f, 140) { stretchScaleX = it } }
+            launch { animateStretchValue(stretchScaleY, 1f, 140) { stretchScaleY = it } }
+            launch { animateStretchValue(stretchRotation, 0f, 120) { stretchRotation = it } }
+        }
+        delay(90.milliseconds)
+        stretchScaleX = 1f
+        stretchScaleY = 1f
+        stretchOffsetX = 0f
+        stretchOffsetY = 0f
+        stretchRotation = 0f
+        isStretching = false
+    }
+
     val walkPhase = ((System.currentTimeMillis() + spec.seed) % 720L) / 720f
     val walkStep = sin(walkPhase * 2f * PI.toFloat())
-    val walkBounce = if (!isGrabbed && !isDropping) {
+    val walkBounce = if (!isGrabbed && !isDropping && !isStretching) {
         walkStep * 1.4f
     } else {
         0f
     }
-    val footfall = if (!isGrabbed && !isDropping && walkStep < -0.72f) {
+    val footfall = if (!isGrabbed && !isDropping && !isStretching && walkStep < -0.72f) {
         ((abs(walkStep) - 0.72f) / 0.28f).coerceIn(0f, 1f)
     } else {
         0f
@@ -420,7 +563,8 @@ private fun SheepRanchCard(
                 walkScaleX *
                 jumpScale *
                 landingScaleX.value *
-                depthOvershootScale.value
+                depthOvershootScale.value *
+                stretchScaleX
     val finalScaleY =
         depthScale *
                 cardScale *
@@ -428,14 +572,20 @@ private fun SheepRanchCard(
                 walkScaleY *
                 jumpScale *
                 landingScaleY.value *
-                depthOvershootScale.value
+                depthOvershootScale.value *
+                stretchScaleY
     val shadowParallaxX = lerp(x.value, x.value * RANCH_SHADOW_PARALLAX, depthProgress)
-    val shadowWidthScale = shadowScale * lerp(1f, 1.14f, depthProgress)
-    val shadowHeightScale = shadowScale * lerp(1f, 0.72f, depthProgress)
+    val stretchShadowX = lerp(1f, 1.22f, ((stretchScaleX - 1f) / 0.4f).coerceIn(0f, 1f))
+    val stretchShadowY = lerp(1f, 0.94f, ((stretchScaleY - 1f) / 0.32f).coerceIn(0f, 1f))
+    val shadowAlphaWithStretch =
+        (shadowAlpha - ((stretchScaleY - 1f).coerceAtLeast(0f) * 0.06f))
+            .coerceAtLeast(0.045f)
+    val shadowWidthScale = shadowScale * lerp(1f, 1.14f, depthProgress) * stretchShadowX
+    val shadowHeightScale = shadowScale * lerp(1f, 0.72f, depthProgress) * stretchShadowY
 
     Box(
         modifier = Modifier
-            .zIndex(if (isGrabbed || isDropping) 4f else 1f + index / 100f)
+            .zIndex(if (isGrabbed || isDropping || isStretching) 4f else 1f + index / 100f)
             .offsetInStage(
                 shadowParallaxX,
                 floorY + cardHeightPx - with(density) { 11.dp.toPx() }
@@ -443,7 +593,7 @@ private fun SheepRanchCard(
             .graphicsLayer {
                 scaleX = shadowWidthScale * (1f + landingSquash.value * 0.18f)
                 scaleY = shadowHeightScale * (1f - landingSquash.value * 0.08f)
-                alpha = shadowAlpha
+                alpha = shadowAlphaWithStretch
             }
     ) {
         Canvas(
@@ -461,7 +611,7 @@ private fun SheepRanchCard(
 
     Box(
         modifier = modifier
-            .zIndex(if (isGrabbed || isDropping) 5f else 2f + index / 100f)
+            .zIndex(if (isGrabbed || isDropping || isStretching) 5f else 2f + index / 100f)
             .offsetInStage(x.value, y.value - jump.value)
             .graphicsLayer {
                 translationY += walkBounce
@@ -471,8 +621,12 @@ private fun SheepRanchCard(
                         } else {
                             direction * 1.8f
                         }) -
-                        landingSquash.value * direction * 2f
+                        landingSquash.value * direction * 2f +
+                        landingWobbleRotation.value +
+                        stretchRotation
                 translationX += if (isGrabbed) resistanceShakeX else 0f
+                translationX += stretchOffsetX
+                translationY += stretchOffsetY
                 rotationX = if (isGrabbed || isDropping) {
                     -RANCH_MAX_ROTATION_X * depthProgress
                 } else {
@@ -492,29 +646,186 @@ private fun SheepRanchCard(
             }
             .pointerInput(postcard.id, floorY, stageWidthPx, stageHeightPx) {
                 coroutineScope {
+                    val gestureScope = this
+                    launch {
+                        awaitEachGesture {
+                            val firstDown = awaitFirstDown(requireUnconsumed = false)
+                            var stretchStarted = false
+
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val pressedChanges = event.changes.filter { it.pressed }
+
+                                if (pressedChanges.isEmpty()) {
+                                    if (stretchStarted && stretchingCardId.value == postcard.id) {
+                                        stretchingCardId.value = null
+                                        suppressTap = false
+                                    }
+                                    break
+                                }
+
+                                if (
+                                    !stretchStarted &&
+                                    pressedChanges.size >= 2 &&
+                                    !isGrabbed &&
+                                    !isDropping &&
+                                    !isStretching &&
+                                    jump.value <= 1f &&
+                                    (stretchingCardId.value == null ||
+                                            stretchingCardId.value == postcard.id)
+                                ) {
+                                    val first = pressedChanges.firstOrNull {
+                                        it.id == firstDown.id
+                                    } ?: pressedChanges[0]
+                                    val second = pressedChanges.firstOrNull {
+                                        it.id != first.id
+                                    } ?: pressedChanges[1]
+                                    val startFirst = first.position
+                                    val startSecond = second.position
+                                    val startVector = startSecond - startFirst
+                                    val startMidpoint = (startFirst + startSecond) / 2f
+                                    val minAxisPx = with(density) { 24.dp.toPx() }
+
+                                    stretchStarted = true
+                                    isStretching = true
+                                    suppressTap = true
+                                    stretchingCardId.value = postcard.id
+                                    gestureScope.launch {
+                                        x.stop()
+                                        y.stop()
+                                        jump.stop()
+                                        jump.snapTo(0f)
+                                        tapScale.snapTo(1f)
+                                        landingSquash.snapTo(0f)
+                                        landingWobbleRotation.snapTo(0f)
+                                    }
+                                    first.consume()
+                                    second.consume()
+
+                                    while (true) {
+                                        val stretchEvent = awaitPointerEvent()
+                                        val activeChanges = stretchEvent.changes.filter { it.pressed }
+                                        val currentFirst = activeChanges.firstOrNull {
+                                            it.id == first.id
+                                        }
+                                        val currentSecond = activeChanges.firstOrNull {
+                                            it.id == second.id
+                                        }
+
+                                        if (currentFirst == null || currentSecond == null) {
+                                            gestureScope.launch {
+                                                releaseStretch()
+                                            }
+                                            stretchEvent.changes.forEach { it.consume() }
+                                            if (activeChanges.isEmpty() &&
+                                                stretchingCardId.value == postcard.id
+                                            ) {
+                                                stretchingCardId.value = null
+                                                suppressTap = false
+                                            }
+                                            break
+                                        }
+
+                                        val currentVector =
+                                            currentSecond.position - currentFirst.position
+                                        val currentMidpoint =
+                                            (currentFirst.position + currentSecond.position) / 2f
+                                        val startAbsX = abs(startVector.x).coerceAtLeast(minAxisPx)
+                                        val startAbsY = abs(startVector.y).coerceAtLeast(minAxisPx)
+                                        val pullX =
+                                            ((abs(currentVector.x) - startAbsX) /
+                                                    (cardWidthPx * 0.45f))
+                                                .coerceAtLeast(0f)
+                                        val pullY =
+                                            ((abs(currentVector.y) - startAbsY) /
+                                                    (cardHeightPx * 0.45f))
+                                                .coerceAtLeast(0f)
+                                        val resistedX =
+                                            1f - exp(-pullX * RANCH_STRETCH_RESISTANCE)
+                                        val resistedY =
+                                            1f - exp(-pullY * RANCH_STRETCH_RESISTANCE)
+                                        val targetStretchX =
+                                            (1f + resistedX * 0.4f - resistedY * 0.045f)
+                                                .coerceIn(0.96f, RANCH_MAX_STRETCH_X)
+                                        val targetStretchY =
+                                            (1f + resistedY * 0.32f - resistedX * 0.055f)
+                                                .coerceIn(0.94f, RANCH_MAX_STRETCH_Y)
+                                        val midpointDelta =
+                                            (currentMidpoint - startMidpoint) *
+                                                    RANCH_STRETCH_CENTER_FOLLOW
+                                        val targetOffsetX =
+                                            midpointDelta.x.coerceIn(
+                                                stagePaddingPx - x.value,
+                                                maxX - x.value
+                                            )
+                                        val targetOffsetY =
+                                            midpointDelta.y.coerceIn(
+                                                stagePaddingPx - y.value,
+                                                floorY - y.value
+                                            )
+                                        val tiltFromHands =
+                                            ((currentFirst.position.y - currentSecond.position.y) /
+                                                    cardHeightPx * 2.2f)
+                                                .coerceIn(-2f, 2f)
+                                        val stretchAmount =
+                                            ((targetStretchX - 1f).coerceAtLeast(0f) / 0.4f +
+                                                    (targetStretchY - 1f).coerceAtLeast(0f) / 0.32f)
+                                                .coerceIn(0f, 1f)
+                                        val jitter =
+                                            if (stretchAmount > 0.82f) {
+                                                sin(System.currentTimeMillis() / 42f) *
+                                                        (stretchAmount - 0.82f) *
+                                                        1.6f
+                                            } else {
+                                                0f
+                                            }
+
+                                        stretchScaleX = targetStretchX
+                                        stretchScaleY = targetStretchY
+                                        stretchOffsetX = targetOffsetX
+                                        stretchOffsetY = targetOffsetY
+                                        stretchRotation = tiltFromHands + jitter
+                                        stretchEvent.changes.forEach { it.consume() }
+                                    }
+                                } else if (stretchStarted) {
+                                    event.changes.forEach { it.consume() }
+                                }
+                            }
+
+                        }
+                    }
                     launch {
                         detectTapGestures(
                             onPress = {
-                                if (!isGrabbed && !isDropping) {
+                                if (!isGrabbed && !isDropping && !isStretching) {
                                     suppressTap = false
-                                    tapScale.animateTo(
-                                        RANCH_TAP_PRESS_SCALE,
-                                        tween(durationMillis = 45)
-                                    )
+                                    gestureScope.launch {
+                                        tapScale.animateTo(
+                                            RANCH_TAP_PRESS_SCALE,
+                                            tween(durationMillis = 45)
+                                        )
+                                    }
                                     val released = tryAwaitRelease()
                                     if (
                                         released &&
                                         !suppressTap &&
                                         !isGrabbed &&
-                                        !isDropping
+                                        !isDropping &&
+                                        !isStretching
                                     ) {
-                                        tapScale.animateTo(
-                                            RANCH_TAP_BOUNCE_SCALE,
-                                            tween(durationMillis = 50)
-                                        )
-                                        onPostcardClick(postcard.id)
+                                        gestureScope.launch {
+                                            tapScale.animateTo(
+                                                RANCH_TAP_BOUNCE_SCALE,
+                                                tween(durationMillis = 50)
+                                            )
+                                            onPostcardClick(postcard.id)
+                                            tapScale.animateTo(1f, tween(durationMillis = 70))
+                                        }
+                                    } else {
+                                        gestureScope.launch {
+                                            tapScale.animateTo(1f, tween(durationMillis = 70))
+                                        }
                                     }
-                                    tapScale.animateTo(1f, tween(durationMillis = 70))
                                     suppressTap = false
                                 }
                             }
@@ -523,39 +834,52 @@ private fun SheepRanchCard(
                     launch {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
-                                isDropping = false
-                                isGrabbed = true
-                                suppressTap = true
-                                dragLean = 0f
-                                dragTiltY = 0f
-                                launch { tapScale.snapTo(1f) }
+                                if (!isStretching && stretchingCardId.value == null) {
+                                    isDropping = false
+                                    isGrabbed = true
+                                    suppressTap = true
+                                    dragLean = 0f
+                                    dragTiltY = 0f
+                                    launch { tapScale.snapTo(1f) }
+                                }
                             },
                             onDrag = { change, dragAmount ->
-                                change.consume()
-                                val nextX = (x.value + dragAmount.x).coerceIn(minX, maxX)
-                                val nextY = (y.value + dragAmount.y)
-                                    .coerceIn((floorY - maxLiftHeight).coerceAtLeast(minY), floorY)
-                                dragLean = (dragAmount.x / 18f).coerceIn(-2f, 2f)
-                                dragTiltY = (dragTiltY * 0.7f +
-                                        (dragAmount.x / 22f).coerceIn(
-                                            -RANCH_MAX_ROTATION_Y,
-                                            RANCH_MAX_ROTATION_Y
-                                        ) * 0.3f)
-                                launch {
-                                    x.snapTo(nextX)
-                                    y.snapTo(nextY)
+                                if (isGrabbed && !isStretching) {
+                                    change.consume()
+                                    val nextX = (x.value + dragAmount.x).coerceIn(stagePaddingPx, maxX)
+                                    val nextY = (y.value + dragAmount.y)
+                                        .coerceIn(
+                                            (floorY - maxLiftHeight).coerceAtLeast(stagePaddingPx),
+                                            floorY
+                                        )
+                                    dragLean = (dragAmount.x / 18f).coerceIn(-2f, 2f)
+                                    dragTiltY = (dragTiltY * 0.7f +
+                                            (dragAmount.x / 22f).coerceIn(
+                                                -RANCH_MAX_ROTATION_Y,
+                                                RANCH_MAX_ROTATION_Y
+                                            ) * 0.3f)
+                                    launch {
+                                        x.snapTo(nextX)
+                                        y.snapTo(nextY)
+                                    }
                                 }
                             },
                             onDragEnd = {
-                                isGrabbed = false
-                                launch {
-                                    dropToFloor()
+                                if (isGrabbed) {
+                                    val impactStrength = depthProgress
+                                    isGrabbed = false
+                                    launch {
+                                        dropToFloor(impactStrength)
+                                    }
                                 }
                             },
                             onDragCancel = {
-                                isGrabbed = false
-                                launch {
-                                    dropToFloor()
+                                if (isGrabbed) {
+                                    val impactStrength = depthProgress
+                                    isGrabbed = false
+                                    launch {
+                                        dropToFloor(impactStrength)
+                                    }
                                 }
                             }
                         )
