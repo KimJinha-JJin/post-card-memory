@@ -67,6 +67,14 @@ private val RanchBottomReserved = 92.dp
 private val RanchCardCorner = 12.dp
 private const val RANCH_MAX_LIFT_FRACTION = 0.62f
 private const val RANCH_DRAG_SCALE = 1.04f
+private const val RANCH_MAX_DEPTH_SCALE = 0.86f
+private const val RANCH_MAX_ROTATION_X = 6f
+private const val RANCH_MAX_ROTATION_Y = 3f
+private const val RANCH_SHADOW_MIN_SCALE = 0.42f
+private const val RANCH_SHADOW_MIN_ALPHA = 0.055f
+private const val RANCH_SHADOW_PARALLAX = 0.88f
+private const val RANCH_TAP_PRESS_SCALE = 0.97f
+private const val RANCH_TAP_BOUNCE_SCALE = 1.035f
 
 @Composable
 fun SheepRanchStage(
@@ -193,11 +201,17 @@ private fun SheepRanchCard(
     val y = remember(postcard.id) { Animatable(0f) }
     val jump = remember(postcard.id) { Animatable(0f) }
     val landingSquash = remember(postcard.id) { Animatable(0f) }
+    val landingScaleX = remember(postcard.id) { Animatable(1f) }
+    val landingScaleY = remember(postcard.id) { Animatable(1f) }
+    val depthOvershootScale = remember(postcard.id) { Animatable(1f) }
+    val tapScale = remember(postcard.id) { Animatable(1f) }
     var direction by remember(postcard.id) { mutableIntStateOf(spec.direction) }
     var walkCount by remember(postcard.id) { mutableIntStateOf(0) }
     var isGrabbed by remember(postcard.id) { mutableStateOf(false) }
     var isDropping by remember(postcard.id) { mutableStateOf(false) }
+    var suppressTap by remember(postcard.id) { mutableStateOf(false) }
     var dragLean by remember(postcard.id) { mutableStateOf(0f) }
+    var dragTiltY by remember(postcard.id) { mutableStateOf(0f) }
     var resistanceShakeX by remember(postcard.id) { mutableStateOf(0f) }
     var resistanceRotation by remember(postcard.id) { mutableStateOf(0f) }
 
@@ -211,10 +225,11 @@ private fun SheepRanchCard(
         .coerceAtLeast(floorTopMin)
     val floorY = lerp(floorTopMin, floorTopMax, spec.startJitter)
     val liftHeight = (floorY - y.value + jump.value).coerceAtLeast(0f)
-    val liftProgress = (liftHeight / maxLiftHeight).coerceIn(0f, 1f)
-    val currentLiftProgress by rememberUpdatedState(liftProgress)
-    val shadowScale = lerp(1f, 0.45f, liftProgress)
-    val shadowAlpha = lerp(0.22f, 0.06f, liftProgress)
+    val depthProgress = (liftHeight / maxLiftHeight).coerceIn(0f, 1f)
+    val currentDepthProgress by rememberUpdatedState(depthProgress)
+    val depthScale = lerp(1f, RANCH_MAX_DEPTH_SCALE, depthProgress)
+    val shadowScale = lerp(1f, RANCH_SHADOW_MIN_SCALE, depthProgress)
+    val shadowAlpha = lerp(0.22f, RANCH_SHADOW_MIN_ALPHA, depthProgress)
     val cardScale by animateFloatAsState(
         targetValue = if (isGrabbed) RANCH_DRAG_SCALE else 1f,
         animationSpec = spring(
@@ -230,6 +245,10 @@ private fun SheepRanchCard(
         y.snapTo(floorY)
         jump.snapTo(0f)
         landingSquash.snapTo(0f)
+        landingScaleX.snapTo(1f)
+        landingScaleY.snapTo(1f)
+        depthOvershootScale.snapTo(1f)
+        tapScale.snapTo(1f)
         positions[postcard.id] = startX
     }
 
@@ -298,6 +317,7 @@ private fun SheepRanchCard(
     LaunchedEffect(isGrabbed, postcard.id) {
         if (!isGrabbed) {
             dragLean = 0f
+            dragTiltY = 0f
             resistanceShakeX = 0f
             resistanceRotation = 0f
             return@LaunchedEffect
@@ -306,9 +326,9 @@ private fun SheepRanchCard(
         while (isActive) {
             val now = withFrameMillis { it }
             val amplitudePx = with(density) {
-                lerp(0.6f, 2.4f, currentLiftProgress).dp.toPx()
+                lerp(0.6f, 2.4f, currentDepthProgress).dp.toPx()
             }
-            val rotationAmplitude = lerp(0.5f, 1.8f, currentLiftProgress)
+            val rotationAmplitude = lerp(0.5f, 1.8f, currentDepthProgress)
             val phase = (now % 120L) / 120f * 2f * PI.toFloat()
             resistanceShakeX = sin(phase) * amplitudePx
             resistanceRotation = sin(phase * 1.35f) * rotationAmplitude
@@ -323,33 +343,106 @@ private fun SheepRanchCard(
             floorY,
             animationSpec = tween(durationMillis = 260)
         )
-        landingSquash.animateTo(1f, tween(durationMillis = 70))
-        landingSquash.animateTo(0f, tween(durationMillis = 120))
-        y.animateTo(floorY - firstBounce, tween(durationMillis = 120))
-        y.animateTo(
-            floorY,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
-            )
-        )
-        y.animateTo(floorY - secondBounce, tween(durationMillis = 90))
-        y.animateTo(floorY, tween(durationMillis = 110))
-        jump.snapTo(0f)
+        coroutineScope {
+            launch { depthOvershootScale.animateTo(1.035f, tween(durationMillis = 55)) }
+            launch { landingSquash.animateTo(1f, tween(durationMillis = 55)) }
+            launch { landingScaleX.animateTo(1.025f, tween(durationMillis = 55)) }
+            launch { landingScaleY.animateTo(0.93f, tween(durationMillis = 55)) }
+        }
+        coroutineScope {
+            launch { landingSquash.animateTo(0.35f, tween(durationMillis = 90)) }
+            launch { landingScaleX.animateTo(0.985f, tween(durationMillis = 90)) }
+            launch { landingScaleY.animateTo(1.035f, tween(durationMillis = 90)) }
+            launch { y.animateTo(floorY - firstBounce, tween(durationMillis = 120)) }
+        }
+        coroutineScope {
+            launch {
+                y.animateTo(
+                    floorY,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                )
+            }
+            launch { depthOvershootScale.animateTo(1f, tween(durationMillis = 120)) }
+            launch { landingScaleX.animateTo(1.015f, tween(durationMillis = 90)) }
+            launch { landingScaleY.animateTo(0.99f, tween(durationMillis = 90)) }
+        }
+        coroutineScope {
+            launch { y.animateTo(floorY - secondBounce, tween(durationMillis = 90)) }
+            launch { landingScaleX.animateTo(1f, tween(durationMillis = 90)) }
+            launch { landingScaleY.animateTo(1.015f, tween(durationMillis = 90)) }
+        }
+        coroutineScope {
+            launch { y.animateTo(floorY, tween(durationMillis = 110)) }
+            launch { landingSquash.animateTo(0f, tween(durationMillis = 110)) }
+            launch { landingScaleX.animateTo(1f, tween(durationMillis = 110)) }
+            launch { landingScaleY.animateTo(1f, tween(durationMillis = 110)) }
+            launch { depthOvershootScale.animateTo(1f, tween(durationMillis = 110)) }
+        }
+        coroutineScope {
+            launch {
+                dragTiltY = 0f
+                dragLean = 0f
+                resistanceShakeX = 0f
+                resistanceRotation = 0f
+                tapScale.snapTo(1f)
+                jump.snapTo(0f)
+                suppressTap = false
+            }
+        }
         isDropping = false
         positions[postcard.id] = x.value
     }
+
+    val walkPhase = ((System.currentTimeMillis() + spec.seed) % 720L) / 720f
+    val walkStep = sin(walkPhase * 2f * PI.toFloat())
+    val walkBounce = if (!isGrabbed && !isDropping) {
+        walkStep * 1.4f
+    } else {
+        0f
+    }
+    val footfall = if (!isGrabbed && !isDropping && walkStep < -0.72f) {
+        ((abs(walkStep) - 0.72f) / 0.28f).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val jumpProgress = (jump.value / with(density) { spec.jumpHeightDp.dp.toPx() })
+        .coerceIn(0f, 1f)
+    val walkScaleX = 1f + footfall * 0.01f
+    val walkScaleY = 1f - footfall * 0.015f
+    val jumpScale = lerp(1f, 0.99f, jumpProgress)
+    val finalScaleX =
+        depthScale *
+                cardScale *
+                tapScale.value *
+                walkScaleX *
+                jumpScale *
+                landingScaleX.value *
+                depthOvershootScale.value
+    val finalScaleY =
+        depthScale *
+                cardScale *
+                tapScale.value *
+                walkScaleY *
+                jumpScale *
+                landingScaleY.value *
+                depthOvershootScale.value
+    val shadowParallaxX = lerp(x.value, x.value * RANCH_SHADOW_PARALLAX, depthProgress)
+    val shadowWidthScale = shadowScale * lerp(1f, 1.14f, depthProgress)
+    val shadowHeightScale = shadowScale * lerp(1f, 0.72f, depthProgress)
 
     Box(
         modifier = Modifier
             .zIndex(if (isGrabbed || isDropping) 4f else 1f + index / 100f)
             .offsetInStage(
-                x.value,
+                shadowParallaxX,
                 floorY + cardHeightPx - with(density) { 11.dp.toPx() }
             )
             .graphicsLayer {
-                scaleX = shadowScale * (1f + landingSquash.value * 0.18f)
-                scaleY = shadowScale * (1f - landingSquash.value * 0.08f)
+                scaleX = shadowWidthScale * (1f + landingSquash.value * 0.18f)
+                scaleY = shadowHeightScale * (1f - landingSquash.value * 0.08f)
                 alpha = shadowAlpha
             }
     ) {
@@ -371,11 +464,6 @@ private fun SheepRanchCard(
             .zIndex(if (isGrabbed || isDropping) 5f else 2f + index / 100f)
             .offsetInStage(x.value, y.value - jump.value)
             .graphicsLayer {
-                val walkBounce = if (!isGrabbed && !isDropping) {
-                    sin((System.currentTimeMillis() + spec.seed) / 180f) * 1.4f
-                } else {
-                    0f
-                }
                 translationY += walkBounce
                 rotationZ = spec.baseRotation +
                         (if (isGrabbed) {
@@ -385,8 +473,19 @@ private fun SheepRanchCard(
                         }) -
                         landingSquash.value * direction * 2f
                 translationX += if (isGrabbed) resistanceShakeX else 0f
-                scaleX = cardScale * (1f + landingSquash.value * 0.025f)
-                scaleY = cardScale * (1f - landingSquash.value * 0.02f)
+                rotationX = if (isGrabbed || isDropping) {
+                    -RANCH_MAX_ROTATION_X * depthProgress
+                } else {
+                    0f
+                }
+                rotationY = if (isGrabbed || isDropping) {
+                    dragTiltY + direction * RANCH_MAX_ROTATION_Y * depthProgress * 0.35f
+                } else {
+                    0f
+                }
+                cameraDistance = 32f * density.density
+                scaleX = finalScaleX
+                scaleY = finalScaleY
                 shadowElevation = if (isGrabbed) 12f else 3f
                 shape = RoundedCornerShape(RanchCardCorner)
                 clip = false
@@ -395,9 +494,28 @@ private fun SheepRanchCard(
                 coroutineScope {
                     launch {
                         detectTapGestures(
-                            onTap = {
+                            onPress = {
                                 if (!isGrabbed && !isDropping) {
-                                    onPostcardClick(postcard.id)
+                                    suppressTap = false
+                                    tapScale.animateTo(
+                                        RANCH_TAP_PRESS_SCALE,
+                                        tween(durationMillis = 45)
+                                    )
+                                    val released = tryAwaitRelease()
+                                    if (
+                                        released &&
+                                        !suppressTap &&
+                                        !isGrabbed &&
+                                        !isDropping
+                                    ) {
+                                        tapScale.animateTo(
+                                            RANCH_TAP_BOUNCE_SCALE,
+                                            tween(durationMillis = 50)
+                                        )
+                                        onPostcardClick(postcard.id)
+                                    }
+                                    tapScale.animateTo(1f, tween(durationMillis = 70))
+                                    suppressTap = false
                                 }
                             }
                         )
@@ -407,7 +525,10 @@ private fun SheepRanchCard(
                             onDragStart = {
                                 isDropping = false
                                 isGrabbed = true
+                                suppressTap = true
                                 dragLean = 0f
+                                dragTiltY = 0f
+                                launch { tapScale.snapTo(1f) }
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
@@ -415,6 +536,11 @@ private fun SheepRanchCard(
                                 val nextY = (y.value + dragAmount.y)
                                     .coerceIn((floorY - maxLiftHeight).coerceAtLeast(minY), floorY)
                                 dragLean = (dragAmount.x / 18f).coerceIn(-2f, 2f)
+                                dragTiltY = (dragTiltY * 0.7f +
+                                        (dragAmount.x / 22f).coerceIn(
+                                            -RANCH_MAX_ROTATION_Y,
+                                            RANCH_MAX_ROTATION_Y
+                                        ) * 0.3f)
                                 launch {
                                     x.snapTo(nextX)
                                     y.snapTo(nextY)
