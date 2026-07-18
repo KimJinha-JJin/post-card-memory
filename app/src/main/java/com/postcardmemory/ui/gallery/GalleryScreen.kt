@@ -95,6 +95,11 @@ private val ViewModeSaver = Saver<GalleryViewMode, String>(
     restore = { GalleryViewMode.valueOf(it) }
 )
 
+private val PlayModeSaver = Saver<GalleryPlayMode, String>(
+    save = { it.name },
+    restore = { GalleryPlayMode.valueOf(it) }
+)
+
 private val SortOrderSaver = Saver<GallerySortOrder, String>(
     save = { it.name },
     restore = { GallerySortOrder.valueOf(it) }
@@ -177,7 +182,11 @@ fun GalleryScreen(
 ) {
     val postcards by viewModel.postcards.collectAsState()
 
-    var isPondModeOn by rememberSaveable { mutableStateOf(false) }
+    var playMode by rememberSaveable(stateSaver = PlayModeSaver) {
+        mutableStateOf(GalleryPlayMode.NONE)
+    }
+    val isPondModeOn = playMode == GalleryPlayMode.POND
+    val isSheepRanchModeOn = playMode == GalleryPlayMode.SHEEP_RANCH
 
     val shakeTrigger = rememberShakeTrigger(enabled = isPondModeOn)
 
@@ -189,7 +198,7 @@ fun GalleryScreen(
         }
     }
 
-    LaunchedEffect(isPondModeOn) {
+    LaunchedEffect(playMode) {
         if (!isPondModeOn) {
             pondController.reset()
         }
@@ -234,6 +243,7 @@ fun GalleryScreen(
         if (selectedIds.isNotEmpty()) {
             toggleSelection(id)
         } else {
+            playMode = GalleryPlayMode.NONE
             onNavigateToDetail(id)
         }
     }
@@ -321,7 +331,13 @@ fun GalleryScreen(
 
                         IconButton(
                             onClick = {
-                                isPondModeOn = !isPondModeOn
+                                selectedIds = emptySet()
+                                playMode = if (isPondModeOn) {
+                                    GalleryPlayMode.NONE
+                                } else {
+                                    GalleryPlayMode.POND
+                                }
+                                viewMode = GalleryViewMode.COMPACT_GRID
                             }
                         ) {
                             Box(
@@ -352,6 +368,54 @@ fun GalleryScreen(
                                             "엽서의 연못 켜기"
                                         }
                                         stateDescription = if (isPondModeOn) {
+                                            "켜짐"
+                                        } else {
+                                            "꺼짐"
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                selectedIds = emptySet()
+                                playMode = if (isSheepRanchModeOn) {
+                                    GalleryPlayMode.NONE
+                                } else {
+                                    GalleryPlayMode.SHEEP_RANCH
+                                }
+                                viewMode = GalleryViewMode.COMPACT_GRID
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(
+                                        color = if (isSheepRanchModeOn) {
+                                            Color(0xFF7E9871).copy(alpha = 0.18f)
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "🐑",
+                                    fontSize = 16.sp,
+                                    color = if (isSheepRanchModeOn) {
+                                        Color(0xFF6F8764)
+                                    } else {
+                                        InkSecondary
+                                    },
+                                    modifier = Modifier.semantics {
+                                        contentDescription = if (isSheepRanchModeOn) {
+                                            "엽서 양떼목장 끄기"
+                                        } else {
+                                            "엽서 양떼목장 켜기"
+                                        }
+                                        stateDescription = if (isSheepRanchModeOn) {
                                             "켜짐"
                                         } else {
                                             "꺼짐"
@@ -421,6 +485,7 @@ fun GalleryScreen(
                                         Modifier
                                     },
                                     onClick = {
+                                        playMode = GalleryPlayMode.NONE
                                         viewMode = GalleryViewMode.DETAIL_LIST
                                         viewMenuExpanded = false
                                     }
@@ -525,7 +590,25 @@ fun GalleryScreen(
         }
     ) { paddingValues ->
 
-        if (postcards.isEmpty()) {
+        if (isSheepRanchModeOn) {
+            val ranchPostcards = remember(postcards) {
+                postcards
+                    .sortedWith(
+                        compareByDescending<Postcard> {
+                            it.capturedAt
+                        }.thenByDescending {
+                            it.id
+                        }
+                    )
+                    .take(10)
+            }
+
+            SheepRanchStage(
+                postcards = ranchPostcards,
+                paddingValues = paddingValues,
+                onPostcardClick = ::handleItemClick
+            )
+        } else if (postcards.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

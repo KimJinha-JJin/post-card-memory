@@ -118,13 +118,6 @@ fun StampCard(
         (seed % 70 - 35) / 10f
     }
 
-    val dateFormatter = remember {
-        SimpleDateFormat(
-            "yyyy-MM-dd",
-            Locale.getDefault()
-        )
-    }
-
     // 평상시 아주 미세하게 둥둥 떠 있는 효과 — 연못 모드 ON일 때만, 카드마다
     // 위상·주기를 살짝 달리해 기계적으로 동시에 움직이는 느낌을 피한다.
     val floatPhase = remember(seed) { (seed % 1000) / 1000f }
@@ -529,6 +522,31 @@ fun StampCard(
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        StampCardContent(
+            postcard = postcard,
+            isSelected = isSelected
+        )
+    }
+}
+
+@Composable
+fun StampCardContent(
+    postcard: Postcard,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    dateTextSizeSp: Int = 11
+) {
+    val dateFormatter = remember {
+        SimpleDateFormat(
+            "yyyy-MM-dd",
+            Locale.getDefault()
+        )
+    }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Box(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -570,7 +588,7 @@ fun StampCard(
             text = dateFormatter.format(
                 Date(postcard.capturedAt)
             ),
-            fontSize = 11.sp,
+            fontSize = dateTextSizeSp.sp,
             fontWeight = FontWeight.Medium,
             color = GraphiteAccent,
             maxLines = 1,
