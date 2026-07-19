@@ -138,15 +138,23 @@ private fun ranchFloorY(
     stagePaddingPx: Float,
     zone: RanchMovementZone
 ): Float {
-    val fullMin = (stageHeightPx * 0.60f).coerceAtLeast(stagePaddingPx)
+    // 양떼목장(FULL_RANCH)은 잔디 시작선(0.60)을 그대로 쓴다. 쫑쫑컵 구역만
+    // RACE_ZONE_TOP_FRACTION까지 끌어올려 화면 대부분을 쓰게 한다 — RaceGroundExtension이
+    // 그 위 배경을 이어 그려준다.
+    val topFraction = when (zone) {
+        RanchMovementZone.FULL_RANCH -> 0.60f
+        RanchMovementZone.RACE_PADDOCK, RanchMovementZone.RACE_SPECTATOR -> RACE_ZONE_TOP_FRACTION
+    }
+    val fullMin = (stageHeightPx * topFraction).coerceAtLeast(stagePaddingPx)
     val fullMax = (stageHeightPx - bottomReservedPx - cardHeightPx)
         .coerceAtLeast(fullMin)
+    val bandMid = lerp(fullMin, fullMax, 0.5f)
     val (bandMin, bandMax) = when (zone) {
         RanchMovementZone.FULL_RANCH -> fullMin to fullMax
-        // 패독: 트랙·그리드와 같은 하단부에 머물도록 아래쪽으로 붙인다.
-        RanchMovementZone.RACE_PADDOCK -> lerp(fullMin, fullMax, 0.62f) to fullMax
-        // 관중: 트랙 위 중단부(펜스 쪽)에 머물도록 위쪽으로 붙인다.
-        RanchMovementZone.RACE_SPECTATOR -> fullMin to lerp(fullMin, fullMax, 0.55f)
+        // 패독: 세로 공간을 절반씩 나눈 아래쪽 절반(트랙·그리드 쪽).
+        RanchMovementZone.RACE_PADDOCK -> bandMid to fullMax
+        // 관중: 세로 공간의 위쪽 절반(펜스 쪽) — 패독과 겹치지 않게 명확히 나눈다.
+        RanchMovementZone.RACE_SPECTATOR -> fullMin to bandMid
     }
     return lerp(bandMin, bandMax, spec.startJitter)
 }

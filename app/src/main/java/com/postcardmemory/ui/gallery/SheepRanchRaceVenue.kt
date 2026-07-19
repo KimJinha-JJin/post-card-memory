@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -30,8 +31,16 @@ import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
 
-internal const val RACE_TRACK_HEIGHT_FRACTION = 0.30f
+internal const val RACE_TRACK_HEIGHT_FRACTION = 0.26f
 internal const val RACE_TRACK_SIDE_INSET_FRACTION = 0.09f
+
+/**
+ * 쫑쫑컵 모드에서 카드(패독·관중)가 돌아다닐 수 있는 세로 영역의 윗선.
+ * 양떼목장의 잔디 시작선(58~60%)보다 훨씬 위로 끌어올려서, 화면 하단에만
+ * 몰려 보이지 않고 화면 대부분을 쓰는 작은 축제 공간처럼 보이게 한다.
+ * [SheepRanchStage]의 구역별 배회 범위 계산도 이 값을 그대로 쓴다.
+ */
+internal const val RACE_ZONE_TOP_FRACTION = 0.20f
 
 private val RaceTrackBase = Color(0xFFB9A489)
 private val RaceTrackLane = Color(0xFFEFE6D2)
@@ -41,6 +50,7 @@ private val RaceLightDim = Color(0xFF8A8074)
 private val RaceCurbCream = Color(0xFFF3E8D4)
 private val RaceCurbBurgundy = Color(0xFF8C4A3E)
 private val RaceFenceColor = Color(0xFF7C7266)
+private val RaceGroundSage = Color(0xFFDDE8D5)
 
 /** 쫑쫑컵 트랙의 좌표 — Venue(상시 표시)와 Overlay(레이스 진행)가 반드시 같은 값을 공유한다. */
 internal data class RaceTrackGeometry(
@@ -77,6 +87,37 @@ internal fun computeRaceTrackGeometry(
         startLineX = startLineX,
         finishLineX = finishLineX
     )
+}
+
+/**
+ * 양떼목장 잔디(58% 지점부터 시작)보다 훨씬 위쪽[RACE_ZONE_TOP_FRACTION]부터 이어지는
+ * 쫑쫑컵 전용 바닥. 기존 [RanchBackground]는 건드리지 않고 그 위에 자연스럽게 이어붙는
+ * 별도 레이어라서, 양떼목장 화면에는 전혀 영향이 없다. 위쪽은 옅게 시작해 잔디와
+ * 만나는 지점에서 자연스럽게 진해지도록 그라데이션을 준다.
+ */
+@Composable
+private fun RaceGroundExtension(
+    stageWidthPx: Float,
+    stageHeightPx: Float,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val groundTop = stageHeightPx * RACE_ZONE_TOP_FRACTION
+        val groundBottom = stageHeightPx * 0.58f
+        if (groundBottom <= groundTop) return@Canvas
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    RaceGroundSage.copy(alpha = 0f),
+                    RaceGroundSage.copy(alpha = 0.5f)
+                ),
+                startY = groundTop,
+                endY = groundBottom
+            ),
+            topLeft = Offset(0f, groundTop),
+            size = Size(stageWidthPx, groundBottom - groundTop)
+        )
+    }
 }
 
 /**
@@ -339,6 +380,11 @@ fun SheepRanchRaceVenue(
     val lightAlpha = if (raceState.phase == SheepRanchRacePhase.IDLE) 0.5f else 1f
 
     Box(modifier = modifier) {
+        RaceGroundExtension(
+            stageWidthPx = stageWidthPx,
+            stageHeightPx = stageHeightPx,
+            modifier = Modifier.matchParentSize()
+        )
         RaceTrackCanvas(
             geometry = geometry,
             intensity = trackIntensity,
