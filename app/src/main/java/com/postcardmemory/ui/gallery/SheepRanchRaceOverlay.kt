@@ -2,6 +2,7 @@ package com.postcardmemory.ui.gallery
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -10,6 +11,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,11 +24,13 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -44,17 +48,28 @@ import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.random.Random
 
 private val RaceTrackBase = Color(0xFFB9A489)
 private val RaceTrackLane = Color(0xFFEFE6D2)
 private val RaceTrackCheckerDark = Color(0xFF8A7A63)
 private val RaceLightHousing = Color(0xFF4A4038)
 private val RaceLightDim = Color(0xFF8A8074)
+private val CrownGold = Color(0xFFE8B94A)
+private val CrownGoldOutline = Color(0xFF8C5F00)
 
 private val RaceCarColors = listOf(
     Color(0xFFB1543F), // 1번 차량 — 버건디 노을빛 빨강
     Color(0xFF7E9C7A), // 2번 차량 — 세이지 민트
     Color(0xFF6E7FA0)  // 3번 차량 — 따뜻한 파랑 회색
+)
+
+private val ConfettiColors = listOf(
+    Color(0xFFB1543F),
+    Color(0xFF7E9C7A),
+    Color(0xFF6E7FA0),
+    Color(0xFFD9A441),
+    Color(0xFFEFE6D2)
 )
 
 private const val TRACK_HEIGHT_FRACTION = 0.30f
@@ -67,6 +82,34 @@ private const val WINNER_JUMP_STAGES = 3
 private const val WINNER_JUMP_RISE_MILLIS = 130
 private const val WINNER_JUMP_FALL_MILLIS = 150
 private const val WINNER_JUMP_BASE_DP = 11f
+private const val CONFETTI_COUNT = 18
+private const val CONFETTI_DURATION_MILLIS = 850
+
+/** 컨페티 한 조각의 고정된 낙하 궤적 — 레이스 시작 시 한 번만 뽑히고 프레임마다 재생성되지 않는다. */
+private data class ConfettiSpec(
+    val xFraction: Float,
+    val colorIndex: Int,
+    val sizeDp: Float,
+    val fallDp: Float,
+    val swayDp: Float,
+    val turns: Float,
+    val delayFraction: Float
+)
+
+private fun buildConfetti(seed: Int): List<ConfettiSpec> {
+    val random = Random(seed)
+    return List(CONFETTI_COUNT) {
+        ConfettiSpec(
+            xFraction = random.nextFloat(),
+            colorIndex = random.nextInt(ConfettiColors.size),
+            sizeDp = 3f + random.nextFloat() * 3f,
+            fallDp = 44f + random.nextFloat() * 38f,
+            swayDp = 5f + random.nextFloat() * 9f,
+            turns = 0.6f + random.nextFloat() * 1.3f,
+            delayFraction = random.nextFloat() * 0.35f
+        )
+    }
+}
 
 /** 차선별 진행 곡선 — 결승 직전 순간이동이나 역행 없이, 서로 다른 페이스로 앞서거니 뒤서거니 한다. */
 private fun laneBaseProgress(laneIndex: Int, t: Float): Float {
@@ -136,6 +179,7 @@ fun SheepRanchRaceOverlay(
 ) {
     val density = LocalDensity.current
     val cardWidthDp = with(density) { cardWidthPx.toDp() }
+    val cardHeightDp = with(density) { cardHeightPx.toDp() }
     val spectatorCardWidthPx = cardWidthPx * 0.88f
     val spectatorCardWidthDp = cardWidthDp * 0.88f
 
@@ -323,6 +367,29 @@ fun SheepRanchRaceOverlay(
                 }
             }
 
+            val confettiSpecs = remember(raceState.sessionId) { buildConfetti(raceState.sessionId) }
+            val confettiProgress = remember(postcard.id) { Animatable(0f) }
+            LaunchedEffect(raceState.phase, raceState.sessionId) {
+                if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) {
+                    confettiProgress.snapTo(0f)
+                    confettiProgress.animateTo(
+                        1f,
+                        tween(durationMillis = CONFETTI_DURATION_MILLIS, easing = LinearEasing)
+                    )
+                } else {
+                    confettiProgress.snapTo(0f)
+                }
+            }
+            val crownScale by animateFloatAsState(
+                targetValue = if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) {
+                    1f
+                } else {
+                    0f
+                },
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "raceCrownScale"
+            )
+
             val bobPx = when {
                 raceState.phase == SheepRanchRacePhase.RACING ->
                     with(density) { (sin(raceProgress * 46f + laneIndex * 2f) * 1.4f).dp.toPx() }
@@ -338,6 +405,7 @@ fun SheepRanchRaceOverlay(
 
             Box(
                 modifier = Modifier
+                    .width(cardWidthDp)
                     .zIndex(if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) 3f else 2f)
                     .graphicsLayer {
                         translationX = x.roundToInt().toFloat()
@@ -352,6 +420,28 @@ fun SheepRanchRaceOverlay(
                     bobOffsetPx = bobPx,
                     launchScale = launchScale
                 )
+
+                if (isWinner && confettiProgress.value > 0f) {
+                    RaceConfetti(
+                        specs = confettiSpecs,
+                        progress = confettiProgress.value,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(y = -cardHeightDp * 0.5f)
+                            .size(width = cardWidthDp * 2.4f, height = cardHeightDp * 1.7f)
+                    )
+                }
+                if (isWinner && crownScale > 0.01f) {
+                    PixelCrown(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(y = -cardHeightDp * 0.4f)
+                            .graphicsLayer {
+                                scaleX = crownScale
+                                scaleY = crownScale
+                            }
+                    )
+                }
             }
         }
 
@@ -407,6 +497,72 @@ private fun RaceTrafficLight(
                 radius = slotHeight * 0.32f,
                 center = Offset(size.width / 2f, slotHeight * (index + 0.5f))
             )
+        }
+    }
+}
+
+/** 우승 엽서 위에 잠깐 뜨는 작은 픽셀 왕관 — 스프링 스케일로 통통 튀며 나타난다. */
+@Composable
+private fun PixelCrown(
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.size(width = 22.dp, height = 14.dp)) {
+        val blockPx = size.width / 5f
+        val spikeHeight = size.height * 0.34f
+        val bandHeight = size.height - spikeHeight
+        listOf(0, 2, 4).forEach { col ->
+            drawRect(
+                color = CrownGold,
+                topLeft = Offset(col * blockPx, 0f),
+                size = Size(blockPx, spikeHeight)
+            )
+        }
+        drawRect(
+            color = CrownGold,
+            topLeft = Offset(0f, spikeHeight),
+            size = Size(size.width, bandHeight * 0.55f)
+        )
+        drawRect(
+            color = CrownGoldOutline,
+            topLeft = Offset(0f, spikeHeight + bandHeight * 0.55f),
+            size = Size(size.width, bandHeight * 0.45f)
+        )
+    }
+}
+
+/** 우승 순간에만 짧게 터지는 컨페티 — 조각별 궤적은 레이스 시작 시 한 번만 뽑히고, 프레임마다는 진행률만 읽는다. */
+@Composable
+private fun RaceConfetti(
+    specs: List<ConfettiSpec>,
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        specs.forEach { spec ->
+            val localT = ((progress - spec.delayFraction) / (1f - spec.delayFraction))
+                .coerceIn(0f, 1f)
+            if (localT <= 0f) return@forEach
+
+            val alpha = if (localT > 0.7f) {
+                (1f - (localT - 0.7f) / 0.3f).coerceIn(0f, 1f)
+            } else {
+                1f
+            }
+            if (alpha <= 0f) return@forEach
+
+            val fallPx = spec.fallDp.dp.toPx() * localT
+            val swayPx = sin(localT * PI.toFloat() * spec.turns * 2f) * spec.swayDp.dp.toPx()
+            val cx = size.width * spec.xFraction + swayPx
+            val cy = fallPx
+            val half = spec.sizeDp.dp.toPx() / 2f
+
+            rotate(degrees = localT * spec.turns * 360f, pivot = Offset(cx, cy)) {
+                drawRect(
+                    color = ConfettiColors[spec.colorIndex].copy(alpha = alpha),
+                    topLeft = Offset(cx - half, cy - half),
+                    size = Size(half * 2f, half * 2f)
+                )
+            }
         }
     }
 }
