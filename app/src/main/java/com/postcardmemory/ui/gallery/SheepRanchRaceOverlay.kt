@@ -52,11 +52,23 @@ import kotlin.random.Random
 private val CrownGold = Color(0xFFE8B94A)
 private val CrownGoldOutline = Color(0xFF8C5F00)
 
+/** 레이스카 차체 색 풀 — 차선이 아니라 엽서 id로 골라서, 카드마다 자기만의 색을 갖는다. */
 private val RaceCarColors = listOf(
-    Color(0xFFB1543F), // 1번 차량 — 버건디 노을빛 빨강
-    Color(0xFF7E9C7A), // 2번 차량 — 세이지 민트
-    Color(0xFF6E7FA0)  // 3번 차량 — 따뜻한 파랑 회색
+    Color(0xFFB1543F), // 버건디 노을빛 빨강
+    Color(0xFF7E9C7A), // 세이지 민트
+    Color(0xFF6E7FA0), // 따뜻한 파랑 회색
+    Color(0xFFD9A441), // 골드
+    Color(0xFFC97B84), // 더스티 로즈
+    Color(0xFFA6704A), // 테라코타
+    Color(0xFF8E8FBF), // 라벤더 그레이
+    Color(0xFF9CAF6B)  // 올리브
 )
+
+private fun raceCarColorFor(postcardId: Long): Color {
+    val rawIndex = (postcardId % RaceCarColors.size).toInt()
+    val index = if (rawIndex < 0) rawIndex + RaceCarColors.size else rawIndex
+    return RaceCarColors[index]
+}
 
 /** 컨페티가 고를 수 있는 전체 색 풀 — 우승 카드마다 이 중 일부만 뽑아 자기만의 색 조합을 갖는다. */
 private val ConfettiPalette = listOf(
@@ -402,7 +414,7 @@ fun SheepRanchRaceOverlay(
             ) {
                 PixelPostcardRaceCar(
                     postcard = postcard,
-                    bodyColor = RaceCarColors[laneIndex % RaceCarColors.size],
+                    bodyColor = raceCarColorFor(postcard.id),
                     cardWidth = cardWidthDp,
                     tiltDegrees = tiltDegrees,
                     bobOffsetPx = bobPx,
