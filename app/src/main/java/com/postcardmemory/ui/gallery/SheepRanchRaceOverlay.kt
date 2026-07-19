@@ -58,13 +58,20 @@ private val RaceCarColors = listOf(
     Color(0xFF6E7FA0)  // 3번 차량 — 따뜻한 파랑 회색
 )
 
-private val ConfettiColors = listOf(
-    Color(0xFFB1543F),
-    Color(0xFF7E9C7A),
-    Color(0xFF6E7FA0),
-    Color(0xFFD9A441),
-    Color(0xFFEFE6D2)
+/** 컨페티가 고를 수 있는 전체 색 풀 — 우승 카드마다 이 중 일부만 뽑아 자기만의 색 조합을 갖는다. */
+private val ConfettiPalette = listOf(
+    Color(0xFFB1543F), // 버건디
+    Color(0xFF7E9C7A), // 세이지 민트
+    Color(0xFF6E7FA0), // 파랑 회색
+    Color(0xFFD9A441), // 골드
+    Color(0xFFEFE6D2), // 크림
+    Color(0xFFC97B84), // 더스티 로즈
+    Color(0xFFA6704A), // 테라코타
+    Color(0xFF8E8FBF), // 라벤더 그레이
+    Color(0xFF9CAF6B), // 올리브
+    Color(0xFFE8B94A)  // 웜 옐로
 )
+private const val CONFETTI_THEME_SIZE = 4
 
 private const val AUDIENCE_ROW_SIZE = 4
 private const val WAVE_CYCLE_MILLIS = 1500f
@@ -80,7 +87,7 @@ private const val CONFETTI_DURATION_MILLIS = 850
 /** 컨페티 한 조각의 고정된 낙하 궤적 — 레이스 시작 시 한 번만 뽑히고 프레임마다 재생성되지 않는다. */
 private data class ConfettiSpec(
     val xFraction: Float,
-    val colorIndex: Int,
+    val color: Color,
     val sizeDp: Float,
     val fallDp: Float,
     val swayDp: Float,
@@ -88,12 +95,18 @@ private data class ConfettiSpec(
     val delayFraction: Float
 )
 
-private fun buildConfetti(seed: Int): List<ConfettiSpec> {
-    val random = Random(seed)
+/**
+ * 우승한 엽서의 id를 시드로 써서, 카드마다 컨페티 색 조합이 달라지게 한다.
+ * 같은 엽서가 다시 우승해도 늘 같은 조합이 나오는 건 우연이 아니라 "그 카드의 색"이라
+ * 의도한 동작이다.
+ */
+private fun buildConfetti(cardSeed: Long): List<ConfettiSpec> {
+    val theme = ConfettiPalette.shuffled(Random(cardSeed)).take(CONFETTI_THEME_SIZE)
+    val random = Random(cardSeed * 31L + 7L)
     return List(CONFETTI_COUNT) {
         ConfettiSpec(
             xFraction = random.nextFloat(),
-            colorIndex = random.nextInt(ConfettiColors.size),
+            color = theme[random.nextInt(theme.size)],
             sizeDp = 3f + random.nextFloat() * 3f,
             fallDp = 44f + random.nextFloat() * 38f,
             swayDp = 5f + random.nextFloat() * 9f,
@@ -342,7 +355,7 @@ fun SheepRanchRaceOverlay(
                 }
             }
 
-            val confettiSpecs = remember(raceState.sessionId) { buildConfetti(raceState.sessionId) }
+            val confettiSpecs = remember(postcard.id) { buildConfetti(postcard.id) }
             val confettiProgress = remember(postcard.id) { Animatable(0f) }
             LaunchedEffect(raceState.phase, raceState.sessionId) {
                 if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) {
@@ -504,7 +517,7 @@ private fun RaceConfetti(
 
             rotate(degrees = localT * spec.turns * 360f, pivot = Offset(cx, cy)) {
                 drawRect(
-                    color = ConfettiColors[spec.colorIndex].copy(alpha = alpha),
+                    color = spec.color.copy(alpha = alpha),
                     topLeft = Offset(cx - half, cy - half),
                     size = Size(half * 2f, half * 2f)
                 )
