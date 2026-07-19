@@ -97,6 +97,7 @@ private const val RACE_DURATION_MILLIS = 4200
 private const val RACE_FINISH_HOLD_MILLIS = 900
 private const val RACE_RETURN_MILLIS = 800
 private const val RACE_NOT_ENOUGH_HINT_MILLIS = 1800L
+private const val RACE_ZONE_BOTTOM_EXTRA_FRACTION = 0.05f
 
 /**
  * 쫑쫑컵 모드의 IDLE 상태에서 카드가 평소 돌아다니는 구역.
@@ -146,7 +147,13 @@ private fun ranchFloorY(
         RanchMovementZone.RACE_PADDOCK, RanchMovementZone.RACE_SPECTATOR -> RACE_ZONE_TOP_FRACTION
     }
     val fullMin = (stageHeightPx * topFraction).coerceAtLeast(stagePaddingPx)
-    val fullMax = (stageHeightPx - bottomReservedPx - cardHeightPx)
+    // 쫑쫑컵 구역은 트랙과 마찬가지로 화면 맨 아래에 바짝 붙지 않도록 여유를 더 둔다.
+    val raceBottomExtra = if (zone == RanchMovementZone.FULL_RANCH) {
+        0f
+    } else {
+        stageHeightPx * RACE_ZONE_BOTTOM_EXTRA_FRACTION
+    }
+    val fullMax = (stageHeightPx - bottomReservedPx - cardHeightPx - raceBottomExtra)
         .coerceAtLeast(fullMin)
     val bandMid = lerp(fullMin, fullMax, 0.5f)
     val (bandMin, bandMax) = when (zone) {

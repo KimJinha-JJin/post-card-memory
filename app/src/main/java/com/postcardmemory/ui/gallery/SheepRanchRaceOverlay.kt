@@ -187,7 +187,7 @@ fun SheepRanchRaceOverlay(
             stageWidthPx = stageWidthPx,
             stageHeightPx = stageHeightPx,
             cardWidthPx = cardWidthPx,
-            bottomMarginPx = with(density) { 8.dp.toPx() }
+            bottomMarginPx = with(density) { RACE_TRACK_BOTTOM_MARGIN_DP.dp.toPx() }
         )
     }
     val trackTop = geometry.trackTop

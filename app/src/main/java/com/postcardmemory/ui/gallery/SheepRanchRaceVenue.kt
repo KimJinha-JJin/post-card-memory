@@ -31,8 +31,14 @@ import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
 
-internal const val RACE_TRACK_HEIGHT_FRACTION = 0.26f
+internal const val RACE_TRACK_HEIGHT_FRACTION = 0.42f
 internal const val RACE_TRACK_SIDE_INSET_FRACTION = 0.09f
+
+/**
+ * 트랙 맨 아래 차선(3번)이 화면 끝에 바짝 붙어 카드 하단 날짜 글씨가 잘리지 않도록
+ * 트랙 바닥과 화면 끝 사이에 남겨두는 여백. Venue와 Overlay가 반드시 같은 값을 쓴다.
+ */
+internal const val RACE_TRACK_BOTTOM_MARGIN_DP = 30f
 
 /**
  * 쫑쫑컵 모드에서 카드(패독·관중)가 돌아다닐 수 있는 세로 영역의 윗선.
@@ -363,7 +369,7 @@ fun SheepRanchRaceVenue(
             stageWidthPx = stageWidthPx,
             stageHeightPx = stageHeightPx,
             cardWidthPx = cardWidthPx,
-            bottomMarginPx = with(density) { 8.dp.toPx() }
+            bottomMarginPx = with(density) { RACE_TRACK_BOTTOM_MARGIN_DP.dp.toPx() }
         )
     }
 
