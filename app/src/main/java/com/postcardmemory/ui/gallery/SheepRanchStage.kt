@@ -94,7 +94,7 @@ private const val RACE_GATHER_MILLIS = 850
 private const val RACE_COUNTDOWN_STEP_MILLIS = 500
 private const val RACE_COUNTDOWN_GO_MILLIS = 350
 private const val RACE_DURATION_MILLIS = 4200
-private const val RACE_FINISH_HOLD_MILLIS = 700
+private const val RACE_FINISH_HOLD_MILLIS = 900
 private const val RACE_RETURN_MILLIS = 800
 private const val RACE_NOT_ENOUGH_HINT_MILLIS = 1800L
 

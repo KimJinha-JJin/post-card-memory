@@ -1,8 +1,11 @@
 package com.postcardmemory.ui.gallery
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,7 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -31,6 +39,8 @@ import com.postcardmemory.ui.components.StampCardContent
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
+import kotlinx.coroutines.isActive
+import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -50,6 +60,13 @@ private val RaceCarColors = listOf(
 private const val TRACK_HEIGHT_FRACTION = 0.30f
 private const val TRACK_SIDE_INSET_FRACTION = 0.09f
 private const val AUDIENCE_ROW_SIZE = 4
+private const val WAVE_CYCLE_MILLIS = 1500f
+private const val WAVE_SPECTATOR_DELAY_MILLIS = 190f
+private const val WAVE_BOUNCE_DP = 6f
+private const val WINNER_JUMP_STAGES = 3
+private const val WINNER_JUMP_RISE_MILLIS = 130
+private const val WINNER_JUMP_FALL_MILLIS = 150
+private const val WINNER_JUMP_BASE_DP = 11f
 
 /** 차선별 진행 곡선 — 결승 직전 순간이동이나 역행 없이, 서로 다른 페이스로 앞서거니 뒤서거니 한다. */
 private fun laneBaseProgress(laneIndex: Int, t: Float): Float {
@@ -132,6 +149,16 @@ fun SheepRanchRaceOverlay(
 
     fun laneCenterY(laneIndex: Int): Float = trackTop + laneHeight * (laneIndex + 0.5f)
 
+    val waveActive = raceState.phase == SheepRanchRacePhase.RACING ||
+        raceState.phase == SheepRanchRacePhase.FINISHING
+    var waveClockMillis by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(waveActive) {
+        if (!waveActive) return@LaunchedEffect
+        while (isActive) {
+            withFrameMillis { waveClockMillis = it }
+        }
+    }
+
     Box(modifier = modifier) {
         Canvas(modifier = Modifier.matchParentSize()) {
             drawRect(
@@ -206,13 +233,21 @@ fun SheepRanchRaceOverlay(
                 else -> slotLeftX to slotCenter.y
             }
             val rotation = snapshot?.rotationDegrees ?: 0f
+            val waveBobPx = if (waveActive) {
+                val localPhase = ((waveClockMillis + index * WAVE_SPECTATOR_DELAY_MILLIS) %
+                    WAVE_CYCLE_MILLIS) / WAVE_CYCLE_MILLIS
+                val lift = sin(localPhase * 2f * PI.toFloat()).coerceAtLeast(0f)
+                with(density) { -(lift * WAVE_BOUNCE_DP).dp.toPx() }
+            } else {
+                0f
+            }
 
             Box(
                 modifier = Modifier
                     .zIndex(1f)
                     .graphicsLayer {
                         translationX = x.roundToInt().toFloat()
-                        translationY = y.roundToInt().toFloat()
+                        translationY = (y + waveBobPx).roundToInt().toFloat()
                         rotationZ = rotation
                     }
             ) {
@@ -267,12 +302,33 @@ fun SheepRanchRaceOverlay(
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
                 label = "raceCarLaunchScale"
             )
-            val bobPx = if (raceState.phase == SheepRanchRacePhase.RACING) {
-                with(density) {
-                    (sin(raceProgress * 46f + laneIndex * 2f) * 1.4f).dp.toPx()
+
+            val winnerJumpOffset = remember(postcard.id) { Animatable(0f) }
+            LaunchedEffect(raceState.phase, raceState.sessionId) {
+                if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) {
+                    val hop = with(density) { WINNER_JUMP_BASE_DP.dp.toPx() }
+                    repeat(WINNER_JUMP_STAGES) { stage ->
+                        val height = hop * (1f - stage * 0.28f)
+                        winnerJumpOffset.animateTo(
+                            -height,
+                            tween(durationMillis = WINNER_JUMP_RISE_MILLIS, easing = FastOutSlowInEasing)
+                        )
+                        winnerJumpOffset.animateTo(
+                            0f,
+                            tween(durationMillis = WINNER_JUMP_FALL_MILLIS, easing = FastOutSlowInEasing)
+                        )
+                    }
+                } else {
+                    winnerJumpOffset.snapTo(0f)
                 }
-            } else {
-                0f
+            }
+
+            val bobPx = when {
+                raceState.phase == SheepRanchRacePhase.RACING ->
+                    with(density) { (sin(raceProgress * 46f + laneIndex * 2f) * 1.4f).dp.toPx() }
+                raceState.phase == SheepRanchRacePhase.FINISHING && isWinner ->
+                    winnerJumpOffset.value
+                else -> 0f
             }
             val tiltDegrees = when (raceState.phase) {
                 SheepRanchRacePhase.RACING -> -1.6f
@@ -282,7 +338,7 @@ fun SheepRanchRaceOverlay(
 
             Box(
                 modifier = Modifier
-                    .zIndex(2f)
+                    .zIndex(if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) 3f else 2f)
                     .graphicsLayer {
                         translationX = x.roundToInt().toFloat()
                         translationY = y.roundToInt().toFloat()
