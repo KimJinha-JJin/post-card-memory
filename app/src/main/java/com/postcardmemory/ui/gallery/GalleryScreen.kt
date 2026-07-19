@@ -187,6 +187,7 @@ fun GalleryScreen(
     }
     val isPondModeOn = playMode == GalleryPlayMode.POND
     val isSheepRanchModeOn = playMode == GalleryPlayMode.SHEEP_RANCH
+    val isRaceModeOn = playMode == GalleryPlayMode.RACE
 
     val shakeTrigger = rememberShakeTrigger(enabled = isPondModeOn)
 
@@ -425,6 +426,54 @@ fun GalleryScreen(
                             }
                         }
 
+                        IconButton(
+                            onClick = {
+                                selectedIds = emptySet()
+                                playMode = if (isRaceModeOn) {
+                                    GalleryPlayMode.NONE
+                                } else {
+                                    GalleryPlayMode.RACE
+                                }
+                                viewMode = GalleryViewMode.COMPACT_GRID
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(
+                                        color = if (isRaceModeOn) {
+                                            Color(0xFFB1543F).copy(alpha = 0.18f)
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "🏎️",
+                                    fontSize = 16.sp,
+                                    color = if (isRaceModeOn) {
+                                        Color(0xFF9C4536)
+                                    } else {
+                                        InkSecondary
+                                    },
+                                    modifier = Modifier.semantics {
+                                        contentDescription = if (isRaceModeOn) {
+                                            "엽서 쫑쫑컵 끄기"
+                                        } else {
+                                            "엽서 쫑쫑컵 켜기"
+                                        }
+                                        stateDescription = if (isRaceModeOn) {
+                                            "켜짐"
+                                        } else {
+                                            "꺼짐"
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
                         Box {
                             IconButton(
                                 onClick = {
@@ -590,7 +639,7 @@ fun GalleryScreen(
         }
     ) { paddingValues ->
 
-        if (isSheepRanchModeOn) {
+        if (isSheepRanchModeOn || isRaceModeOn) {
             val ranchPostcards = remember(postcards) {
                 postcards
                     .sortedWith(
@@ -606,7 +655,8 @@ fun GalleryScreen(
             SheepRanchStage(
                 postcards = ranchPostcards,
                 paddingValues = paddingValues,
-                onPostcardClick = ::handleItemClick
+                onPostcardClick = ::handleItemClick,
+                raceEnabled = isRaceModeOn
             )
         } else if (postcards.isEmpty()) {
             Box(

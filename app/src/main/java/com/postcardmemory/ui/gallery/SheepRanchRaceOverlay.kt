@@ -121,16 +121,21 @@ private fun laneBaseProgress(laneIndex: Int, t: Float): Float {
     }
 }
 
-/** 마지막 15~25% 구간에서만 우승 차량을 완만하게 밀어준다 — 단조증가라 역행하지 않는다. */
+/**
+ * 마지막 30% 구간에서만 우승 차량을 밀어준다. 시작·끝 지점에서 속도(미분)가 0이 되는
+ * smoothstep 곡선을 써서, 갑자기 툭 튀어나오지 않고 서서히 붙었다가 서서히 빠지게 한다.
+ */
 private fun laneWinnerBoost(t: Float): Float {
-    val ramp = ((t.coerceIn(0f, 1f) - 0.75f) / 0.25f).coerceIn(0f, 1f)
-    return ramp * 0.09f
+    val clamped = t.coerceIn(0f, 1f)
+    val ramp = ((clamped - 0.7f) / 0.3f).coerceIn(0f, 1f)
+    val smoothRamp = ramp * ramp * (3f - 2f * ramp)
+    return smoothRamp * 0.06f
 }
 
 private fun laneProgress(laneIndex: Int, isWinner: Boolean, t: Float): Float {
     val base = laneBaseProgress(laneIndex, t)
     val boost = if (isWinner) laneWinnerBoost(t) else 0f
-    return (base + boost).coerceIn(0f, 1.05f)
+    return (base + boost).coerceIn(0f, 1.08f)
 }
 
 private fun spectatorSlot(

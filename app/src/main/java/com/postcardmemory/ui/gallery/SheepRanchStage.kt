@@ -116,6 +116,7 @@ fun SheepRanchStage(
     postcards: List<Postcard>,
     paddingValues: PaddingValues,
     onPostcardClick: (Long) -> Unit,
+    raceEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val positions = remember(postcards.map { it.id }) {
@@ -221,6 +222,7 @@ fun SheepRanchStage(
         }
 
         fun attemptStartRace(tapOffset: Offset) {
+            if (!raceEnabled) return
             if (raceState.phase != SheepRanchRacePhase.IDLE) return
             if (postcards.size < RACE_MIN_POSTCARDS) {
                 showNotEnoughHint = true
