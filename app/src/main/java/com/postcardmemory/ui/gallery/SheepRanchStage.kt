@@ -98,17 +98,57 @@ private const val RACE_FINISH_HOLD_MILLIS = 900
 private const val RACE_RETURN_MILLIS = 800
 private const val RACE_NOT_ENOUGH_HINT_MILLIS = 1800L
 
+/**
+ * 쫑쫑컵 모드의 IDLE 상태에서 카드가 평소 돌아다니는 구역.
+ * 양떼목장(raceEnabled = false)에서는 항상 [FULL_RANCH]로, 기존 자유 배회와 동일하다.
+ */
+private enum class RanchMovementZone {
+    FULL_RANCH,
+    RACE_PADDOCK,
+    RACE_SPECTATOR
+}
+
+private fun movementZoneFor(index: Int, raceEnabled: Boolean): RanchMovementZone {
+    if (!raceEnabled) return RanchMovementZone.FULL_RANCH
+    return if (index < RACE_MAX_RACERS) {
+        RanchMovementZone.RACE_PADDOCK
+    } else {
+        RanchMovementZone.RACE_SPECTATOR
+    }
+}
+
+/** 구역별 좌우 배회 범위 — 패독은 출발선 쪽 절반으로, 관중은 기존 폭 그대로 쓴다. */
+private fun zoneBoundsX(
+    zone: RanchMovementZone,
+    stagePaddingPx: Float,
+    maxX: Float
+): Pair<Float, Float> {
+    return when (zone) {
+        RanchMovementZone.FULL_RANCH -> stagePaddingPx to maxX
+        RanchMovementZone.RACE_PADDOCK -> stagePaddingPx to lerp(stagePaddingPx, maxX, 0.5f)
+        RanchMovementZone.RACE_SPECTATOR -> stagePaddingPx to maxX
+    }
+}
+
 private fun ranchFloorY(
     spec: SheepRanchCardSpec,
     stageHeightPx: Float,
     cardHeightPx: Float,
     bottomReservedPx: Float,
-    stagePaddingPx: Float
+    stagePaddingPx: Float,
+    zone: RanchMovementZone
 ): Float {
-    val floorTopMin = (stageHeightPx * 0.60f).coerceAtLeast(stagePaddingPx)
-    val floorTopMax = (stageHeightPx - bottomReservedPx - cardHeightPx)
-        .coerceAtLeast(floorTopMin)
-    return lerp(floorTopMin, floorTopMax, spec.startJitter)
+    val fullMin = (stageHeightPx * 0.60f).coerceAtLeast(stagePaddingPx)
+    val fullMax = (stageHeightPx - bottomReservedPx - cardHeightPx)
+        .coerceAtLeast(fullMin)
+    val (bandMin, bandMax) = when (zone) {
+        RanchMovementZone.FULL_RANCH -> fullMin to fullMax
+        // 패독: 트랙·그리드와 같은 하단부에 머물도록 아래쪽으로 붙인다.
+        RanchMovementZone.RACE_PADDOCK -> lerp(fullMin, fullMax, 0.62f) to fullMax
+        // 관중: 트랙 위 중단부(펜스 쪽)에 머물도록 위쪽으로 붙인다.
+        RanchMovementZone.RACE_SPECTATOR -> fullMin to lerp(fullMin, fullMax, 0.55f)
+    }
+    return lerp(bandMin, bandMax, spec.startJitter)
 }
 
 @Composable
@@ -208,8 +248,10 @@ fun SheepRanchStage(
             val marginPx = with(density) { 14.dp.toPx() }
             postcards.forEachIndexed { index, pc ->
                 val spec = createSheepRanchCardSpec(pc.id, index, postcards.size)
-                val left = positions[pc.id] ?: lerp(stagePaddingPx, stageMaxX, spec.startBias)
-                val top = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx)
+                val zone = movementZoneFor(index, raceEnabled)
+                val (zoneMinX, zoneMaxX) = zoneBoundsX(zone, stagePaddingPx, stageMaxX)
+                val left = positions[pc.id] ?: lerp(zoneMinX, zoneMaxX, spec.startBias)
+                val top = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
                 val rect = Rect(
                     left - marginPx,
                     top - marginPx,
@@ -236,8 +278,10 @@ fun SheepRanchStage(
             val snapshots = buildMap {
                 postcards.forEachIndexed { index, pc ->
                     val spec = createSheepRanchCardSpec(pc.id, index, postcards.size)
-                    val x = positions[pc.id] ?: lerp(stagePaddingPx, stageMaxX, spec.startBias)
-                    val y = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx)
+                    val zone = movementZoneFor(index, raceEnabled)
+                    val (zoneMinX, zoneMaxX) = zoneBoundsX(zone, stagePaddingPx, stageMaxX)
+                    val x = positions[pc.id] ?: lerp(zoneMinX, zoneMaxX, spec.startBias)
+                    val y = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
                     put(pc.id, SheepRanchCardSnapshot(pc.id, x, y, spec.baseRotation))
                 }
             }
@@ -261,6 +305,19 @@ fun SheepRanchStage(
         RanchBackground(
             modifier = Modifier.matchParentSize()
         )
+
+        if (raceEnabled) {
+            SheepRanchRaceVenue(
+                raceState = raceState,
+                racePhaseProgress = racePhaseProgress.value,
+                raceProgress = raceProgress.value,
+                countdownStep = raceCountdownStep,
+                stageWidthPx = stageWidthPx,
+                stageHeightPx = stageHeightPx,
+                cardWidthPx = cardWidthPx,
+                modifier = Modifier.matchParentSize()
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -302,6 +359,7 @@ fun SheepRanchStage(
                 stretchingCardId = stretchingCardId,
                 busyCardId = busyCardId,
                 raceActive = raceActive,
+                zone = movementZoneFor(index, raceEnabled),
                 onPostcardClick = onPostcardClick,
                 modifier = Modifier.size(width = cardWidth, height = cardWidth + 36.dp)
             )
@@ -319,7 +377,6 @@ fun SheepRanchStage(
                 raceState = raceState,
                 raceProgress = raceProgress.value,
                 racePhaseProgress = racePhaseProgress.value,
-                countdownStep = raceCountdownStep,
                 racers = racerPostcards,
                 spectators = spectatorPostcards,
                 stageWidthPx = stageWidthPx,
@@ -404,6 +461,7 @@ private fun SheepRanchCard(
     stretchingCardId: MutableState<Long?>,
     busyCardId: MutableState<Long?>,
     raceActive: Boolean,
+    zone: RanchMovementZone,
     onPostcardClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -437,9 +495,10 @@ private fun SheepRanchCard(
     var resistanceRotation by remember(postcard.id) { mutableFloatStateOf(0f) }
 
     val maxX = (stageWidthPx - cardWidthPx - stagePaddingPx).coerceAtLeast(stagePaddingPx)
+    val (wanderMinX, wanderMaxX) = zoneBoundsX(zone, stagePaddingPx, maxX)
     val maxLiftHeight = (stageHeightPx * RANCH_MAX_LIFT_FRACTION)
         .coerceAtLeast(cardHeightPx)
-    val floorY = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx)
+    val floorY = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
     val liftHeight = (floorY - y.value + jump.value).coerceAtLeast(0f)
     val depthProgress = (liftHeight / maxLiftHeight).coerceIn(0f, 1f)
     val latestDepthProgress = rememberUpdatedState(depthProgress)
@@ -455,8 +514,8 @@ private fun SheepRanchCard(
         label = "ranchCardScale"
     )
 
-    LaunchedEffect(stageWidthPx, stageHeightPx, cardWidthPx, postcard.id) {
-        val startX = lerp(stagePaddingPx, maxX, spec.startBias)
+    LaunchedEffect(stageWidthPx, stageHeightPx, cardWidthPx, postcard.id, zone) {
+        val startX = lerp(wanderMinX, wanderMaxX, spec.startBias)
         x.snapTo(startX)
         y.snapTo(floorY)
         jump.snapTo(0f)
@@ -489,7 +548,8 @@ private fun SheepRanchCard(
         isGrabbed,
         isDropping,
         isStretching,
-        raceActive
+        raceActive,
+        zone
     ) {
         if (
             isGrabbed || isDropping || isStretching || raceActive ||
@@ -508,19 +568,19 @@ private fun SheepRanchCard(
                 (spec.speedDpPerSecond * spec.walkMillis / 1000f).dp.toPx()
             }
             val nearEdge =
-                (direction < 0 && x.value <= stagePaddingPx + cardWidthPx * 0.3f) ||
-                        (direction > 0 && x.value >= maxX - cardWidthPx * 0.3f)
+                (direction < 0 && x.value <= wanderMinX + cardWidthPx * 0.3f) ||
+                        (direction > 0 && x.value >= wanderMaxX - cardWidthPx * 0.3f)
             if (nearEdge) {
                 direction *= -1
             }
 
-            var targetX = (x.value + distancePx * direction).coerceIn(stagePaddingPx, maxX)
+            var targetX = (x.value + distancePx * direction).coerceIn(wanderMinX, wanderMaxX)
             val tooClose = positions
                 .filterKeys { it != postcard.id }
                 .values
                 .any { otherX -> abs(otherX - targetX) < cardWidthPx * 0.72f }
             if (tooClose) {
-                targetX = (x.value - distancePx * direction * 0.75f).coerceIn(stagePaddingPx, maxX)
+                targetX = (x.value - distancePx * direction * 0.75f).coerceIn(wanderMinX, wanderMaxX)
                 direction *= -1
             }
 
@@ -549,7 +609,7 @@ private fun SheepRanchCard(
                 )
             }
 
-            if (targetX <= stagePaddingPx + 1f || targetX >= maxX - 1f) {
+            if (targetX <= wanderMinX + 1f || targetX >= wanderMaxX - 1f) {
                 direction *= -1
             }
         }

@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -50,11 +49,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
-private val RaceTrackBase = Color(0xFFB9A489)
-private val RaceTrackLane = Color(0xFFEFE6D2)
-private val RaceTrackCheckerDark = Color(0xFF8A7A63)
-private val RaceLightHousing = Color(0xFF4A4038)
-private val RaceLightDim = Color(0xFF8A8074)
 private val CrownGold = Color(0xFFE8B94A)
 private val CrownGoldOutline = Color(0xFF8C5F00)
 
@@ -72,8 +66,6 @@ private val ConfettiColors = listOf(
     Color(0xFFEFE6D2)
 )
 
-private const val TRACK_HEIGHT_FRACTION = 0.30f
-private const val TRACK_SIDE_INSET_FRACTION = 0.09f
 private const val AUDIENCE_ROW_SIZE = 4
 private const val WAVE_CYCLE_MILLIS = 1500f
 private const val WAVE_SPECTATOR_DELAY_MILLIS = 190f
@@ -163,17 +155,19 @@ private fun spectatorSlot(
 /**
  * 〈엽서 양떼목장 — 쫑쫑컵〉 레이스 오버레이.
  *
- * 트랙·신호등·관중·레이스카를 그리는 순수 렌더러다. 실제 단계 전환과 타이밍은
- * [SheepRanchStage]의 단일 코루틴이 관리하고, 이 컴포저블은 그 상태(raceState,
- * raceProgress, racePhaseProgress, countdownStep)를 읽어 매 프레임 위치만 계산한다.
- * 기존 SheepRanchCard의 낙하·stretch 상태는 전혀 건드리지 않는다.
+ * 출전자·관중 카드와 결승 연출을 그리는 동적 렌더러다. 상시 트랙·연석·신호등처럼
+ * IDLE 상태에도 떠 있는 배경 소품은 [SheepRanchRaceVenue]가 맡고, 이 오버레이는
+ * [SheepRanchRaceVenue]와 같은 [computeRaceTrackGeometry] 좌표를 공유해 정렬이
+ * 어긋나지 않게 한다. 실제 단계 전환과 타이밍은 [SheepRanchStage]의 단일 코루틴이
+ * 관리하고, 이 컴포저블은 그 상태(raceState, raceProgress, racePhaseProgress)를
+ * 읽어 매 프레임 위치만 계산한다. 기존 SheepRanchCard의 낙하·stretch 상태는 전혀
+ * 건드리지 않는다.
  */
 @Composable
 fun SheepRanchRaceOverlay(
     raceState: SheepRanchRaceState,
     raceProgress: Float,
     racePhaseProgress: Float,
-    countdownStep: Int,
     racers: List<Postcard>,
     spectators: List<Postcard>,
     stageWidthPx: Float,
@@ -188,15 +182,21 @@ fun SheepRanchRaceOverlay(
     val spectatorCardWidthPx = cardWidthPx * 0.88f
     val spectatorCardWidthDp = cardWidthDp * 0.88f
 
-    val trackTop = stageHeightPx * (1f - TRACK_HEIGHT_FRACTION)
-    val trackBottom = stageHeightPx - with(density) { 8.dp.toPx() }
-    val trackLeft = stageWidthPx * TRACK_SIDE_INSET_FRACTION
-    val trackRight = stageWidthPx * (1f - TRACK_SIDE_INSET_FRACTION)
-    val laneHeight = (trackBottom - trackTop) / 3f
-    val startLineX = trackLeft + cardWidthPx * 0.55f
-    val finishLineX = trackRight - cardWidthPx * 0.55f
+    val geometry = remember(stageWidthPx, stageHeightPx, cardWidthPx) {
+        computeRaceTrackGeometry(
+            stageWidthPx = stageWidthPx,
+            stageHeightPx = stageHeightPx,
+            cardWidthPx = cardWidthPx,
+            bottomMarginPx = with(density) { 8.dp.toPx() }
+        )
+    }
+    val trackTop = geometry.trackTop
+    val trackLeft = geometry.trackLeft
+    val trackRight = geometry.trackRight
+    val startLineX = geometry.startLineX
+    val finishLineX = geometry.finishLineX
 
-    fun laneCenterY(laneIndex: Int): Float = trackTop + laneHeight * (laneIndex + 0.5f)
+    fun laneCenterY(laneIndex: Int): Float = geometry.laneCenterY(laneIndex)
 
     val waveActive = raceState.phase == SheepRanchRacePhase.RACING ||
         raceState.phase == SheepRanchRacePhase.FINISHING
@@ -209,55 +209,6 @@ fun SheepRanchRaceOverlay(
     }
 
     Box(modifier = modifier) {
-        Canvas(modifier = Modifier.matchParentSize()) {
-            drawRect(
-                color = RaceTrackBase.copy(alpha = 0.55f),
-                topLeft = Offset(trackLeft, trackTop),
-                size = Size(trackRight - trackLeft, trackBottom - trackTop)
-            )
-            for (lane in 1 until 3) {
-                val y = trackTop + laneHeight * lane
-                drawLine(
-                    color = RaceTrackLane.copy(alpha = 0.5f),
-                    start = Offset(trackLeft, y),
-                    end = Offset(trackRight, y),
-                    strokeWidth = 1.5.dp.toPx()
-                )
-            }
-
-            val checkerBlock = 5.dp.toPx()
-            listOf(startLineX, finishLineX).forEach { lineX ->
-                var blockY = trackTop
-                var row = 0
-                while (blockY < trackBottom) {
-                    val color = if (row % 2 == 0) RaceTrackLane else RaceTrackCheckerDark
-                    drawRect(
-                        color = color.copy(alpha = 0.65f),
-                        topLeft = Offset(lineX - checkerBlock / 2f, blockY),
-                        size = Size(checkerBlock, checkerBlock)
-                    )
-                    blockY += checkerBlock
-                    row++
-                }
-            }
-        }
-
-        if (raceState.phase == SheepRanchRacePhase.GATHERING ||
-            raceState.phase == SheepRanchRacePhase.COUNTDOWN
-        ) {
-            RaceTrafficLight(
-                countdownStep = if (raceState.phase == SheepRanchRacePhase.COUNTDOWN) {
-                    countdownStep
-                } else {
-                    -1
-                },
-                modifier = Modifier.graphicsLayer {
-                    translationX = startLineX - 20.dp.toPx()
-                    translationY = trackTop - 46.dp.toPx()
-                }
-            )
-        }
-
         spectators.forEachIndexed { index, postcard ->
             val snapshot = raceState.snapshots[postcard.id]
             val startX = snapshot?.x ?: 0f
@@ -473,35 +424,6 @@ fun SheepRanchRaceOverlay(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun RaceTrafficLight(
-    countdownStep: Int,
-    modifier: Modifier = Modifier
-) {
-    Canvas(
-        modifier = modifier.size(width = 18.dp, height = 48.dp)
-    ) {
-        val lightColors = listOf(
-            Color(0xFFB8564A),
-            Color(0xFFD9A441),
-            Color(0xFF7E9C7A)
-        )
-        drawRoundRect(
-            color = RaceLightHousing,
-            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-        )
-        val slotHeight = size.height / 3f
-        lightColors.forEachIndexed { index, color ->
-            val isLit = index == countdownStep
-            drawCircle(
-                color = if (isLit) color else RaceLightDim.copy(alpha = 0.5f),
-                radius = slotHeight * 0.32f,
-                center = Offset(size.width / 2f, slotHeight * (index + 0.5f))
-            )
         }
     }
 }
