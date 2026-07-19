@@ -136,7 +136,8 @@ private fun spectatorSlot(
     trackLeft: Float,
     trackRight: Float,
     trackTop: Float,
-    cardHeightPx: Float
+    cardHeightPx: Float,
+    jitter: Offset
 ): Offset {
     val row = index / AUDIENCE_ROW_SIZE
     val col = index % AUDIENCE_ROW_SIZE
@@ -146,10 +147,23 @@ private fun spectatorSlot(
         (count - AUDIENCE_ROW_SIZE).coerceAtLeast(1)
     }
     val fraction = (col + 0.5f) / colsInRow.coerceAtLeast(1)
-    val x = lerp(trackLeft, trackRight, fraction)
+    val x = lerp(trackLeft, trackRight, fraction) + jitter.x
     val rowSpacing = cardHeightPx * 0.6f
-    val y = (trackTop - cardHeightPx * 0.75f - row * rowSpacing).coerceAtLeast(8f)
+    val y = (trackTop - cardHeightPx * 0.75f - row * rowSpacing + jitter.y).coerceAtLeast(8f)
     return Offset(x, y)
+}
+
+/** 관중 자리별 흔들림 — 레이스 시작 시 한 번만 뽑혀 매번 자리 배치가 조금씩 달라 보이게 한다. */
+private fun buildSpectatorJitter(seed: Int, count: Int, cardHeightPx: Float): List<Offset> {
+    val random = Random(seed)
+    val rangeX = cardHeightPx * 0.5f
+    val rangeY = cardHeightPx * 0.28f
+    return List(count) {
+        Offset(
+            (random.nextFloat() - 0.5f) * rangeX,
+            (random.nextFloat() - 0.5f) * rangeY
+        )
+    }
 }
 
 /**
@@ -208,6 +222,10 @@ fun SheepRanchRaceOverlay(
         }
     }
 
+    val spectatorJitter = remember(raceState.sessionId, spectators.size) {
+        buildSpectatorJitter(raceState.sessionId, spectators.size, cardHeightPx)
+    }
+
     Box(modifier = modifier) {
         spectators.forEachIndexed { index, postcard ->
             val snapshot = raceState.snapshots[postcard.id]
@@ -219,7 +237,8 @@ fun SheepRanchRaceOverlay(
                 trackLeft,
                 trackRight,
                 trackTop,
-                cardHeightPx
+                cardHeightPx,
+                spectatorJitter.getOrElse(index) { Offset.Zero }
             )
             val slotLeftX = slotCenter.x - spectatorCardWidthPx / 2f
             val (x, y) = when (raceState.phase) {
