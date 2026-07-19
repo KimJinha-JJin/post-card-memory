@@ -288,8 +288,11 @@ fun SheepRanchStage(
             if (stretchingCardId.value != null || busyCardId.value != null) return
             if (isPointOverAnyCard(tapOffset)) return
 
-            val racers = postcards.take(RACE_MAX_RACERS)
-            val spectators = postcards.drop(RACE_MAX_RACERS)
+            // 매번 최신 3장만 출전하면 항상 똑같은 조합이라 지루하니, 레이스가 시작되는
+            // 이 순간에 한 번만 무작위로 섞어 출전자/관중을 나눈다(프레임마다 다시 섞지 않음).
+            val shuffled = postcards.shuffled(Random)
+            val racers = shuffled.take(RACE_MAX_RACERS)
+            val spectators = shuffled.drop(RACE_MAX_RACERS)
             val snapshots = buildMap {
                 postcards.forEachIndexed { index, pc ->
                     val spec = createSheepRanchCardSpec(pc.id, index, postcards.size)
