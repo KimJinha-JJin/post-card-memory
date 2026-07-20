@@ -27,6 +27,7 @@ import androidx.exifinterface.media.ExifInterface
 import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -40,6 +41,7 @@ import kotlin.math.sin
 object PostcardImageExporter {
 
     private const val OUTPUT_SIZE = 2048
+    private const val SHARE_CACHE_DIR_NAME = "shared_postcards"
     private const val STAMP_BORDER_WIDTH = 18f
     private const val STICKER_CORNER_RADIUS_RATIO =
         16f / 120f
@@ -101,6 +103,96 @@ object PostcardImageExporter {
                 }
             }
         }
+    }
+
+    fun exportForSharing(
+        context: Context,
+        postcard: Postcard,
+        stickerOverlays: List<StickerOverlay> = emptyList(),
+        sealOverlays: List<SealOverlay> = emptyList()
+    ): Result<File> {
+        return runCatching {
+            val outputBitmap =
+                createPostcardBitmap(
+                    context = context,
+                    postcard = postcard,
+                    stickerOverlays = stickerOverlays,
+                    sealOverlays = sealOverlays
+                )
+
+            try {
+                saveBitmapForSharing(
+                    context = context,
+                    bitmap = outputBitmap,
+                    postcardId = postcard.id
+                )
+            } finally {
+                if (!outputBitmap.isRecycled) {
+                    outputBitmap.recycle()
+                }
+            }
+        }
+    }
+
+    internal fun shareFileNameFor(postcardId: Long): String =
+        "postcard_share_$postcardId.png"
+
+    private fun saveBitmapForSharing(
+        context: Context,
+        bitmap: Bitmap,
+        postcardId: Long
+    ): File {
+        val shareDir =
+            File(context.cacheDir, SHARE_CACHE_DIR_NAME)
+
+        if (
+            !shareDir.exists() &&
+            !shareDir.mkdirs()
+        ) {
+            throw IOException(
+                "공유 폴더를 만들지 못했습니다."
+            )
+        }
+
+        val shareFileName =
+            shareFileNameFor(postcardId)
+
+        // 공유창이 나중에 URI를 읽을 수 있으므로 직전 공유 파일은 지우지 않고,
+        // 같은 폴더에 남아있는 다른 엽서의 오래된 공유 파일만 정리해 캐시가 무한히 늘지 않게 한다.
+        shareDir.listFiles()?.forEach { existingFile ->
+            if (existingFile.name != shareFileName) {
+                existingFile.delete()
+            }
+        }
+
+        val shareFile =
+            File(shareDir, shareFileName)
+
+        FileOutputStream(shareFile).use { outputStream ->
+            val saved =
+                bitmap.compress(
+                    Bitmap.CompressFormat.PNG,
+                    100,
+                    outputStream
+                )
+
+            if (!saved) {
+                throw IOException(
+                    "공유용 이미지 파일 저장에 실패했습니다."
+                )
+            }
+        }
+
+        if (
+            !shareFile.exists() ||
+            shareFile.length() == 0L
+        ) {
+            throw IOException(
+                "공유용 이미지 파일이 비어 있습니다."
+            )
+        }
+
+        return shareFile
     }
 
     private fun createPostcardBitmap(

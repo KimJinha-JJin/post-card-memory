@@ -1,5 +1,6 @@
 package com.postcardmemory.ui.detail
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import java.io.File
@@ -56,6 +57,7 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Wallpaper
@@ -921,6 +923,7 @@ fun DetailScreen(
     val postcard by viewModel.postcard.collectAsState()
     val deleted by viewModel.deleted.collectAsState()
     val exportState by viewModel.exportState.collectAsState()
+    val shareState by viewModel.shareState.collectAsState()
     val backgroundUpdateState by viewModel.backgroundUpdateState.collectAsState()
     val imageUpdateState by viewModel.imageUpdateState.collectAsState()
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
@@ -1390,6 +1393,7 @@ fun DetailScreen(
 
     val controlsEnabled =
         exportState !is ExportState.Exporting &&
+                shareState !is ShareState.Preparing &&
                 backgroundUpdateState !is BackgroundUpdateState.Saving &&
                 fontUpdateState !is FontUpdateState.Saving &&
                 layoutUpdateState !is LayoutUpdateState.Saving &&
@@ -1404,6 +1408,69 @@ fun DetailScreen(
     LaunchedEffect(Unit) {
         viewModel.textScaleSaveErrors.collect { message ->
             textScaleSnackbarHostState.showSnackbar(message)
+        }
+    }
+
+    LaunchedEffect(shareState) {
+        when (val currentShareState = shareState) {
+            is ShareState.Ready -> {
+                val shareUri =
+                    runCatching {
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            currentShareState.file
+                        )
+                    }.getOrNull()
+
+                if (shareUri == null) {
+                    Toast.makeText(
+                        context,
+                        "엽서를 공유할 수 없어요.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    val shareIntent =
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(
+                                Intent.EXTRA_STREAM,
+                                shareUri
+                            )
+                            addFlags(
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+
+                    runCatching {
+                        context.startActivity(
+                            Intent.createChooser(
+                                shareIntent,
+                                "엽서 공유하기"
+                            )
+                        )
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            "이 이미지를 받을 수 있는 앱이 없어요.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+
+                viewModel.resetShareState()
+            }
+
+            is ShareState.Error -> {
+                Toast.makeText(
+                    context,
+                    currentShareState.message,
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.resetShareState()
+            }
+
+            else -> Unit
         }
     }
 
@@ -3729,6 +3796,55 @@ fun DetailScreen(
                             contentDescription =
                                 "갤러리에 저장",
                             tint = BrutalCoral
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = {
+                        postcard?.let { pc ->
+                            viewModel.sharePostcard(
+                                stickerOverlays =
+                                    createStickerOverlaysForExport(
+                                        photoStickers =
+                                            photoStickers,
+                                        postcardSize =
+                                            postcardPreviewSize,
+                                        stickerSizes =
+                                            stickerSizes
+                                    ),
+                                sealOverlays =
+                                    createSealOverlaysForExport(
+                                        photoSeals =
+                                            photoSeals,
+                                        postcardSize =
+                                            postcardPreviewSize,
+                                        sealSizes =
+                                            sealSizes,
+                                        capturedAtMillis =
+                                            pc.capturedAt
+                                    )
+                            )
+                        }
+                    },
+                    enabled = controlsEnabled
+                ) {
+                    if (
+                        shareState
+                                is ShareState.Preparing
+                    ) {
+                        CircularProgressIndicator(
+                            color = BrutalBlack,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector =
+                                Icons.Default.Share,
+                            contentDescription =
+                                "엽서 공유하기",
+                            tint = BrutalBlack
                         )
                     }
                 }

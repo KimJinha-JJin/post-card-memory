@@ -2,4 +2,5 @@
 <paths>
     <files-path name="postcards" path="postcards/" />
     <cache-path name="camera_capture" path="camera_capture/" />
+    <cache-path name="shared_postcards" path="shared_postcards/" />
 </paths>

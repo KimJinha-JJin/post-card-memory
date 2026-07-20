@@ -57,6 +57,21 @@ sealed interface ExportState {
     ) : ExportState
 }
 
+sealed interface ShareState {
+
+    data object Idle : ShareState
+
+    data object Preparing : ShareState
+
+    data class Ready(
+        val file: File
+    ) : ShareState
+
+    data class Error(
+        val message: String
+    ) : ShareState
+}
+
 sealed interface BackgroundUpdateState {
 
     data object Idle : BackgroundUpdateState
@@ -183,6 +198,14 @@ class DetailViewModel @Inject constructor(
 
     val exportState: StateFlow<ExportState> =
         _exportState
+
+    private val _shareState =
+        MutableStateFlow<ShareState>(
+            ShareState.Idle
+        )
+
+    val shareState: StateFlow<ShareState> =
+        _shareState
 
     private val _backgroundUpdateState =
         MutableStateFlow<BackgroundUpdateState>(
@@ -2684,6 +2707,57 @@ class DetailViewModel @Inject constructor(
     fun resetExportState() {
         _exportState.value =
             ExportState.Idle
+    }
+
+    fun sharePostcard(
+        stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList(),
+        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList()
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        if (
+            _shareState.value is
+                    ShareState.Preparing
+        ) {
+            return
+        }
+
+        _shareState.value =
+            ShareState.Preparing
+
+        viewModelScope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    PostcardImageExporter
+                        .exportForSharing(
+                            context = context,
+                            postcard = currentPostcard,
+                            stickerOverlays = stickerOverlays,
+                            sealOverlays = sealOverlays
+                        )
+                }
+
+            result.fold(
+                onSuccess = { file ->
+                    _shareState.value =
+                        ShareState.Ready(file)
+                },
+                onFailure = { exception ->
+                    _shareState.value =
+                        ShareState.Error(
+                            exception.message
+                                ?: "엽서 이미지를 준비하지 못했어요."
+                        )
+                }
+            )
+        }
+    }
+
+    fun resetShareState() {
+        _shareState.value =
+            ShareState.Idle
     }
 
     fun deletePostcard() {
