@@ -16,6 +16,7 @@ import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.BackgroundImageStorage
 import com.postcardmemory.utils.PhotoColorExtractor
 import com.postcardmemory.utils.PhotoStickerImageStorage
+import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardImageStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +24,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -30,17 +32,34 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private const val SEAL_HISTORY_LIMIT = 50
 private const val STICKER_HISTORY_LIMIT = 30
 private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
+private const val DRAFT_AUTOSAVE_DEBOUNCE_MS = 900L
+
+sealed interface DraftSaveStatus {
+
+    data object Idle : DraftSaveStatus
+
+    data object PendingChanges : DraftSaveStatus
+
+    data object Saving : DraftSaveStatus
+
+    data object Saved : DraftSaveStatus
+
+    data object Failed : DraftSaveStatus
+}
 
 sealed interface ExportState {
 
@@ -300,6 +319,186 @@ class DetailViewModel @Inject constructor(
 
     private var tapedFilmPhotoZoomSaveJob: Job? = null
 
+    // ---- 편집 초안(스티커·도장) 자동저장 ----
+
+    private val _draftSaveStatus =
+        MutableStateFlow<DraftSaveStatus>(DraftSaveStatus.Idle)
+
+    val draftSaveStatus: StateFlow<DraftSaveStatus> =
+        _draftSaveStatus
+
+    private val _draftRecovery =
+        MutableStateFlow<PostcardEditDraft?>(null)
+
+    val draftRecovery: StateFlow<PostcardEditDraft?> =
+        _draftRecovery
+
+    private var currentDraftPostcardId: Long = 0L
+    private var draftCreatedAtMillis: Long = 0L
+    private val draftRevisionCounter = AtomicLong(0L)
+    private var latestPersistedDraftRevision: Long = 0L
+    private val draftSaveMutex = Mutex()
+    private var draftAutosaveJob: Job? = null
+
+    /**
+     * 새 postcardId로 상세 화면에 진입할 때 한 번 호출한다.
+     * 기존 미저장 초안이 있으면 draftRecovery에 채워 UI가 복구 여부를 묻게 한다.
+     * 여기서는 아직 photoStickers/photoSeals를 바꾸지 않는다(완성 저장본을 임의로 덮지 않기 위함).
+     */
+    fun initializeDraftSession(postcardId: Long) {
+        currentDraftPostcardId = postcardId
+        draftAutosaveJob?.cancel()
+        draftRevisionCounter.set(0L)
+        latestPersistedDraftRevision = 0L
+        _draftSaveStatus.value = DraftSaveStatus.Idle
+        _draftRecovery.value = null
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val existingDraft =
+                PostcardDraftStorage.loadDraft(context, postcardId)
+
+            if (existingDraft != null && existingDraft.postcardId == postcardId) {
+                draftCreatedAtMillis = existingDraft.createdAtMillis
+                draftRevisionCounter.set(existingDraft.revision)
+                latestPersistedDraftRevision = existingDraft.revision
+                _draftRecovery.value = existingDraft
+            } else {
+                draftCreatedAtMillis = System.currentTimeMillis()
+            }
+        }
+    }
+
+    fun resumeDraftRecovery() {
+        val draft = _draftRecovery.value ?: return
+
+        _photoStickers.value = draft.stickers
+        _selectedStickerId.value = draft.selectedStickerId
+        _photoSeals.value = draft.seals
+        _selectedSealId.value = draft.selectedSealId
+
+        clearStickerHistory()
+        clearSealHistory()
+
+        draftCreatedAtMillis = draft.createdAtMillis
+        draftRevisionCounter.set(draft.revision)
+        latestPersistedDraftRevision = draft.revision
+
+        _draftRecovery.value = null
+    }
+
+    fun discardDraftRecovery() {
+        val draft = _draftRecovery.value ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            PostcardDraftStorage.deleteDraft(context, draft.postcardId)
+        }
+
+        _draftRecovery.value = null
+    }
+
+    private fun scheduleDraftAutosave() {
+        if (currentDraftPostcardId <= 0L) {
+            return
+        }
+
+        _draftSaveStatus.value = DraftSaveStatus.PendingChanges
+
+        draftAutosaveJob?.cancel()
+        draftAutosaveJob = viewModelScope.launch {
+            delay(DRAFT_AUTOSAVE_DEBOUNCE_MS)
+            persistDraftNow()
+        }
+    }
+
+    /** 디바운스를 건너뛰고 즉시 flush한다. 화면 이탈·백그라운드 전환 시 사용한다. */
+    fun flushDraftNow() {
+        if (currentDraftPostcardId <= 0L) {
+            return
+        }
+
+        draftAutosaveJob?.cancel()
+        viewModelScope.launch {
+            persistDraftNow()
+        }
+    }
+
+    private suspend fun persistDraftNow() {
+        val postcardId = currentDraftPostcardId
+        if (postcardId <= 0L) {
+            return
+        }
+
+        val candidateRevision = draftRevisionCounter.incrementAndGet()
+        val snapshotStickers = _photoStickers.value
+        val snapshotSelectedStickerId = _selectedStickerId.value
+        val snapshotSeals = _photoSeals.value
+        val snapshotSelectedSealId = _selectedSealId.value
+
+        _draftSaveStatus.value = DraftSaveStatus.Saving
+
+        val success = withContext(Dispatchers.IO) {
+            draftSaveMutex.withLock {
+                if (
+                    !shouldPersistDraftRevision(
+                        candidateRevision = candidateRevision,
+                        latestPersistedRevision = latestPersistedDraftRevision
+                    )
+                ) {
+                    return@withLock true
+                }
+
+                val draft = PostcardEditDraft(
+                    postcardId = postcardId,
+                    createdAtMillis = draftCreatedAtMillis,
+                    updatedAtMillis = System.currentTimeMillis(),
+                    revision = candidateRevision,
+                    stickers = snapshotStickers,
+                    selectedStickerId = snapshotSelectedStickerId,
+                    seals = snapshotSeals,
+                    selectedSealId = snapshotSelectedSealId
+                )
+
+                val saved =
+                    PostcardDraftStorage.saveDraftAtomically(context, draft)
+
+                if (saved) {
+                    latestPersistedDraftRevision = candidateRevision
+                }
+
+                saved
+            }
+        }
+
+        _draftSaveStatus.value =
+            if (success) DraftSaveStatus.Saved else DraftSaveStatus.Failed
+    }
+
+    /**
+     * 확정 저장(팔레트 버튼)이 실제로 성공한 뒤에만 초안을 지운다.
+     * 삭제도 draftSaveMutex 안에서 revision을 함께 올려, 이미 진행 중이던
+     * 오래된 자동저장이 삭제 직후에 도착해 초안 파일을 되살리지 못하게 한다.
+     */
+    fun saveEditsAndClearDraft(postcardId: Long) {
+        draftAutosaveJob?.cancel()
+
+        viewModelScope.launch(Dispatchers.IO) {
+            persistStickerEditState(postcardId)
+            persistSealEditState(postcardId)
+
+            draftSaveMutex.withLock {
+                latestPersistedDraftRevision =
+                    draftRevisionCounter.incrementAndGet()
+                PostcardDraftStorage.deleteDraft(context, postcardId)
+            }
+
+            withContext(Dispatchers.Main) {
+                _draftSaveStatus.value = DraftSaveStatus.Idle
+            }
+        }
+    }
+
+    // ---- 스티커/도장 상태 ----
+
     private val _photoStickers =
         MutableStateFlow(listOf<PhotoStickerItem>())
 
@@ -316,6 +515,7 @@ class DetailViewModel @Inject constructor(
         stickers: List<PhotoStickerItem>
     ) {
         _photoStickers.value = stickers
+        scheduleDraftAutosave()
     }
 
     fun setSelectedStickerId(
@@ -328,47 +528,53 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            val stickerCacheDir =
-                File(
-                    context.cacheDir,
-                    "photo_stickers"
-                ).canonicalFile
-            val persistDir =
-                File(
-                    context.filesDir,
-                    "sticker_bgs/$postcardId"
-                )
-            if (
-                !persistDir.exists() &&
-                !persistDir.mkdirs()
-            ) {
-                return@launch
-            }
-
-            val updatedStickers =
-                _photoStickers.value.map { sticker ->
-                    persistStickerBackground(
-                        sticker = sticker,
-                        stickerCacheDir = stickerCacheDir,
-                        persistDir = persistDir
-                    )
-                }
-
-            if (updatedStickers != _photoStickers.value) {
-                _photoStickers.value = updatedStickers
-            }
-
-            clearStickerHistory()
-
-            val stateDir =
-                File(context.filesDir, "sticker_states")
-            if (!stateDir.exists()) stateDir.mkdirs()
-            File(stateDir, "$postcardId.txt").writeText(
-                updatedStickers.joinToString("\n") {
-                    it.serialize()
-                }
-            )
+            persistStickerEditState(postcardId)
         }
+    }
+
+    private suspend fun persistStickerEditState(
+        postcardId: Long
+    ) {
+        val stickerCacheDir =
+            File(
+                context.cacheDir,
+                "photo_stickers"
+            ).canonicalFile
+        val persistDir =
+            File(
+                context.filesDir,
+                "sticker_bgs/$postcardId"
+            )
+        if (
+            !persistDir.exists() &&
+            !persistDir.mkdirs()
+        ) {
+            return
+        }
+
+        val updatedStickers =
+            _photoStickers.value.map { sticker ->
+                persistStickerBackground(
+                    sticker = sticker,
+                    stickerCacheDir = stickerCacheDir,
+                    persistDir = persistDir
+                )
+            }
+
+        if (updatedStickers != _photoStickers.value) {
+            _photoStickers.value = updatedStickers
+        }
+
+        clearStickerHistory()
+
+        val stateDir =
+            File(context.filesDir, "sticker_states")
+        if (!stateDir.exists()) stateDir.mkdirs()
+        File(stateDir, "$postcardId.txt").writeText(
+            updatedStickers.joinToString("\n") {
+                it.serialize()
+            }
+        )
     }
 
     fun loadPhotoStickersState(
@@ -424,6 +630,7 @@ class DetailViewModel @Inject constructor(
         seals: List<PostcardSealItem>
     ) {
         _photoSeals.value = seals
+        scheduleDraftAutosave()
     }
 
     fun setSelectedSealId(
@@ -436,15 +643,21 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            val stateDir =
-                File(context.filesDir, "seal_states")
-            if (!stateDir.exists()) stateDir.mkdirs()
-            File(stateDir, "$postcardId.txt").writeText(
-                _photoSeals.value.joinToString("\n") {
-                    it.serialize()
-                }
-            )
+            persistSealEditState(postcardId)
         }
+    }
+
+    private suspend fun persistSealEditState(
+        postcardId: Long
+    ) {
+        val stateDir =
+            File(context.filesDir, "seal_states")
+        if (!stateDir.exists()) stateDir.mkdirs()
+        File(stateDir, "$postcardId.txt").writeText(
+            _photoSeals.value.joinToString("\n") {
+                it.serialize()
+            }
+        )
     }
 
     fun loadPhotoSealsState(
@@ -534,6 +747,7 @@ class DetailViewModel @Inject constructor(
         _photoSeals.value = previous.seals
         _selectedSealId.value = previous.selectedSealId
         updateSealHistoryAvailability()
+        scheduleDraftAutosave()
     }
 
     fun redoSealChange() {
@@ -549,6 +763,7 @@ class DetailViewModel @Inject constructor(
         _photoSeals.value = next.seals
         _selectedSealId.value = next.selectedSealId
         updateSealHistoryAvailability()
+        scheduleDraftAutosave()
     }
 
     private data class StickerSnapshot(
@@ -652,6 +867,7 @@ class DetailViewModel @Inject constructor(
         _selectedStickerId.value = previous.selectedStickerId
         updateStickerHistoryAvailability()
         sweepStickerCleanupCandidates()
+        scheduleDraftAutosave()
     }
 
     fun redoStickerChange() {
@@ -668,6 +884,7 @@ class DetailViewModel @Inject constructor(
         _selectedStickerId.value = next.selectedStickerId
         updateStickerHistoryAvailability()
         sweepStickerCleanupCandidates()
+        scheduleDraftAutosave()
     }
 
     private data class PhotoTransformSnapshot(
@@ -2481,6 +2698,7 @@ class DetailViewModel @Inject constructor(
                     _photoStickers.value + newSticker
                 _selectedStickerId.value =
                     newSticker.id
+                scheduleDraftAutosave()
             } else {
                 _textScaleSaveErrors.trySend(
                     "스티커 사진을 저장하지 못했어."
@@ -2519,6 +2737,7 @@ class DetailViewModel @Inject constructor(
             _photoStickers.value =
                 _photoStickers.value + duplicate
             _selectedStickerId.value = newId
+            scheduleDraftAutosave()
             return
         }
 
@@ -2560,6 +2779,7 @@ class DetailViewModel @Inject constructor(
             _photoStickers.value =
                 _photoStickers.value + duplicate
             _selectedStickerId.value = newId
+            scheduleDraftAutosave()
         }
     }
 
@@ -2635,6 +2855,7 @@ class DetailViewModel @Inject constructor(
                 this[index] = this[index + 1]
                 this[index + 1] = temp
             }
+        scheduleDraftAutosave()
     }
 
     fun moveStickerBackward(
@@ -2656,6 +2877,7 @@ class DetailViewModel @Inject constructor(
                 this[index] = this[index - 1]
                 this[index - 1] = temp
             }
+        scheduleDraftAutosave()
     }
 
     fun exportPostcardToGallery(
@@ -2790,6 +3012,21 @@ class DetailViewModel @Inject constructor(
                         stickerFile.delete()
                     }
                 }
+
+                File(
+                    context.filesDir,
+                    "seal_states/" +
+                            "${currentPostcard.id}.txt"
+                ).let { sealFile ->
+                    if (sealFile.exists()) {
+                        sealFile.delete()
+                    }
+                }
+
+                PostcardDraftStorage.deleteDraft(
+                    context,
+                    currentPostcard.id
+                )
 
                 File(
                     context.filesDir,

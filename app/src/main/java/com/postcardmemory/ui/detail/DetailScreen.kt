@@ -3,6 +3,9 @@ package com.postcardmemory.ui.detail
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import java.io.File
 import java.util.UUID
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -924,6 +927,8 @@ fun DetailScreen(
     val deleted by viewModel.deleted.collectAsState()
     val exportState by viewModel.exportState.collectAsState()
     val shareState by viewModel.shareState.collectAsState()
+    val draftSaveStatus by viewModel.draftSaveStatus.collectAsState()
+    val draftRecovery by viewModel.draftRecovery.collectAsState()
     val backgroundUpdateState by viewModel.backgroundUpdateState.collectAsState()
     val imageUpdateState by viewModel.imageUpdateState.collectAsState()
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
@@ -1234,6 +1239,7 @@ fun DetailScreen(
         viewModel.loadPostcard(postcardId)
         viewModel.loadPhotoStickersState(postcardId)
         viewModel.loadPhotoSealsState(postcardId)
+        viewModel.initializeDraftSession(postcardId)
     }
 
     LaunchedEffect(deleted) {
@@ -1408,6 +1414,22 @@ fun DetailScreen(
     LaunchedEffect(Unit) {
         viewModel.textScaleSaveErrors.collect { message ->
             textScaleSnackbarHostState.showSnackbar(message)
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                viewModel.flushDraftNow()
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -3685,6 +3707,34 @@ fun DetailScreen(
                     }
                 }
 
+                run {
+                    val draftSaveStatusText = when (draftSaveStatus) {
+                        DraftSaveStatus.PendingChanges -> "꾸미기 변경됨"
+                        DraftSaveStatus.Saving -> "꾸미기 저장 중…"
+                        DraftSaveStatus.Saved -> "꾸미기 임시 저장됨"
+                        DraftSaveStatus.Failed -> "꾸미기 저장 실패"
+                        DraftSaveStatus.Idle -> null
+                    }
+
+                    if (draftSaveStatusText != null) {
+                        Spacer(
+                            modifier = Modifier.height(6.dp)
+                        )
+
+                        Text(
+                            text = draftSaveStatusText,
+                            color =
+                                if (draftSaveStatus is DraftSaveStatus.Failed) {
+                                    GalleryDangerRed
+                                } else {
+                                    InkSecondary
+                                },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
                 Spacer(
                     modifier = Modifier.height(96.dp)
                 )
@@ -3730,10 +3780,7 @@ fun DetailScreen(
 
                 IconButton(
                     onClick = {
-                        viewModel.savePhotoStickersState(
-                            postcardId
-                        )
-                        viewModel.savePhotoSealsState(
+                        viewModel.saveEditsAndClearDraft(
                             postcardId
                         )
                         Toast.makeText(
@@ -4172,6 +4219,56 @@ fun DetailScreen(
                         color = BrutalBlack,
                         fontWeight =
                             FontWeight.SemiBold
+                    )
+                }
+            }
+        )
+    }
+
+    draftRecovery?.let { draft ->
+        val stickerAndSealCount =
+            draft.stickers.size + draft.seals.size
+
+        AlertDialog(
+            onDismissRequest = {
+                /* 명시적으로 선택하기 전까지는 닫히지 않게 한다(무한 반복 방지와는 별개로, 실수로 흘려버리지 않도록). */
+            },
+            title = {
+                Text(
+                    text = "저장하지 않은 꾸미기가 있어요",
+                    color = BrutalBlack,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text =
+                        "마지막으로 배치한 스티커·도장 ${stickerAndSealCount}개를 이어서 편집할까요?\n\n사진·문구·배경은 이미 저장돼 있으니 걱정하지 않아도 돼."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.resumeDraftRecovery()
+                    }
+                ) {
+                    Text(
+                        text = "이어서 편집",
+                        color = BrutalBlack,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.discardDraftRecovery()
+                    }
+                ) {
+                    Text(
+                        text = "꾸미기 삭제",
+                        color = GalleryDangerRed,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
