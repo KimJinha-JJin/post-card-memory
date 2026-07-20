@@ -77,6 +77,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -122,6 +123,7 @@ import coil.compose.AsyncImage
 import kotlin.math.atan2
 import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.PhotoSourceMenu
@@ -928,7 +930,6 @@ fun DetailScreen(
     val exportState by viewModel.exportState.collectAsState()
     val shareState by viewModel.shareState.collectAsState()
     val draftSaveStatus by viewModel.draftSaveStatus.collectAsState()
-    val draftRecovery by viewModel.draftRecovery.collectAsState()
     val backgroundUpdateState by viewModel.backgroundUpdateState.collectAsState()
     val imageUpdateState by viewModel.imageUpdateState.collectAsState()
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
@@ -1237,9 +1238,7 @@ fun DetailScreen(
 
     LaunchedEffect(postcardId) {
         viewModel.loadPostcard(postcardId)
-        viewModel.loadPhotoStickersState(postcardId)
-        viewModel.loadPhotoSealsState(postcardId)
-        viewModel.initializeDraftSession(postcardId)
+        viewModel.loadStickerSealStateAndAutoRestoreDraft(postcardId)
     }
 
     LaunchedEffect(deleted) {
@@ -1408,12 +1407,26 @@ fun DetailScreen(
                 !isRemovingBackground
     val latestControlsEnabled by rememberUpdatedState(controlsEnabled)
 
-    val textScaleSnackbarHostState =
+    val detailSnackbarHostState =
         remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
         viewModel.textScaleSaveErrors.collect { message ->
-            textScaleSnackbarHostState.showSnackbar(message)
+            detailSnackbarHostState.showSnackbar(message)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.draftAutoRestoredEvents.collect {
+            val result =
+                detailSnackbarHostState.showSnackbar(
+                    message = "이전에 꾸미던 상태를 불러왔어요",
+                    actionLabel = "원래대로"
+                )
+
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.revertToConfirmedState()
+            }
         }
     }
 
@@ -3708,30 +3721,50 @@ fun DetailScreen(
                 }
 
                 run {
+                    // "저장됨"은 잠깐 보였다 스스로 사라진다. 나머지 상태는 그대로 유지된다.
+                    var showSavedBriefly by remember { mutableStateOf(false) }
+
+                    LaunchedEffect(draftSaveStatus) {
+                        if (draftSaveStatus is DraftSaveStatus.Saved) {
+                            showSavedBriefly = true
+                            delay(1500)
+                            showSavedBriefly = false
+                        } else {
+                            showSavedBriefly = false
+                        }
+                    }
+
                     val draftSaveStatusText = when (draftSaveStatus) {
-                        DraftSaveStatus.PendingChanges -> "꾸미기 변경됨"
+                        DraftSaveStatus.PendingChanges,
                         DraftSaveStatus.Saving -> "꾸미기 저장 중…"
-                        DraftSaveStatus.Saved -> "꾸미기 임시 저장됨"
-                        DraftSaveStatus.Failed -> "꾸미기 저장 실패"
+                        DraftSaveStatus.Saved ->
+                            "✓ 꾸미기 저장됨".takeIf { showSavedBriefly }
+                        DraftSaveStatus.Failed -> "꾸미기를 저장하지 못했어요"
                         DraftSaveStatus.Idle -> null
                     }
 
-                    if (draftSaveStatusText != null) {
-                        Spacer(
-                            modifier = Modifier.height(6.dp)
-                        )
+                    AnimatedVisibility(
+                        visible = draftSaveStatusText != null,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Column {
+                            Spacer(
+                                modifier = Modifier.height(6.dp)
+                            )
 
-                        Text(
-                            text = draftSaveStatusText,
-                            color =
-                                if (draftSaveStatus is DraftSaveStatus.Failed) {
-                                    GalleryDangerRed
-                                } else {
-                                    InkSecondary
-                                },
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                            Text(
+                                text = draftSaveStatusText.orEmpty(),
+                                color =
+                                    if (draftSaveStatus is DraftSaveStatus.Failed) {
+                                        GalleryDangerRed
+                                    } else {
+                                        InkSecondary
+                                    },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
 
@@ -3785,15 +3818,15 @@ fun DetailScreen(
                         )
                         Toast.makeText(
                             context,
-                            "현재 편집 상태를 저장했어!",
+                            "스티커·도장 꾸미기를 저장했어!",
                             Toast.LENGTH_SHORT
                         ).show()
                     },
                     enabled = controlsEnabled
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Palette,
-                        contentDescription = "편집 상태 저장",
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "스티커·도장 꾸미기 완료 저장",
                         tint = BrutalBlack
                     )
                 }
@@ -4225,56 +4258,6 @@ fun DetailScreen(
         )
     }
 
-    draftRecovery?.let { draft ->
-        val stickerAndSealCount =
-            draft.stickers.size + draft.seals.size
-
-        AlertDialog(
-            onDismissRequest = {
-                /* 명시적으로 선택하기 전까지는 닫히지 않게 한다(무한 반복 방지와는 별개로, 실수로 흘려버리지 않도록). */
-            },
-            title = {
-                Text(
-                    text = "저장하지 않은 꾸미기가 있어요",
-                    color = BrutalBlack,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Text(
-                    text =
-                        "마지막으로 배치한 스티커·도장 ${stickerAndSealCount}개를 이어서 편집할까요?\n\n사진·문구·배경은 이미 저장돼 있으니 걱정하지 않아도 돼."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.resumeDraftRecovery()
-                    }
-                ) {
-                    Text(
-                        text = "이어서 편집",
-                        color = BrutalBlack,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.discardDraftRecovery()
-                    }
-                ) {
-                    Text(
-                        text = "꾸미기 삭제",
-                        color = GalleryDangerRed,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        )
-    }
-
     (
             backgroundUpdateState
                     as? BackgroundUpdateState.Error
@@ -4503,7 +4486,7 @@ fun DetailScreen(
         }
 
         SnackbarHost(
-            hostState = textScaleSnackbarHostState,
+            hostState = detailSnackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()

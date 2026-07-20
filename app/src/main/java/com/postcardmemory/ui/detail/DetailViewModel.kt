@@ -327,11 +327,12 @@ class DetailViewModel @Inject constructor(
     val draftSaveStatus: StateFlow<DraftSaveStatus> =
         _draftSaveStatus
 
-    private val _draftRecovery =
-        MutableStateFlow<PostcardEditDraft?>(null)
+    /** 임시저장 상태가 자동 복원된 순간에만 한 번 발행되는 이벤트(Snackbar 트리거용). */
+    private val _draftAutoRestoredEvents =
+        Channel<Unit>(Channel.BUFFERED)
 
-    val draftRecovery: StateFlow<PostcardEditDraft?> =
-        _draftRecovery
+    val draftAutoRestoredEvents: Flow<Unit> =
+        _draftAutoRestoredEvents.receiveAsFlow()
 
     private var currentDraftPostcardId: Long = 0L
     private var draftCreatedAtMillis: Long = 0L
@@ -340,20 +341,50 @@ class DetailViewModel @Inject constructor(
     private val draftSaveMutex = Mutex()
     private var draftAutosaveJob: Job? = null
 
+    /** "원래대로"를 눌렀을 때 되돌아갈 확정 저장 상태(임시저장 적용 직전 스냅샷). */
+    private var confirmedStickersBaseline: List<PhotoStickerItem> = emptyList()
+    private var confirmedSealsBaseline: List<PostcardSealItem> = emptyList()
+
     /**
-     * 새 postcardId로 상세 화면에 진입할 때 한 번 호출한다.
-     * 기존 미저장 초안이 있으면 draftRecovery에 채워 UI가 복구 여부를 묻게 한다.
-     * 여기서는 아직 photoStickers/photoSeals를 바꾸지 않는다(완성 저장본을 임의로 덮지 않기 위함).
+     * 새 postcardId로 상세 화면에 진입할 때 한 번만 호출한다.
+     * 확정 스티커·도장 상태를 먼저 로드한 뒤, 저장하지 않은 임시저장이
+     * 있으면 그 위에 자동으로 덮어 적용한다. 사용자 확인은 요구하지 않는다.
+     *
+     * 이미 같은 postcardId로 초기화된 세션이면 아무 것도 하지 않는다 —
+     * 화면 회전 등으로 Activity가 재생성돼 LaunchedEffect가 다시 실행돼도
+     * (ViewModel 자체는 살아남으므로) 확정 상태를 다시 덮어써 진행 중인
+     * 편집을 잃거나 복원 Snackbar가 중복 표시되는 일이 없게 한다.
      */
-    fun initializeDraftSession(postcardId: Long) {
+    fun loadStickerSealStateAndAutoRestoreDraft(postcardId: Long) {
+        if (currentDraftPostcardId == postcardId) {
+            return
+        }
+
         currentDraftPostcardId = postcardId
         draftAutosaveJob?.cancel()
         draftRevisionCounter.set(0L)
         latestPersistedDraftRevision = 0L
         _draftSaveStatus.value = DraftSaveStatus.Idle
-        _draftRecovery.value = null
+        confirmedStickersBaseline = emptyList()
+        confirmedSealsBaseline = emptyList()
+
+        clearStickerHistory()
+        clearSealHistory()
 
         viewModelScope.launch(Dispatchers.IO) {
+            val confirmedStickers = readConfirmedStickerState(postcardId)
+            val confirmedSeals = readConfirmedSealState(postcardId)
+
+            withContext(Dispatchers.Main) {
+                _photoStickers.value = confirmedStickers
+                _selectedStickerId.value = null
+                _photoSeals.value = confirmedSeals
+                _selectedSealId.value = null
+            }
+
+            confirmedStickersBaseline = confirmedStickers
+            confirmedSealsBaseline = confirmedSeals
+
             val existingDraft =
                 PostcardDraftStorage.loadDraft(context, postcardId)
 
@@ -361,39 +392,53 @@ class DetailViewModel @Inject constructor(
                 draftCreatedAtMillis = existingDraft.createdAtMillis
                 draftRevisionCounter.set(existingDraft.revision)
                 latestPersistedDraftRevision = existingDraft.revision
-                _draftRecovery.value = existingDraft
+
+                withContext(Dispatchers.Main) {
+                    _photoStickers.value = existingDraft.stickers
+                    _selectedStickerId.value = existingDraft.selectedStickerId
+                    _photoSeals.value = existingDraft.seals
+                    _selectedSealId.value = existingDraft.selectedSealId
+                }
+
+                _draftAutoRestoredEvents.trySend(Unit)
             } else {
                 draftCreatedAtMillis = System.currentTimeMillis()
             }
         }
     }
 
-    fun resumeDraftRecovery() {
-        val draft = _draftRecovery.value ?: return
+    /**
+     * Snackbar의 "원래대로"를 눌렀을 때 호출한다. 임시저장을 폐기하고 확정
+     * 상태로 되돌리며, 삭제도 revision을 올려 진행 중이던 자동저장이
+     * 되살리지 못하게 막는다(saveEditsAndClearDraft와 동일한 보호 방식).
+     */
+    fun revertToConfirmedState() {
+        val postcardId = currentDraftPostcardId
+        if (postcardId <= 0L) {
+            return
+        }
 
-        _photoStickers.value = draft.stickers
-        _selectedStickerId.value = draft.selectedStickerId
-        _photoSeals.value = draft.seals
-        _selectedSealId.value = draft.selectedSealId
+        draftAutosaveJob?.cancel()
+
+        _photoStickers.value = confirmedStickersBaseline
+        _selectedStickerId.value = null
+        _photoSeals.value = confirmedSealsBaseline
+        _selectedSealId.value = null
 
         clearStickerHistory()
         clearSealHistory()
 
-        draftCreatedAtMillis = draft.createdAtMillis
-        draftRevisionCounter.set(draft.revision)
-        latestPersistedDraftRevision = draft.revision
-
-        _draftRecovery.value = null
-    }
-
-    fun discardDraftRecovery() {
-        val draft = _draftRecovery.value ?: return
-
         viewModelScope.launch(Dispatchers.IO) {
-            PostcardDraftStorage.deleteDraft(context, draft.postcardId)
-        }
+            draftSaveMutex.withLock {
+                latestPersistedDraftRevision =
+                    draftRevisionCounter.incrementAndGet()
+                PostcardDraftStorage.deleteDraft(context, postcardId)
+            }
 
-        _draftRecovery.value = null
+            withContext(Dispatchers.Main) {
+                _draftSaveStatus.value = DraftSaveStatus.Idle
+            }
+        }
     }
 
     private fun scheduleDraftAutosave() {
@@ -577,41 +622,35 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    fun loadPhotoStickersState(
+    /** 확정 저장된 스티커 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
+    private suspend fun readConfirmedStickerState(
         postcardId: Long
-    ) {
-        clearStickerHistory()
+    ): List<PhotoStickerItem> {
+        val file =
+            File(
+                context.filesDir,
+                "sticker_states/$postcardId.txt"
+            )
+        if (!file.exists()) return emptyList()
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val file =
-                File(
-                    context.filesDir,
-                    "sticker_states/$postcardId.txt"
+        val persistDir =
+            File(
+                context.filesDir,
+                "sticker_bgs/$postcardId"
+            )
+
+        return file.readLines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                val item =
+                    deserializePhotoStickerItem(
+                        line
+                    ) ?: return@mapNotNull null
+                restorePersistedStickerBackground(
+                    sticker = item,
+                    persistDir = persistDir
                 )
-            _selectedStickerId.value = null
-            if (!file.exists()) return@launch
-            val persistDir =
-                File(
-                    context.filesDir,
-                    "sticker_bgs/$postcardId"
-                )
-            val stickers =
-                file.readLines()
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        val item =
-                            deserializePhotoStickerItem(
-                                line
-                            ) ?: return@mapNotNull null
-                        restorePersistedStickerBackground(
-                            sticker = item,
-                            persistDir = persistDir
-                        )
-                    }
-            if (stickers.isNotEmpty()) {
-                _photoStickers.value = stickers
             }
-        }
     }
 
     private val _photoSeals =
@@ -660,30 +699,22 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    fun loadPhotoSealsState(
+    /** 확정 저장된 도장 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
+    private suspend fun readConfirmedSealState(
         postcardId: Long
-    ) {
-        clearSealHistory()
+    ): List<PostcardSealItem> {
+        val file =
+            File(
+                context.filesDir,
+                "seal_states/$postcardId.txt"
+            )
+        if (!file.exists()) return emptyList()
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val file =
-                File(
-                    context.filesDir,
-                    "seal_states/$postcardId.txt"
-                )
-            _selectedSealId.value = null
-            if (!file.exists()) return@launch
-
-            val seals =
-                file.readLines()
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        deserializePostcardSealItem(line)
-                    }
-            if (seals.isNotEmpty()) {
-                _photoSeals.value = seals
+        return file.readLines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                deserializePostcardSealItem(line)
             }
-        }
     }
 
     private data class SealSnapshot(
