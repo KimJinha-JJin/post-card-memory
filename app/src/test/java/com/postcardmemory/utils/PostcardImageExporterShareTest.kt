@@ -8,36 +8,42 @@ import org.junit.Test
 class PostcardImageExporterShareTest {
 
     @Test
-    fun shareFileNameFor_usesPostcardIdAndPngExtension() {
-        assertEquals(
-            "postcard_share_42.png",
-            PostcardImageExporter.shareFileNameFor(42L)
+    fun shareFileNameFor_matchesTimestampedPngPattern() {
+        val fileName =
+            PostcardImageExporter.shareFileNameFor(timestampMillis = 0L)
+
+        assertTrue(
+            fileName.matches(
+                Regex("postcard_\\d{4}-\\d{2}-\\d{2}_\\d{6}\\.png")
+            )
         )
     }
 
     @Test
-    fun shareFileNameFor_isStableForSameId() {
-        val first = PostcardImageExporter.shareFileNameFor(7L)
-        val second = PostcardImageExporter.shareFileNameFor(7L)
+    fun shareFileNameFor_isStableForSameTimestamp() {
+        val first =
+            PostcardImageExporter.shareFileNameFor(timestampMillis = 1_700_000_000_000L)
+        val second =
+            PostcardImageExporter.shareFileNameFor(timestampMillis = 1_700_000_000_000L)
 
         assertEquals(first, second)
     }
 
     @Test
-    fun shareFileNameFor_differsAcrossIds() {
-        val first = PostcardImageExporter.shareFileNameFor(1L)
-        val second = PostcardImageExporter.shareFileNameFor(2L)
+    fun shareFileNameFor_differsAcrossTimestamps() {
+        val first =
+            PostcardImageExporter.shareFileNameFor(timestampMillis = 1_700_000_000_000L)
+        val second =
+            PostcardImageExporter.shareFileNameFor(timestampMillis = 1_700_000_060_000L)
 
         assertFalse(first == second)
     }
 
     @Test
     fun shareFileNameFor_containsNoPathTraversalOrUserText() {
-        val fileName = PostcardImageExporter.shareFileNameFor(123L)
+        val fileName =
+            PostcardImageExporter.shareFileNameFor(timestampMillis = 1_700_000_000_000L)
 
-        assertTrue(
-            fileName.matches(Regex("postcard_share_[0-9]+\\.png"))
-        )
         assertFalse(fileName.contains(".."))
         assertFalse(fileName.contains("/"))
         assertFalse(fileName.contains("\\"))

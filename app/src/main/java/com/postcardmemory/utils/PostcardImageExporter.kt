@@ -123,8 +123,7 @@ object PostcardImageExporter {
             try {
                 saveBitmapForSharing(
                     context = context,
-                    bitmap = outputBitmap,
-                    postcardId = postcard.id
+                    bitmap = outputBitmap
                 )
             } finally {
                 if (!outputBitmap.isRecycled) {
@@ -134,13 +133,21 @@ object PostcardImageExporter {
         }
     }
 
-    internal fun shareFileNameFor(postcardId: Long): String =
-        "postcard_share_$postcardId.png"
+    internal fun shareFileNameFor(
+        timestampMillis: Long = System.currentTimeMillis()
+    ): String {
+        val timestamp =
+            SimpleDateFormat(
+                "yyyy-MM-dd_HHmmss",
+                Locale.US
+            ).format(Date(timestampMillis))
+
+        return "postcard_$timestamp.png"
+    }
 
     private fun saveBitmapForSharing(
         context: Context,
-        bitmap: Bitmap,
-        postcardId: Long
+        bitmap: Bitmap
     ): File {
         val shareDir =
             File(context.cacheDir, SHARE_CACHE_DIR_NAME)
@@ -155,10 +162,12 @@ object PostcardImageExporter {
         }
 
         val shareFileName =
-            shareFileNameFor(postcardId)
+            shareFileNameFor()
 
-        // 공유창이 나중에 URI를 읽을 수 있으므로 직전 공유 파일은 지우지 않고,
-        // 같은 폴더에 남아있는 다른 엽서의 오래된 공유 파일만 정리해 캐시가 무한히 늘지 않게 한다.
+        // 이전에 공유용으로 만들어 둔 PNG는 이 시점 이후로 쓰이지 않으므로
+        // 새 공유 이미지를 만들기 전에 미리 정리해 캐시가 무한히 늘지 않게 한다.
+        // (Preparing/Ready 상태에서는 재공유 요청 자체를 막으므로, 현재 미리보기나
+        // 시스템 공유창에서 사용 중인 파일이 여기서 지워질 일은 없다.)
         shareDir.listFiles()?.forEach { existingFile ->
             if (existingFile.name != shareFileName) {
                 existingFile.delete()

@@ -2971,8 +2971,8 @@ class DetailViewModel @Inject constructor(
                 ?: return
 
         if (
-            _shareState.value is
-                    ShareState.Preparing
+            _shareState.value !is
+                    ShareState.Idle
         ) {
             return
         }
