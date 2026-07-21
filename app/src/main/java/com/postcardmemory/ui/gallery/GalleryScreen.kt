@@ -26,8 +26,10 @@ import androidx.compose.foundation.lazy.grid.items as lazyGridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
@@ -66,6 +68,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -84,10 +87,16 @@ import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.InkPrimary
 import com.postcardmemory.ui.theme.InkSecondary
+import com.postcardmemory.ui.theme.PaperDivider
+import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.SurfaceGray
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.sqrt
 
 private val ViewModeSaver = Saver<GalleryViewMode, String>(
@@ -188,6 +197,7 @@ fun GalleryScreen(
     val isPondModeOn = playMode == GalleryPlayMode.POND
     val isSheepRanchModeOn = playMode == GalleryPlayMode.SHEEP_RANCH
     val isRaceModeOn = playMode == GalleryPlayMode.RACE
+    val isPlayModeOn = playMode != GalleryPlayMode.NONE
 
     val shakeTrigger = rememberShakeTrigger(enabled = isPondModeOn)
 
@@ -219,6 +229,10 @@ fun GalleryScreen(
 
     var sortOrder by rememberSaveable(stateSaver = SortOrderSaver) {
         mutableStateOf(GallerySortOrder.NEWEST)
+    }
+
+    var playModeMenuExpanded by remember {
+        mutableStateOf(false)
     }
 
     var viewMenuExpanded by remember {
@@ -330,145 +344,101 @@ fun GalleryScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        IconButton(
-                            onClick = {
-                                selectedIds = emptySet()
-                                playMode = if (isPondModeOn) {
-                                    GalleryPlayMode.NONE
-                                } else {
-                                    GalleryPlayMode.POND
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    playModeMenuExpanded = true
                                 }
-                                viewMode = GalleryViewMode.COMPACT_GRID
-                            }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .background(
-                                        color = if (isPondModeOn) {
-                                            PondAccentTeal.copy(alpha = 0.18f)
-                                        } else {
-                                            Color.Transparent
-                                        },
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "💧",
-                                    fontSize = 16.sp,
-                                    color = if (isPondModeOn) {
-                                        PondAccentTeal
-                                    } else {
-                                        InkSecondary
-                                    },
-                                    modifier = Modifier.semantics {
-                                        contentDescription = if (isPondModeOn) {
-                                            "엽서의 연못 끄기"
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .background(
+                                            color = if (isPlayModeOn) {
+                                                SunsetGold.copy(alpha = 0.16f)
+                                            } else {
+                                                Color.Transparent
+                                            },
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.EmojiEmotions,
+                                        contentDescription = if (isPlayModeOn) {
+                                            "현재 놀이 모드: ${playModeLabel(playMode)}"
                                         } else {
-                                            "엽서의 연못 켜기"
-                                        }
-                                        stateDescription = if (isPondModeOn) {
-                                            "켜짐"
+                                            "놀이 모드 선택"
+                                        },
+                                        tint = if (isPlayModeOn) {
+                                            SunsetGold
                                         } else {
-                                            "꺼짐"
+                                            InkSecondary
+                                        },
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .semantics {
+                                                stateDescription = if (isPlayModeOn) {
+                                                    "켜짐"
+                                                } else {
+                                                    "꺼짐"
+                                                }
+                                            }
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = playModeMenuExpanded,
+                                onDismissRequest = {
+                                    playModeMenuExpanded = false
+                                }
+                            ) {
+                                PlayModeMenuItem(
+                                    emoji = "💧",
+                                    label = "엽서의 연못",
+                                    selected = isPondModeOn,
+                                    onClick = {
+                                        selectedIds = emptySet()
+                                        playMode = if (isPondModeOn) {
+                                            GalleryPlayMode.NONE
+                                        } else {
+                                            GalleryPlayMode.POND
                                         }
+                                        viewMode = GalleryViewMode.COMPACT_GRID
+                                        playModeMenuExpanded = false
                                     }
                                 )
-                            }
-                        }
 
-                        IconButton(
-                            onClick = {
-                                selectedIds = emptySet()
-                                playMode = if (isSheepRanchModeOn) {
-                                    GalleryPlayMode.NONE
-                                } else {
-                                    GalleryPlayMode.SHEEP_RANCH
-                                }
-                                viewMode = GalleryViewMode.COMPACT_GRID
-                            }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .background(
-                                        color = if (isSheepRanchModeOn) {
-                                            Color(0xFF7E9871).copy(alpha = 0.18f)
+                                PlayModeMenuItem(
+                                    emoji = "🐑",
+                                    label = "양떼목장",
+                                    selected = isSheepRanchModeOn,
+                                    onClick = {
+                                        selectedIds = emptySet()
+                                        playMode = if (isSheepRanchModeOn) {
+                                            GalleryPlayMode.NONE
                                         } else {
-                                            Color.Transparent
-                                        },
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "🐑",
-                                    fontSize = 16.sp,
-                                    color = if (isSheepRanchModeOn) {
-                                        Color(0xFF6F8764)
-                                    } else {
-                                        InkSecondary
-                                    },
-                                    modifier = Modifier.semantics {
-                                        contentDescription = if (isSheepRanchModeOn) {
-                                            "엽서 양떼목장 끄기"
-                                        } else {
-                                            "엽서 양떼목장 켜기"
+                                            GalleryPlayMode.SHEEP_RANCH
                                         }
-                                        stateDescription = if (isSheepRanchModeOn) {
-                                            "켜짐"
-                                        } else {
-                                            "꺼짐"
-                                        }
+                                        viewMode = GalleryViewMode.COMPACT_GRID
+                                        playModeMenuExpanded = false
                                     }
                                 )
-                            }
-                        }
 
-                        IconButton(
-                            onClick = {
-                                selectedIds = emptySet()
-                                playMode = if (isRaceModeOn) {
-                                    GalleryPlayMode.NONE
-                                } else {
-                                    GalleryPlayMode.RACE
-                                }
-                                viewMode = GalleryViewMode.COMPACT_GRID
-                            }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .background(
-                                        color = if (isRaceModeOn) {
-                                            Color(0xFFB1543F).copy(alpha = 0.18f)
+                                PlayModeMenuItem(
+                                    emoji = "🏎️",
+                                    label = "엽서 쫑쫑컵",
+                                    selected = isRaceModeOn,
+                                    onClick = {
+                                        selectedIds = emptySet()
+                                        playMode = if (isRaceModeOn) {
+                                            GalleryPlayMode.NONE
                                         } else {
-                                            Color.Transparent
-                                        },
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "🏎️",
-                                    fontSize = 16.sp,
-                                    color = if (isRaceModeOn) {
-                                        Color(0xFF9C4536)
-                                    } else {
-                                        InkSecondary
-                                    },
-                                    modifier = Modifier.semantics {
-                                        contentDescription = if (isRaceModeOn) {
-                                            "엽서 쫑쫑컵 끄기"
-                                        } else {
-                                            "엽서 쫑쫑컵 켜기"
+                                            GalleryPlayMode.RACE
                                         }
-                                        stateDescription = if (isRaceModeOn) {
-                                            "켜짐"
-                                        } else {
-                                            "꺼짐"
-                                        }
+                                        viewMode = GalleryViewMode.COMPACT_GRID
+                                        playModeMenuExpanded = false
                                     }
                                 )
                             }
@@ -785,6 +755,57 @@ fun GalleryScreen(
     }
 }
 
+private fun playModeLabel(mode: GalleryPlayMode): String =
+    when (mode) {
+        GalleryPlayMode.POND -> "엽서의 연못"
+        GalleryPlayMode.SHEEP_RANCH -> "양떼목장"
+        GalleryPlayMode.RACE -> "엽서 쫑쫑컵"
+        GalleryPlayMode.NONE -> ""
+    }
+
+@Composable
+private fun PlayModeMenuItem(
+    emoji: String,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                color = InkPrimary,
+                fontWeight = if (selected) {
+                    FontWeight.Bold
+                } else {
+                    FontWeight.Normal
+                }
+            )
+        },
+        leadingIcon = {
+            Text(
+                text = emoji,
+                fontSize = 16.sp
+            )
+        },
+        trailingIcon = {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = SunsetGold
+                )
+            }
+        },
+        modifier = if (selected) {
+            Modifier.background(SunsetGold.copy(alpha = 0.16f))
+        } else {
+            Modifier
+        },
+        onClick = onClick
+    )
+}
+
 @Composable
 private fun GalleryGrid(
     postcards: List<Postcard>,
@@ -934,6 +955,10 @@ private fun GalleryDetailList(
     onItemClick: (Long) -> Unit,
     onItemLongClick: (Long) -> Unit
 ) {
+    val monthSections = remember(postcards) {
+        monthSectionsFor(postcards)
+    }
+
     LazyColumn(
         contentPadding = PaddingValues(
             top = paddingValues.calculateTopPadding(),
@@ -971,24 +996,116 @@ private fun GalleryDetailList(
             HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
         }
 
-        lazyColumnItems(
-            items = postcards,
-            key = { postcard ->
-                postcard.id
+        monthSections.forEach { section ->
+            item(key = "month_${section.yearMonth}") {
+                GalleryMonthHeader(
+                    yearMonth = section.yearMonth,
+                    postcardCount = section.postcards.size
+                )
             }
-        ) { postcard ->
-            PostcardDetailRow(
-                postcard = postcard,
-                isSelected = postcard.id in selectedIds,
-                onClick = {
-                    onItemClick(postcard.id)
-                },
-                onLongClick = {
-                    onItemLongClick(postcard.id)
+
+            lazyColumnItems(
+                items = section.postcards,
+                key = { postcard ->
+                    postcard.id
                 }
+            ) { postcard ->
+                PostcardDetailRow(
+                    postcard = postcard,
+                    isSelected = postcard.id in selectedIds,
+                    onClick = {
+                        onItemClick(postcard.id)
+                    },
+                    onLongClick = {
+                        onItemLongClick(postcard.id)
+                    }
+                )
+
+                HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
+            }
+        }
+    }
+}
+
+private data class GalleryMonthSection(
+    val yearMonth: YearMonth,
+    val postcards: List<Postcard>
+)
+
+private val monthHeaderLabelFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy년 M월")
+
+/**
+ * 이미 정렬된 [postcards] 순서를 그대로 따라 월별로 묶는다. 그룹 자체를
+ * 별도로 재정렬하지 않으므로, 최신순/오래된순 어느 쪽으로 들어와도
+ * 첫 등장 순서가 곧 월의 표시 순서가 된다.
+ */
+private fun monthSectionsFor(
+    postcards: List<Postcard>
+): List<GalleryMonthSection> {
+    val grouped = LinkedHashMap<YearMonth, MutableList<Postcard>>()
+
+    postcards.forEach { postcard ->
+        val yearMonth =
+            YearMonth.from(
+                Instant.ofEpochMilli(postcard.capturedAt)
+                    .atZone(ZoneId.systemDefault())
             )
 
-            HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
+        grouped.getOrPut(yearMonth) { mutableListOf() }.add(postcard)
+    }
+
+    return grouped.map { (yearMonth, postcardsInMonth) ->
+        GalleryMonthSection(
+            yearMonth = yearMonth,
+            postcards = postcardsInMonth
+        )
+    }
+}
+
+@Composable
+private fun GalleryMonthHeader(
+    yearMonth: YearMonth,
+    postcardCount: Int
+) {
+    val label =
+        remember(yearMonth) {
+            yearMonth.format(monthHeaderLabelFormatter)
         }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PaperField)
+            .semantics(mergeDescendants = true) {
+                heading()
+                contentDescription = "$label, 엽서 ${postcardCount}장"
+            }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = 10.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = InkPrimary,
+                modifier = Modifier.weight(1f)
+            )
+
+            Text(
+                text = "${postcardCount}장",
+                fontSize = 12.sp,
+                color = InkSecondary
+            )
+        }
+
+        HorizontalDivider(color = PaperDivider, thickness = 1.dp)
     }
 }

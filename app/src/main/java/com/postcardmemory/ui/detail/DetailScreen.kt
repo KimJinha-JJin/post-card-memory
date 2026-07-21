@@ -8,6 +8,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import java.io.File
 import java.util.UUID
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,6 +60,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
@@ -954,6 +957,10 @@ fun DetailScreen(
         mutableStateOf(false)
     }
 
+    var isFocusPreviewMode by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     var showMessageDialog by remember {
         mutableStateOf(false)
     }
@@ -1249,6 +1256,10 @@ fun DetailScreen(
         viewModel.loadStickerSealStateAndAutoRestoreDraft(postcardId)
     }
 
+    BackHandler(enabled = isFocusPreviewMode) {
+        isFocusPreviewMode = false
+    }
+
     LaunchedEffect(deleted) {
         if (deleted) {
             onNavigateBack()
@@ -1481,15 +1492,28 @@ fun DetailScreen(
                 .padding(
                     horizontal = 20.dp
                 ),
+            verticalArrangement =
+                if (isFocusPreviewMode) {
+                    Arrangement.Center
+                } else {
+                    Arrangement.Top
+                },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(
-                modifier = Modifier.height(72.dp)
-            )
+            if (!isFocusPreviewMode) {
+                Spacer(
+                    modifier = Modifier.height(72.dp)
+                )
+            }
 
             postcard?.let { pc ->
+                val postcardPreviewWidthFraction =
+                    if (isFocusPreviewMode) 0.96f else 0.8f
+
                 Box(
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    modifier = Modifier.fillMaxWidth(
+                        postcardPreviewWidthFraction
+                    )
                 ) {
                     Box(
                         modifier = Modifier
@@ -1506,8 +1530,13 @@ fun DetailScreen(
                                 postcardPreviewSize = size
                             }
                             .pointerInput(
-                                selectedLayout
+                                selectedLayout,
+                                isFocusPreviewMode
                             ) {
+                                if (isFocusPreviewMode) {
+                                    return@pointerInput
+                                }
+
                                 val panSensitivity = 0.45f
                                 var tapedFilmDragArmed = true
                                 var photoTransformGestureSnapshotPending = true
@@ -1701,6 +1730,8 @@ fun DetailScreen(
                         photoStickers.forEach { sticker ->
                             val isSelected =
                                 sticker.id == selectedStickerId
+                            val isVisuallySelected =
+                                isSelected && !isFocusPreviewMode
                             val perStickerEditMode =
                                 if (isSelected) {
                                     resolvedStickerEditMode
@@ -1732,7 +1763,7 @@ fun DetailScreen(
 
                             val imageModifier =
                                 when {
-                                    sticker.isBackgroundRemoved && isSelected ->
+                                    sticker.isBackgroundRemoved && isVisuallySelected ->
                                         Modifier
                                             .fillMaxSize()
                                             .border(
@@ -1742,7 +1773,7 @@ fun DetailScreen(
                                             )
                                     sticker.isBackgroundRemoved ->
                                         Modifier.fillMaxSize()
-                                    isSelected ->
+                                    isVisuallySelected ->
                                         Modifier
                                             .fillMaxSize()
                                             .clip(RoundedCornerShape(16.dp))
@@ -1788,8 +1819,13 @@ fun DetailScreen(
                                         .pointerInput(
                                             sticker.id,
                                             postcardPreviewSize,
-                                            perStickerEditMode
+                                            perStickerEditMode,
+                                            isFocusPreviewMode
                                         ) {
+                                            if (isFocusPreviewMode) {
+                                                return@pointerInput
+                                            }
+
                                             var stickerGestureSnapshotPending = true
 
                                             coroutineScope {
@@ -2002,7 +2038,7 @@ fun DetailScreen(
                                         }  // coroutineScope
                                 )
 
-                                if (isSelected && perStickerEditMode == StickerEditMode.Rotate) {
+                                if (isVisuallySelected && perStickerEditMode == StickerEditMode.Rotate) {
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.TopCenter)
@@ -2011,8 +2047,13 @@ fun DetailScreen(
                                             .pointerInput(
                                                 sticker.id,
                                                 postcardPreviewSize,
-                                                stickerScaleHandleTouchPx
+                                                stickerScaleHandleTouchPx,
+                                                isFocusPreviewMode
                                             ) {
+                                                if (isFocusPreviewMode) {
+                                                    return@pointerInput
+                                                }
+
                                                 var rotationGestureActive = false
                                                 var gestureStartRotation = 0f
                                                 var gestureStartCenter = Offset.Zero
@@ -2163,7 +2204,7 @@ fun DetailScreen(
                                     }
                                 }
 
-                                if (isSelected) {
+                                if (isVisuallySelected) {
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
@@ -2219,7 +2260,7 @@ fun DetailScreen(
                                     }
                                 }
 
-                                if (isSelected && perStickerEditMode == StickerEditMode.Scale) {
+                                if (isVisuallySelected && perStickerEditMode == StickerEditMode.Scale) {
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
@@ -2227,8 +2268,13 @@ fun DetailScreen(
                                             .pointerInput(
                                                 sticker.id,
                                                 postcardPreviewSize,
-                                                stickerScaleHandleTouchPx
+                                                stickerScaleHandleTouchPx,
+                                                isFocusPreviewMode
                                             ) {
+                                                if (isFocusPreviewMode) {
+                                                    return@pointerInput
+                                                }
+
                                                 var scaleGestureActive = false
                                                 var gestureStartScale = 1f
                                                 var gestureStartCenter = Offset.Zero
@@ -2398,6 +2444,8 @@ fun DetailScreen(
                         photoSeals.forEach { seal ->
                             val isSealSelected =
                                 seal.id == selectedSealId
+                            val isSealVisuallySelected =
+                                isSealSelected && !isFocusPreviewMode
                             val currentSealOffset =
                                 seal.offset
 
@@ -2442,8 +2490,13 @@ fun DetailScreen(
                                     }
                                     .pointerInput(
                                         seal.id,
-                                        postcardPreviewSize
+                                        postcardPreviewSize,
+                                        isFocusPreviewMode
                                     ) {
+                                        if (isFocusPreviewMode) {
+                                            return@pointerInput
+                                        }
+
                                         var sealGestureSnapshotPending = true
                                         var activeSealPointerCount = 0
 
@@ -2617,7 +2670,7 @@ fun DetailScreen(
                                                         (seal.id to size)
                                         }
                                         .then(
-                                            if (isSealSelected) {
+                                            if (isSealVisuallySelected) {
                                                 val selectionShape =
                                                     when (seal.type) {
                                                         SealType.CIRCLE_POSTMARK,
@@ -2655,6 +2708,7 @@ fun DetailScreen(
                 }
             }
 
+            if (!isFocusPreviewMode) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3731,8 +3785,10 @@ fun DetailScreen(
                 )
             }
             }
+            }
         }
 
+        if (!isFocusPreviewMode) {
         Column {
             Row(
                 modifier = Modifier
@@ -3887,6 +3943,21 @@ fun DetailScreen(
                     }
                 }
 
+                IconButton(
+                    onClick = {
+                        moreMenuExpanded = false
+                        showPhotoSourceMenu = false
+                        isFocusPreviewMode = true
+                    },
+                    enabled = controlsEnabled
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fullscreen,
+                        contentDescription = "집중 미리보기",
+                        tint = BrutalBlack
+                    )
+                }
+
                 Box {
                     IconButton(
                         onClick = {
@@ -3931,6 +4002,34 @@ fun DetailScreen(
             }
 
             HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
+        }
+        }
+    }
+
+    if (isFocusPreviewMode) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            IconButton(
+                onClick = {
+                    isFocusPreviewMode = false
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(48.dp)
+                    .background(
+                        color = PaperSurface.copy(alpha = 0.92f),
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FullscreenExit,
+                    contentDescription = "집중 미리보기 종료",
+                    tint = InkPrimary
+                )
+            }
         }
     }
 
@@ -4418,7 +4517,7 @@ fun DetailScreen(
             )
         }
 
-        if (postcard != null) {
+        if (postcard != null && !isFocusPreviewMode) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
