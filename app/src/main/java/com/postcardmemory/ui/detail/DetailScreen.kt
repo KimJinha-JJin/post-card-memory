@@ -80,6 +80,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -1428,7 +1429,8 @@ fun DetailScreen(
             val result =
                 detailSnackbarHostState.showSnackbar(
                     message = "이전에 꾸미던 상태를 불러왔어요",
-                    actionLabel = "원래대로"
+                    actionLabel = "원래대로",
+                    duration = SnackbarDuration.Short
                 )
 
             if (result == SnackbarResult.ActionPerformed) {
@@ -4596,20 +4598,23 @@ private fun SharePreviewBottomSheet(
                     .fillMaxWidth()
                     .heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BrutalCoral
+                    containerColor = SunsetGold,
+                    contentColor = PaperSurface,
+                    disabledContainerColor = SunsetGold.copy(alpha = 0.45f),
+                    disabledContentColor = PaperSurface.copy(alpha = 0.65f)
                 )
             ) {
                 Icon(
                     imageVector = Icons.Default.Share,
                     contentDescription = null,
-                    tint = BrutalWhite
+                    tint = PaperSurface
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
                     text = "공유하기",
-                    color = BrutalWhite,
+                    color = PaperSurface,
                     fontWeight = FontWeight.Bold
                 )
             }
