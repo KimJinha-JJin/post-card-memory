@@ -2687,6 +2687,15 @@ class DetailViewModel @Inject constructor(
             BackgroundUpdateState.Idle
     }
 
+    /**
+     * 중심 사진 교체. 새 파일 복사 → Room 갱신 → 화면 갱신까지 모두 성공한
+     * 뒤에만 이전 사진 파일을 지운다 — 예전에는 이 성공 경로에서 이전
+     * 파일을 전혀 정리하지 않아 교체할 때마다 filesDir/postcards/에 과거
+     * 사진이 계속 누적됐다. Room 갱신 실패 시에는 이전 그대로 새로 만든
+     * 파일만 지운다(기존 동작 유지). previousImagePath와 newImagePath가
+     * 같은 경우(이론상 UUID 기반이라 발생하지 않지만 방어적으로)는 이전
+     * 파일을 지우지 않는다.
+     */
     fun updatePostcardImage(
         sourceUri: Uri
     ) {
@@ -2700,6 +2709,9 @@ class DetailViewModel @Inject constructor(
         ) {
             return
         }
+
+        val previousImagePath =
+            currentPostcard.imagePath
 
         _imageUpdateState.value =
             ImageUpdateState.Saving
@@ -2732,6 +2744,16 @@ class DetailViewModel @Inject constructor(
 
                 _imageUpdateState.value =
                     ImageUpdateState.Success
+
+                if (previousImagePath != newImagePath) {
+                    withContext(Dispatchers.IO) {
+                        PostcardImageStorage
+                            .deleteIfOwnedByApp(
+                                context = context,
+                                path = previousImagePath
+                            )
+                    }
+                }
             } catch (exception: Exception) {
                 withContext(Dispatchers.IO) {
                     newImagePath

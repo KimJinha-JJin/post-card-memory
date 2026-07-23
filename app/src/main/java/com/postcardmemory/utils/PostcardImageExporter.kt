@@ -32,6 +32,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -42,6 +43,15 @@ object PostcardImageExporter {
 
     private const val OUTPUT_SIZE = 2048
     private const val SHARE_CACHE_DIR_NAME = "shared_postcards"
+
+    /**
+     * 공유 캐시 보관 정책. 엽서 PNG는 몇 MB 수준이라 24시간·20개면 기기
+     * 저장공간에 부담이 거의 없으면서도, chooser에서 오래 머물거나 곧바로
+     * 재공유하는 정상적인 사용 패턴에서 파일이 사라지는 일은 없을 만큼
+     * 충분히 넉넉하다.
+     */
+    private const val SHARE_CACHE_TTL_MILLIS = 24 * 60 * 60 * 1000L
+    private const val SHARE_CACHE_MAX_FILES = 20
     private const val STAMP_BORDER_WIDTH = 18f
     private const val STICKER_CORNER_RADIUS_RATIO =
         16f / 120f
@@ -123,6 +133,7 @@ object PostcardImageExporter {
             try {
                 saveBitmapForSharing(
                     context = context,
+                    postcardId = postcard.id,
                     bitmap = outputBitmap
                 )
             } finally {
@@ -133,20 +144,20 @@ object PostcardImageExporter {
         }
     }
 
+    /**
+     * 초 단위 timestamp만 쓰면 같은 초에 두 번 공유할 때 파일명이 완전히
+     * 같아져 두 번째 공유가 첫 번째 공유 파일을 덮어써 버린다. postcardId +
+     * 밀리초 + UUID 조합이라 같은 밀리초에 호출돼도 사실상 충돌하지 않는다.
+     */
     internal fun shareFileNameFor(
-        timestampMillis: Long = System.currentTimeMillis()
-    ): String {
-        val timestamp =
-            SimpleDateFormat(
-                "yyyy-MM-dd_HHmmss",
-                Locale.US
-            ).format(Date(timestampMillis))
-
-        return "postcard_$timestamp.png"
-    }
+        postcardId: Long,
+        timestampMillis: Long = System.currentTimeMillis(),
+        uuid: String = UUID.randomUUID().toString()
+    ): String = "postcard_${postcardId}_${timestampMillis}_$uuid.png"
 
     private fun saveBitmapForSharing(
         context: Context,
+        postcardId: Long,
         bitmap: Bitmap
     ): File {
         val shareDir =
@@ -162,46 +173,90 @@ object PostcardImageExporter {
         }
 
         val shareFileName =
-            shareFileNameFor()
-
-        // 이전에 공유용으로 만들어 둔 PNG는 이 시점 이후로 쓰이지 않으므로
-        // 새 공유 이미지를 만들기 전에 미리 정리해 캐시가 무한히 늘지 않게 한다.
-        // (Preparing/Ready 상태에서는 재공유 요청 자체를 막으므로, 현재 미리보기나
-        // 시스템 공유창에서 사용 중인 파일이 여기서 지워질 일은 없다.)
-        shareDir.listFiles()?.forEach { existingFile ->
-            if (existingFile.name != shareFileName) {
-                existingFile.delete()
-            }
-        }
-
+            shareFileNameFor(postcardId = postcardId)
         val shareFile =
             File(shareDir, shareFileName)
 
-        FileOutputStream(shareFile).use { outputStream ->
-            val saved =
-                bitmap.compress(
-                    Bitmap.CompressFormat.PNG,
-                    100,
-                    outputStream
-                )
+        try {
+            FileOutputStream(shareFile).use { outputStream ->
+                val saved =
+                    bitmap.compress(
+                        Bitmap.CompressFormat.PNG,
+                        100,
+                        outputStream
+                    )
 
-            if (!saved) {
+                if (!saved) {
+                    throw IOException(
+                        "공유용 이미지 파일 저장에 실패했습니다."
+                    )
+                }
+            }
+
+            if (
+                !shareFile.exists() ||
+                shareFile.length() == 0L
+            ) {
                 throw IOException(
-                    "공유용 이미지 파일 저장에 실패했습니다."
+                    "공유용 이미지 파일이 비어 있습니다."
                 )
             }
+        } catch (exception: Exception) {
+            // 실패한 빈/부분 파일을 캐시에 남기지 않는다.
+            if (shareFile.exists()) {
+                shareFile.delete()
+            }
+            throw exception
         }
 
-        if (
-            !shareFile.exists() ||
-            shareFile.length() == 0L
-        ) {
-            throw IOException(
-                "공유용 이미지 파일이 비어 있습니다."
+        // 방금 만든 파일은 절대 정리 대상에 포함하지 않는다. chooser가 아직
+        // 열려 있거나 외부 앱이 방금 넘긴 직전 공유 파일을 읽는 중일 수
+        // 있으므로, 여기서 "현재 파일 이름과 다르면 전부 삭제" 같은 즉시
+        // 전체 삭제는 하지 않고 TTL·최대 보관 개수 정책으로만 제한적으로
+        // 정리한다. 정리 실패는 이번 공유 성공 여부에 영향을 주지 않는다.
+        runCatching {
+            cleanupOldShareFiles(
+                shareDir = shareDir,
+                currentFileName = shareFileName
             )
         }
 
         return shareFile
+    }
+
+    /**
+     * TTL을 넘긴 공유 캐시 파일을 지우고, TTL 이내라도 개수가 너무 많으면
+     * 오래된 파일부터 최대 보관 개수만큼만 남긴다. currentFileName(이번
+     * 공유로 방금 생성한 파일)은 항상 제외한다. internal은 순수 JUnit
+     * 테스트를 위함(같은 패키지에서 TemporaryFolder로 검증).
+     */
+    internal fun cleanupOldShareFiles(
+        shareDir: File,
+        currentFileName: String,
+        ttlMillis: Long = SHARE_CACHE_TTL_MILLIS,
+        maxFiles: Int = SHARE_CACHE_MAX_FILES,
+        nowMillis: Long = System.currentTimeMillis()
+    ) {
+        val otherFiles =
+            shareDir.listFiles { file ->
+                file.isFile && file.name != currentFileName
+            } ?: return
+
+        val (expired, fresh) =
+            otherFiles.partition { file ->
+                nowMillis - file.lastModified() > ttlMillis
+            }
+
+        expired.forEach { file ->
+            runCatching { file.delete() }
+        }
+
+        fresh
+            .sortedByDescending { file -> file.lastModified() }
+            .drop(maxFiles)
+            .forEach { file ->
+                runCatching { file.delete() }
+            }
     }
 
     private fun createPostcardBitmap(
