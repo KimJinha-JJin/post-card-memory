@@ -940,6 +940,7 @@ fun DetailScreen(
     val exportState by viewModel.exportState.collectAsState()
     val shareState by viewModel.shareState.collectAsState()
     val draftSaveStatus by viewModel.draftSaveStatus.collectAsState()
+    val confirmSaveState by viewModel.confirmSaveState.collectAsState()
     val backgroundUpdateState by viewModel.backgroundUpdateState.collectAsState()
     val imageUpdateState by viewModel.imageUpdateState.collectAsState()
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
@@ -1412,6 +1413,30 @@ fun DetailScreen(
         }
     }
 
+    LaunchedEffect(confirmSaveState) {
+        when (confirmSaveState) {
+            is ConfirmSaveState.Saved -> {
+                Toast.makeText(
+                    context,
+                    "스티커·도장 꾸미기를 저장했어!",
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.acknowledgeConfirmSaveResult()
+            }
+
+            is ConfirmSaveState.Failed -> {
+                Toast.makeText(
+                    context,
+                    "스티커·도장 꾸미기를 저장하지 못했어. 다시 시도해줘.",
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.acknowledgeConfirmSaveResult()
+            }
+
+            else -> Unit
+        }
+    }
+
     val isRemovingBackground =
         stickerBackgroundRemovalState is StickerBackgroundRemovalState.Removing
 
@@ -1423,6 +1448,7 @@ fun DetailScreen(
                 layoutUpdateState !is LayoutUpdateState.Saving &&
                 dateFormatUpdateState !is DateFormatUpdateState.Saving &&
                 imageUpdateState !is ImageUpdateState.Saving &&
+                confirmSaveState !is ConfirmSaveState.Saving &&
                 !isRemovingBackground
     val latestControlsEnabled by rememberUpdatedState(controlsEnabled)
 
@@ -3830,11 +3856,6 @@ fun DetailScreen(
                         viewModel.saveEditsAndClearDraft(
                             postcardId
                         )
-                        Toast.makeText(
-                            context,
-                            "스티커·도장 꾸미기를 저장했어!",
-                            Toast.LENGTH_SHORT
-                        ).show()
                     },
                     enabled = controlsEnabled
                 ) {

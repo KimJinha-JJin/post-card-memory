@@ -14,6 +14,7 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.BackgroundImageStorage
+import com.postcardmemory.utils.ConfirmedEditStateStorage
 import com.postcardmemory.utils.PhotoColorExtractor
 import com.postcardmemory.utils.PhotoStickerImageStorage
 import com.postcardmemory.utils.PostcardDraftStorage
@@ -60,6 +61,29 @@ sealed interface DraftSaveStatus {
 
     data object Failed : DraftSaveStatus
 }
+
+/** 완료 버튼(확정 저장)의 상태. 스티커·도장 저장을 이 상태로만 판단한다. */
+sealed interface ConfirmSaveState {
+
+    data object Idle : ConfirmSaveState
+
+    data object Saving : ConfirmSaveState
+
+    data object Saved : ConfirmSaveState
+
+    data object Failed : ConfirmSaveState
+}
+
+/** 스티커·도장 저장이 모두 성공했을 때만 확정 저장 전체를 성공으로 본다. */
+internal fun shouldConfirmSaveSucceed(
+    stickersSaved: Boolean,
+    sealsSaved: Boolean
+): Boolean = stickersSaved && sealsSaved
+
+/** 이미 확정 저장이 진행 중이면 완료 버튼 연타로 새 저장을 또 시작하지 않는다. */
+internal fun canStartConfirmSave(
+    currentState: ConfirmSaveState
+): Boolean = currentState !is ConfirmSaveState.Saving
 
 sealed interface ExportState {
 
@@ -327,6 +351,17 @@ class DetailViewModel @Inject constructor(
     val draftSaveStatus: StateFlow<DraftSaveStatus> =
         _draftSaveStatus
 
+    private val _confirmSaveState =
+        MutableStateFlow<ConfirmSaveState>(ConfirmSaveState.Idle)
+
+    val confirmSaveState: StateFlow<ConfirmSaveState> =
+        _confirmSaveState
+
+    /** 완료 버튼 결과(성공/실패)를 화면이 확인 처리한 뒤 Idle로 되돌린다. */
+    fun acknowledgeConfirmSaveResult() {
+        _confirmSaveState.value = ConfirmSaveState.Idle
+    }
+
     /** 임시저장 상태가 자동 복원된 순간에만 한 번 발행되는 이벤트(Snackbar 트리거용). */
     private val _draftAutoRestoredEvents =
         Channel<Unit>(Channel.BUFFERED)
@@ -519,25 +554,47 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 확정 저장(팔레트 버튼)이 실제로 성공한 뒤에만 초안을 지운다.
-     * 삭제도 draftSaveMutex 안에서 revision을 함께 올려, 이미 진행 중이던
-     * 오래된 자동저장이 삭제 직후에 도착해 초안 파일을 되살리지 못하게 한다.
+     * 확정 저장(완료 버튼)이 스티커·도장 모두 실제로 성공한 뒤에만 초안을
+     * 지운다. 하나라도 실패하면 초안을 유지해 사용자가 다시 시도할 수 있게
+     * 한다. 이미 저장이 진행 중이면 새 요청은 무시해 완료 버튼 연타로
+     * 같은 파일에 저장이 중복 실행되는 것을 막는다.
+     *
+     * 초안 삭제 자체의 실패(드문 파일시스템 오류)는 정리 실패로만 취급하고
+     * 전체 결과는 성공으로 본다 — 이 시점엔 스티커·도장 확정 상태가 이미
+     * 안전하게 저장됐고, deleteDraft는 예외를 던지지 않으므로 재시도 시
+     * 자동저장이 다음 임시저장에서 초안 파일을 다시 갱신해 자연히 해소된다.
      */
     fun saveEditsAndClearDraft(postcardId: Long) {
+        if (!canStartConfirmSave(_confirmSaveState.value)) {
+            return
+        }
+
         draftAutosaveJob?.cancel()
+        _confirmSaveState.value = ConfirmSaveState.Saving
 
         viewModelScope.launch(Dispatchers.IO) {
-            persistStickerEditState(postcardId)
-            persistSealEditState(postcardId)
+            val stickersSaved = persistStickerEditState(postcardId)
+            val sealsSaved = persistSealEditState(postcardId)
+            val allSaved = shouldConfirmSaveSucceed(stickersSaved, sealsSaved)
 
-            draftSaveMutex.withLock {
-                latestPersistedDraftRevision =
-                    draftRevisionCounter.incrementAndGet()
-                PostcardDraftStorage.deleteDraft(context, postcardId)
+            if (allSaved) {
+                draftSaveMutex.withLock {
+                    latestPersistedDraftRevision =
+                        draftRevisionCounter.incrementAndGet()
+                    PostcardDraftStorage.deleteDraft(context, postcardId)
+                }
             }
 
             withContext(Dispatchers.Main) {
-                _draftSaveStatus.value = DraftSaveStatus.Idle
+                if (allSaved) {
+                    _draftSaveStatus.value = DraftSaveStatus.Idle
+                }
+                _confirmSaveState.value =
+                    if (allSaved) {
+                        ConfirmSaveState.Saved
+                    } else {
+                        ConfirmSaveState.Failed
+                    }
             }
         }
     }
@@ -577,9 +634,14 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 스티커 확정 상태를 저장한다. 누끼 파일 승격이나 상태 파일 쓰기 중
+     * 하나라도 실패하면 false를 반환하며, 이 경우 StateFlow와 undo/redo
+     * 이력, 기존 확정 파일 모두 건드리지 않아 재시도가 안전하다.
+     */
     private suspend fun persistStickerEditState(
         postcardId: Long
-    ) {
+    ): Boolean {
         val stickerCacheDir =
             File(
                 context.cacheDir,
@@ -594,32 +656,40 @@ class DetailViewModel @Inject constructor(
             !persistDir.exists() &&
             !persistDir.mkdirs()
         ) {
-            return
+            return false
         }
 
-        val updatedStickers =
-            _photoStickers.value.map { sticker ->
+        val updatedStickers = mutableListOf<PhotoStickerItem>()
+        for (sticker in _photoStickers.value) {
+            val persisted =
                 persistStickerBackground(
                     sticker = sticker,
                     stickerCacheDir = stickerCacheDir,
                     persistDir = persistDir
-                )
-            }
+                ) ?: return false
+            updatedStickers.add(persisted)
+        }
+
+        val stateFile =
+            File(context.filesDir, "sticker_states/$postcardId.txt")
+        val saved =
+            ConfirmedEditStateStorage.writeTextAtomically(
+                targetFile = stateFile,
+                content = updatedStickers.joinToString("\n") {
+                    it.serialize()
+                }
+            )
+
+        if (!saved) {
+            return false
+        }
 
         if (updatedStickers != _photoStickers.value) {
             _photoStickers.value = updatedStickers
         }
-
         clearStickerHistory()
 
-        val stateDir =
-            File(context.filesDir, "sticker_states")
-        if (!stateDir.exists()) stateDir.mkdirs()
-        File(stateDir, "$postcardId.txt").writeText(
-            updatedStickers.joinToString("\n") {
-                it.serialize()
-            }
-        )
+        return true
     }
 
     /** 확정 저장된 스티커 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
@@ -686,14 +756,16 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** 도장 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
     private suspend fun persistSealEditState(
         postcardId: Long
-    ) {
-        val stateDir =
-            File(context.filesDir, "seal_states")
-        if (!stateDir.exists()) stateDir.mkdirs()
-        File(stateDir, "$postcardId.txt").writeText(
-            _photoSeals.value.joinToString("\n") {
+    ): Boolean {
+        val stateFile =
+            File(context.filesDir, "seal_states/$postcardId.txt")
+
+        return ConfirmedEditStateStorage.writeTextAtomically(
+            targetFile = stateFile,
+            content = _photoSeals.value.joinToString("\n") {
                 it.serialize()
             }
         )
@@ -1093,11 +1165,18 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 스티커의 누끼(배경제거) 이미지를 postcard별 영구 폴더로 승격한다.
+     * 승격에 필요한 원본 파일을 끝내 찾지 못하면(캐시에도 영구 폴더에도
+     * 없음) null을 반환해 확정 저장 전체를 실패로 처리하게 한다 — 이전에는
+     * 이 경우 조용히 isBackgroundRemoved=false로 격하시켜 사용자가 모르는
+     * 새 누끼 편집 내용이 사라졌다.
+     */
     private fun persistStickerBackground(
         sticker: PhotoStickerItem,
         stickerCacheDir: File,
         persistDir: File
-    ): PhotoStickerItem {
+    ): PhotoStickerItem? {
         if (!sticker.isBackgroundRemoved) {
             return sticker
         }
@@ -1117,11 +1196,7 @@ class DetailViewModel @Inject constructor(
                 }
             val restoredUri =
                 restoredFile?.let { Uri.fromFile(it) }
-                    ?: return sticker.copy(
-                        displayedUri = sticker.originalUri,
-                        removedBgUri = null,
-                        isBackgroundRemoved = false
-                    )
+                    ?: return null
 
             return sticker.copy(
                 displayedUri = restoredUri,
@@ -1140,11 +1215,7 @@ class DetailViewModel @Inject constructor(
 
         val srcPath =
             removedUri.path
-                ?: return sticker.copy(
-                    displayedUri = sticker.originalUri,
-                    removedBgUri = null,
-                    isBackgroundRemoved = false
-                )
+                ?: return null
         val srcFile =
             File(srcPath).canonicalFile
 
@@ -1197,11 +1268,7 @@ class DetailViewModel @Inject constructor(
 
         val finalUri =
             finalFile?.let { Uri.fromFile(it) }
-                ?: return sticker.copy(
-                    displayedUri = sticker.originalUri,
-                    removedBgUri = null,
-                    isBackgroundRemoved = false
-                )
+                ?: return null
 
         return sticker.copy(
             displayedUri = finalUri,
