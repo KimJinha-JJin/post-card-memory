@@ -1462,12 +1462,14 @@ object PostcardImageExporter {
             (sealOverlay.sizeRatio * OUTPUT_SIZE)
                 .coerceIn(1f, OUTPUT_SIZE.toFloat())
 
-        val left =
-            (sealOverlay.normalizedX.coerceIn(0f, 1f) * OUTPUT_SIZE)
-                .coerceIn(0f, OUTPUT_SIZE - sealSide)
-        val top =
-            (sealOverlay.normalizedY.coerceIn(0f, 1f) * OUTPUT_SIZE)
-                .coerceIn(0f, OUTPUT_SIZE - sealSide)
+        // 도장은 미리보기에서 가장자리 걸침이 허용되므로(최소 가시 영역
+        // 정책, DetailScreen.correctSealOffsetForMinimumVisibility 참고)
+        // 여기서 [0,1]/[0, OUTPUT_SIZE-side]로 다시 완전히 안쪽으로 밀어
+        // 넣지 않는다 — normalizedX/Y는 이미 그 정책으로 안전하게 보정된
+        // 값이며, 이 함수가 임의로 재클램프하면 화면에서 허용된 위치가
+        // Export에서 다시 이동해버린다.
+        val left = sealOverlay.normalizedX * OUTPUT_SIZE
+        val top = sealOverlay.normalizedY * OUTPUT_SIZE
 
         val sealBounds =
             RectF(left, top, left + sealSide, top + sealSide)

@@ -176,7 +176,7 @@ private enum class TextScaleTarget {
     Date
 }
 
-private fun clampStickerOffset(
+internal fun clampStickerOffset(
     offset: Offset,
     postcardSize: IntSize,
     stickerSize: IntSize
@@ -202,7 +202,7 @@ private fun clampStickerOffset(
     )
 }
 
-private fun centeredStickerOffset(
+internal fun centeredStickerOffset(
     postcardSize: IntSize,
     stickerSize: IntSize
 ): Offset =
@@ -212,6 +212,24 @@ private fun centeredStickerOffset(
         y = ((postcardSize.height - stickerSize.height) / 2f)
             .coerceAtLeast(0f)
     )
+
+/**
+ * stickerSizes[id]/sealSizes[id] 측정값이 아직 없을 때(예: 방금 추가해 첫
+ * 컴포지션이 안 끝난 경우) 쓰는 fallback 크기. 스티커·도장 모두 실제 렌더
+ * 크기가 `기준크기(dp) * item.scale`로 정확히 결정되므로(DetailScreen의
+ * `.size(STICKER_BASE_SIZE * sticker.scale)`/`.size(SEAL_BASE_SIZE * seal.scale)`
+ * 참고) 이 공식이 근사가 아니라 실제 측정값과 사실상 동일하다.
+ */
+internal fun computeFallbackOverlaySize(
+    basePx: Float,
+    scale: Float
+): IntSize {
+    val side =
+        (basePx * scale)
+            .roundToInt()
+            .coerceAtLeast(1)
+    return IntSize(side, side)
+}
 
 private fun localStickerDeltaToParent(
     localDelta: Offset,
@@ -244,11 +262,25 @@ private val SEAL_MIN_VISIBLE_EDGE = 24.dp
 private const val SEAL_MIN_VISIBLE_FRACTION = 0.30f
 
 /**
+ * 스티커·도장의 기준(scale=1) 렌더 크기. 실제 렌더 크기는 항상
+ * `기준 크기 * item.scale`이라 stickerSizes/sealSizes 측정값이 아직 없을 때도
+ * (예: 방금 추가해 첫 컴포지션이 안 끝난 경우) 이 상수와 scale만으로 미리보기와
+ * 동일한 크기를 다시 계산할 수 있다 — Export가 이 값으로 fallback한다.
+ */
+private val STICKER_BASE_SIZE = 120.dp
+private val SEAL_BASE_SIZE = 90.dp
+
+/**
  * 회전·확대가 반영된 도장의 최종 시각 경계(AABB)를 기준으로, 도장이 최소 가시 영역
  * 밑으로 사라지는 경우에만 가장 가까운 안전 위치로 offset(회전 전 좌상단 좌표)을
  * 보정한다. 이미 안전하면 원래 offset을 그대로 반환한다.
+ *
+ * Compose 상태나 UI 객체에 의존하지 않는 순수 함수라 미리보기 드래그 종료
+ * 시점과 Export 오버레이 생성(createSealOverlayForExport) 양쪽에서 그대로
+ * 재사용한다 — 화면에서 허용된 가장자리 걸침이 Export에서도 유지되게 하는
+ * 핵심 함수다. internal은 순수 JUnit 테스트를 위함(같은 패키지에서 호출).
  */
-private fun correctSealOffsetForMinimumVisibility(
+internal fun correctSealOffsetForMinimumVisibility(
     offset: Offset,
     sealSize: IntSize,
     rotationDegrees: Float,
@@ -327,7 +359,7 @@ private val SEAL_SELECTED_MIN_GESTURE_SIZE = 120.dp
 /** 엽서 한 장에 추가할 수 있는 도장 총 개수(종류 무관 합산). */
 const val MAX_SEAL_COUNT = 2
 
-private fun createStickerOverlayForExport(
+internal fun createStickerOverlayForExport(
     stickerUri: Uri?,
     originalStickerUri: Uri?,
     isBackgroundRemoved: Boolean,
@@ -351,6 +383,8 @@ private fun createStickerOverlayForExport(
         return null
     }
 
+    // 일반 사진 스티커는 도장과 달리 가장자리 걸침을 허용하지 않는다 —
+    // 항상 엽서 내부에 완전히 들어오도록 clampStickerOffset을 그대로 쓴다.
     val resolvedOffset =
         clampStickerOffset(
             offset =
@@ -383,10 +417,16 @@ private fun createStickerOverlayForExport(
     )
 }
 
-private fun createStickerOverlaysForExport(
+/**
+ * stickerSizes[id] 측정값이 아직 없어도(방금 추가한 스티커 등) 조용히 건너뛰지
+ * 않고 computeFallbackOverlaySize로 계산한 크기를 사용한다 — 미리보기와 같은
+ * 공식(STICKER_BASE_SIZE * sticker.scale)이라 실질적으로 동일한 결과다.
+ */
+internal fun createStickerOverlaysForExport(
     photoStickers: List<PhotoStickerItem>,
     postcardSize: IntSize,
-    stickerSizes: Map<String, IntSize>
+    stickerSizes: Map<String, IntSize>,
+    baseStickerPx: Float
 ): List<PostcardImageExporter.StickerOverlay> {
     if (
         postcardSize.width <= 0 ||
@@ -398,7 +438,10 @@ private fun createStickerOverlaysForExport(
     return photoStickers.mapNotNull { sticker ->
         val stickerSize =
             stickerSizes[sticker.id]
-                ?: return@mapNotNull null
+                ?: computeFallbackOverlaySize(
+                    basePx = baseStickerPx,
+                    scale = sticker.scale
+                )
 
         createStickerOverlayForExport(
             stickerUri = sticker.displayedUri,
@@ -414,13 +457,14 @@ private fun createStickerOverlaysForExport(
     }
 }
 
-private fun createSealOverlayForExport(
+internal fun createSealOverlayForExport(
     type: SealType,
     colorArgb: Long,
     rotationDegrees: Float,
     sealOffset: Offset?,
     postcardSize: IntSize,
     sealSize: IntSize,
+    minimumVisibleEdgePx: Float,
     capturedAtMillis: Long?
 ): PostcardImageExporter.SealOverlay? {
     if (
@@ -432,28 +476,31 @@ private fun createSealOverlayForExport(
         return null
     }
 
+    // 도장은 미리보기 드래그 종료 시점과 같은 최소 가시 영역 정책을 쓴다 —
+    // 화면에서 허용된 가장자리 걸침을 Export가 안쪽으로 다시 밀어넣지 않도록,
+    // 스티커용 clampStickerOffset이 아니라 도장 전용 함수를 그대로 재사용한다.
     val resolvedOffset =
-        clampStickerOffset(
+        correctSealOffsetForMinimumVisibility(
             offset =
                 sealOffset
                     ?: centeredStickerOffset(
                         postcardSize = postcardSize,
                         stickerSize = sealSize
                     ),
+            sealSize = sealSize,
+            rotationDegrees = rotationDegrees,
             postcardSize = postcardSize,
-            stickerSize = sealSize
+            minimumVisibleEdgePx = minimumVisibleEdgePx
         )
 
     return PostcardImageExporter.SealOverlay(
         type = type.name,
+        // 가장자리 걸침을 표현해야 하므로 [0,1]로 재클램프하지 않는다 —
+        // correctSealOffsetForMinimumVisibility가 이미 안전한 범위로 보정했다.
         normalizedX =
-            (resolvedOffset.x /
-                    postcardSize.width.toFloat())
-                .coerceIn(0f, 1f),
+            resolvedOffset.x / postcardSize.width.toFloat(),
         normalizedY =
-            (resolvedOffset.y /
-                    postcardSize.height.toFloat())
-                .coerceIn(0f, 1f),
+            resolvedOffset.y / postcardSize.height.toFloat(),
         sizeRatio =
             sealSize.width.toFloat() /
                     postcardSize.width.toFloat(),
@@ -463,10 +510,17 @@ private fun createSealOverlayForExport(
     )
 }
 
-private fun createSealOverlaysForExport(
+/**
+ * sealSizes[id] 측정값이 아직 없어도(방금 추가한 도장 등) 조용히 건너뛰지
+ * 않고 computeFallbackOverlaySize로 계산한 크기를 사용한다 — 미리보기와 같은
+ * 공식(SEAL_BASE_SIZE * seal.scale)이라 실질적으로 동일한 결과다.
+ */
+internal fun createSealOverlaysForExport(
     photoSeals: List<PostcardSealItem>,
     postcardSize: IntSize,
     sealSizes: Map<String, IntSize>,
+    baseSealPx: Float,
+    minimumVisibleEdgePx: Float,
     capturedAtMillis: Long?
 ): List<PostcardImageExporter.SealOverlay> {
     if (
@@ -479,11 +533,15 @@ private fun createSealOverlaysForExport(
     return photoSeals.mapNotNull { seal ->
         val sealSize =
             sealSizes[seal.id]
-                ?: return@mapNotNull null
+                ?: computeFallbackOverlaySize(
+                    basePx = baseSealPx,
+                    scale = seal.scale
+                )
 
         createSealOverlayForExport(
             type = seal.type,
             colorArgb = seal.colorArgb,
+            minimumVisibleEdgePx = minimumVisibleEdgePx,
             rotationDegrees = seal.rotationDegrees,
             sealOffset = seal.offset,
             postcardSize = postcardSize,
@@ -1024,7 +1082,11 @@ fun DetailScreen(
     }
 
     val baseStickerPx = with(LocalDensity.current) {
-        120.dp.toPx()
+        STICKER_BASE_SIZE.toPx()
+    }
+
+    val baseSealPx = with(LocalDensity.current) {
+        SEAL_BASE_SIZE.toPx()
     }
 
     val sealMinVisibleEdgePx = with(LocalDensity.current) {
@@ -1830,7 +1892,7 @@ fun DetailScreen(
 
                             Box(
                                 modifier = stickerPositionModifier
-                                    .size(120.dp * sticker.scale)
+                                    .size(STICKER_BASE_SIZE * sticker.scale)
                                     .onSizeChanged { size ->
                                         stickerSizes =
                                             stickerSizes +
@@ -2489,7 +2551,7 @@ fun DetailScreen(
                             val currentSealOffset =
                                 seal.offset
 
-                            val sealVisualSize = 90.dp * seal.scale
+                            val sealVisualSize = SEAL_BASE_SIZE * seal.scale
                             val sealHitAreaSize =
                                 if (isSealSelected) {
                                     maxOf(sealVisualSize, SEAL_SELECTED_MIN_GESTURE_SIZE)
@@ -3883,6 +3945,15 @@ fun DetailScreen(
                 IconButton(
                     onClick = {
                         postcard?.let { pc ->
+                            if (postcardPreviewSize == IntSize.Zero) {
+                                Toast.makeText(
+                                    context,
+                                    "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@let
+                            }
+
                             viewModel.exportPostcardToGallery(
                                 stickerOverlays =
                                     createStickerOverlaysForExport(
@@ -3891,7 +3962,9 @@ fun DetailScreen(
                                         postcardSize =
                                             postcardPreviewSize,
                                         stickerSizes =
-                                            stickerSizes
+                                            stickerSizes,
+                                        baseStickerPx =
+                                            baseStickerPx
                                     ),
                                 sealOverlays =
                                     createSealOverlaysForExport(
@@ -3901,6 +3974,10 @@ fun DetailScreen(
                                             postcardPreviewSize,
                                         sealSizes =
                                             sealSizes,
+                                        baseSealPx =
+                                            baseSealPx,
+                                        minimumVisibleEdgePx =
+                                            sealMinVisibleEdgePx,
                                         capturedAtMillis =
                                             pc.capturedAt
                                     )
@@ -3932,6 +4009,15 @@ fun DetailScreen(
                 IconButton(
                     onClick = {
                         postcard?.let { pc ->
+                            if (postcardPreviewSize == IntSize.Zero) {
+                                Toast.makeText(
+                                    context,
+                                    "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@let
+                            }
+
                             viewModel.sharePostcard(
                                 stickerOverlays =
                                     createStickerOverlaysForExport(
@@ -3940,7 +4026,9 @@ fun DetailScreen(
                                         postcardSize =
                                             postcardPreviewSize,
                                         stickerSizes =
-                                            stickerSizes
+                                            stickerSizes,
+                                        baseStickerPx =
+                                            baseStickerPx
                                     ),
                                 sealOverlays =
                                     createSealOverlaysForExport(
@@ -3950,6 +4038,10 @@ fun DetailScreen(
                                             postcardPreviewSize,
                                         sealSizes =
                                             sealSizes,
+                                        baseSealPx =
+                                            baseSealPx,
+                                        minimumVisibleEdgePx =
+                                            sealMinVisibleEdgePx,
                                         capturedAtMillis =
                                             pc.capturedAt
                                     )
