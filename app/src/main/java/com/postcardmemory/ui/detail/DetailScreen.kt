@@ -936,7 +936,7 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val postcard by viewModel.postcard.collectAsState()
-    val deleted by viewModel.deleted.collectAsState()
+    val deleteState by viewModel.deleteState.collectAsState()
     val exportState by viewModel.exportState.collectAsState()
     val shareState by viewModel.shareState.collectAsState()
     val draftSaveStatus by viewModel.draftSaveStatus.collectAsState()
@@ -1261,9 +1261,22 @@ fun DetailScreen(
         isFocusPreviewMode = false
     }
 
-    LaunchedEffect(deleted) {
-        if (deleted) {
-            onNavigateBack()
+    LaunchedEffect(deleteState) {
+        when (val currentDeleteState = deleteState) {
+            is PostcardDeleteState.Deleted -> {
+                onNavigateBack()
+            }
+
+            is PostcardDeleteState.Error -> {
+                Toast.makeText(
+                    context,
+                    currentDeleteState.message,
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.acknowledgeDeleteError()
+            }
+
+            else -> Unit
         }
     }
 
@@ -1449,6 +1462,7 @@ fun DetailScreen(
                 dateFormatUpdateState !is DateFormatUpdateState.Saving &&
                 imageUpdateState !is ImageUpdateState.Saving &&
                 confirmSaveState !is ConfirmSaveState.Saving &&
+                deleteState !is PostcardDeleteState.Deleting &&
                 !isRemovingBackground
     val latestControlsEnabled by rememberUpdatedState(controlsEnabled)
 

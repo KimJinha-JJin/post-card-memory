@@ -18,6 +18,7 @@ import com.postcardmemory.utils.BackgroundImageStorage
 import com.postcardmemory.utils.ConfirmedEditStateStorage
 import com.postcardmemory.utils.PhotoColorExtractor
 import com.postcardmemory.utils.PhotoStickerImageStorage
+import com.postcardmemory.utils.PostcardDeletionManager
 import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardImageStorage
@@ -131,6 +132,20 @@ sealed interface ShareState {
     ) : ShareState
 }
 
+/** 상세 화면 엽서 삭제(3일차 공통 삭제 정책) 상태. */
+sealed interface PostcardDeleteState {
+
+    data object Idle : PostcardDeleteState
+
+    data object Deleting : PostcardDeleteState
+
+    data object Deleted : PostcardDeleteState
+
+    data class Error(
+        val message: String
+    ) : PostcardDeleteState
+}
+
 sealed interface BackgroundUpdateState {
 
     data object Idle : BackgroundUpdateState
@@ -235,6 +250,7 @@ sealed interface PhotoColorExtractionState {
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repository: PostcardRepository,
+    private val deletionManager: PostcardDeletionManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -244,11 +260,18 @@ class DetailViewModel @Inject constructor(
     val postcard: StateFlow<Postcard?> =
         _postcard
 
-    private val _deleted =
-        MutableStateFlow(false)
+    private val _deleteState =
+        MutableStateFlow<PostcardDeleteState>(PostcardDeleteState.Idle)
 
-    val deleted: StateFlow<Boolean> =
-        _deleted
+    val deleteState: StateFlow<PostcardDeleteState> =
+        _deleteState
+
+    /** 실패 Toast 등을 보여준 뒤 다시 삭제를 시도할 수 있도록 Idle로 되돌린다. */
+    fun acknowledgeDeleteError() {
+        if (_deleteState.value is PostcardDeleteState.Error) {
+            _deleteState.value = PostcardDeleteState.Idle
+        }
+    }
 
     private val _exportState =
         MutableStateFlow<ExportState>(
@@ -3226,67 +3249,48 @@ class DetailViewModel @Inject constructor(
             ShareState.Idle
     }
 
+    /**
+     * 상세 화면 삭제. 갤러리 삭제(GalleryViewModel.deletePostcards)와 동일한
+     * PostcardDeletionManager를 사용해 두 경로가 같은 자산을 정리하게 한다.
+     * Room 삭제 자체가 실패하면 화면을 종료하지 않고 재시도할 수 있게 두며,
+     * Room은 삭제됐지만 일부 파일 정리만 실패했다면(고아 파일) 화면은
+     * 정상 종료하되 그 사실을 로그로 남긴다.
+     */
     fun deletePostcard() {
         val currentPostcard =
             _postcard.value
                 ?: return
 
+        if (_deleteState.value is PostcardDeleteState.Deleting) {
+            return
+        }
+
+        _deleteState.value = PostcardDeleteState.Deleting
+
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                File(
-                    currentPostcard.imagePath
-                ).let { imageFile ->
-                    if (imageFile.exists()) {
-                        imageFile.delete()
-                    }
+            val result =
+                withContext(Dispatchers.IO) {
+                    deletionManager.deletePostcard(currentPostcard)
                 }
 
-                BackgroundImageStorage
-                    .deleteBackgroundImage(
-                        currentPostcard
-                            .backgroundImagePath
+            if (!result.databaseDeleted) {
+                _deleteState.value =
+                    PostcardDeleteState.Error(
+                        "엽서를 삭제하지 못했어. 다시 시도해줘."
                     )
+                return@launch
+            }
 
-                File(
-                    context.filesDir,
-                    "sticker_states/" +
-                            "${currentPostcard.id}.txt"
-                ).let { stickerFile ->
-                    if (stickerFile.exists()) {
-                        stickerFile.delete()
-                    }
-                }
-
-                File(
-                    context.filesDir,
-                    "seal_states/" +
-                            "${currentPostcard.id}.txt"
-                ).let { sealFile ->
-                    if (sealFile.exists()) {
-                        sealFile.delete()
-                    }
-                }
-
-                PostcardDraftStorage.deleteDraft(
-                    context,
-                    currentPostcard.id
-                )
-
-                File(
-                    context.filesDir,
-                    "sticker_bgs/${currentPostcard.id}"
-                ).let { bgDir ->
-                    if (bgDir.exists()) {
-                        bgDir.deleteRecursively()
-                    }
-                }
-
-                repository.deletePostcard(
-                    currentPostcard
+            if (result.failedAssets.isNotEmpty()) {
+                Log.w(
+                    TAG,
+                    "엽서 삭제: DB는 지워졌지만 일부 파일 정리 실패 " +
+                            "postcardId=${result.postcardId} " +
+                            "failed=${result.failedAssets}"
                 )
             }
 
-            _deleted.value = true
+            _deleteState.value = PostcardDeleteState.Deleted
         }
     }
 

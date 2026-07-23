@@ -28,7 +28,8 @@ object PostcardDraftStorage {
     private fun draftDir(filesDir: File): File =
         File(filesDir, DRAFT_DIR_NAME)
 
-    private fun draftFile(filesDir: File, postcardId: Long): File =
+    /** internal: PostcardDeletionManager가 삭제 전 존재 여부 확인에 재사용한다. */
+    internal fun draftFile(filesDir: File, postcardId: Long): File =
         File(draftDir(filesDir), draftFileNameFor(postcardId))
 
     /**
