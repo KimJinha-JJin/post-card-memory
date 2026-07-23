@@ -184,4 +184,83 @@ class PostcardDraftStorageTest {
         // 예외 없이 조용히 넘어가야 한다.
         PostcardDraftStorage.deleteDraft(filesDir, 555L)
     }
+
+    @Test
+    fun draftStickerBackgroundDir_isSeparateFromConfirmedStickerBgsDir() {
+        val filesDir = tempFolder.newFolder("files")
+
+        val draftBgDir = PostcardDraftStorage.draftStickerBackgroundDir(filesDir, 30L)
+
+        assertEquals(
+            File(filesDir, "draft_sticker_bgs/30").canonicalPath,
+            draftBgDir.canonicalPath
+        )
+        assertFalse(
+            draftBgDir.canonicalPath ==
+                File(filesDir, "sticker_bgs/30").canonicalPath
+        )
+    }
+
+    @Test
+    fun deleteDraft_alsoRemovesDraftOwnedStickerBackgroundDir() {
+        val filesDir = tempFolder.newFolder("files")
+
+        val draftBgDir = PostcardDraftStorage.draftStickerBackgroundDir(filesDir, 40L)
+        draftBgDir.mkdirs()
+        val ownedFile = File(draftBgDir, "sticker-1.png")
+        ownedFile.writeText("fake-png-bytes")
+
+        PostcardDraftStorage.saveDraftAtomically(filesDir, draft(postcardId = 40L))
+        PostcardDraftStorage.deleteDraft(filesDir, 40L)
+
+        assertFalse(ownedFile.exists())
+        assertFalse(draftBgDir.exists())
+    }
+
+    @Test
+    fun deleteDraft_doesNotTouchConfirmedStickerBgsDir() {
+        val filesDir = tempFolder.newFolder("files")
+
+        val confirmedBgDir = File(filesDir, "sticker_bgs/41")
+        confirmedBgDir.mkdirs()
+        val confirmedFile = File(confirmedBgDir, "sticker-1.png")
+        confirmedFile.writeText("confirmed-png-bytes")
+
+        PostcardDraftStorage.saveDraftAtomically(filesDir, draft(postcardId = 41L))
+        PostcardDraftStorage.deleteDraft(filesDir, 41L)
+
+        // 확정 저장용 sticker_bgs는 draft_sticker_bgs와 이름만 비슷할 뿐
+        // 전혀 다른 디렉터리이므로 초안 삭제에 영향받지 않아야 한다.
+        assertTrue(confirmedFile.exists())
+        assertEquals("confirmed-png-bytes", confirmedFile.readText())
+    }
+
+    @Test
+    fun deleteDraft_isSafeWhenStickerBackgroundDirDoesNotExist() {
+        val filesDir = tempFolder.newFolder("files")
+
+        // 예외 없이 조용히 넘어가야 한다(디렉터리 자체가 없는 경우).
+        PostcardDraftStorage.deleteDraft(filesDir, 999L)
+    }
+
+    @Test
+    fun loadDraft_corruptedFile_alsoRemovesDraftOwnedStickerBackgroundDir() {
+        val filesDir = tempFolder.newFolder("files")
+        val draftDir = File(filesDir, "drafts/edit_state")
+        draftDir.mkdirs()
+
+        val corruptFile = File(draftDir, "22.draft.txt")
+        corruptFile.writeText("this is not a valid draft file at all")
+
+        val draftBgDir = PostcardDraftStorage.draftStickerBackgroundDir(filesDir, 22L)
+        draftBgDir.mkdirs()
+        val ownedFile = File(draftBgDir, "sticker-1.png")
+        ownedFile.writeText("fake-png-bytes")
+
+        val loaded = PostcardDraftStorage.loadDraft(filesDir, 22L)
+
+        assertNull(loaded)
+        assertFalse(ownedFile.exists())
+        assertFalse(draftBgDir.exists())
+    }
 }

@@ -3,6 +3,7 @@ package com.postcardmemory.ui.detail
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -44,6 +45,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+private const val TAG = "DetailViewModel"
 private const val SEAL_HISTORY_LIMIT = 50
 private const val STICKER_HISTORY_LIMIT = 30
 private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
@@ -84,6 +86,20 @@ internal fun shouldConfirmSaveSucceed(
 internal fun canStartConfirmSave(
     currentState: ConfirmSaveState
 ): Boolean = currentState !is ConfirmSaveState.Saving
+
+/** 실제로 읽을 수 있는 파일인지(존재+읽기가능+빈 파일 아님) 확인하는 순수 판정. */
+internal fun isReadableNonEmptyFile(file: File): Boolean =
+    file.exists() && file.canRead() && file.length() > 0L
+
+/**
+ * 초안 복원 시 배경제거 상태를 유지할지 판정한다. isBackgroundRemoved=true인데
+ * removedBgUri를 실제로 열 수 없다면(파일 유실) 배경제거 상태를 지워야
+ * displayedUri/removedBgUri/isBackgroundRemoved가 서로 모순되지 않는다.
+ */
+internal fun shouldClearBackgroundRemoval(
+    isBackgroundRemoved: Boolean,
+    removedBgUsable: Boolean
+): Boolean = isBackgroundRemoved && !removedBgUsable
 
 sealed interface ExportState {
 
@@ -428,8 +444,11 @@ class DetailViewModel @Inject constructor(
                 draftRevisionCounter.set(existingDraft.revision)
                 latestPersistedDraftRevision = existingDraft.revision
 
+                val restoredStickers =
+                    validateAndRepairRestoredStickers(existingDraft.stickers)
+
                 withContext(Dispatchers.Main) {
-                    _photoStickers.value = existingDraft.stickers
+                    _photoStickers.value = restoredStickers
                     _selectedStickerId.value = existingDraft.selectedStickerId
                     _photoSeals.value = existingDraft.seals
                     _selectedSealId.value = existingDraft.selectedSealId
@@ -440,6 +459,63 @@ class DetailViewModel @Inject constructor(
                 draftCreatedAtMillis = System.currentTimeMillis()
             }
         }
+    }
+
+    /**
+     * 초안에 기록된 URI가 실제로 열 수 있는 파일/콘텐츠를 가리키는지 검증하고
+     * 모순된 상태를 복구한다. 원본(originalUri)까지 열 수 없는 스티커는
+     * 복원 목록에서 제외한다(깨진 이미지를 화면에 남기지 않기 위함) — 손상된
+     * 스티커 하나 때문에 나머지 스티커의 복원이 실패하지는 않는다.
+     */
+    private fun validateAndRepairRestoredStickers(
+        stickers: List<PhotoStickerItem>
+    ): List<PhotoStickerItem> {
+        return stickers.mapNotNull { sticker ->
+            if (!isUriUsable(sticker.originalUri)) {
+                Log.w(
+                    TAG,
+                    "초안 복원 제외(원본 유실): stickerId=${sticker.id}"
+                )
+                return@mapNotNull null
+            }
+
+            val removedBgUsable =
+                sticker.removedBgUri?.let { isUriUsable(it) } ?: false
+
+            if (
+                shouldClearBackgroundRemoval(
+                    isBackgroundRemoved = sticker.isBackgroundRemoved,
+                    removedBgUsable = removedBgUsable
+                )
+            ) {
+                Log.w(
+                    TAG,
+                    "초안 복원 중 누끼 파일 유실, 원본으로 복구: " +
+                            "stickerId=${sticker.id}"
+                )
+                sticker.copy(
+                    displayedUri = sticker.originalUri,
+                    removedBgUri = null,
+                    isBackgroundRemoved = false
+                )
+            } else {
+                sticker
+            }
+        }
+    }
+
+    private fun isUriUsable(uri: Uri): Boolean {
+        if (uri.scheme == "file") {
+            val path = uri.path ?: return false
+            return isReadableNonEmptyFile(File(path))
+        }
+
+        return runCatching {
+            context.contentResolver
+                .openInputStream(uri)
+                ?.use { true }
+                ?: false
+        }.getOrDefault(false)
     }
 
     /**
@@ -502,6 +578,47 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 초안을 저장하기 전에 배경제거된 스티커의 누끼 파일을 캐시에서
+     * draft_sticker_bgs/<postcardId>/로 승격한다. onCleared()가 화면
+     * 이탈 시 cacheDir/photo_stickers를 정리하므로, 이 승격이 없으면
+     * 완료 버튼을 누르지 않고 나간 초안이 참조하는 누끼 파일이 다음 진입
+     * 전에 사라질 수 있다. 승격에 실패한 스티커가 하나라도 있으면 null을
+     * 반환해 이번 초안 저장 전체를 실패로 처리하고, 이미 저장된 초안은
+     * 손상시키지 않는다.
+     */
+    private fun promoteDraftStickerBackgrounds(
+        postcardId: Long,
+        stickers: List<PhotoStickerItem>
+    ): List<PhotoStickerItem>? {
+        val stickerCacheDir =
+            File(context.cacheDir, "photo_stickers").canonicalFile
+        val draftPersistDir =
+            PostcardDraftStorage.draftStickerBackgroundDir(context, postcardId)
+
+        if (
+            !draftPersistDir.exists() &&
+            !draftPersistDir.mkdirs()
+        ) {
+            return null
+        }
+
+        val promoted = mutableListOf<PhotoStickerItem>()
+        for (sticker in stickers) {
+            val persisted =
+                persistStickerBackground(
+                    sticker = sticker,
+                    stickerCacheDir = stickerCacheDir,
+                    persistDir = draftPersistDir,
+                    // undo/redo 스택이 아직 캐시 경로를 참조 중일 수 있으니
+                    // 초안 자동저장에서는 캐시 원본을 지우지 않는다.
+                    deleteCacheSourceAfterCopy = false
+                ) ?: return null
+            promoted.add(persisted)
+        }
+        return promoted
+    }
+
     private suspend fun persistDraftNow() {
         val postcardId = currentDraftPostcardId
         if (postcardId <= 0L) {
@@ -516,6 +633,8 @@ class DetailViewModel @Inject constructor(
 
         _draftSaveStatus.value = DraftSaveStatus.Saving
 
+        var promotedStickers: List<PhotoStickerItem>? = null
+
         val success = withContext(Dispatchers.IO) {
             draftSaveMutex.withLock {
                 if (
@@ -527,12 +646,18 @@ class DetailViewModel @Inject constructor(
                     return@withLock true
                 }
 
+                val promoted =
+                    promoteDraftStickerBackgrounds(
+                        postcardId = postcardId,
+                        stickers = snapshotStickers
+                    ) ?: return@withLock false
+
                 val draft = PostcardEditDraft(
                     postcardId = postcardId,
                     createdAtMillis = draftCreatedAtMillis,
                     updatedAtMillis = System.currentTimeMillis(),
                     revision = candidateRevision,
-                    stickers = snapshotStickers,
+                    stickers = promoted,
                     selectedStickerId = snapshotSelectedStickerId,
                     seals = snapshotSeals,
                     selectedSealId = snapshotSelectedSealId
@@ -543,10 +668,24 @@ class DetailViewModel @Inject constructor(
 
                 if (saved) {
                     latestPersistedDraftRevision = candidateRevision
+                    promotedStickers = promoted
                 }
 
                 saved
             }
+        }
+
+        // 승격된 URI를 실제 화면 상태에도 반영한다. 단, 승격이 진행되는 동안
+        // 사용자가 스티커를 더 편집했다면(스냅샷과 현재 값이 달라졌다면)
+        // 되돌아온 결과가 그 편집을 덮어쓰지 않도록 건너뛴다 — 다음 자동저장
+        // 사이클이 최신 상태로 다시 승격을 시도한다.
+        val promoted = promotedStickers
+        if (
+            success &&
+            promoted != null &&
+            _photoStickers.value == snapshotStickers
+        ) {
+            _photoStickers.value = promoted
         }
 
         _draftSaveStatus.value =
@@ -1166,16 +1305,26 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 스티커의 누끼(배경제거) 이미지를 postcard별 영구 폴더로 승격한다.
-     * 승격에 필요한 원본 파일을 끝내 찾지 못하면(캐시에도 영구 폴더에도
-     * 없음) null을 반환해 확정 저장 전체를 실패로 처리하게 한다 — 이전에는
-     * 이 경우 조용히 isBackgroundRemoved=false로 격하시켜 사용자가 모르는
-     * 새 누끼 편집 내용이 사라졌다.
+     * 스티커의 누끼(배경제거) 이미지를 persistDir로 승격한다. 초안 저장
+     * (draft_sticker_bgs/<postcardId>)과 확정 저장(sticker_bgs/<postcardId>)
+     * 양쪽에서 재사용하므로, 원본 위치가 캐시든 다른 영구 디렉터리(예: 초안
+     * 전용 폴더)든 모두 처리할 수 있어야 한다. 승격에 필요한 원본 파일을
+     * 끝내 찾지 못하면 null을 반환해 저장 전체를 실패로 처리하게 한다 —
+     * 이전에는 이 경우 조용히 isBackgroundRemoved=false로 격하시켜 사용자가
+     * 모르는 새 누끼 편집 내용이 사라졌다.
+     *
+     * deleteCacheSourceAfterCopy: 확정 저장(persistStickerEditState)은 성공
+     * 직후 clearStickerHistory()로 undo/redo를 비우므로 캐시 원본을 바로
+     * 지워도 안전하다(true, 기본값). 반면 초안 자동저장(persistDraftNow)은
+     * undo/redo 이력을 그대로 유지해야 하므로, 그 스택이 여전히 옛 캐시
+     * 경로를 참조 중일 수 있어 false로 호출해 캐시 원본을 지우지 않는다 —
+     * cacheDir는 OS가 회수 가능한 영역이라 남겨둬도 안전하다.
      */
     private fun persistStickerBackground(
         sticker: PhotoStickerItem,
         stickerCacheDir: File,
-        persistDir: File
+        persistDir: File,
+        deleteCacheSourceAfterCopy: Boolean = true
     ): PhotoStickerItem? {
         if (!sticker.isBackgroundRemoved) {
             return sticker
@@ -1219,51 +1368,48 @@ class DetailViewModel @Inject constructor(
         val srcFile =
             File(srcPath).canonicalFile
 
+        // 이미 이 목적지 파일 자체를 가리키고 있다면(같은 postcardId로
+        // 같은 종류의 디렉터리에 재저장하는 경우) 복사가 필요 없다.
         val finalFile =
-            if (
-                srcFile.path.startsWith(
-                    stickerCacheDir.path
-                )
+            if (srcFile == destFile) {
+                srcFile.takeIf { it.exists() && it.canRead() }
+                    ?: destFile.takeIf { it.exists() && it.canRead() }
+            } else if (
+                srcFile.exists() &&
+                srcFile.canRead()
             ) {
+                srcFile.copyTo(
+                    destFile,
+                    overwrite = true
+                )
                 if (
-                    srcFile.exists() &&
-                    srcFile.canRead()
+                    destFile.exists() &&
+                    destFile.canRead()
                 ) {
-                    srcFile.copyTo(
-                        destFile,
-                        overwrite = true
-                    )
+                    // 캐시 원본만, 그것도 호출자가 안전하다고 표시했을 때만
+                    // 정리한다. 초안 전용 디렉터리 등 다른 영구 디렉터리에서
+                    // 승격해온 경우(예: 확정 저장이 초안이 이미 옮겨둔 파일을
+                    // 다시 sticker_bgs로 승격) 그 디렉터리는 별도 소유자(초안
+                    // 폐기/성공 시점)가 정리하므로 여기서 지우지 않는다.
                     if (
-                        destFile.exists() &&
-                        destFile.canRead()
+                        deleteCacheSourceAfterCopy &&
+                        srcFile.path.startsWith(
+                            stickerCacheDir.path
+                        )
                     ) {
                         srcFile.delete()
-                        destFile
-                    } else {
-                        srcFile
                     }
-                } else if (
-                    destFile.exists() &&
-                    destFile.canRead()
-                ) {
                     destFile
                 } else {
-                    null
-                }
-            } else {
-                if (
-                    srcFile.exists() &&
-                    srcFile.canRead()
-                ) {
                     srcFile
-                } else if (
-                    destFile.exists() &&
-                    destFile.canRead()
-                ) {
-                    destFile
-                } else {
-                    null
                 }
+            } else if (
+                destFile.exists() &&
+                destFile.canRead()
+            ) {
+                destFile
+            } else {
+                null
             }
 
         val finalUri =
@@ -3302,25 +3448,20 @@ class DetailViewModel @Inject constructor(
             }
         }
 
+    /**
+     * cacheDir/photo_stickers를 여기서 더 이상 정리하지 않는다. 예전에는
+     * 화면을 나갈 때(완료 버튼을 안 눌러도) 현재 스티커가 참조하는 캐시
+     * 파일을 무조건 지웠는데, 이러면 막 배경을 제거하고 나간 초안이
+     * 참조하는 누끼 파일까지 함께 사라졌다. 이제 배경제거 파일은
+     * persistDraftNow()가 자동저장 시점에 draft_sticker_bgs/<postcardId>/
+     * 로 승격해 초안이 그 durable 경로를 가리키게 하므로, 캐시에 남는
+     * 파일은 승격이 끝난 뒤의 여분 사본이거나 애초에 아무 저장도 참조하지
+     * 않는 파일뿐이다 — cacheDir는 OS가 알아서 회수할 수 있는 임시 영역이라
+     * 여기서 강제로 지우지 않아도 안전하다.
+     */
     override fun onCleared() {
         subjectSegmenter?.close()
         subjectSegmenter = null
-        val stickerCacheDir =
-            File(
-                context.cacheDir,
-                "photo_stickers"
-            ).canonicalFile
-        _photoStickers.value.forEach { sticker ->
-            sticker.removedBgUri
-                ?.takeIf { it.scheme == "file" }
-                ?.path
-                ?.let { path ->
-                    val f = File(path).canonicalFile
-                    if (f.path.startsWith(stickerCacheDir.path)) {
-                        f.delete()
-                    }
-                }
-        }
         super.onCleared()
     }
 }
