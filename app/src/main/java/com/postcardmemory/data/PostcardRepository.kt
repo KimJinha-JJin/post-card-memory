@@ -231,4 +231,52 @@ class PostcardRepository @Inject constructor(
             tapedFilmPhotoZoom = tapedFilmPhotoZoom
         )
     }
+
+    suspend fun updatePostcardTemplateStyle(
+        id: Long,
+        layoutStyle: String,
+        backgroundColorArgb: Long,
+        backgroundPattern: String,
+        backgroundPatternDensity: Float,
+        messageFont: String,
+        dateFormat: String,
+        messageTextScale: Float,
+        dateTextScale: Float,
+        photoEdgeBlur: Float,
+        stampPhotoScale: Float,
+        stampPhotoOffsetX: Float,
+        stampPhotoOffsetY: Float,
+        stampPhotoZoom: Float,
+        polaroidPhotoScale: Float,
+        polaroidPhotoOffsetX: Float,
+        polaroidPhotoOffsetY: Float,
+        polaroidPhotoZoom: Float,
+        tapedFilmPhotoOffsetX: Float,
+        tapedFilmPhotoOffsetY: Float,
+        tapedFilmPhotoZoom: Float
+    ) {
+        dao.updatePostcardTemplateStyle(
+            id = id,
+            layoutStyle = layoutStyle,
+            backgroundColorArgb = backgroundColorArgb,
+            backgroundPattern = backgroundPattern,
+            backgroundPatternDensity = backgroundPatternDensity,
+            messageFont = messageFont,
+            dateFormat = dateFormat,
+            messageTextScale = messageTextScale,
+            dateTextScale = dateTextScale,
+            photoEdgeBlur = photoEdgeBlur,
+            stampPhotoScale = stampPhotoScale,
+            stampPhotoOffsetX = stampPhotoOffsetX,
+            stampPhotoOffsetY = stampPhotoOffsetY,
+            stampPhotoZoom = stampPhotoZoom,
+            polaroidPhotoScale = polaroidPhotoScale,
+            polaroidPhotoOffsetX = polaroidPhotoOffsetX,
+            polaroidPhotoOffsetY = polaroidPhotoOffsetY,
+            polaroidPhotoZoom = polaroidPhotoZoom,
+            tapedFilmPhotoOffsetX = tapedFilmPhotoOffsetX,
+            tapedFilmPhotoOffsetY = tapedFilmPhotoOffsetY,
+            tapedFilmPhotoZoom = tapedFilmPhotoZoom
+        )
+    }
 }

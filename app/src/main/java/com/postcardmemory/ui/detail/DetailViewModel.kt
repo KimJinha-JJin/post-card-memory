@@ -2,6 +2,7 @@ package com.postcardmemory.ui.detail
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.geometry.Offset
@@ -22,6 +23,8 @@ import com.postcardmemory.utils.PostcardDeletionManager
 import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardImageStorage
+import com.postcardmemory.utils.PostcardRenderSpec
+import com.postcardmemory.utils.PostcardTemplateStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -50,6 +53,9 @@ private const val TAG = "DetailViewModel"
 private const val SEAL_HISTORY_LIMIT = 50
 private const val STICKER_HISTORY_LIMIT = 30
 private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
+private const val TEMPLATE_STYLE_HISTORY_LIMIT = 50
+private const val MAX_TEMPLATE_NAME_LENGTH = 20
+private const val TEMPLATE_PREVIEW_SIZE = 320
 private const val DRAFT_AUTOSAVE_DEBOUNCE_MS = 900L
 
 sealed interface DraftSaveStatus {
@@ -63,6 +69,30 @@ sealed interface DraftSaveStatus {
     data object Saved : DraftSaveStatus
 
     data object Failed : DraftSaveStatus
+}
+
+/** "현재 꾸밈 저장"(새 사용자 템플릿 생성)의 상태. */
+sealed interface TemplateSaveState {
+
+    data object Idle : TemplateSaveState
+
+    data object Saving : TemplateSaveState
+
+    data object Saved : TemplateSaveState
+
+    data class Error(val message: String) : TemplateSaveState
+}
+
+/** 이름 변경·덮어쓰기·삭제 등 기존 사용자 템플릿 관리 동작의 상태. */
+sealed interface TemplateManageState {
+
+    data object Idle : TemplateManageState
+
+    data object InProgress : TemplateManageState
+
+    data object Success : TemplateManageState
+
+    data class Error(val message: String) : TemplateManageState
 }
 
 /** 완료 버튼(확정 저장)의 상태. 스티커·도장 저장을 이 상태로만 판단한다. */
@@ -1306,6 +1336,558 @@ class DetailViewModel @Inject constructor(
         updatePhotoTransformHistoryAvailability()
     }
 
+    /**
+     * 템플릿 적용 한 번을 되돌릴 수 있는 스냅샷. seals가 null이면 이 템플릿
+     * 적용이 도장을 건드리지 않았다는 뜻이라 되돌릴 때도 도장은 그대로 둔다
+     * (기존 sealUndoStack과는 완전히 독립적 — 스티커·도장 자체 Undo는 건드리지 않는다).
+     */
+    private data class TemplateApplicationSnapshot(
+        val style: PostcardTemplateStyle,
+        val seals: List<PostcardSealItem>?
+    )
+
+    private val templateStyleUndoStack =
+        ArrayDeque<TemplateApplicationSnapshot>()
+
+    private val templateStyleRedoStack =
+        ArrayDeque<TemplateApplicationSnapshot>()
+
+    private val _canUndoTemplateStyle =
+        MutableStateFlow(false)
+
+    val canUndoTemplateStyle: StateFlow<Boolean> =
+        _canUndoTemplateStyle
+
+    private val _canRedoTemplateStyle =
+        MutableStateFlow(false)
+
+    val canRedoTemplateStyle: StateFlow<Boolean> =
+        _canRedoTemplateStyle
+
+    private fun updateTemplateStyleHistoryAvailability() {
+        _canUndoTemplateStyle.value =
+            templateStyleUndoStack.isNotEmpty()
+        _canRedoTemplateStyle.value =
+            templateStyleRedoStack.isNotEmpty()
+    }
+
+    private fun clearTemplateStyleHistory() {
+        templateStyleUndoStack.clear()
+        templateStyleRedoStack.clear()
+        updateTemplateStyleHistoryAvailability()
+    }
+
+    private fun applyTemplateApplicationSnapshot(
+        snapshot: TemplateApplicationSnapshot
+    ) {
+        val currentPostcard =
+            _postcard.value ?: return
+
+        persistTemplateStyle(
+            postcardId = currentPostcard.id,
+            style = snapshot.style
+        )
+
+        if (snapshot.seals != null) {
+            _photoSeals.value = snapshot.seals
+        }
+    }
+
+    fun undoTemplateStyleChange() {
+        val previous =
+            templateStyleUndoStack.removeLastOrNull() ?: return
+        val currentPostcard =
+            _postcard.value
+
+        if (currentPostcard != null) {
+            templateStyleRedoStack.addLast(
+                TemplateApplicationSnapshot(
+                    style = currentPostcard.toTemplateStyle(),
+                    seals =
+                        if (previous.seals != null) {
+                            _photoSeals.value
+                        } else {
+                            null
+                        }
+                )
+            )
+        }
+
+        applyTemplateApplicationSnapshot(previous)
+        updateTemplateStyleHistoryAvailability()
+    }
+
+    fun redoTemplateStyleChange() {
+        val next =
+            templateStyleRedoStack.removeLastOrNull() ?: return
+        val currentPostcard =
+            _postcard.value
+
+        if (currentPostcard != null) {
+            templateStyleUndoStack.addLast(
+                TemplateApplicationSnapshot(
+                    style = currentPostcard.toTemplateStyle(),
+                    seals =
+                        if (next.seals != null) {
+                            _photoSeals.value
+                        } else {
+                            null
+                        }
+                )
+            )
+        }
+
+        applyTemplateApplicationSnapshot(next)
+        updateTemplateStyleHistoryAvailability()
+    }
+
+    /**
+     * 템플릿을 적용한다. 사진·문구·날짜·스티커·기존 도장은 그대로 두고
+     * 스타일 값만 바꾼다. 도장은 현재 엽서에 도장이 하나도 없을 때만 템플릿
+     * 도장을 추가하고(기존 도장이 있으면 템플릿 도장은 무시, 최대 개수 위반
+     * 불가능), 적용 전 상태를 스냅샷 하나로 남겨 Undo 한 번으로 스타일과
+     * (추가됐다면) 도장까지 함께 되돌릴 수 있다.
+     */
+    fun applyTemplate(
+        template: PostcardTemplate
+    ) {
+        val currentPostcard =
+            _postcard.value ?: return
+
+        val willAddSeal =
+            template.seal != null && _photoSeals.value.isEmpty()
+
+        templateStyleUndoStack.addLast(
+            TemplateApplicationSnapshot(
+                style = currentPostcard.toTemplateStyle(),
+                seals = if (willAddSeal) _photoSeals.value else null
+            )
+        )
+        if (templateStyleUndoStack.size > TEMPLATE_STYLE_HISTORY_LIMIT) {
+            templateStyleUndoStack.removeFirst()
+        }
+        templateStyleRedoStack.clear()
+        updateTemplateStyleHistoryAvailability()
+
+        if (willAddSeal) {
+            val templateSeal = template.seal!!
+            setPhotoSeals(
+                listOf(
+                    PostcardSealItem(
+                        type = templateSeal.type,
+                        scale = templateSeal.type.defaultScale,
+                        colorArgb = templateSeal.colorArgb
+                    )
+                )
+            )
+        }
+
+        persistTemplateStyle(
+            postcardId = currentPostcard.id,
+            style = template.style
+        )
+    }
+
+    private fun persistTemplateStyle(
+        postcardId: Long,
+        style: PostcardTemplateStyle
+    ) {
+        _postcard.value =
+            _postcard.value?.applyTemplateStyle(style)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updatePostcardTemplateStyle(
+                id = postcardId,
+                layoutStyle = style.layoutStyle,
+                backgroundColorArgb = style.backgroundColorArgb,
+                backgroundPattern = style.backgroundPattern,
+                backgroundPatternDensity = style.backgroundPatternDensity,
+                messageFont = style.messageFont,
+                dateFormat = style.dateFormat,
+                messageTextScale = style.messageTextScale,
+                dateTextScale = style.dateTextScale,
+                photoEdgeBlur = style.photoEdgeBlur,
+                stampPhotoScale = style.stampPhotoScale,
+                stampPhotoOffsetX = style.stampPhotoOffsetX,
+                stampPhotoOffsetY = style.stampPhotoOffsetY,
+                stampPhotoZoom = style.stampPhotoZoom,
+                polaroidPhotoScale = style.polaroidPhotoScale,
+                polaroidPhotoOffsetX = style.polaroidPhotoOffsetX,
+                polaroidPhotoOffsetY = style.polaroidPhotoOffsetY,
+                polaroidPhotoZoom = style.polaroidPhotoZoom,
+                tapedFilmPhotoOffsetX = style.tapedFilmPhotoOffsetX,
+                tapedFilmPhotoOffsetY = style.tapedFilmPhotoOffsetY,
+                tapedFilmPhotoZoom = style.tapedFilmPhotoZoom
+            )
+        }
+    }
+
+    // ---- 내 템플릿(사용자 템플릿) ----
+
+    private val _userTemplates =
+        MutableStateFlow<List<PostcardTemplate>>(emptyList())
+
+    val userTemplates: StateFlow<List<PostcardTemplate>> =
+        _userTemplates
+
+    private val _templateSaveState =
+        MutableStateFlow<TemplateSaveState>(TemplateSaveState.Idle)
+
+    val templateSaveState: StateFlow<TemplateSaveState> =
+        _templateSaveState
+
+    private val _templateManageState =
+        MutableStateFlow<TemplateManageState>(TemplateManageState.Idle)
+
+    val templateManageState: StateFlow<TemplateManageState> =
+        _templateManageState
+
+    /** 저장된 사용자 템플릿을 filesDir에서 읽어온다. 손상된 파일은 storage가 이미 걸러낸 뒤다. */
+    fun loadUserTemplates() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val loaded =
+                PostcardTemplateStorage.loadAllTemplates(context)
+                    .sortedByDescending { it.updatedAtMillis }
+
+            withContext(Dispatchers.Main) {
+                _userTemplates.value = loaded
+            }
+        }
+    }
+
+    /** "나의 템플릿 N" 형태의 기본 이름을 제안한다. 이미 쓰이는 이름과 겹치지 않는 번호를 고른다. */
+    fun suggestNewTemplateName(): String {
+        val existingNames =
+            _userTemplates.value.map { it.name }.toSet()
+        var index = _userTemplates.value.size + 1
+        var candidate = "나의 템플릿 $index"
+
+        while (candidate in existingNames) {
+            index += 1
+            candidate = "나의 템플릿 $index"
+        }
+
+        return candidate
+    }
+
+    fun isTemplateNameDuplicate(name: String): Boolean =
+        _userTemplates.value.any {
+            it.name == name.trim()
+        }
+
+    fun resetTemplateSaveState() {
+        _templateSaveState.value = TemplateSaveState.Idle
+    }
+
+    fun resetTemplateManageState() {
+        _templateManageState.value = TemplateManageState.Idle
+    }
+
+    /**
+     * 현재 엽서의 스타일 값(+도장이 정확히 하나면 그 도장도)을 새 사용자
+     * 템플릿으로 저장한다. 사진 원본·문구·날짜·스티커는 절대 포함하지 않는다.
+     * 저장 실패 시 기존에 있던 정상 템플릿 목록은 손대지 않고, 부분적으로
+     * 생성됐을 수 있는 파일을 정리한다.
+     */
+    fun saveCurrentStyleAsNewTemplate(
+        name: String
+    ) {
+        val currentPostcard =
+            _postcard.value ?: return
+
+        val trimmedName =
+            name.trim().take(MAX_TEMPLATE_NAME_LENGTH)
+
+        if (trimmedName.isBlank()) {
+            _templateSaveState.value =
+                TemplateSaveState.Error("템플릿 이름을 입력해줘.")
+            return
+        }
+
+        _templateSaveState.value = TemplateSaveState.Saving
+
+        val style = currentPostcard.toTemplateStyle()
+        val currentSeals = _photoSeals.value
+        val seal =
+            if (currentSeals.size == 1) {
+                PostcardTemplateSeal(
+                    type = currentSeals[0].type,
+                    colorArgb = currentSeals[0].colorArgb
+                )
+            } else {
+                null
+            }
+
+        val template =
+            PostcardTemplate(
+                name = trimmedName,
+                style = style,
+                seal = seal
+            )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val previewBitmap =
+                renderTemplatePreviewBitmap(
+                    imagePath = currentPostcard.imagePath,
+                    style = style
+                )
+
+            val templateSaved =
+                PostcardTemplateStorage.saveTemplateAtomically(
+                    context = context,
+                    template = template
+                )
+
+            if (!templateSaved) {
+                previewBitmap?.recycle()
+                withContext(Dispatchers.Main) {
+                    _templateSaveState.value =
+                        TemplateSaveState.Error(
+                            "템플릿을 저장하지 못했어. 잠시 뒤 다시 시도해줘."
+                        )
+                }
+                return@launch
+            }
+
+            // 미리보기 생성/저장 실패는 템플릿 자체 저장 실패로 취급하지 않는다 —
+            // 카드에서는 항상 현재 엽서 사진으로 실시간 미리보기를 그리므로
+            // 저장된 미리보기 파일은 향후를 위한 보조 자산일 뿐이다.
+            if (previewBitmap != null) {
+                PostcardTemplateStorage.savePreviewAtomically(
+                    context = context,
+                    templateId = template.id,
+                    bitmap = previewBitmap
+                )
+                previewBitmap.recycle()
+            }
+
+            withContext(Dispatchers.Main) {
+                _userTemplates.value =
+                    (_userTemplates.value + template)
+                        .sortedByDescending { it.updatedAtMillis }
+                _templateSaveState.value =
+                    TemplateSaveState.Saved
+            }
+        }
+    }
+
+    /** 작은 미리보기 전용 렌더. 실패해도 예외를 던지지 않고 null을 반환한다. */
+    private fun renderTemplatePreviewBitmap(
+        imagePath: String,
+        style: PostcardTemplateStyle
+    ): Bitmap? =
+        runCatching {
+            val sourceBitmap =
+                PostcardRenderSpec.decodeSourceBitmap(File(imagePath))
+
+            try {
+                val previewBitmap =
+                    Bitmap.createBitmap(
+                        TEMPLATE_PREVIEW_SIZE,
+                        TEMPLATE_PREVIEW_SIZE,
+                        Bitmap.Config.ARGB_8888
+                    )
+
+                PostcardRenderSpec.drawBaseContent(
+                    canvas = Canvas(previewBitmap),
+                    sourceBitmap = sourceBitmap,
+                    backgroundColorArgb = style.backgroundColorArgb,
+                    backgroundPattern = style.backgroundPattern,
+                    message = "",
+                    messageFont = style.messageFont,
+                    layoutStyle = style.layoutStyle,
+                    capturedAt = System.currentTimeMillis(),
+                    dateFormat = style.dateFormat,
+                    targetSize = TEMPLATE_PREVIEW_SIZE.toFloat(),
+                    messageTextScale = style.messageTextScale,
+                    dateTextScale = style.dateTextScale,
+                    backgroundPatternDensity = style.backgroundPatternDensity,
+                    stampPhotoScale = style.stampPhotoScale,
+                    polaroidPhotoScale = style.polaroidPhotoScale,
+                    photoEdgeBlur = style.photoEdgeBlur,
+                    stampPhotoOffsetX = style.stampPhotoOffsetX,
+                    stampPhotoOffsetY = style.stampPhotoOffsetY,
+                    polaroidPhotoOffsetX = style.polaroidPhotoOffsetX,
+                    polaroidPhotoOffsetY = style.polaroidPhotoOffsetY,
+                    tapedFilmPhotoOffsetX = style.tapedFilmPhotoOffsetX,
+                    tapedFilmPhotoOffsetY = style.tapedFilmPhotoOffsetY,
+                    stampPhotoZoom = style.stampPhotoZoom,
+                    polaroidPhotoZoom = style.polaroidPhotoZoom,
+                    tapedFilmPhotoZoom = style.tapedFilmPhotoZoom
+                )
+
+                previewBitmap
+            } finally {
+                if (!sourceBitmap.isRecycled) {
+                    sourceBitmap.recycle()
+                }
+            }
+        }.getOrNull()
+
+    /**
+     * 이름 변경. id·스타일·미리보기·생성 시각은 그대로 두고 이름과 수정
+     * 시각만 바꾼다. 내장 템플릿은 _userTemplates에 없으므로 애초에
+     * 대상이 될 수 없다.
+     */
+    fun renameUserTemplate(
+        templateId: String,
+        newName: String
+    ) {
+        val target =
+            _userTemplates.value.firstOrNull { it.id == templateId }
+                ?: return
+
+        val trimmedName =
+            newName.trim().take(MAX_TEMPLATE_NAME_LENGTH)
+
+        if (trimmedName.isBlank()) {
+            _templateManageState.value =
+                TemplateManageState.Error("템플릿 이름을 입력해줘.")
+            return
+        }
+
+        _templateManageState.value = TemplateManageState.InProgress
+
+        val renamed =
+            target.copy(
+                name = trimmedName,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved =
+                PostcardTemplateStorage.saveTemplateAtomically(
+                    context = context,
+                    template = renamed
+                )
+
+            withContext(Dispatchers.Main) {
+                if (saved) {
+                    _userTemplates.value =
+                        _userTemplates.value
+                            .map { if (it.id == templateId) renamed else it }
+                            .sortedByDescending { it.updatedAtMillis }
+                    _templateManageState.value =
+                        TemplateManageState.Success
+                } else {
+                    _templateManageState.value =
+                        TemplateManageState.Error(
+                            "이름을 바꾸지 못했어. 기존 템플릿은 그대로야."
+                        )
+                }
+            }
+        }
+    }
+
+    /**
+     * 현재 엽서의 꾸밈으로 덮어쓴다. id·이름·생성 시각은 유지하고 스타일·
+     * (있다면)도장·미리보기·수정 시각만 갱신한다. 저장에 실패하면 기존
+     * 템플릿 파일은 그대로 남는다(temp+rename 원자적 저장이라 반쯤 쓰인
+     * 파일이 기존 파일을 대체하지 않음).
+     */
+    fun overwriteUserTemplateWithCurrentStyle(
+        templateId: String
+    ) {
+        val target =
+            _userTemplates.value.firstOrNull { it.id == templateId }
+                ?: return
+        val currentPostcard =
+            _postcard.value ?: return
+
+        _templateManageState.value = TemplateManageState.InProgress
+
+        val style = currentPostcard.toTemplateStyle()
+        val currentSeals = _photoSeals.value
+        val seal =
+            if (currentSeals.size == 1) {
+                PostcardTemplateSeal(
+                    type = currentSeals[0].type,
+                    colorArgb = currentSeals[0].colorArgb
+                )
+            } else {
+                null
+            }
+
+        val updated =
+            target.copy(
+                style = style,
+                seal = seal,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val previewBitmap =
+                renderTemplatePreviewBitmap(
+                    imagePath = currentPostcard.imagePath,
+                    style = style
+                )
+
+            val saved =
+                PostcardTemplateStorage.saveTemplateAtomically(
+                    context = context,
+                    template = updated
+                )
+
+            if (!saved) {
+                previewBitmap?.recycle()
+                withContext(Dispatchers.Main) {
+                    _templateManageState.value =
+                        TemplateManageState.Error(
+                            "템플릿을 덮어쓰지 못했어. 기존 템플릿은 그대로야."
+                        )
+                }
+                return@launch
+            }
+
+            if (previewBitmap != null) {
+                PostcardTemplateStorage.savePreviewAtomically(
+                    context = context,
+                    templateId = updated.id,
+                    bitmap = previewBitmap
+                )
+                previewBitmap.recycle()
+            }
+
+            withContext(Dispatchers.Main) {
+                _userTemplates.value =
+                    _userTemplates.value
+                        .map { if (it.id == templateId) updated else it }
+                        .sortedByDescending { it.updatedAtMillis }
+                _templateManageState.value =
+                    TemplateManageState.Success
+            }
+        }
+    }
+
+    /**
+     * 사용자 템플릿과 그 미리보기 파일만 지운다(PostcardTemplateStorage.
+     * deleteTemplate이 둘 다 정리). 이 템플릿을 과거에 적용했던 엽서들은
+     * 이미 스타일 값이 각자 Room에 복사되어 있으므로 전혀 영향받지 않는다.
+     */
+    fun deleteUserTemplate(
+        templateId: String
+    ) {
+        val target =
+            _userTemplates.value.firstOrNull { it.id == templateId }
+                ?: return
+
+        _templateManageState.value = TemplateManageState.InProgress
+
+        viewModelScope.launch(Dispatchers.IO) {
+            PostcardTemplateStorage.deleteTemplate(
+                context = context,
+                templateId = target.id
+            )
+
+            withContext(Dispatchers.Main) {
+                _userTemplates.value =
+                    _userTemplates.value.filter { it.id != templateId }
+                _templateManageState.value =
+                    TemplateManageState.Success
+            }
+        }
+    }
+
     private var subjectSegmenter: SubjectSegmenter? =
         null
 
@@ -1313,6 +1895,8 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ) {
         clearPhotoTransformHistory()
+        clearTemplateStyleHistory()
+        loadUserTemplates()
 
         viewModelScope.launch {
             val loadedPostcard =
@@ -3356,7 +3940,8 @@ class DetailViewModel @Inject constructor(
         return when (layoutStyle) {
             "STAMP",
             "POLAROID",
-            "TAPED_FILM" -> layoutStyle
+            "TAPED_FILM",
+            "LETTER" -> layoutStyle
 
             else -> "STAMP"
         }

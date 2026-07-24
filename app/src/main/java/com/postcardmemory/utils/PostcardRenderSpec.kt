@@ -55,17 +55,26 @@ object PostcardRenderSpec {
     private const val TAPED_FILM_SPROCKET_GAP = 22f
     private const val TAPED_FILM_TAPE_WIDTH = 210f
     private const val TAPED_FILM_TAPE_HEIGHT = 92f
+    private const val LETTER_ANCHOR_X = 1024f
+    private const val LETTER_ANCHOR_Y = 710f
+    private const val LETTER_PHOTO_HALF_WIDTH = 928f
+    private const val LETTER_PHOTO_HALF_HEIGHT = 570f
+    private const val LETTER_DIVIDER_Y = 1312f
+    private const val LETTER_DIVIDER_LEFT = 96f
+    private const val LETTER_DIVIDER_RIGHT = 1952f
 
     enum class LayoutStyle {
         STAMP,
         POLAROID,
-        TAPED_FILM
+        TAPED_FILM,
+        LETTER
     }
 
     enum class PhotoFrameStyle {
         PINKING,
         POLAROID,
-        TAPED_FILM
+        TAPED_FILM,
+        LETTER
     }
 
     data class RenderLayout(
@@ -79,7 +88,9 @@ object PostcardRenderSpec {
         val darkMessageOverlay: Boolean = false,
         val photoOffsetX: Float = 0f,
         val photoOffsetY: Float = 0f,
-        val photoZoom: Float = 1f
+        val photoZoom: Float = 1f,
+        /** 사진과 문구 사이 얇은 구분선(편지지 레이아웃 전용). 다른 레이아웃은 null이라 그리지 않는다. */
+        val dividerY: Float? = null
     )
 
     fun resolveLayoutStyle(
@@ -88,6 +99,7 @@ object PostcardRenderSpec {
         return when (layoutStyle) {
             "POLAROID" -> LayoutStyle.POLAROID
             "TAPED_FILM" -> LayoutStyle.TAPED_FILM
+            "LETTER" -> LayoutStyle.LETTER
             else -> LayoutStyle.STAMP
         }
     }
@@ -203,6 +215,40 @@ object PostcardRenderSpec {
                     photoZoom = tapedFilmPhotoZoom
                 )
             }
+
+            // 편지지: 사진은 상단 약 60~65%, 얇은 구분선 아래로 기존 레이아웃보다
+            // 넓은 문구 영역, 날짜는 하단 오른쪽. Postcard/Room에 새 컬럼을
+            // 추가하지 않도록 TAPED_FILM과 동일하게 stampPhoto* 값을 재사용한다.
+            LayoutStyle.LETTER -> {
+                val clampedScale =
+                    stampPhotoScale.coerceIn(0.85f, 1.15f)
+                val halfWidth =
+                    LETTER_PHOTO_HALF_WIDTH * clampedScale
+                val halfHeight =
+                    LETTER_PHOTO_HALF_HEIGHT * clampedScale
+
+                val photoBounds =
+                    RectF(
+                        LETTER_ANCHOR_X - halfWidth,
+                        LETTER_ANCHOR_Y - halfHeight,
+                        LETTER_ANCHOR_X + halfWidth,
+                        LETTER_ANCHOR_Y + halfHeight
+                    )
+
+                RenderLayout(
+                    stampBounds = photoBounds,
+                    photoBounds = photoBounds,
+                    photoFrameStyle = PhotoFrameStyle.LETTER,
+                    // 다른 레이아웃보다 세로로 넓은 문구 영역.
+                    messagePanel = RectF(96f, 1352f, 1952f, 1840f),
+                    // 우측 정렬처럼 보이도록 패널 자체를 오른쪽으로 좁게 배치.
+                    datePanel = RectF(1300f, 1868f, 1952f, 1952f),
+                    photoOffsetX = stampPhotoOffsetX,
+                    photoOffsetY = stampPhotoOffsetY,
+                    photoZoom = stampPhotoZoom,
+                    dividerY = LETTER_DIVIDER_Y
+                )
+            }
         }
     }
 
@@ -299,6 +345,26 @@ object PostcardRenderSpec {
                     zoom = layout.photoZoom
                 )
             }
+
+            PhotoFrameStyle.LETTER -> {
+                drawLetterPhoto(
+                    canvas = canvas,
+                    sourceBitmap = sourceBitmap,
+                    photoBounds = layout.photoBounds,
+                    edgeBlur = photoEdgeBlur,
+                    offsetX = layout.photoOffsetX,
+                    offsetY = layout.photoOffsetY,
+                    zoom = layout.photoZoom
+                )
+            }
+        }
+        layout.dividerY?.let { dividerY ->
+            drawLetterDivider(
+                canvas = canvas,
+                dividerY = dividerY,
+                left = LETTER_DIVIDER_LEFT,
+                right = LETTER_DIVIDER_RIGHT
+            )
         }
         drawMessage(
             canvas = canvas,
@@ -1210,6 +1276,70 @@ object PostcardRenderSpec {
             }
 
         canvas.drawRoundRect(tapeBounds, 4f, 4f, tapeEdgePaint)
+    }
+
+    private fun drawLetterPhoto(
+        canvas: Canvas,
+        sourceBitmap: Bitmap,
+        photoBounds: RectF,
+        edgeBlur: Float = 0f,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        zoom: Float = 1f
+    ) {
+        val shadowBounds =
+            RectF(
+                photoBounds.left + 14f,
+                photoBounds.top + 18f,
+                photoBounds.right + 14f,
+                photoBounds.bottom + 18f
+            )
+        val shadowPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(55, 18, 12, 28)
+                style = Paint.Style.FILL
+            }
+
+        canvas.drawRect(shadowBounds, shadowPaint)
+
+        canvas.save()
+        canvas.clipRect(photoBounds)
+        drawCenterCroppedBitmap(
+            canvas = canvas,
+            bitmap = sourceBitmap,
+            destinationRect = photoBounds,
+            edgeBlur = edgeBlur,
+            offsetX = offsetX,
+            offsetY = offsetY,
+            zoom = zoom
+        )
+        canvas.restore()
+
+        val borderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(210, 255, 255, 255)
+                style = Paint.Style.STROKE
+                strokeWidth = 6f
+            }
+
+        canvas.drawRect(photoBounds, borderPaint)
+    }
+
+    /** 사진과 문구 사이의 얇은 구분선. 오래된 편지지처럼 은은한 갈색 계열로 그린다. */
+    private fun drawLetterDivider(
+        canvas: Canvas,
+        dividerY: Float,
+        left: Float,
+        right: Float
+    ) {
+        val dividerPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(130, 96, 76, 64)
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            }
+
+        canvas.drawLine(left, dividerY, right, dividerY, dividerPaint)
     }
 
     private fun drawMessage(

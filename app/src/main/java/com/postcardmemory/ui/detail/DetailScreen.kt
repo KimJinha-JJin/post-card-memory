@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -63,6 +64,8 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
@@ -1041,6 +1044,19 @@ fun DetailScreen(
     val canRedoSeal by viewModel.canRedoSeal.collectAsState()
     val canUndoPhotoTransform by viewModel.canUndoPhotoTransform.collectAsState()
     val canRedoPhotoTransform by viewModel.canRedoPhotoTransform.collectAsState()
+    val canUndoTemplateStyle by viewModel.canUndoTemplateStyle.collectAsState()
+    val canRedoTemplateStyle by viewModel.canRedoTemplateStyle.collectAsState()
+    val userTemplates by viewModel.userTemplates.collectAsState()
+    val templateSaveState by viewModel.templateSaveState.collectAsState()
+    val templateManageState by viewModel.templateManageState.collectAsState()
+    var lastAppliedTemplateId by remember { mutableStateOf<String?>(null) }
+    var showSaveTemplateDialog by remember { mutableStateOf(false) }
+    var saveTemplateNameInput by remember { mutableStateOf("") }
+    var templatesExpanded by remember { mutableStateOf(true) }
+    var templatePendingRename by remember { mutableStateOf<PostcardTemplate?>(null) }
+    var renameTemplateNameInput by remember { mutableStateOf("") }
+    var templatePendingOverwrite by remember { mutableStateOf<PostcardTemplate?>(null) }
+    var templatePendingDelete by remember { mutableStateOf<PostcardTemplate?>(null) }
     var stampPhotoScaleDragSnapshotTaken by remember {
         mutableStateOf(false)
     }
@@ -1694,7 +1710,8 @@ fun DetailScreen(
                                                     current.polaroidPhotoOffsetX
                                                 PostcardLayoutStyle.TAPED_FILM ->
                                                     current.tapedFilmPhotoOffsetX
-                                                PostcardLayoutStyle.STAMP ->
+                                                PostcardLayoutStyle.STAMP,
+                                                PostcardLayoutStyle.LETTER ->
                                                     current.stampPhotoOffsetX
                                             }
                                         val oldOffsetY =
@@ -1703,7 +1720,8 @@ fun DetailScreen(
                                                     current.polaroidPhotoOffsetY
                                                 PostcardLayoutStyle.TAPED_FILM ->
                                                     current.tapedFilmPhotoOffsetY
-                                                PostcardLayoutStyle.STAMP ->
+                                                PostcardLayoutStyle.STAMP,
+                                                PostcardLayoutStyle.LETTER ->
                                                     current.stampPhotoOffsetY
                                             }
                                         val oldZoom =
@@ -1712,7 +1730,8 @@ fun DetailScreen(
                                                     current.polaroidPhotoZoom
                                                 PostcardLayoutStyle.TAPED_FILM ->
                                                     current.tapedFilmPhotoZoom
-                                                PostcardLayoutStyle.STAMP ->
+                                                PostcardLayoutStyle.STAMP,
+                                                PostcardLayoutStyle.LETTER ->
                                                     current.stampPhotoZoom
                                             }
 
@@ -1767,7 +1786,8 @@ fun DetailScreen(
                                                 viewModel.saveTapedFilmPhotoZoom(newZoom)
                                             }
 
-                                            PostcardLayoutStyle.STAMP -> {
+                                            PostcardLayoutStyle.STAMP,
+                                            PostcardLayoutStyle.LETTER -> {
                                                 viewModel.setStampPhotoOffsetPreview(
                                                     newOffsetX,
                                                     newOffsetY
@@ -2980,6 +3000,150 @@ fun DetailScreen(
                         modifier = Modifier.height(14.dp)
                     )
 
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                onClick = {
+                                    templatesExpanded = !templatesExpanded
+                                }
+                            ),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "템플릿",
+                            color = BrutalBlack,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Icon(
+                            imageVector =
+                                if (templatesExpanded) {
+                                    Icons.Default.KeyboardArrowUp
+                                } else {
+                                    Icons.Default.KeyboardArrowDown
+                                },
+                            contentDescription =
+                                if (templatesExpanded) {
+                                    "템플릿 영역 접기"
+                                } else {
+                                    "템플릿 영역 펼치기"
+                                },
+                            tint = BrutalBlack
+                        )
+                    }
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    if (templatesExpanded) {
+                    postcard?.let { currentPostcardForTemplates ->
+                        val templatePreviewBitmap =
+                            rememberTemplatePreviewBitmap(
+                                currentPostcardForTemplates.imagePath
+                            )
+
+                        PostcardTemplateSection(
+                            title = "추천 템플릿",
+                            templates = BuiltInTemplates.all,
+                            sourceBitmap = templatePreviewBitmap,
+                            selectedTemplateId = lastAppliedTemplateId,
+                            onSelect = { template ->
+                                viewModel.applyTemplate(template)
+                                lastAppliedTemplateId = template.id
+                            },
+                            enabled = controlsEnabled,
+                            canUndo = canUndoTemplateStyle,
+                            canRedo = canRedoTemplateStyle,
+                            onUndo = { viewModel.undoTemplateStyleChange() },
+                            onRedo = { viewModel.redoTemplateStyleChange() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(14.dp)
+                        )
+
+                        PostcardTemplateSection(
+                            title = "내 템플릿",
+                            templates = userTemplates,
+                            sourceBitmap = templatePreviewBitmap,
+                            selectedTemplateId = lastAppliedTemplateId,
+                            onSelect = { template ->
+                                viewModel.applyTemplate(template)
+                                lastAppliedTemplateId = template.id
+                            },
+                            enabled = controlsEnabled,
+                            modifier = Modifier.fillMaxWidth(),
+                            onRequestRename = { template ->
+                                templatePendingRename = template
+                                renameTemplateNameInput = template.name
+                            },
+                            onRequestOverwrite = { template ->
+                                templatePendingOverwrite = template
+                            },
+                            onRequestDelete = { template ->
+                                templatePendingDelete = template
+                            },
+                            leadingContent = {
+                                Column(
+                                    modifier = Modifier
+                                        .width(84.dp)
+                                        .clickable(
+                                            enabled = controlsEnabled,
+                                            onClick = {
+                                                saveTemplateNameInput =
+                                                    viewModel.suggestNewTemplateName()
+                                                showSaveTemplateDialog = true
+                                            }
+                                        ),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(PaperField)
+                                            .border(
+                                                width = 1.dp,
+                                                color = PaperDivider,
+                                                shape = RoundedCornerShape(10.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "+",
+                                            color = SunsetGold,
+                                            fontSize = 28.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = "현재 꾸밈 저장",
+                                        color = BrutalBlack,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        modifier = Modifier.widthIn(max = 68.dp)
+                                    )
+                                }
+                            }
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(14.dp)
+                        )
+                    }
+                    }
+
                     if (
                         selectedLayout ==
                         PostcardLayoutStyle.POLAROID
@@ -3014,16 +3178,20 @@ fun DetailScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        val isTapedFilm =
+                        // TAPED_FILM·LETTER는 layoutFor()에서 0.85~1.15로
+                        // 클램프하므로 슬라이더 범위도 동일하게 맞춘다.
+                        val isNarrowScaleRange =
                             selectedLayout ==
-                                    PostcardLayoutStyle.TAPED_FILM
+                                    PostcardLayoutStyle.TAPED_FILM ||
+                                    selectedLayout ==
+                                    PostcardLayoutStyle.LETTER
 
                         EditorPercentSlider(
                             label = "사진 크기",
                             percent =
                                 stampPhotoScalePercent,
-                            minPercent = if (isTapedFilm) 85 else 70,
-                            maxPercent = if (isTapedFilm) 115 else 130,
+                            minPercent = if (isNarrowScaleRange) 85 else 70,
+                            maxPercent = if (isNarrowScaleRange) 115 else 130,
                             enabled = controlsEnabled,
                             onPreviewPercentChanged = { percent ->
                                 if (!stampPhotoScaleDragSnapshotTaken) {
@@ -4313,6 +4481,362 @@ fun DetailScreen(
                 TextButton(
                     onClick = {
                         showMessageDialog = false
+                    }
+                ) {
+                    Text(
+                        text = "취소",
+                        color = InkSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(templateSaveState) {
+        if (templateSaveState is TemplateSaveState.Saved) {
+            showSaveTemplateDialog = false
+            viewModel.resetTemplateSaveState()
+        }
+    }
+
+    if (showSaveTemplateDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSaveTemplateDialog = false
+                viewModel.resetTemplateSaveState()
+            },
+            containerColor = PaperSurface,
+            titleContentColor = InkPrimary,
+            textContentColor = InkPrimary,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = "현재 꾸밈 저장",
+                    color = InkPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "지금 이 엽서의 배경·레이아웃·크기 같은 꾸밈 방식만 템플릿으로 저장해. 사진과 글은 저장되지 않아.",
+                        color = InkSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = saveTemplateNameInput,
+                        onValueChange = { newValue ->
+                            if (newValue.length <= 20) {
+                                saveTemplateNameInput = newValue
+                            }
+                        },
+                        label = {
+                            Text("템플릿 이름")
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = PaperField,
+                            unfocusedContainerColor = PaperField,
+                            disabledContainerColor =
+                                PaperField.copy(alpha = 0.6f),
+                            focusedBorderColor = SunsetGold,
+                            unfocusedBorderColor = PaperDivider,
+                            disabledBorderColor =
+                                PaperDivider.copy(alpha = 0.6f),
+                            focusedLabelColor = SunsetGold,
+                            unfocusedLabelColor = InkSecondary,
+                            focusedTextColor = InkPrimary,
+                            unfocusedTextColor = InkPrimary,
+                            cursorColor = SunsetGold
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (
+                        saveTemplateNameInput.isNotBlank() &&
+                        viewModel.isTemplateNameDuplicate(saveTemplateNameInput)
+                    ) {
+                        Text(
+                            text = "이미 같은 이름의 템플릿이 있어. 그래도 저장하면 따로 구분해서 보관돼.",
+                            color = InkSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+
+                    val currentTemplateSaveState = templateSaveState
+                    if (currentTemplateSaveState is TemplateSaveState.Error) {
+                        Text(
+                            text = currentTemplateSaveState.message,
+                            color = GalleryDangerRed,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.saveCurrentStyleAsNewTemplate(
+                            saveTemplateNameInput
+                        )
+                    },
+                    enabled =
+                        saveTemplateNameInput.trim().isNotBlank() &&
+                                templateSaveState !is TemplateSaveState.Saving
+                ) {
+                    Text(
+                        text = "저장",
+                        color = SunsetGold,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showSaveTemplateDialog = false
+                        viewModel.resetTemplateSaveState()
+                    }
+                ) {
+                    Text(
+                        text = "취소",
+                        color = InkSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(templateManageState) {
+        if (templateManageState is TemplateManageState.Success) {
+            templatePendingRename = null
+            templatePendingOverwrite = null
+            templatePendingDelete = null
+            viewModel.resetTemplateManageState()
+        }
+    }
+
+    templatePendingRename?.let { templateToRename ->
+        AlertDialog(
+            onDismissRequest = {
+                templatePendingRename = null
+                viewModel.resetTemplateManageState()
+            },
+            containerColor = PaperSurface,
+            titleContentColor = InkPrimary,
+            textContentColor = InkPrimary,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = "템플릿 이름 변경",
+                    color = InkPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = renameTemplateNameInput,
+                        onValueChange = { newValue ->
+                            if (newValue.length <= 20) {
+                                renameTemplateNameInput = newValue
+                            }
+                        },
+                        label = {
+                            Text("템플릿 이름")
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = PaperField,
+                            unfocusedContainerColor = PaperField,
+                            disabledContainerColor =
+                                PaperField.copy(alpha = 0.6f),
+                            focusedBorderColor = SunsetGold,
+                            unfocusedBorderColor = PaperDivider,
+                            disabledBorderColor =
+                                PaperDivider.copy(alpha = 0.6f),
+                            focusedLabelColor = SunsetGold,
+                            unfocusedLabelColor = InkSecondary,
+                            focusedTextColor = InkPrimary,
+                            unfocusedTextColor = InkPrimary,
+                            cursorColor = SunsetGold
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val currentTemplateManageState = templateManageState
+                    if (currentTemplateManageState is TemplateManageState.Error) {
+                        Text(
+                            text = currentTemplateManageState.message,
+                            color = GalleryDangerRed,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.renameUserTemplate(
+                            templateToRename.id,
+                            renameTemplateNameInput
+                        )
+                    },
+                    enabled =
+                        renameTemplateNameInput.trim().isNotBlank() &&
+                                templateManageState !is TemplateManageState.InProgress
+                ) {
+                    Text(
+                        text = "저장",
+                        color = SunsetGold,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        templatePendingRename = null
+                        viewModel.resetTemplateManageState()
+                    }
+                ) {
+                    Text(
+                        text = "취소",
+                        color = InkSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        )
+    }
+
+    templatePendingOverwrite?.let { templateToOverwrite ->
+        AlertDialog(
+            onDismissRequest = {
+                templatePendingOverwrite = null
+                viewModel.resetTemplateManageState()
+            },
+            containerColor = PaperSurface,
+            titleContentColor = InkPrimary,
+            textContentColor = InkPrimary,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = "현재 꾸밈으로 바꿀까?",
+                    color = InkPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text =
+                            "'${templateToOverwrite.name}' 템플릿을 지금 이 엽서의 꾸밈으로 덮어써. 이전 스타일은 되돌릴 수 없어.",
+                        color = InkSecondary,
+                        fontSize = 13.sp
+                    )
+
+                    val currentTemplateManageState = templateManageState
+                    if (currentTemplateManageState is TemplateManageState.Error) {
+                        Text(
+                            text = currentTemplateManageState.message,
+                            color = GalleryDangerRed,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.overwriteUserTemplateWithCurrentStyle(
+                            templateToOverwrite.id
+                        )
+                    },
+                    enabled = templateManageState !is TemplateManageState.InProgress
+                ) {
+                    Text(
+                        text = "덮어쓰기",
+                        color = SunsetGold,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        templatePendingOverwrite = null
+                        viewModel.resetTemplateManageState()
+                    }
+                ) {
+                    Text(
+                        text = "취소",
+                        color = InkSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        )
+    }
+
+    templatePendingDelete?.let { templateToDelete ->
+        AlertDialog(
+            onDismissRequest = {
+                templatePendingDelete = null
+                viewModel.resetTemplateManageState()
+            },
+            containerColor = PaperSurface,
+            titleContentColor = InkPrimary,
+            textContentColor = InkPrimary,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = "템플릿을 삭제할까?",
+                    color = InkPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text =
+                        "'${templateToDelete.name}' 템플릿을 삭제해. 이 템플릿을 과거에 적용했던 엽서들은 영향받지 않아.",
+                    color = InkSecondary,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteUserTemplate(templateToDelete.id)
+                    },
+                    enabled = templateManageState !is TemplateManageState.InProgress
+                ) {
+                    Text(
+                        text = "삭제",
+                        color = GalleryDangerRed,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        templatePendingDelete = null
+                        viewModel.resetTemplateManageState()
                     }
                 ) {
                     Text(

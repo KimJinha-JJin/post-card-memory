@@ -32,7 +32,8 @@ enum class PostcardLayoutStyle(
 ) {
     STAMP("우표"),
     POLAROID("폴라로이드"),
-    TAPED_FILM("테이프 필름")
+    TAPED_FILM("테이프 필름"),
+    LETTER("편지지")
 }
 
 @Composable

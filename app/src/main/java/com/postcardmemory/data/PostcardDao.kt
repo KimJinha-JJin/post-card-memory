@@ -277,4 +277,61 @@ interface PostcardDao {
         id: Long,
         tapedFilmPhotoZoom: Float
     )
+
+    /**
+     * 템플릿 적용/되돌리기 전용 일괄 업데이트. 개별 필드 업데이트 함수들은
+     * 사용자가 슬라이더 하나씩 조작할 때 쓰는 디바운스 저장 경로라, 템플릿처럼
+     * 20개 스타일 값을 한 번에 바꾸는 동작에는 값마다 별도 쿼리를 호출하는
+     * 대신 이 쿼리 하나로 원자적으로 반영한다. backgroundImagePath는
+     * 템플릿이 다루지 않는 값이라 여기서 건드리지 않는다.
+     */
+    @Query(
+        """
+        UPDATE postcards
+        SET layoutStyle = :layoutStyle,
+            backgroundColorArgb = :backgroundColorArgb,
+            backgroundPattern = :backgroundPattern,
+            backgroundPatternDensity = :backgroundPatternDensity,
+            messageFont = :messageFont,
+            dateFormat = :dateFormat,
+            messageTextScale = :messageTextScale,
+            dateTextScale = :dateTextScale,
+            photoEdgeBlur = :photoEdgeBlur,
+            stampPhotoScale = :stampPhotoScale,
+            stampPhotoOffsetX = :stampPhotoOffsetX,
+            stampPhotoOffsetY = :stampPhotoOffsetY,
+            stampPhotoZoom = :stampPhotoZoom,
+            polaroidPhotoScale = :polaroidPhotoScale,
+            polaroidPhotoOffsetX = :polaroidPhotoOffsetX,
+            polaroidPhotoOffsetY = :polaroidPhotoOffsetY,
+            polaroidPhotoZoom = :polaroidPhotoZoom,
+            tapedFilmPhotoOffsetX = :tapedFilmPhotoOffsetX,
+            tapedFilmPhotoOffsetY = :tapedFilmPhotoOffsetY,
+            tapedFilmPhotoZoom = :tapedFilmPhotoZoom
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardTemplateStyle(
+        id: Long,
+        layoutStyle: String,
+        backgroundColorArgb: Long,
+        backgroundPattern: String,
+        backgroundPatternDensity: Float,
+        messageFont: String,
+        dateFormat: String,
+        messageTextScale: Float,
+        dateTextScale: Float,
+        photoEdgeBlur: Float,
+        stampPhotoScale: Float,
+        stampPhotoOffsetX: Float,
+        stampPhotoOffsetY: Float,
+        stampPhotoZoom: Float,
+        polaroidPhotoScale: Float,
+        polaroidPhotoOffsetX: Float,
+        polaroidPhotoOffsetY: Float,
+        polaroidPhotoZoom: Float,
+        tapedFilmPhotoOffsetX: Float,
+        tapedFilmPhotoOffsetY: Float,
+        tapedFilmPhotoZoom: Float
+    )
 }
