@@ -26,12 +26,17 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as lazyGridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +46,8 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,6 +64,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -67,12 +76,14 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -239,6 +250,14 @@ fun GalleryScreen(
         mutableStateOf(GallerySortOrder.NEWEST)
     }
 
+    var searchQuery by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    var isSearchActive by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     var playModeMenuExpanded by remember {
         mutableStateOf(false)
     }
@@ -277,6 +296,20 @@ fun GalleryScreen(
 
     BackHandler(enabled = selectionMode) {
         selectedIds = emptySet()
+    }
+
+    BackHandler(enabled = isSearchActive && !selectionMode) {
+        isSearchActive = false
+        searchQuery = ""
+    }
+
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
+            searchFocusRequester.requestFocus()
+        }
     }
 
     Scaffold(
@@ -332,6 +365,95 @@ fun GalleryScreen(
 
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
+            } else if (isSearchActive) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(GalleryPaperWhite)
+                            .padding(
+                                horizontal = 8.dp,
+                                vertical = 8.dp
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = InkSecondary,
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .size(20.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { newValue ->
+                                searchQuery = newValue
+                            },
+                            placeholder = {
+                                Text(
+                                    text = "문구, 장소, 날짜로 검색",
+                                    color = InkSecondary
+                                )
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = PaperField,
+                                unfocusedContainerColor = PaperField,
+                                focusedBorderColor = SunsetGold,
+                                unfocusedBorderColor = PaperDivider,
+                                focusedTextColor = InkPrimary,
+                                unfocusedTextColor = InkPrimary,
+                                focusedPlaceholderColor = InkSecondary,
+                                unfocusedPlaceholderColor = InkSecondary,
+                                cursorColor = SunsetGold
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                imeAction = ImeAction.Search
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    keyboardController?.hide()
+                                }
+                            ),
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            searchQuery = ""
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "검색어 지우기",
+                                            tint = InkSecondary
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(searchFocusRequester)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                isSearchActive = false
+                                searchQuery = ""
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "검색 종료",
+                                tint = BrutalBlack
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
+                }
             } else {
                 Column {
                     Row(
@@ -351,6 +473,22 @@ fun GalleryScreen(
                             color = InkPrimary,
                             modifier = Modifier.weight(1f)
                         )
+
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    playMode = GalleryPlayMode.NONE
+                                    isSearchActive = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "엽서 검색",
+                                    tint = InkSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
 
                         Box {
                             IconButton(
@@ -672,38 +810,47 @@ fun GalleryScreen(
                 }
             }
         } else {
-            val displayedPostcards = remember(postcards, sortOrder) {
+            val displayedPostcards = remember(postcards, sortOrder, searchQuery) {
+                val filtered = filterPostcardsForSearch(postcards, searchQuery)
+
                 when (sortOrder) {
                     GallerySortOrder.NEWEST ->
-                        postcards.sortedByDescending { it.capturedAt }
+                        filtered.sortedByDescending { it.capturedAt }
 
                     GallerySortOrder.OLDEST ->
-                        postcards.sortedBy { it.capturedAt }
+                        filtered.sortedBy { it.capturedAt }
                 }
             }
 
-            when (viewMode) {
-                GalleryViewMode.COMPACT_GRID -> {
-                    GalleryGrid(
-                        postcards = displayedPostcards,
-                        selectedIds = selectedIds,
-                        shakeTrigger = shakeTrigger,
-                        isPondModeOn = isPondModeOn,
-                        pondController = pondController,
-                        paddingValues = paddingValues,
-                        onItemClick = ::handleItemClick,
-                        onItemLongClick = ::handleItemLongClick
-                    )
-                }
+            if (displayedPostcards.isEmpty()) {
+                SearchEmptyState(
+                    query = searchQuery.trim(),
+                    paddingValues = paddingValues
+                )
+            } else {
+                when (viewMode) {
+                    GalleryViewMode.COMPACT_GRID -> {
+                        GalleryGrid(
+                            postcards = displayedPostcards,
+                            selectedIds = selectedIds,
+                            shakeTrigger = shakeTrigger,
+                            isPondModeOn = isPondModeOn,
+                            pondController = pondController,
+                            paddingValues = paddingValues,
+                            onItemClick = ::handleItemClick,
+                            onItemLongClick = ::handleItemLongClick
+                        )
+                    }
 
-                GalleryViewMode.DETAIL_LIST -> {
-                    GalleryDetailList(
-                        postcards = displayedPostcards,
-                        selectedIds = selectedIds,
-                        paddingValues = paddingValues,
-                        onItemClick = ::handleItemClick,
-                        onItemLongClick = ::handleItemLongClick
-                    )
+                    GalleryViewMode.DETAIL_LIST -> {
+                        GalleryDetailList(
+                            postcards = displayedPostcards,
+                            selectedIds = selectedIds,
+                            paddingValues = paddingValues,
+                            onItemClick = ::handleItemClick,
+                            onItemLongClick = ::handleItemLongClick
+                        )
+                    }
                 }
             }
         }
@@ -1035,6 +1182,53 @@ private fun GalleryDetailList(
     }
 }
 
+/**
+ * 검색 결과가 없을 때만 보여주는 전용 빈 화면. "저장된 엽서 없음"
+ * 상태([postcards.isEmpty()][GalleryScreen])와는 이미 상위에서 분기되어
+ * 있어, 여기 도달했다는 건 항상 엽서는 있지만 검색어에 걸리는 게 없다는
+ * 뜻이다.
+ */
+@Composable
+private fun SearchEmptyState(
+    query: String,
+    paddingValues: PaddingValues
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(GalleryPaperWhite)
+            .padding(paddingValues),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .background(
+                    color = PaperTray,
+                    shape = CircleShape
+                )
+                .padding(
+                    horizontal = 38.dp,
+                    vertical = 32.dp
+                )
+        ) {
+            Text(
+                text = "🔍",
+                fontSize = 64.sp
+            )
+
+            Text(
+                text = "'$query' 관련 엽서는 아직 없어요.\n다른 기억의 조각을 검색해 보세요.",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = BrutalBlack,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+        }
+    }
+}
+
 private data class GalleryMonthSection(
     val yearMonth: YearMonth,
     val postcards: List<Postcard>
@@ -1068,6 +1262,45 @@ private fun monthSectionsFor(
             yearMonth = yearMonth,
             postcards = postcardsInMonth
         )
+    }
+}
+
+private val searchDateFormatters: List<DateTimeFormatter> = listOf(
+    DateTimeFormatter.ofPattern("yyyy"),
+    DateTimeFormatter.ofPattern("yyyy-MM"),
+    DateTimeFormatter.ofPattern("yyyy.MM.dd"),
+    DateTimeFormatter.ofPattern("yyyy년 M월")
+)
+
+private fun capturedAtMatchesQuery(capturedAt: Long, query: String): Boolean {
+    val zonedCapturedAt =
+        Instant.ofEpochMilli(capturedAt).atZone(ZoneId.systemDefault())
+
+    return searchDateFormatters.any { formatter ->
+        zonedCapturedAt.format(formatter).contains(query, ignoreCase = true)
+    }
+}
+
+/**
+ * 문구(message)·장소(location)·날짜(capturedAt) 기준으로 [postcards]를 좁힌다.
+ * 검색어가 비어 있거나 공백뿐이면 필터를 적용하지 않고 원본 목록을 그대로
+ * 반환한다. Room 컬럼이나 저장된 값은 건드리지 않고, capturedAt(epoch millis)을
+ * 검색 시점에만 여러 날짜 문자열로 변환해 비교한다.
+ */
+internal fun filterPostcardsForSearch(
+    postcards: List<Postcard>,
+    query: String
+): List<Postcard> {
+    val trimmedQuery = query.trim()
+
+    if (trimmedQuery.isEmpty()) {
+        return postcards
+    }
+
+    return postcards.filter { postcard ->
+        postcard.message.contains(trimmedQuery, ignoreCase = true) ||
+            postcard.location?.contains(trimmedQuery, ignoreCase = true) == true ||
+            capturedAtMatchesQuery(postcard.capturedAt, trimmedQuery)
     }
 }
 
