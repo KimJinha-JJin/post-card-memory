@@ -34,12 +34,6 @@ class PostcardRepository @Inject constructor(
         dao.deletePostcardById(id)
     }
 
-    suspend fun deletePostcardsByIds(
-        ids: List<Long>
-    ) {
-        dao.deletePostcardsByIds(ids)
-    }
-
     suspend fun updatePostcardMessage(
         id: Long,
         message: String

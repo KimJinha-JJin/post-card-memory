@@ -45,14 +45,6 @@ interface PostcardDao {
     )
 
     @Query(
-        "DELETE FROM postcards " +
-                "WHERE id IN (:ids)"
-    )
-    suspend fun deletePostcardsByIds(
-        ids: List<Long>
-    )
-
-    @Query(
         "UPDATE postcards " +
                 "SET message = :message " +
                 "WHERE id = :id"

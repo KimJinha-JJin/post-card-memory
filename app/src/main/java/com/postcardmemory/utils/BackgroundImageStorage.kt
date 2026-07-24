@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import java.io.File
 import java.io.IOException
+import java.util.UUID
 
 object BackgroundImageStorage {
 
@@ -37,6 +38,8 @@ object BackgroundImageStorage {
                 backgroundDirectory,
                 "background_" +
                         System.currentTimeMillis() +
+                        "_" +
+                        UUID.randomUUID() +
                         extension
             )
 

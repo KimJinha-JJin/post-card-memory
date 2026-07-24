@@ -2857,7 +2857,11 @@ class DetailViewModel @Inject constructor(
                             resultUri = resultUri
                         )
                 },
-                onFailure = {
+                onFailure = { exception ->
+                    if (exception is CancellationException) {
+                        throw exception
+                    }
+
                     _stickerBackgroundRemovalState.value =
                         StickerBackgroundRemovalState.Error(
                             stickerId = stickerId,
