@@ -1389,7 +1389,14 @@ class DetailViewModel @Inject constructor(
         )
 
         if (snapshot.seals != null) {
+            // setPhotoSeals()/undoSealChange()와 동일하게 초안 자동저장도
+            // 함께 트리거해야 한다 — 그렇지 않으면 템플릿 Undo/Redo로 되돌린
+            // 도장이 인메모리·화면에서는 사라졌는데 크래시 복구용 초안
+            // 파일(PostcardDraftStorage)에는 예전 도장이 남아, "완료" 버튼을
+            // 누르기 전에 앱이 종료되면 재실행 시 되돌렸던 도장이 복구
+            // 제안으로 다시 나타날 수 있다.
             _photoSeals.value = snapshot.seals
+            scheduleDraftAutosave()
         }
     }
 
@@ -1488,6 +1495,17 @@ class DetailViewModel @Inject constructor(
         )
     }
 
+    /**
+     * 템플릿 스타일 저장 전용 job. 슬라이더 저장 함수들(saveStampPhotoScale
+     * 등)과 동일하게, 새 저장을 시작하기 전 이전 저장을 취소한다 — 그렇지
+     * 않으면 템플릿을 빠르게 연속 적용(A→B→C)했을 때 Dispatchers.IO의 실행
+     * 순서가 보장되지 않아 나중에 적용한 스타일이 먼저 완료된 이전 스타일에
+     * 덮어써질 수 있다. _postcard.value는 항상 동기적으로 최신값이므로
+     * 화면에는 영향이 없지만, Room에 저장되는 값이 화면과 달라져 앱을 다시
+     * 켰을 때 이전 템플릿으로 되돌아가 보일 수 있었다.
+     */
+    private var templateStyleSaveJob: Job? = null
+
     private fun persistTemplateStyle(
         postcardId: Long,
         style: PostcardTemplateStyle
@@ -1495,7 +1513,8 @@ class DetailViewModel @Inject constructor(
         _postcard.value =
             _postcard.value?.applyTemplateStyle(style)
 
-        viewModelScope.launch(Dispatchers.IO) {
+        templateStyleSaveJob?.cancel()
+        templateStyleSaveJob = viewModelScope.launch(Dispatchers.IO) {
             repository.updatePostcardTemplateStyle(
                 id = postcardId,
                 layoutStyle = style.layoutStyle,
@@ -1735,7 +1754,13 @@ class DetailViewModel @Inject constructor(
     ) {
         val target =
             _userTemplates.value.firstOrNull { it.id == templateId }
-                ?: return
+                ?: run {
+                    _templateManageState.value =
+                        TemplateManageState.Error(
+                            "이미 지워진 템플릿이야. 목록을 새로고침해줘."
+                        )
+                    return
+                }
 
         val trimmedName =
             newName.trim().take(MAX_TEMPLATE_NAME_LENGTH)
@@ -1790,7 +1815,13 @@ class DetailViewModel @Inject constructor(
     ) {
         val target =
             _userTemplates.value.firstOrNull { it.id == templateId }
-                ?: return
+                ?: run {
+                    _templateManageState.value =
+                        TemplateManageState.Error(
+                            "이미 지워진 템플릿이야. 목록을 새로고침해줘."
+                        )
+                    return
+                }
         val currentPostcard =
             _postcard.value ?: return
 

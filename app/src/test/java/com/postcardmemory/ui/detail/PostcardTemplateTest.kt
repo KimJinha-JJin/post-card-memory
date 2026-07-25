@@ -197,4 +197,77 @@ class PostcardTemplateTest {
 
         assertEquals(style, roundTripped)
     }
+
+    // ---- 선택 표시 해제(resolveEffectiveSelectedTemplateId) ----
+
+    private fun template(id: String, style: PostcardTemplateStyle = sampleStyle()) =
+        PostcardTemplate(id = id, name = id, style = style)
+
+    @Test
+    fun resolveEffectiveSelectedTemplateId_noneApplied_returnsNull() {
+        val result =
+            resolveEffectiveSelectedTemplateId(
+                lastAppliedTemplateId = null,
+                candidateTemplates = listOf(template("a")),
+                currentStyle = sampleStyle()
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun resolveEffectiveSelectedTemplateId_styleStillMatches_staysSelected() {
+        val style = sampleStyle()
+
+        val result =
+            resolveEffectiveSelectedTemplateId(
+                lastAppliedTemplateId = "a",
+                candidateTemplates = listOf(template("a", style)),
+                currentStyle = style
+            )
+
+        assertEquals("a", result)
+    }
+
+    @Test
+    fun resolveEffectiveSelectedTemplateId_manualEditChangedStyle_clearsSelection() {
+        val appliedStyle = sampleStyle()
+        val editedStyle = appliedStyle.copy(backgroundPatternDensity = 2.5f)
+
+        val result =
+            resolveEffectiveSelectedTemplateId(
+                lastAppliedTemplateId = "a",
+                candidateTemplates = listOf(template("a", appliedStyle)),
+                currentStyle = editedStyle
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun resolveEffectiveSelectedTemplateId_templateNoLongerInList_clearsSelection() {
+        val style = sampleStyle()
+
+        // 예: 사용자가 방금 적용한 템플릿을 곧바로 삭제한 경우.
+        val result =
+            resolveEffectiveSelectedTemplateId(
+                lastAppliedTemplateId = "deleted-id",
+                candidateTemplates = listOf(template("other-id", style)),
+                currentStyle = style
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun resolveEffectiveSelectedTemplateId_nullCurrentStyle_clearsSelection() {
+        val result =
+            resolveEffectiveSelectedTemplateId(
+                lastAppliedTemplateId = "a",
+                candidateTemplates = listOf(template("a")),
+                currentStyle = null
+            )
+
+        assertNull(result)
+    }
 }

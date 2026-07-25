@@ -112,6 +112,30 @@ fun Postcard.applyTemplateStyle(
         tapedFilmPhotoZoom = style.tapedFilmPhotoZoom
     )
 
+/**
+ * 화면에 "선택됨"으로 표시할 템플릿 id를 정한다. lastAppliedTemplateId를
+ * 그대로 쓰지 않는 이유: 템플릿 적용 후 슬라이더 등으로 스타일을 수동으로
+ * 바꾸거나 그 템플릿이 삭제되면 더 이상 그 템플릿과 같은 상태가 아니므로,
+ * 후보 목록(내장+내 템플릿)에서 같은 id를 찾아 스타일이 실제로 일치할
+ * 때만 선택 표시를 유지한다.
+ */
+fun resolveEffectiveSelectedTemplateId(
+    lastAppliedTemplateId: String?,
+    candidateTemplates: List<PostcardTemplate>,
+    currentStyle: PostcardTemplateStyle?
+): String? {
+    val templateId = lastAppliedTemplateId ?: return null
+    val matchingTemplate =
+        candidateTemplates.firstOrNull { it.id == templateId }
+            ?: return null
+
+    return if (matchingTemplate.style == currentStyle) {
+        templateId
+    } else {
+        null
+    }
+}
+
 private fun PostcardTemplateStyle.serialize(): String =
     listOf(
         layoutStyle,

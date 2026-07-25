@@ -1050,6 +1050,12 @@ fun DetailScreen(
     val templateSaveState by viewModel.templateSaveState.collectAsState()
     val templateManageState by viewModel.templateManageState.collectAsState()
     var lastAppliedTemplateId by remember { mutableStateOf<String?>(null) }
+    val effectiveSelectedTemplateId =
+        resolveEffectiveSelectedTemplateId(
+            lastAppliedTemplateId = lastAppliedTemplateId,
+            candidateTemplates = BuiltInTemplates.all + userTemplates,
+            currentStyle = postcard?.toTemplateStyle()
+        )
     var showSaveTemplateDialog by remember { mutableStateOf(false) }
     var saveTemplateNameInput by remember { mutableStateOf("") }
     var templatesExpanded by remember { mutableStateOf(true) }
@@ -3050,7 +3056,7 @@ fun DetailScreen(
                             title = "추천 템플릿",
                             templates = BuiltInTemplates.all,
                             sourceBitmap = templatePreviewBitmap,
-                            selectedTemplateId = lastAppliedTemplateId,
+                            selectedTemplateId = effectiveSelectedTemplateId,
                             onSelect = { template ->
                                 viewModel.applyTemplate(template)
                                 lastAppliedTemplateId = template.id
@@ -3071,7 +3077,7 @@ fun DetailScreen(
                             title = "내 템플릿",
                             templates = userTemplates,
                             sourceBitmap = templatePreviewBitmap,
-                            selectedTemplateId = lastAppliedTemplateId,
+                            selectedTemplateId = effectiveSelectedTemplateId,
                             onSelect = { template ->
                                 viewModel.applyTemplate(template)
                                 lastAppliedTemplateId = template.id
