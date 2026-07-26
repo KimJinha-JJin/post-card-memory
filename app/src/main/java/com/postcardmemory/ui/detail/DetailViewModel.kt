@@ -412,6 +412,21 @@ class DetailViewModel @Inject constructor(
 
     private var tapedFilmPhotoZoomSaveJob: Job? = null
 
+    /**
+     * 개별 스타일 저장(위 12개 Job + Job이 없는 layoutStyle/backgroundColorArgb/
+     * backgroundPattern/messageFont/dateFormat)과 템플릿 일괄 저장
+     * (persistTemplateStyle)의 실제 DAO 쓰기 구간을 직렬화한다. 각 저장은 이
+     * Mutex를 획득한 시점에 _postcard.value에서 자신이 쓸 값을 다시 읽어서
+     * DAO에 넘기므로(호출 시점에 캡처해둔 값이 아니라), 완료 순서가 뒤바뀌어도
+     * 가장 나중에 커밋하는 저장이 항상 그 순간의 실제 화면 상태를 그대로
+     * 쓰게 된다 — 개별 저장과 템플릿 일괄 저장 중 어느 쪽이 사용자의 시간상
+     * 마지막 조작이었는지와 무관하게, "다시 읽기 + 직렬화"만으로 항상 최신
+     * 조작이 최종 Room 상태가 된다. Mutex 없이 다시 읽기만 하면 읽기와
+     * 커밋 사이의 시간차 때문에 오래된 읽기가 나중에 커밋되며 다시 역전될
+     * 수 있어 두 가지를 함께 써야 한다.
+     */
+    private val styleWriteMutex = Mutex()
+
     // ---- 편집 초안(스티커·도장) 자동저장 ----
 
     private val _draftSaveStatus =
@@ -1612,29 +1627,41 @@ class DetailViewModel @Inject constructor(
         templateStyleSaveJob = viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    repository.updatePostcardTemplateStyle(
-                        id = postcardId,
-                        layoutStyle = style.layoutStyle,
-                        backgroundColorArgb = style.backgroundColorArgb,
-                        backgroundPattern = style.backgroundPattern,
-                        backgroundPatternDensity = style.backgroundPatternDensity,
-                        messageFont = style.messageFont,
-                        dateFormat = style.dateFormat,
-                        messageTextScale = style.messageTextScale,
-                        dateTextScale = style.dateTextScale,
-                        photoEdgeBlur = style.photoEdgeBlur,
-                        stampPhotoScale = style.stampPhotoScale,
-                        stampPhotoOffsetX = style.stampPhotoOffsetX,
-                        stampPhotoOffsetY = style.stampPhotoOffsetY,
-                        stampPhotoZoom = style.stampPhotoZoom,
-                        polaroidPhotoScale = style.polaroidPhotoScale,
-                        polaroidPhotoOffsetX = style.polaroidPhotoOffsetX,
-                        polaroidPhotoOffsetY = style.polaroidPhotoOffsetY,
-                        polaroidPhotoZoom = style.polaroidPhotoZoom,
-                        tapedFilmPhotoOffsetX = style.tapedFilmPhotoOffsetX,
-                        tapedFilmPhotoOffsetY = style.tapedFilmPhotoOffsetY,
-                        tapedFilmPhotoZoom = style.tapedFilmPhotoZoom
-                    )
+                    styleWriteMutex.withLock {
+                        // 개별 스타일 저장과의 경합 방지: 캡처해둔 style이
+                        // 아니라 Mutex를 획득한 이 순간의 _postcard.value를
+                        // 다시 읽어서 쓴다 — 그 사이 개별 슬라이더 조작이
+                        // 끼어들었다면 그 값이 이미 반영돼 있으므로 함께
+                        // 저장되고, 반대로 이 템플릿 저장이 늦게 커밋되더라도
+                        // 자신이 밀려난 옛 style로 최신 조작을 덮어쓰지 않는다.
+                        val latestStyle =
+                            _postcard.value?.toTemplateStyle()
+                                ?: return@withLock
+
+                        repository.updatePostcardTemplateStyle(
+                            id = postcardId,
+                            layoutStyle = latestStyle.layoutStyle,
+                            backgroundColorArgb = latestStyle.backgroundColorArgb,
+                            backgroundPattern = latestStyle.backgroundPattern,
+                            backgroundPatternDensity = latestStyle.backgroundPatternDensity,
+                            messageFont = latestStyle.messageFont,
+                            dateFormat = latestStyle.dateFormat,
+                            messageTextScale = latestStyle.messageTextScale,
+                            dateTextScale = latestStyle.dateTextScale,
+                            photoEdgeBlur = latestStyle.photoEdgeBlur,
+                            stampPhotoScale = latestStyle.stampPhotoScale,
+                            stampPhotoOffsetX = latestStyle.stampPhotoOffsetX,
+                            stampPhotoOffsetY = latestStyle.stampPhotoOffsetY,
+                            stampPhotoZoom = latestStyle.stampPhotoZoom,
+                            polaroidPhotoScale = latestStyle.polaroidPhotoScale,
+                            polaroidPhotoOffsetX = latestStyle.polaroidPhotoOffsetX,
+                            polaroidPhotoOffsetY = latestStyle.polaroidPhotoOffsetY,
+                            polaroidPhotoZoom = latestStyle.polaroidPhotoZoom,
+                            tapedFilmPhotoOffsetX = latestStyle.tapedFilmPhotoOffsetX,
+                            tapedFilmPhotoOffsetY = latestStyle.tapedFilmPhotoOffsetY,
+                            tapedFilmPhotoZoom = latestStyle.tapedFilmPhotoZoom
+                        )
+                    }
                 }
             } catch (exception: CancellationException) {
                 throw exception
@@ -2264,29 +2291,52 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        val previousFont =
+            currentPostcard.messageFont
+
+        _postcard.value =
+            currentPostcard.copy(
+                messageFont = normalizedFont
+            )
+
         _fontUpdateState.value =
             FontUpdateState.Saving
 
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    repository
-                        .updatePostcardMessageFont(
-                            id = currentPostcard.id,
-                            messageFont =
-                                normalizedFont
+                val writtenFont =
+                    withContext(Dispatchers.IO) {
+                        styleWriteMutex.withLock {
+                            // 템플릿 일괄 저장과의 경합 방지: Mutex를 획득한
+                            // 이 순간 _postcard.value를 다시 읽어서 쓴다.
+                            val latestFont =
+                                _postcard.value?.messageFont
+                                    ?: return@withLock null
+                            repository
+                                .updatePostcardMessageFont(
+                                    id = currentPostcard.id,
+                                    messageFont = latestFont
+                                )
+                            latestFont
+                        }
+                    }
+
+                if (writtenFont != null) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            messageFont = writtenFont
                         )
                 }
 
-                _postcard.value =
-                    currentPostcard.copy(
-                        messageFont =
-                            normalizedFont
-                    )
-
                 _fontUpdateState.value =
                     FontUpdateState.Success
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
+                _postcard.value =
+                    _postcard.value?.copy(
+                        messageFont = previousFont
+                    )
                 _fontUpdateState.value =
                     FontUpdateState.Error(
                         exception.message
@@ -2315,29 +2365,50 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        val previousLayoutStyle =
+            currentPostcard.layoutStyle
+
+        _postcard.value =
+            currentPostcard.copy(
+                layoutStyle = normalizedLayoutStyle
+            )
+
         _layoutUpdateState.value =
             LayoutUpdateState.Saving
 
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    repository
-                        .updatePostcardLayoutStyle(
-                            id = currentPostcard.id,
-                            layoutStyle =
-                                normalizedLayoutStyle
+                val writtenLayoutStyle =
+                    withContext(Dispatchers.IO) {
+                        styleWriteMutex.withLock {
+                            val latestLayoutStyle =
+                                _postcard.value?.layoutStyle
+                                    ?: return@withLock null
+                            repository
+                                .updatePostcardLayoutStyle(
+                                    id = currentPostcard.id,
+                                    layoutStyle = latestLayoutStyle
+                                )
+                            latestLayoutStyle
+                        }
+                    }
+
+                if (writtenLayoutStyle != null) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            layoutStyle = writtenLayoutStyle
                         )
                 }
 
-                _postcard.value =
-                    currentPostcard.copy(
-                        layoutStyle =
-                            normalizedLayoutStyle
-                    )
-
                 _layoutUpdateState.value =
                     LayoutUpdateState.Success
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
+                _postcard.value =
+                    _postcard.value?.copy(
+                        layoutStyle = previousLayoutStyle
+                    )
                 _layoutUpdateState.value =
                     LayoutUpdateState.Error(
                         exception.message
@@ -2366,29 +2437,50 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        val previousDateFormat =
+            currentPostcard.dateFormat
+
+        _postcard.value =
+            currentPostcard.copy(
+                dateFormat = normalizedDateFormat
+            )
+
         _dateFormatUpdateState.value =
             DateFormatUpdateState.Saving
 
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    repository
-                        .updatePostcardDateFormat(
-                            id = currentPostcard.id,
-                            dateFormat =
-                                normalizedDateFormat
+                val writtenDateFormat =
+                    withContext(Dispatchers.IO) {
+                        styleWriteMutex.withLock {
+                            val latestDateFormat =
+                                _postcard.value?.dateFormat
+                                    ?: return@withLock null
+                            repository
+                                .updatePostcardDateFormat(
+                                    id = currentPostcard.id,
+                                    dateFormat = latestDateFormat
+                                )
+                            latestDateFormat
+                        }
+                    }
+
+                if (writtenDateFormat != null) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            dateFormat = writtenDateFormat
                         )
                 }
 
-                _postcard.value =
-                    currentPostcard.copy(
-                        dateFormat =
-                            normalizedDateFormat
-                    )
-
                 _dateFormatUpdateState.value =
                     DateFormatUpdateState.Success
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
+                _postcard.value =
+                    _postcard.value?.copy(
+                        dateFormat = previousDateFormat
+                    )
                 _dateFormatUpdateState.value =
                     DateFormatUpdateState.Error(
                         exception.message
@@ -2432,19 +2524,35 @@ class DetailViewModel @Inject constructor(
         messageTextScaleSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardMessageTextScale(
-                                id = currentPostcard.id,
-                                messageTextScale =
-                                    normalizedScale
+                    val writtenScale =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                // 템플릿 일괄 저장과의 경합 방지: 이 순간
+                                // _postcard.value에 남아있는 값을 다시 읽어서
+                                // 쓴다(호출 당시 캡처한 normalizedScale이
+                                // 아니라) — 그 사이 템플릿이 적용됐다면 그
+                                // 값을 그대로 유지하고, 재확인(reconfirm)도
+                                // 이 값 기준으로 해야 템플릿 값을 되돌리지
+                                // 않는다.
+                                val latestScale =
+                                    _postcard.value?.messageTextScale
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardMessageTextScale(
+                                        id = currentPostcard.id,
+                                        messageTextScale =
+                                            latestScale
+                                    )
+                                latestScale
+                            }
+                        }
+
+                    if (writtenScale != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                messageTextScale = writtenScale
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            messageTextScale = normalizedScale
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2493,19 +2601,28 @@ class DetailViewModel @Inject constructor(
         dateTextScaleSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardDateTextScale(
-                                id = currentPostcard.id,
-                                dateTextScale =
-                                    normalizedScale
+                    val writtenScale =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestScale =
+                                    _postcard.value?.dateTextScale
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardDateTextScale(
+                                        id = currentPostcard.id,
+                                        dateTextScale =
+                                            latestScale
+                                    )
+                                latestScale
+                            }
+                        }
+
+                    if (writtenScale != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                dateTextScale = writtenScale
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            dateTextScale = normalizedScale
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2554,20 +2671,29 @@ class DetailViewModel @Inject constructor(
         backgroundPatternDensitySaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardBackgroundPatternDensity(
-                                id = currentPostcard.id,
+                    val writtenDensity =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestDensity =
+                                    _postcard.value?.backgroundPatternDensity
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardBackgroundPatternDensity(
+                                        id = currentPostcard.id,
+                                        backgroundPatternDensity =
+                                            latestDensity
+                                    )
+                                latestDensity
+                            }
+                        }
+
+                    if (writtenDensity != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
                                 backgroundPatternDensity =
-                                    normalizedDensity
+                                    writtenDensity
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            backgroundPatternDensity =
-                                normalizedDensity
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2617,19 +2743,28 @@ class DetailViewModel @Inject constructor(
         stampPhotoScaleSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardStampPhotoScale(
-                                id = currentPostcard.id,
-                                stampPhotoScale =
-                                    normalizedScale
+                    val writtenScale =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestScale =
+                                    _postcard.value?.stampPhotoScale
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardStampPhotoScale(
+                                        id = currentPostcard.id,
+                                        stampPhotoScale =
+                                            latestScale
+                                    )
+                                latestScale
+                            }
+                        }
+
+                    if (writtenScale != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                stampPhotoScale = writtenScale
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            stampPhotoScale = normalizedScale
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2678,19 +2813,28 @@ class DetailViewModel @Inject constructor(
         polaroidPhotoScaleSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardPolaroidPhotoScale(
-                                id = currentPostcard.id,
-                                polaroidPhotoScale =
-                                    normalizedScale
+                    val writtenScale =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestScale =
+                                    _postcard.value?.polaroidPhotoScale
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardPolaroidPhotoScale(
+                                        id = currentPostcard.id,
+                                        polaroidPhotoScale =
+                                            latestScale
+                                    )
+                                latestScale
+                            }
+                        }
+
+                    if (writtenScale != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                polaroidPhotoScale = writtenScale
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            polaroidPhotoScale = normalizedScale
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2739,19 +2883,28 @@ class DetailViewModel @Inject constructor(
         photoEdgeBlurSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardPhotoEdgeBlur(
-                                id = currentPostcard.id,
-                                photoEdgeBlur =
-                                    normalizedEdgeBlur
+                    val writtenEdgeBlur =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestEdgeBlur =
+                                    _postcard.value?.photoEdgeBlur
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardPhotoEdgeBlur(
+                                        id = currentPostcard.id,
+                                        photoEdgeBlur =
+                                            latestEdgeBlur
+                                    )
+                                latestEdgeBlur
+                            }
+                        }
+
+                    if (writtenEdgeBlur != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                photoEdgeBlur = writtenEdgeBlur
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            photoEdgeBlur = normalizedEdgeBlur
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2807,20 +2960,29 @@ class DetailViewModel @Inject constructor(
         stampPhotoOffsetSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardStampPhotoOffset(
-                                id = currentPostcard.id,
-                                stampPhotoOffsetX = normalizedOffsetX,
-                                stampPhotoOffsetY = normalizedOffsetY
+                    val written =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latest =
+                                    _postcard.value
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardStampPhotoOffset(
+                                        id = currentPostcard.id,
+                                        stampPhotoOffsetX = latest.stampPhotoOffsetX,
+                                        stampPhotoOffsetY = latest.stampPhotoOffsetY
+                                    )
+                                latest.stampPhotoOffsetX to latest.stampPhotoOffsetY
+                            }
+                        }
+
+                    if (written != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                stampPhotoOffsetX = written.first,
+                                stampPhotoOffsetY = written.second
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            stampPhotoOffsetX = normalizedOffsetX,
-                            stampPhotoOffsetY = normalizedOffsetY
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2877,20 +3039,29 @@ class DetailViewModel @Inject constructor(
         polaroidPhotoOffsetSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardPolaroidPhotoOffset(
-                                id = currentPostcard.id,
-                                polaroidPhotoOffsetX = normalizedOffsetX,
-                                polaroidPhotoOffsetY = normalizedOffsetY
+                    val written =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latest =
+                                    _postcard.value
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardPolaroidPhotoOffset(
+                                        id = currentPostcard.id,
+                                        polaroidPhotoOffsetX = latest.polaroidPhotoOffsetX,
+                                        polaroidPhotoOffsetY = latest.polaroidPhotoOffsetY
+                                    )
+                                latest.polaroidPhotoOffsetX to latest.polaroidPhotoOffsetY
+                            }
+                        }
+
+                    if (written != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                polaroidPhotoOffsetX = written.first,
+                                polaroidPhotoOffsetY = written.second
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            polaroidPhotoOffsetX = normalizedOffsetX,
-                            polaroidPhotoOffsetY = normalizedOffsetY
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -2947,20 +3118,29 @@ class DetailViewModel @Inject constructor(
         tapedFilmPhotoOffsetSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardTapedFilmPhotoOffset(
-                                id = currentPostcard.id,
-                                tapedFilmPhotoOffsetX = normalizedOffsetX,
-                                tapedFilmPhotoOffsetY = normalizedOffsetY
+                    val written =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latest =
+                                    _postcard.value
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardTapedFilmPhotoOffset(
+                                        id = currentPostcard.id,
+                                        tapedFilmPhotoOffsetX = latest.tapedFilmPhotoOffsetX,
+                                        tapedFilmPhotoOffsetY = latest.tapedFilmPhotoOffsetY
+                                    )
+                                latest.tapedFilmPhotoOffsetX to latest.tapedFilmPhotoOffsetY
+                            }
+                        }
+
+                    if (written != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                tapedFilmPhotoOffsetX = written.first,
+                                tapedFilmPhotoOffsetY = written.second
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            tapedFilmPhotoOffsetX = normalizedOffsetX,
-                            tapedFilmPhotoOffsetY = normalizedOffsetY
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -3009,18 +3189,27 @@ class DetailViewModel @Inject constructor(
         stampPhotoZoomSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardStampPhotoZoom(
-                                id = currentPostcard.id,
-                                stampPhotoZoom = normalizedZoom
+                    val writtenZoom =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestZoom =
+                                    _postcard.value?.stampPhotoZoom
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardStampPhotoZoom(
+                                        id = currentPostcard.id,
+                                        stampPhotoZoom = latestZoom
+                                    )
+                                latestZoom
+                            }
+                        }
+
+                    if (writtenZoom != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                stampPhotoZoom = writtenZoom
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            stampPhotoZoom = normalizedZoom
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -3068,18 +3257,27 @@ class DetailViewModel @Inject constructor(
         polaroidPhotoZoomSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardPolaroidPhotoZoom(
-                                id = currentPostcard.id,
-                                polaroidPhotoZoom = normalizedZoom
+                    val writtenZoom =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestZoom =
+                                    _postcard.value?.polaroidPhotoZoom
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardPolaroidPhotoZoom(
+                                        id = currentPostcard.id,
+                                        polaroidPhotoZoom = latestZoom
+                                    )
+                                latestZoom
+                            }
+                        }
+
+                    if (writtenZoom != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                polaroidPhotoZoom = writtenZoom
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            polaroidPhotoZoom = normalizedZoom
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -3127,18 +3325,27 @@ class DetailViewModel @Inject constructor(
         tapedFilmPhotoZoomSaveJob =
             viewModelScope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
-                        repository
-                            .updatePostcardTapedFilmPhotoZoom(
-                                id = currentPostcard.id,
-                                tapedFilmPhotoZoom = normalizedZoom
+                    val writtenZoom =
+                        withContext(Dispatchers.IO) {
+                            styleWriteMutex.withLock {
+                                val latestZoom =
+                                    _postcard.value?.tapedFilmPhotoZoom
+                                        ?: return@withLock null
+                                repository
+                                    .updatePostcardTapedFilmPhotoZoom(
+                                        id = currentPostcard.id,
+                                        tapedFilmPhotoZoom = latestZoom
+                                    )
+                                latestZoom
+                            }
+                        }
+
+                    if (writtenZoom != null) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                tapedFilmPhotoZoom = writtenZoom
                             )
                     }
-
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            tapedFilmPhotoZoom = normalizedZoom
-                        )
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
@@ -3160,38 +3367,66 @@ class DetailViewModel @Inject constructor(
             _postcard.value
                 ?: return
 
+        val previousBackgroundColorArgb =
+            currentPostcard.backgroundColorArgb
         val previousBackgroundPath =
             currentPostcard.backgroundImagePath
+
+        _postcard.value =
+            currentPostcard.copy(
+                backgroundColorArgb = backgroundColorArgb,
+                backgroundImagePath = null
+            )
 
         _backgroundUpdateState.value =
             BackgroundUpdateState.Saving
 
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    repository.updatePostcardBackground(
-                        id = currentPostcard.id,
-                        backgroundColorArgb =
-                            backgroundColorArgb,
-                        backgroundImagePath = null
-                    )
+                val writtenColorArgb =
+                    withContext(Dispatchers.IO) {
+                        styleWriteMutex.withLock {
+                            // 템플릿과 경합하는 건 backgroundColorArgb뿐이라
+                            // 그 값만 이 순간 _postcard.value에서 다시 읽는다.
+                            // backgroundImagePath는 이 함수의 고유 목적(배경
+                            // 이미지를 지우고 단색으로 전환)이라 항상 null로
+                            // 쓴다 — 템플릿은 backgroundImagePath를 다루지
+                            // 않으므로 여기서 다시 읽을 대상이 아니다.
+                            val latestColorArgb =
+                                _postcard.value?.backgroundColorArgb
+                                    ?: return@withLock null
+                            repository.updatePostcardBackground(
+                                id = currentPostcard.id,
+                                backgroundColorArgb = latestColorArgb,
+                                backgroundImagePath = null
+                            )
 
-                    BackgroundImageStorage
-                        .deleteBackgroundImage(
-                            previousBackgroundPath
+                            BackgroundImageStorage
+                                .deleteBackgroundImage(
+                                    previousBackgroundPath
+                                )
+
+                            latestColorArgb
+                        }
+                    }
+
+                if (writtenColorArgb != null) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backgroundColorArgb = writtenColorArgb
                         )
                 }
 
-                _postcard.value =
-                    currentPostcard.copy(
-                        backgroundColorArgb =
-                            backgroundColorArgb,
-                        backgroundImagePath = null
-                    )
-
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Success
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
+                _postcard.value =
+                    _postcard.value?.copy(
+                        backgroundColorArgb = previousBackgroundColorArgb,
+                        backgroundImagePath = previousBackgroundPath
+                    )
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Error(
                         exception.message
@@ -3256,29 +3491,50 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        val previousPattern =
+            currentPostcard.backgroundPattern
+
+        _postcard.value =
+            currentPostcard.copy(
+                backgroundPattern = normalizedPattern
+            )
+
         _backgroundUpdateState.value =
             BackgroundUpdateState.Saving
 
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    repository
-                        .updatePostcardBackgroundPattern(
-                            id = currentPostcard.id,
-                            backgroundPattern =
-                                normalizedPattern
+                val writtenPattern =
+                    withContext(Dispatchers.IO) {
+                        styleWriteMutex.withLock {
+                            val latestPattern =
+                                _postcard.value?.backgroundPattern
+                                    ?: return@withLock null
+                            repository
+                                .updatePostcardBackgroundPattern(
+                                    id = currentPostcard.id,
+                                    backgroundPattern = latestPattern
+                                )
+                            latestPattern
+                        }
+                    }
+
+                if (writtenPattern != null) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backgroundPattern = writtenPattern
                         )
                 }
 
-                _postcard.value =
-                    currentPostcard.copy(
-                        backgroundPattern =
-                            normalizedPattern
-                    )
-
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Success
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
+                _postcard.value =
+                    _postcard.value?.copy(
+                        backgroundPattern = previousPattern
+                    )
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Error(
                         exception.message
@@ -3316,14 +3572,23 @@ class DetailViewModel @Inject constructor(
                     }
 
                 withContext(Dispatchers.IO) {
-                    repository.updatePostcardBackground(
-                        id = currentPostcard.id,
-                        backgroundColorArgb =
-                            currentPostcard
-                                .backgroundColorArgb,
-                        backgroundImagePath =
-                            newBackgroundPath
-                    )
+                    styleWriteMutex.withLock {
+                        // backgroundColorArgb는 템플릿이 다루는 필드라
+                        // 호출 당시 캡처한 currentPostcard가 아니라 이
+                        // 순간의 _postcard.value에서 다시 읽는다.
+                        // backgroundImagePath는 이 함수 고유의 값이라
+                        // 그대로 newBackgroundPath를 쓴다.
+                        val latestColorArgb =
+                            _postcard.value?.backgroundColorArgb
+                                ?: currentPostcard.backgroundColorArgb
+                        repository.updatePostcardBackground(
+                            id = currentPostcard.id,
+                            backgroundColorArgb =
+                                latestColorArgb,
+                            backgroundImagePath =
+                                newBackgroundPath
+                        )
+                    }
 
                     if (
                         previousBackgroundPath !=
@@ -3337,13 +3602,15 @@ class DetailViewModel @Inject constructor(
                 }
 
                 _postcard.value =
-                    currentPostcard.copy(
+                    _postcard.value?.copy(
                         backgroundImagePath =
                             newBackgroundPath
                     )
 
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Success
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
                 withContext(Dispatchers.IO) {
                     BackgroundImageStorage
@@ -3375,13 +3642,17 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    repository.updatePostcardBackground(
-                        id = currentPostcard.id,
-                        backgroundColorArgb =
-                            currentPostcard
-                                .backgroundColorArgb,
-                        backgroundImagePath = null
-                    )
+                    styleWriteMutex.withLock {
+                        val latestColorArgb =
+                            _postcard.value?.backgroundColorArgb
+                                ?: currentPostcard.backgroundColorArgb
+                        repository.updatePostcardBackground(
+                            id = currentPostcard.id,
+                            backgroundColorArgb =
+                                latestColorArgb,
+                            backgroundImagePath = null
+                        )
+                    }
 
                     BackgroundImageStorage
                         .deleteBackgroundImage(
@@ -3390,12 +3661,14 @@ class DetailViewModel @Inject constructor(
                 }
 
                 _postcard.value =
-                    currentPostcard.copy(
+                    _postcard.value?.copy(
                         backgroundImagePath = null
                     )
 
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Success
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Error(
