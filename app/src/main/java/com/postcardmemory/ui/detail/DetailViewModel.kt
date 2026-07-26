@@ -3369,13 +3369,10 @@ class DetailViewModel @Inject constructor(
 
         val previousBackgroundColorArgb =
             currentPostcard.backgroundColorArgb
-        val previousBackgroundPath =
-            currentPostcard.backgroundImagePath
 
         _postcard.value =
             currentPostcard.copy(
-                backgroundColorArgb = backgroundColorArgb,
-                backgroundImagePath = null
+                backgroundColorArgb = backgroundColorArgb
             )
 
         _backgroundUpdateState.value =
@@ -3383,50 +3380,53 @@ class DetailViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val writtenColorArgb =
-                    withContext(Dispatchers.IO) {
-                        styleWriteMutex.withLock {
-                            // 템플릿과 경합하는 건 backgroundColorArgb뿐이라
-                            // 그 값만 이 순간 _postcard.value에서 다시 읽는다.
-                            // backgroundImagePath는 이 함수의 고유 목적(배경
-                            // 이미지를 지우고 단색으로 전환)이라 항상 null로
-                            // 쓴다 — 템플릿은 backgroundImagePath를 다루지
-                            // 않으므로 여기서 다시 읽을 대상이 아니다.
-                            val latestColorArgb =
-                                _postcard.value?.backgroundColorArgb
-                                    ?: return@withLock null
-                            repository.updatePostcardBackground(
-                                id = currentPostcard.id,
-                                backgroundColorArgb = latestColorArgb,
-                                backgroundImagePath = null
-                            )
-
-                            BackgroundImageStorage
-                                .deleteBackgroundImage(
-                                    previousBackgroundPath
-                                )
-
-                            latestColorArgb
-                        }
-                    }
-
-                if (writtenColorArgb != null) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            backgroundColorArgb = writtenColorArgb
+                withContext(Dispatchers.IO) {
+                    styleWriteMutex.withLock {
+                        // updatePostcardBackground는 색과 이미지 경로를 한
+                        // 쿼리로 함께 UPDATE하므로, 이 저장이 바꾸려는 값이
+                        // 색뿐이더라도 경로까지 이 순간의 _postcard.value에서
+                        // 다시 읽어 그대로 되써야 한다. 호출 당시 캡처한 값이나
+                        // 고정값(null)을 쓰면 그 사이에 반영된 더 최신 경로를
+                        // 오래된 저장이 덮어쓰게 된다.
+                        val latest =
+                            _postcard.value
+                                ?: return@withLock
+                        repository.updatePostcardBackground(
+                            id = currentPostcard.id,
+                            backgroundColorArgb =
+                                latest.backgroundColorArgb,
+                            backgroundImagePath =
+                                latest.backgroundImagePath
                         )
+                    }
                 }
 
+                // 커밋한 값은 정의상 커밋 시점의 화면 값이라 여기서 화면에
+                // 되쓸 것이 없다. 그 사이 화면이 달라졌다면 그건 더 최신
+                // 조작이므로 오래된 저장이 되돌리면 안 된다.
+                //
+                // 배경 이미지 파일은 이 함수가 삭제하지 않는다 — 배경색 변경은
+                // 이미지 파일의 수명주기를 소유하지 않으며, 호출 당시 캡처한
+                // 경로만 보고 지우면 그 사이 다시 참조된 파일을 지울 수 있다.
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Success
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _postcard.value =
-                    _postcard.value?.copy(
-                        backgroundColorArgb = previousBackgroundColorArgb,
-                        backgroundImagePath = previousBackgroundPath
-                    )
+                // 실패한 저장이 되돌릴 수 있는 건 자기가 낙관적으로 쓴 배경색뿐이다.
+                // 이미 더 최신 배경색 조작이 반영됐다면 그 상태는 건드리지 않고,
+                // backgroundImagePath도 이 저장의 소관이 아니므로 손대지 않는다.
+                if (
+                    _postcard.value?.backgroundColorArgb ==
+                    backgroundColorArgb
+                ) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backgroundColorArgb =
+                                previousBackgroundColorArgb
+                        )
+                }
+
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Error(
                         exception.message
