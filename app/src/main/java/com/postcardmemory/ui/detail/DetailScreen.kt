@@ -1049,7 +1049,7 @@ fun DetailScreen(
     val userTemplates by viewModel.userTemplates.collectAsState()
     val templateSaveState by viewModel.templateSaveState.collectAsState()
     val templateManageState by viewModel.templateManageState.collectAsState()
-    var lastAppliedTemplateId by remember { mutableStateOf<String?>(null) }
+    val lastAppliedTemplateId by viewModel.lastAppliedTemplateId.collectAsState()
     val effectiveSelectedTemplateId =
         resolveEffectiveSelectedTemplateId(
             lastAppliedTemplateId = lastAppliedTemplateId,
@@ -3059,7 +3059,6 @@ fun DetailScreen(
                             selectedTemplateId = effectiveSelectedTemplateId,
                             onSelect = { template ->
                                 viewModel.applyTemplate(template)
-                                lastAppliedTemplateId = template.id
                             },
                             enabled = controlsEnabled,
                             canUndo = canUndoTemplateStyle,
@@ -3080,7 +3079,6 @@ fun DetailScreen(
                             selectedTemplateId = effectiveSelectedTemplateId,
                             onSelect = { template ->
                                 viewModel.applyTemplate(template)
-                                lastAppliedTemplateId = template.id
                             },
                             enabled = controlsEnabled,
                             modifier = Modifier.fillMaxWidth(),

@@ -1377,15 +1377,33 @@ class DetailViewModel @Inject constructor(
         updateTemplateStyleHistoryAvailability()
     }
 
+    /**
+     * 현재 "선택됨"으로 표시할 템플릿 id. DetailScreen의 Compose 로컬 상태가
+     * 아니라 여기서 관리하는 이유: 저장 실패 롤백 시 스타일·Undo/Redo 스택과
+     * 같은 트랜잭션(같은 onSaveFailed 콜백) 안에서 함께 되돌려야, 실패한
+     * 적용이 선택된 것처럼 보이거나 오래된 실패가 그 사이에 사용자가 고른
+     * 최신 선택을 덮어쓰는 일이 없다.
+     */
+    private val _lastAppliedTemplateId =
+        MutableStateFlow<String?>(null)
+
+    val lastAppliedTemplateId: StateFlow<String?> =
+        _lastAppliedTemplateId
+
     private fun applyTemplateApplicationSnapshot(
-        snapshot: TemplateApplicationSnapshot
+        snapshot: TemplateApplicationSnapshot,
+        onSaveFailed: () -> Unit
     ) {
         val currentPostcard =
             _postcard.value ?: return
+        val previousStyle =
+            currentPostcard.toTemplateStyle()
 
         persistTemplateStyle(
             postcardId = currentPostcard.id,
-            style = snapshot.style
+            style = snapshot.style,
+            previousStyle = previousStyle,
+            onSaveFailed = onSaveFailed
         )
 
         if (snapshot.seals != null) {
@@ -1401,50 +1419,92 @@ class DetailViewModel @Inject constructor(
     }
 
     fun undoTemplateStyleChange() {
+        if (templateStyleUndoStack.isEmpty()) return
+        val currentPostcard =
+            _postcard.value ?: return
+
+        val undoStackBeforeExecution =
+            ArrayDeque(templateStyleUndoStack)
+        val redoStackBeforeExecution =
+            ArrayDeque(templateStyleRedoStack)
+        val sealsBeforeExecution =
+            _photoSeals.value
+
         val previous =
             templateStyleUndoStack.removeLastOrNull() ?: return
-        val currentPostcard =
-            _postcard.value
 
-        if (currentPostcard != null) {
-            templateStyleRedoStack.addLast(
-                TemplateApplicationSnapshot(
-                    style = currentPostcard.toTemplateStyle(),
-                    seals =
-                        if (previous.seals != null) {
-                            _photoSeals.value
-                        } else {
-                            null
-                        }
-                )
+        templateStyleRedoStack.addLast(
+            TemplateApplicationSnapshot(
+                style = currentPostcard.toTemplateStyle(),
+                seals =
+                    if (previous.seals != null) {
+                        _photoSeals.value
+                    } else {
+                        null
+                    }
             )
-        }
+        )
 
-        applyTemplateApplicationSnapshot(previous)
+        applyTemplateApplicationSnapshot(
+            snapshot = previous,
+            onSaveFailed = {
+                templateStyleUndoStack.clear()
+                templateStyleUndoStack.addAll(undoStackBeforeExecution)
+                templateStyleRedoStack.clear()
+                templateStyleRedoStack.addAll(redoStackBeforeExecution)
+                updateTemplateStyleHistoryAvailability()
+
+                if (previous.seals != null) {
+                    _photoSeals.value = sealsBeforeExecution
+                    scheduleDraftAutosave()
+                }
+            }
+        )
         updateTemplateStyleHistoryAvailability()
     }
 
     fun redoTemplateStyleChange() {
+        if (templateStyleRedoStack.isEmpty()) return
+        val currentPostcard =
+            _postcard.value ?: return
+
+        val undoStackBeforeExecution =
+            ArrayDeque(templateStyleUndoStack)
+        val redoStackBeforeExecution =
+            ArrayDeque(templateStyleRedoStack)
+        val sealsBeforeExecution =
+            _photoSeals.value
+
         val next =
             templateStyleRedoStack.removeLastOrNull() ?: return
-        val currentPostcard =
-            _postcard.value
 
-        if (currentPostcard != null) {
-            templateStyleUndoStack.addLast(
-                TemplateApplicationSnapshot(
-                    style = currentPostcard.toTemplateStyle(),
-                    seals =
-                        if (next.seals != null) {
-                            _photoSeals.value
-                        } else {
-                            null
-                        }
-                )
+        templateStyleUndoStack.addLast(
+            TemplateApplicationSnapshot(
+                style = currentPostcard.toTemplateStyle(),
+                seals =
+                    if (next.seals != null) {
+                        _photoSeals.value
+                    } else {
+                        null
+                    }
             )
-        }
+        )
 
-        applyTemplateApplicationSnapshot(next)
+        applyTemplateApplicationSnapshot(
+            snapshot = next,
+            onSaveFailed = {
+                templateStyleUndoStack.clear()
+                templateStyleUndoStack.addAll(undoStackBeforeExecution)
+                templateStyleRedoStack.clear()
+                templateStyleRedoStack.addAll(redoStackBeforeExecution)
+                updateTemplateStyleHistoryAvailability()
+
+                if (next.seals != null) {
+                    _photoSeals.value = sealsBeforeExecution
+                    scheduleDraftAutosave()
+                }
+            }
+        )
         updateTemplateStyleHistoryAvailability()
     }
 
@@ -1463,11 +1523,21 @@ class DetailViewModel @Inject constructor(
 
         val willAddSeal =
             template.seal != null && _photoSeals.value.isEmpty()
+        val previousStyle =
+            currentPostcard.toTemplateStyle()
+        val previousSeals =
+            _photoSeals.value
+        val previousTemplateId =
+            _lastAppliedTemplateId.value
+        val undoStackBeforeExecution =
+            ArrayDeque(templateStyleUndoStack)
+        val redoStackBeforeExecution =
+            ArrayDeque(templateStyleRedoStack)
 
         templateStyleUndoStack.addLast(
             TemplateApplicationSnapshot(
-                style = currentPostcard.toTemplateStyle(),
-                seals = if (willAddSeal) _photoSeals.value else null
+                style = previousStyle,
+                seals = if (willAddSeal) previousSeals else null
             )
         )
         if (templateStyleUndoStack.size > TEMPLATE_STYLE_HISTORY_LIMIT) {
@@ -1475,6 +1545,8 @@ class DetailViewModel @Inject constructor(
         }
         templateStyleRedoStack.clear()
         updateTemplateStyleHistoryAvailability()
+
+        _lastAppliedTemplateId.value = template.id
 
         if (willAddSeal) {
             val templateSeal = template.seal!!
@@ -1491,7 +1563,22 @@ class DetailViewModel @Inject constructor(
 
         persistTemplateStyle(
             postcardId = currentPostcard.id,
-            style = template.style
+            style = template.style,
+            previousStyle = previousStyle,
+            onSaveFailed = {
+                templateStyleUndoStack.clear()
+                templateStyleUndoStack.addAll(undoStackBeforeExecution)
+                templateStyleRedoStack.clear()
+                templateStyleRedoStack.addAll(redoStackBeforeExecution)
+                updateTemplateStyleHistoryAvailability()
+
+                _lastAppliedTemplateId.value = previousTemplateId
+
+                if (willAddSeal) {
+                    _photoSeals.value = previousSeals
+                    scheduleDraftAutosave()
+                }
+            }
         )
     }
 
@@ -1503,41 +1590,62 @@ class DetailViewModel @Inject constructor(
      * 덮어써질 수 있다. _postcard.value는 항상 동기적으로 최신값이므로
      * 화면에는 영향이 없지만, Room에 저장되는 값이 화면과 달라져 앱을 다시
      * 켰을 때 이전 템플릿으로 되돌아가 보일 수 있었다.
+     *
+     * 취소(templateStyleSaveJob?.cancel())는 슬라이더 저장 함수들과 동일하게
+     * CancellationException을 먼저 rethrow해서 실패로 취급하지 않는다 — 이
+     * 덕분에 A→B→C 연속 적용에서 취소된 이전 저장은 자기 catch(Exception)
+     * 블록에 도달하지 못해 최신 상태를 롤백할 수 없다(오래된 작업의 롤백
+     * 방지는 별도 세대 번호 없이 이 취소·rethrow 구조만으로 보장된다).
      */
     private var templateStyleSaveJob: Job? = null
 
     private fun persistTemplateStyle(
         postcardId: Long,
-        style: PostcardTemplateStyle
+        style: PostcardTemplateStyle,
+        previousStyle: PostcardTemplateStyle,
+        onSaveFailed: () -> Unit
     ) {
         _postcard.value =
             _postcard.value?.applyTemplateStyle(style)
 
         templateStyleSaveJob?.cancel()
-        templateStyleSaveJob = viewModelScope.launch(Dispatchers.IO) {
-            repository.updatePostcardTemplateStyle(
-                id = postcardId,
-                layoutStyle = style.layoutStyle,
-                backgroundColorArgb = style.backgroundColorArgb,
-                backgroundPattern = style.backgroundPattern,
-                backgroundPatternDensity = style.backgroundPatternDensity,
-                messageFont = style.messageFont,
-                dateFormat = style.dateFormat,
-                messageTextScale = style.messageTextScale,
-                dateTextScale = style.dateTextScale,
-                photoEdgeBlur = style.photoEdgeBlur,
-                stampPhotoScale = style.stampPhotoScale,
-                stampPhotoOffsetX = style.stampPhotoOffsetX,
-                stampPhotoOffsetY = style.stampPhotoOffsetY,
-                stampPhotoZoom = style.stampPhotoZoom,
-                polaroidPhotoScale = style.polaroidPhotoScale,
-                polaroidPhotoOffsetX = style.polaroidPhotoOffsetX,
-                polaroidPhotoOffsetY = style.polaroidPhotoOffsetY,
-                polaroidPhotoZoom = style.polaroidPhotoZoom,
-                tapedFilmPhotoOffsetX = style.tapedFilmPhotoOffsetX,
-                tapedFilmPhotoOffsetY = style.tapedFilmPhotoOffsetY,
-                tapedFilmPhotoZoom = style.tapedFilmPhotoZoom
-            )
+        templateStyleSaveJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.updatePostcardTemplateStyle(
+                        id = postcardId,
+                        layoutStyle = style.layoutStyle,
+                        backgroundColorArgb = style.backgroundColorArgb,
+                        backgroundPattern = style.backgroundPattern,
+                        backgroundPatternDensity = style.backgroundPatternDensity,
+                        messageFont = style.messageFont,
+                        dateFormat = style.dateFormat,
+                        messageTextScale = style.messageTextScale,
+                        dateTextScale = style.dateTextScale,
+                        photoEdgeBlur = style.photoEdgeBlur,
+                        stampPhotoScale = style.stampPhotoScale,
+                        stampPhotoOffsetX = style.stampPhotoOffsetX,
+                        stampPhotoOffsetY = style.stampPhotoOffsetY,
+                        stampPhotoZoom = style.stampPhotoZoom,
+                        polaroidPhotoScale = style.polaroidPhotoScale,
+                        polaroidPhotoOffsetX = style.polaroidPhotoOffsetX,
+                        polaroidPhotoOffsetY = style.polaroidPhotoOffsetY,
+                        polaroidPhotoZoom = style.polaroidPhotoZoom,
+                        tapedFilmPhotoOffsetX = style.tapedFilmPhotoOffsetX,
+                        tapedFilmPhotoOffsetY = style.tapedFilmPhotoOffsetY,
+                        tapedFilmPhotoZoom = style.tapedFilmPhotoZoom
+                    )
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                _postcard.value =
+                    _postcard.value?.applyTemplateStyle(previousStyle)
+                onSaveFailed()
+                _textScaleSaveErrors.trySend(
+                    "템플릿 스타일을 저장하지 못했어. 이전 상태로 되돌렸어."
+                )
+            }
         }
     }
 
@@ -1927,6 +2035,7 @@ class DetailViewModel @Inject constructor(
     ) {
         clearPhotoTransformHistory()
         clearTemplateStyleHistory()
+        _lastAppliedTemplateId.value = null
         loadUserTemplates()
 
         viewModelScope.launch {
