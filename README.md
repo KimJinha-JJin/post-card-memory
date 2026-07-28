@@ -148,7 +148,6 @@ app/src/main/java/com/postcardmemory/
 │   ├── PostcardRenderSpec.kt    ← 엽서 미리보기 렌더링
 │   ├── PostcardImageExporter.kt ← 엽서 이미지 내보내기
 │   ├── PostcardImageStorage.kt
-│   ├── BackgroundImageStorage.kt
 │   └── PhotoStickerImageStorage.kt
 │
 └── MainActivity.kt

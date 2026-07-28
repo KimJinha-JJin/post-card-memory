@@ -36,8 +36,8 @@ import org.junit.Test
  *   복귀하기까지의 구간. 이 사이에 사용자가 색을 한 번 더 고를 수 있다.
  *
  * 참고: 현재 앱에서 backgroundImagePath를 non-null로 만드는 UI 경로는 없다
- * (updateBackgroundImage/removeBackgroundImage는 어디에서도 호출되지 않는
- * 미사용 코드다). 아래 saveBackgroundImagePath는 "경로 컬럼에 쓰는 다른
+ * (호출자가 없던 updateBackgroundImage/removeBackgroundImage는 dead code
+ * 정리로 제거됐다). 아래 saveBackgroundImagePath는 "경로 컬럼에 쓰는 다른
  * 저장이 존재할 때" updateBackgroundColor가 그 값을 보존하는지 확인하기
  * 위한 대역이며, 오늘 그런 호출자가 있다고 주장하는 것이 아니다.
  */
