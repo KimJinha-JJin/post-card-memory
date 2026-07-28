@@ -30,7 +30,9 @@ class PostcardImageExporterShareCacheCleanupTest {
     @Test
     fun cleanup_neverDeletesCurrentFile_evenIfItWouldBeExpiredByAge() {
         val shareDir = tempFolder.newFolder("shared_postcards")
-        val now = 10_000_000L
+        // now는 ageMillis보다 충분히 커서 setLastModified에 음수가 들어가지 않으면서도,
+        // (now - ageMillis)가 여전히 ttlMillis(1_000L)를 훨씬 넘도록 잡는다.
+        val now = 2_000_000_000L
         // setLastModified로 일부러 아주 오래된 것처럼 보이게 해도 currentFileName이면 지우면 안 된다.
         val current = fileWithAge(shareDir, "current.png", ageMillis = 999_999_999L, now = now)
 
