@@ -1341,8 +1341,23 @@ fun DetailScreen(
         viewModel.loadStickerSealStateAndAutoRestoreDraft(postcardId)
     }
 
+    val exitScope = rememberCoroutineScope()
+    // 슬라이더 계열 저장과 템플릿 적용은 Saving 상태가 없어 controlsEnabled로
+    // 뒤로 가기를 막지 못한다. 나가기 전 아직 끝나지 않은 저장을 기다려야
+    // ViewModelStore가 clear()되기 전에 마지막 값이 Room에 반영된다.
+    val navigateBackAfterPendingStyleSaves: () -> Unit = {
+        exitScope.launch {
+            viewModel.awaitPendingStyleSaves()
+            onNavigateBack()
+        }
+    }
+
     BackHandler(enabled = isFocusPreviewMode) {
         isFocusPreviewMode = false
+    }
+
+    BackHandler(enabled = !isFocusPreviewMode) {
+        navigateBackAfterPendingStyleSaves()
     }
 
     LaunchedEffect(deleteState) {
@@ -4076,7 +4091,7 @@ fun DetailScreen(
                     Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = onNavigateBack,
+                    onClick = navigateBackAfterPendingStyleSaves,
                     enabled = controlsEnabled
                 ) {
                     Icon(

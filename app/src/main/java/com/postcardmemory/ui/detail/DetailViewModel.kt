@@ -42,11 +42,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "DetailViewModel"
 private const val SEAL_HISTORY_LIMIT = 50
@@ -56,6 +58,7 @@ private const val TEMPLATE_STYLE_HISTORY_LIMIT = 50
 private const val MAX_TEMPLATE_NAME_LENGTH = 20
 private const val TEMPLATE_PREVIEW_SIZE = 320
 private const val DRAFT_AUTOSAVE_DEBOUNCE_MS = 900L
+private const val PENDING_STYLE_SAVE_TIMEOUT_MS = 2_000L
 
 sealed interface DraftSaveStatus {
 
@@ -3546,6 +3549,44 @@ class DetailViewModel @Inject constructor(
     fun resetBackgroundUpdateState() {
         _backgroundUpdateState.value =
             BackgroundUpdateState.Idle
+    }
+
+    /**
+     * 슬라이더 계열 저장(saveStampPhotoScale 등)과 템플릿 적용(persistTemplateStyle)은
+     * DetailScreen의 controlsEnabled가 확인하는 Saving 상태가 없어, 저장이 실제
+     * DAO 쓰기에 닿기 전에도 뒤로 가기가 가능하다. 화면 이탈 직전 이 함수로
+     * 아직 끝나지 않은 저장들이 완료되기를 기다린 뒤 navigation을 진행해야,
+     * ViewModelStore가 clear()되어 viewModelScope가 취소되기 전에 마지막 값이
+     * Room에 반영된다. 각 Job은 실패를 자체적으로 롤백하고 CancellationException을
+     * rethrow하므로 여기서는 완료 여부만 기다리면 된다(join은 예외를 전파하지
+     * 않는다). 혹시 모를 비정상적 지연으로 navigation이 무기한 멈추지 않도록
+     * 상한 시간을 둔다.
+     */
+    suspend fun awaitPendingStyleSaves() {
+        val pendingJobs =
+            listOfNotNull(
+                messageTextScaleSaveJob,
+                dateTextScaleSaveJob,
+                backgroundPatternDensitySaveJob,
+                stampPhotoScaleSaveJob,
+                polaroidPhotoScaleSaveJob,
+                photoEdgeBlurSaveJob,
+                stampPhotoOffsetSaveJob,
+                polaroidPhotoOffsetSaveJob,
+                tapedFilmPhotoOffsetSaveJob,
+                stampPhotoZoomSaveJob,
+                polaroidPhotoZoomSaveJob,
+                tapedFilmPhotoZoomSaveJob,
+                templateStyleSaveJob
+            ).filter { it.isActive }
+
+        if (pendingJobs.isEmpty()) {
+            return
+        }
+
+        withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS) {
+            pendingJobs.joinAll()
+        }
     }
 
     /**
