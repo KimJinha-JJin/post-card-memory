@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -332,6 +332,34 @@ abstract class PostcardDatabase : RoomDatabase() {
                         """
                         ALTER TABLE postcards
                         ADD COLUMN tapedFilmPhotoZoom REAL NOT NULL DEFAULT 1.0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        /**
+         * 5→6 Migration 도입 당시(STANDARD/PHOTO_FOCUS/AIRY/MAGAZINE/POLAROID
+         * 5종 레이아웃 시절) 기본값이 'STANDARD'였고, 이후 Stamp/Polaroid
+         * 2종으로 통합되며(0d92834) Kotlin 쪽 기본값만 'STAMP'로 바뀌었을 뿐
+         * 이미 저장된 행을 정규화하는 Migration은 그때 추가되지 않았다.
+         * updateLayoutStyle()이 한 번도 다시 호출되지 않은 오래된 엽서는
+         * 지금도 문자 그대로 'STANDARD' 등 옛 값을 들고 있을 수 있다 —
+         * 현재 유효한 4개 값(STAMP/POLAROID/TAPED_FILM/LETTER) 밖의 값을
+         * normalizeLayoutStyle()과 동일한 기준으로 STAMP로 정규화한다.
+         */
+        val MIGRATION_14_15 =
+            object : Migration(
+                startVersion = 14,
+                endVersion = 15
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        UPDATE postcards
+                        SET layoutStyle = 'STAMP'
+                        WHERE layoutStyle NOT IN ('STAMP', 'POLAROID', 'TAPED_FILM', 'LETTER')
                         """.trimIndent()
                     )
                 }
