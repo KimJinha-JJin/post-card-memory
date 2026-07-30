@@ -2385,6 +2385,13 @@ fun DetailScreen(
                                                     viewModel
                                                         .deleteStickerCacheUri(uri)
                                                 }
+                                                toDelete?.originalUri?.let { uri ->
+                                                    viewModel
+                                                        .deleteStickerOriginalIfUnreferenced(
+                                                            uri,
+                                                            remaining
+                                                        )
+                                                }
                                                 stickerSizes =
                                                     stickerSizes - sticker.id
                                                 if (selectedStickerId == sticker.id) {

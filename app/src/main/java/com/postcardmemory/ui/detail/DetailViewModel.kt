@@ -424,6 +424,8 @@ class DetailViewModel @Inject constructor(
 
     private var dateFormatSaveJob: Job? = null
 
+    private var imageUpdateJob: Job? = null
+
     private var messageUpdateJob: Job? = null
 
     private var confirmSaveJob: Job? = null
@@ -1170,6 +1172,38 @@ class DetailViewModel @Inject constructor(
                     uri = uri,
                     remainingStickers = _photoStickers.value
                 )
+            }
+        }
+    }
+
+    /**
+     * sweepStickerCleanupCandidates()와 같은 판정 로직을 쓰지만, 화면을
+     * 완전히 나가기 직전(awaitPendingStyleSaves) 호출용으로 실제 파일 삭제를
+     * viewModelScope에 새 Job으로 던지지 않고 이 자리에서 끝까지 기다린다.
+     * onCleared() 시점에는 viewModelScope가 이미 취소된 뒤라 그 안에서
+     * launch한 정리 작업은 시작도 못 하고 취소되므로, sticker_originals/
+     * 아래 아직 정리되지 않은 원본 파일이 영구적으로 남는다 — 그래서
+     * onCleared()가 아니라 scope가 살아있는 이 시점에 직접 기다려야 한다.
+     */
+    private suspend fun awaitStickerCleanupSweep() {
+        val stillPending =
+            stickerCleanupCandidates.toList()
+
+        stillPending.forEach { uri ->
+            if (!isStickerFileStillReferenced(uri)) {
+                stickerCleanupCandidates.remove(uri)
+
+                withContext(Dispatchers.IO) {
+                    uriToLocalStickerFile(uri)
+                        ?.let { file -> deleteStickerCacheFile(file) }
+
+                    PhotoStickerImageStorage
+                        .deleteOriginalIfUnreferenced(
+                            context = context,
+                            deletedUri = uri,
+                            remainingStickers = _photoStickers.value
+                        )
+                }
             }
         }
     }
@@ -3656,8 +3690,9 @@ class DetailViewModel @Inject constructor(
     /**
      * 슬라이더 계열 저장(saveStampPhotoScale 등), 배경색·배경 패턴·폰트·
      * 레이아웃·날짜 형식 저장(updateBackgroundColor 등), 템플릿 적용
-     * (persistTemplateStyle), 글귀 저장(updateMessage), 스티커·도장 확정
-     * 저장(saveEditsAndClearDraft), 내 템플릿 저장/이름변경/덮어쓰기는 모두
+     * (persistTemplateStyle), 사진 교체(updatePostcardImage), 글귀 저장
+     * (updateMessage), 스티커·도장 확정 저장(saveEditsAndClearDraft), 내
+     * 템플릿 저장/이름변경/덮어쓰기는 모두
      * DetailScreen의 controlsEnabled가 확인하는 Saving 상태만으로는 뒤로
      * 가기를 막지 못한다 — 아이콘 뒤로 가기 버튼은 enabled=controlsEnabled로
      * 저장 중 클릭을 막지만, 시스템 back(BackHandler)은 이 플래그를 전혀
@@ -3668,6 +3703,11 @@ class DetailViewModel @Inject constructor(
      * 각 Job은 실패를 자체적으로 롤백하고 CancellationException을 rethrow하므로
      * 여기서는 완료 여부만 기다리면 된다(join은 예외를 전파하지 않는다). 혹시
      * 모를 비정상적 지연으로 navigation이 무기한 멈추지 않도록 상한 시간을 둔다.
+     *
+     * 마지막으로 stickerCleanupCandidates도 여기서 함께 정리한다(
+     * awaitStickerCleanupSweep) — onCleared()는 viewModelScope가 이미
+     * 취소된 뒤 호출되므로 그 안에서 정리를 시도하면 아무 파일도 지워지지
+     * 않는다.
      *
      * 내 템플릿 저장/이름변경/덮어쓰기 Job은, 각 다이얼로그의 "취소" 버튼과
      * 바깥 탭 dismiss가 InProgress/Saving 여부와 무관하게 항상 활성화돼
@@ -3698,6 +3738,7 @@ class DetailViewModel @Inject constructor(
                 layoutStyleSaveJob,
                 dateFormatSaveJob,
                 templateStyleSaveJob,
+                imageUpdateJob,
                 messageUpdateJob,
                 confirmSaveJob,
                 userTemplateSaveJob,
@@ -3705,13 +3746,13 @@ class DetailViewModel @Inject constructor(
                 userTemplateOverwriteJob
             ).filter { it.isActive }
 
-        if (pendingJobs.isEmpty()) {
-            return
+        if (pendingJobs.isNotEmpty()) {
+            withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS) {
+                pendingJobs.joinAll()
+            }
         }
 
-        withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS) {
-            pendingJobs.joinAll()
-        }
+        awaitStickerCleanupSweep()
     }
 
     /**
@@ -3743,7 +3784,7 @@ class DetailViewModel @Inject constructor(
         _imageUpdateState.value =
             ImageUpdateState.Saving
 
-        viewModelScope.launch {
+        imageUpdateJob = viewModelScope.launch {
             var newImagePath: String? =
                 null
 
@@ -3771,16 +3812,8 @@ class DetailViewModel @Inject constructor(
 
                 _imageUpdateState.value =
                     ImageUpdateState.Success
-
-                if (previousImagePath != newImagePath) {
-                    withContext(Dispatchers.IO) {
-                        PostcardImageStorage
-                            .deleteIfOwnedByApp(
-                                context = context,
-                                path = previousImagePath
-                            )
-                    }
-                }
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
                 withContext(Dispatchers.IO) {
                     newImagePath
@@ -3799,6 +3832,30 @@ class DetailViewModel @Inject constructor(
                         exception.message
                             ?: "사진을 바꾸지 못했습니다."
                     )
+
+                return@launch
+            }
+
+            // 여기 도달했다는 것은 새 파일 복사와 Room/화면 갱신이 모두
+            // 성공해 새 사진이 이미 확정됐다는 뜻이다. 이후 이전 파일 정리가
+            // 실패하거나 취소돼도 새 파일은 여전히 Room과 화면 상태가 가리키는
+            // 유효한 파일이므로, 위 catch처럼 새 파일을 지우거나 성공 상태를
+            // Error로 되돌리면 안 된다 — 정리 실패는 이전 파일이 남는 누수일
+            // 뿐, "존재하지 않는 파일을 가리키는 깨진 엽서"보다 안전하다.
+            if (previousImagePath != newImagePath) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        PostcardImageStorage
+                            .deleteIfOwnedByApp(
+                                context = context,
+                                path = previousImagePath
+                            )
+                    }
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    // 이전 파일 정리 실패는 파일 누수일 뿐이므로 무시한다.
+                }
             }
         }
     }
@@ -3904,18 +3961,52 @@ class DetailViewModel @Inject constructor(
             StickerBackgroundRemovalState.Idle
     }
 
+    private fun uriToLocalStickerFile(
+        uri: Uri
+    ): File? =
+        uri
+            .takeIf { cachedUri ->
+                cachedUri.scheme == "file"
+            }
+            ?.path
+            ?.let { path ->
+                File(path)
+            }
+
+    private fun deleteStickerCacheFile(
+        file: File
+    ) {
+        val stickerCacheDir =
+            File(
+                context.cacheDir,
+                "photo_stickers"
+            ).canonicalFile
+        val stickerPersistDir =
+            File(
+                context.filesDir,
+                "sticker_bgs"
+            ).canonicalFile
+        val targetFile =
+            file.canonicalFile
+
+        if (
+            targetFile.path.startsWith(
+                stickerCacheDir.path
+            ) ||
+            targetFile.path.startsWith(
+                stickerPersistDir.path
+            )
+        ) {
+            targetFile.delete()
+        }
+    }
+
     fun deleteStickerCacheUri(
         uri: Uri?
     ) {
         val file =
             uri
-                ?.takeIf { cachedUri ->
-                    cachedUri.scheme == "file"
-                }
-                ?.path
-                ?.let { path ->
-                    File(path)
-                }
+                ?.let(::uriToLocalStickerFile)
                 ?: return
 
         if (isStickerFileStillReferenced(uri)) {
@@ -3926,29 +4017,7 @@ class DetailViewModel @Inject constructor(
         stickerCleanupCandidates.remove(uri)
 
         viewModelScope.launch(Dispatchers.IO) {
-            val stickerCacheDir =
-                File(
-                    context.cacheDir,
-                    "photo_stickers"
-                ).canonicalFile
-            val stickerPersistDir =
-                File(
-                    context.filesDir,
-                    "sticker_bgs"
-                ).canonicalFile
-            val targetFile =
-                file.canonicalFile
-
-            if (
-                targetFile.path.startsWith(
-                    stickerCacheDir.path
-                ) ||
-                targetFile.path.startsWith(
-                    stickerPersistDir.path
-                )
-            ) {
-                targetFile.delete()
-            }
+            deleteStickerCacheFile(file)
         }
     }
 
