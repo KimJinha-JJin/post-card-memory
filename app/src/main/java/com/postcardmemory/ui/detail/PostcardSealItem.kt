@@ -48,11 +48,18 @@ fun deserializePostcardSealItem(
     return runCatching {
         val ox = p[2].takeIf { it != "~" }?.toFloat()
         val oy = p[3].takeIf { it != "~" }?.toFloat()
+        // 인식하지 못하는 SealType이면(향후 enum 값이 없어지거나 이름이
+        // 바뀌면) 임의의 다른 도장으로 조용히 대체하지 않고 이 항목만
+        // 버린다 — deserializePhotoStickerItem, PostcardTemplate.
+        // parseTemplateSeal과 동일한 정책(손상된 개별 항목은 건너뛴다).
+        val type =
+            SealType.entries
+                .firstOrNull { it.name == p[1] }
+                ?: return null
+
         PostcardSealItem(
             id = p[0],
-            type = SealType.entries
-                .firstOrNull { it.name == p[1] }
-                ?: SealType.CIRCLE_POSTMARK,
+            type = type,
             offset = if (ox != null && oy != null) {
                 Offset(ox, oy)
             } else {
