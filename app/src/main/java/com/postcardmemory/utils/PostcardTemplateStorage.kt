@@ -136,20 +136,17 @@ object PostcardTemplateStorage {
         }
     }
 
-    fun deleteTemplate(context: Context, templateId: String) {
+    fun deleteTemplate(context: Context, templateId: String): Boolean =
         deleteTemplate(context.filesDir, templateId)
-    }
 
     /** 템플릿 데이터 파일과 미리보기 파일만 지운다. 다른 템플릿·엽서 파일은 건드리지 않는다. */
-    internal fun deleteTemplate(filesDir: File, templateId: String) {
+    internal fun deleteTemplate(filesDir: File, templateId: String): Boolean {
         val file = templateFile(filesDir, templateId)
-        if (file.exists()) {
-            file.delete()
-        }
+        val fileDeleted = !file.exists() || file.delete()
 
         val preview = previewFile(filesDir, templateId)
-        if (preview.exists()) {
-            preview.delete()
-        }
+        val previewDeleted = !preview.exists() || preview.delete()
+
+        return fileDeleted && previewDeleted
     }
 }

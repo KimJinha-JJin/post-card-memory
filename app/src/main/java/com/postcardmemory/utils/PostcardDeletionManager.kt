@@ -143,7 +143,7 @@ internal fun cleanupPostcardOwnedAssets(
     val draftCleanupOk =
         runCatching {
             PostcardDraftStorage.deleteDraft(filesDir, postcard.id)
-        }.isSuccess
+        }.getOrDefault(false)
 
     when {
         !draftCleanupOk ->

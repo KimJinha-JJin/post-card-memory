@@ -122,20 +122,21 @@ object PostcardDraftStorage {
         return parsed
     }
 
-    fun deleteDraft(context: Context, postcardId: Long) {
+    fun deleteDraft(context: Context, postcardId: Long): Boolean =
         deleteDraft(context.filesDir, postcardId)
-    }
 
     /**
      * 초안 텍스트 파일과 초안 소유 누끼 디렉터리를 함께 지운다 — 초안을
      * 지우는 모든 호출부(원래대로/완료 저장 성공/엽서 삭제)가 이 함수 하나만
      * 부르면 초안이 소유한 파일까지 자동으로 정리되도록 한 곳에 모았다.
      */
-    internal fun deleteDraft(filesDir: File, postcardId: Long) {
+    internal fun deleteDraft(filesDir: File, postcardId: Long): Boolean {
         val file = draftFile(filesDir, postcardId)
-        if (file.exists()) {
-            file.delete()
-        }
-        draftStickerBackgroundDir(filesDir, postcardId).deleteRecursively()
+        val fileDeleted = !file.exists() || file.delete()
+
+        val dirDeleted =
+            draftStickerBackgroundDir(filesDir, postcardId).deleteRecursively()
+
+        return fileDeleted && dirDeleted
     }
 }

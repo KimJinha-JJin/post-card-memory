@@ -436,6 +436,8 @@ class DetailViewModel @Inject constructor(
 
     private var userTemplateOverwriteJob: Job? = null
 
+    private var userTemplateDeleteJob: Job? = null
+
     /**
      * 개별 스타일 저장(위 Job들)과 템플릿 일괄 저장(persistTemplateStyle)의
      * 실제 DAO 쓰기 구간을 직렬화한다. 각 저장은 이 Mutex를 획득한 시점에
@@ -2122,17 +2124,25 @@ class DetailViewModel @Inject constructor(
 
         _templateManageState.value = TemplateManageState.InProgress
 
-        viewModelScope.launch(Dispatchers.IO) {
-            PostcardTemplateStorage.deleteTemplate(
-                context = context,
-                templateId = target.id
-            )
+        userTemplateDeleteJob = viewModelScope.launch(Dispatchers.IO) {
+            val deleted =
+                PostcardTemplateStorage.deleteTemplate(
+                    context = context,
+                    templateId = target.id
+                )
 
             withContext(Dispatchers.Main) {
-                _userTemplates.value =
-                    _userTemplates.value.filter { it.id != templateId }
-                _templateManageState.value =
-                    TemplateManageState.Success
+                if (deleted) {
+                    _userTemplates.value =
+                        _userTemplates.value.filter { it.id != templateId }
+                    _templateManageState.value =
+                        TemplateManageState.Success
+                } else {
+                    _templateManageState.value =
+                        TemplateManageState.Error(
+                            "템플릿을 지우지 못했어. 기존 템플릿은 그대로야."
+                        )
+                }
             }
         }
     }
@@ -3743,7 +3753,8 @@ class DetailViewModel @Inject constructor(
                 confirmSaveJob,
                 userTemplateSaveJob,
                 userTemplateRenameJob,
-                userTemplateOverwriteJob
+                userTemplateOverwriteJob,
+                userTemplateDeleteJob
             ).filter { it.isActive }
 
         if (pendingJobs.isNotEmpty()) {
