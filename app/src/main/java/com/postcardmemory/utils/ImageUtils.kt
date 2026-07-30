@@ -76,35 +76,6 @@ object ImageUtils {
     }
 
     /**
-     * 기존 방식과의 호환을 위한 중앙 정사각형 자르기 함수.
-     *
-     * 아직 CameraViewModel이 기존 함수를 사용하고 있어도
-     * 정상적으로 빌드되고 동작한다.
-     */
-    fun cropToStampRatio(
-        context: Context,
-        sourceFile: File
-    ): File {
-        val imageSize = getOrientedImageSize(
-            sourceFile
-        )
-
-        val viewportSize = min(
-            imageSize.width,
-            imageSize.height
-        ).toFloat()
-
-        return cropToStampRatio(
-            context = context,
-            sourceFile = sourceFile,
-            zoom = 1f,
-            offsetX = 0f,
-            offsetY = 0f,
-            viewportSize = viewportSize
-        )
-    }
-
-    /**
      * 사용자가 화면에서 선택한 확대 비율과 이동 위치를
      * 원본 사진 좌표로 환산하여 정사각형으로 저장한다.
      */

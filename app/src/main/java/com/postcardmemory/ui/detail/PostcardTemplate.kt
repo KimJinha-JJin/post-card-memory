@@ -3,8 +3,6 @@ package com.postcardmemory.ui.detail
 import com.postcardmemory.data.Postcard
 import java.util.UUID
 
-const val TEMPLATE_FORMAT_VERSION = 1
-
 private const val TEMPLATE_HEADER = "POSTCARD_TEMPLATE_V1"
 
 /**
