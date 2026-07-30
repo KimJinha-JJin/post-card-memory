@@ -20,11 +20,9 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.exifinterface.media.ExifInterface
+import com.postcardmemory.ui.components.PostcardDateFormat
 import java.io.File
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -1602,16 +1600,37 @@ object PostcardRenderSpec {
         capturedAt: Long,
         dateFormat: String
     ): String {
-        return SimpleDateFormat(
-            "yyyy-MM-dd",
-            Locale.KOREAN
-        ).format(Date(capturedAt))
+        val resolvedFormat =
+            PostcardDateFormat
+                .entries
+                .firstOrNull { entry -> entry.name == dateFormat }
+                ?: PostcardDateFormat.DOT
+
+        return resolvedFormat.format(capturedAt)
     }
 
     private fun resolveMessageTypeface(
         messageFont: String
     ): Typeface {
-        return Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+        return when (messageFont) {
+            "DEFAULT" ->
+                Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+
+            "SANS_SERIF" ->
+                Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+
+            "SERIF" ->
+                Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+
+            "MONOSPACE" ->
+                Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+
+            "CURSIVE" ->
+                Typeface.create("cursive", Typeface.NORMAL)
+
+            else ->
+                Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+        }
     }
 
     private fun getPatternColor(
