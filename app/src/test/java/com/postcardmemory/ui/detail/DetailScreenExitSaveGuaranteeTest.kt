@@ -36,17 +36,20 @@ class DetailScreenExitSaveGuaranteeTest {
     private class FakeRoom {
         var fieldA: Int = 0
         var fieldB: Int = 0
+        var fieldC: Int = 0
     }
 
     private class FakeViewModel(parentJob: Job) {
         var uiFieldA: Int = 0
         var uiFieldB: Int = 0
+        var uiFieldC: Int = 0
         val room = FakeRoom()
         val errors = mutableListOf<String>()
         private val scope = CoroutineScope(parentJob)
         private val styleWriteMutex = Mutex()
         private var fieldASaveJob: Job? = null
         private var templateSaveJob: Job? = null
+        private var fieldCSaveJob: Job? = null
 
         fun saveFieldA(
             newValue: Int,
@@ -96,10 +99,31 @@ class DetailScreenExitSaveGuaranteeTest {
             return job
         }
 
+        /**
+         * DetailViewModel.updateBackgroundColor 등 5개 수정 후와 동일한 형태:
+         * 이전 Job을 cancel()하지 않지만(재읽기+직렬화만으로 최종 상태에
+         * 수렴하므로) 필드에는 보관해 awaitPendingStyleSaves()가 찾을 수 있다.
+         */
+        fun updateFieldC(
+            newValue: Int,
+            beforeWrite: suspend () -> Unit = {}
+        ): Job {
+            uiFieldC = newValue
+
+            val job = scope.launch {
+                beforeWrite()
+                styleWriteMutex.withLock {
+                    room.fieldC = uiFieldC
+                }
+            }
+            fieldCSaveJob = job
+            return job
+        }
+
         /** DetailViewModel.awaitPendingStyleSaves()와 동일한 형태. */
         suspend fun awaitPendingStyleSaves(timeoutMillis: Long = 2_000L) {
             val pendingJobs =
-                listOfNotNull(fieldASaveJob, templateSaveJob)
+                listOfNotNull(fieldASaveJob, templateSaveJob, fieldCSaveJob)
                     .filter { it.isActive }
 
             if (pendingJobs.isEmpty()) {
@@ -255,5 +279,33 @@ class DetailScreenExitSaveGuaranteeTest {
         assertFalse(elapsedJob.isCancelled) // 타임아웃으로 정상 반환됐다(취소된 것이 아님)
 
         parentJob.cancel() // 영원히 끝나지 않을 저장을 정리한다(테스트 종료 후 누수 방지)
+    }
+
+    // ---- 시나리오 E: Job 추적이 추가된 배경색류 저장(fieldC)도 이제 보존된다 ----
+    //
+    // DetailScreenExitSaveLossTest.awaitPendingStyleSaves_doesNotCoverJoblessSave_fieldCStillLost가
+    // 재현한 문제(awaitPendingStyleSaves()가 Job을 어디에도 보관하지 않는
+    // 배경색/배경 패턴/폰트/레이아웃/날짜 형식 저장을 기다리지 못함)에 대한
+    // 수정을 검증한다. 실제 수정은 DetailViewModel에 backgroundColorSaveJob 등
+    // 5개 필드를 추가하고 각 저장 함수가 launch한 Job을 거기에 담아
+    // awaitPendingStyleSaves()의 목록에 포함시킨 것이다.
+    @Test
+    fun awaitBeforeExit_backgroundColorLikeSaveIsNowPersisted() = runBlocking {
+        val parentJob = SupervisorJob()
+        val vm = FakeViewModel(parentJob)
+        val reachedDispatchPoint = CompletableDeferred<Unit>()
+
+        val fieldCJob = vm.updateFieldC(newValue = 7) {
+            reachedDispatchPoint.await()
+        }
+
+        val exitJob = launch { exitScreen(vm, parentJob) }
+
+        reachedDispatchPoint.complete(Unit)
+        fieldCJob.join()
+        exitJob.join()
+
+        assertFalse(fieldCJob.isCancelled)
+        assertEquals(7, vm.room.fieldC) // await가 취소보다 먼저 저장을 끝냈다
     }
 }

@@ -1342,8 +1342,9 @@ fun DetailScreen(
     }
 
     val exitScope = rememberCoroutineScope()
-    // 슬라이더 계열 저장과 템플릿 적용은 Saving 상태가 없어 controlsEnabled로
-    // 뒤로 가기를 막지 못한다. 나가기 전 아직 끝나지 않은 저장을 기다려야
+    // 아래 시스템 back(BackHandler)은 controlsEnabled(backgroundUpdateState 등
+    // Saving 플래그)를 전혀 확인하지 않으므로, 저장이 실제 DAO 쓰기에 닿기 전에도
+    // 화면을 나갈 수 있다. 나가기 전 아직 끝나지 않은 저장을 기다려야
     // ViewModelStore가 clear()되기 전에 마지막 값이 Room에 반영된다.
     val navigateBackAfterPendingStyleSaves: () -> Unit = {
         exitScope.launch {

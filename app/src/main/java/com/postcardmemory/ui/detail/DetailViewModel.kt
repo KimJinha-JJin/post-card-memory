@@ -414,18 +414,34 @@ class DetailViewModel @Inject constructor(
 
     private var tapedFilmPhotoZoomSaveJob: Job? = null
 
+    private var backgroundColorSaveJob: Job? = null
+
+    private var backgroundPatternSaveJob: Job? = null
+
+    private var messageFontSaveJob: Job? = null
+
+    private var layoutStyleSaveJob: Job? = null
+
+    private var dateFormatSaveJob: Job? = null
+
     /**
-     * 개별 스타일 저장(위 12개 Job + Job이 없는 layoutStyle/backgroundColorArgb/
-     * backgroundPattern/messageFont/dateFormat)과 템플릿 일괄 저장
-     * (persistTemplateStyle)의 실제 DAO 쓰기 구간을 직렬화한다. 각 저장은 이
-     * Mutex를 획득한 시점에 _postcard.value에서 자신이 쓸 값을 다시 읽어서
-     * DAO에 넘기므로(호출 시점에 캡처해둔 값이 아니라), 완료 순서가 뒤바뀌어도
-     * 가장 나중에 커밋하는 저장이 항상 그 순간의 실제 화면 상태를 그대로
-     * 쓰게 된다 — 개별 저장과 템플릿 일괄 저장 중 어느 쪽이 사용자의 시간상
-     * 마지막 조작이었는지와 무관하게, "다시 읽기 + 직렬화"만으로 항상 최신
-     * 조작이 최종 Room 상태가 된다. Mutex 없이 다시 읽기만 하면 읽기와
-     * 커밋 사이의 시간차 때문에 오래된 읽기가 나중에 커밋되며 다시 역전될
-     * 수 있어 두 가지를 함께 써야 한다.
+     * 개별 스타일 저장(위 Job들)과 템플릿 일괄 저장(persistTemplateStyle)의
+     * 실제 DAO 쓰기 구간을 직렬화한다. 각 저장은 이 Mutex를 획득한 시점에
+     * _postcard.value에서 자신이 쓸 값을 다시 읽어서 DAO에 넘기므로(호출
+     * 시점에 캡처해둔 값이 아니라), 완료 순서가 뒤바뀌어도 가장 나중에
+     * 커밋하는 저장이 항상 그 순간의 실제 화면 상태를 그대로 쓰게 된다 —
+     * 개별 저장과 템플릿 일괄 저장 중 어느 쪽이 사용자의 시간상 마지막
+     * 조작이었는지와 무관하게, "다시 읽기 + 직렬화"만으로 항상 최신 조작이
+     * 최종 Room 상태가 된다. Mutex 없이 다시 읽기만 하면 읽기와 커밋 사이의
+     * 시간차 때문에 오래된 읽기가 나중에 커밋되며 다시 역전될 수 있어 두
+     * 가지를 함께 써야 한다.
+     *
+     * backgroundColorSaveJob 등 5개는 다른 것과 달리 새 저장이 이전 Job을
+     * cancel()하지 않는다 — 재읽기+직렬화만으로 이미 최종 상태로 수렴하므로
+     * cancel 없이도 안전하며(da80596), 여러 개가 겹쳐 있어도 그중 어느
+     * 것이든 완료되면 그 시점의 화면 상태가 커밋된다. awaitPendingStyleSaves()가
+     * 필드에 보관된(=가장 나중에 launch된) Job 하나만 join해도 충분한 이유가
+     * 이것이다.
      */
     private val styleWriteMutex = Mutex()
 
@@ -2304,7 +2320,7 @@ class DetailViewModel @Inject constructor(
         _fontUpdateState.value =
             FontUpdateState.Saving
 
-        viewModelScope.launch {
+        messageFontSaveJob = viewModelScope.launch {
             try {
                 val writtenFont =
                     withContext(Dispatchers.IO) {
@@ -2378,7 +2394,7 @@ class DetailViewModel @Inject constructor(
         _layoutUpdateState.value =
             LayoutUpdateState.Saving
 
-        viewModelScope.launch {
+        layoutStyleSaveJob = viewModelScope.launch {
             try {
                 val writtenLayoutStyle =
                     withContext(Dispatchers.IO) {
@@ -2450,7 +2466,7 @@ class DetailViewModel @Inject constructor(
         _dateFormatUpdateState.value =
             DateFormatUpdateState.Saving
 
-        viewModelScope.launch {
+        dateFormatSaveJob = viewModelScope.launch {
             try {
                 val writtenDateFormat =
                     withContext(Dispatchers.IO) {
@@ -3380,7 +3396,7 @@ class DetailViewModel @Inject constructor(
         _backgroundUpdateState.value =
             BackgroundUpdateState.Saving
 
-        viewModelScope.launch {
+        backgroundColorSaveJob = viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
                     styleWriteMutex.withLock {
@@ -3504,7 +3520,7 @@ class DetailViewModel @Inject constructor(
         _backgroundUpdateState.value =
             BackgroundUpdateState.Saving
 
-        viewModelScope.launch {
+        backgroundPatternSaveJob = viewModelScope.launch {
             try {
                 val writtenPattern =
                     withContext(Dispatchers.IO) {
@@ -3552,15 +3568,18 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 슬라이더 계열 저장(saveStampPhotoScale 등)과 템플릿 적용(persistTemplateStyle)은
-     * DetailScreen의 controlsEnabled가 확인하는 Saving 상태가 없어, 저장이 실제
-     * DAO 쓰기에 닿기 전에도 뒤로 가기가 가능하다. 화면 이탈 직전 이 함수로
-     * 아직 끝나지 않은 저장들이 완료되기를 기다린 뒤 navigation을 진행해야,
-     * ViewModelStore가 clear()되어 viewModelScope가 취소되기 전에 마지막 값이
-     * Room에 반영된다. 각 Job은 실패를 자체적으로 롤백하고 CancellationException을
-     * rethrow하므로 여기서는 완료 여부만 기다리면 된다(join은 예외를 전파하지
-     * 않는다). 혹시 모를 비정상적 지연으로 navigation이 무기한 멈추지 않도록
-     * 상한 시간을 둔다.
+     * 슬라이더 계열 저장(saveStampPhotoScale 등), 배경색·배경 패턴·폰트·
+     * 레이아웃·날짜 형식 저장(updateBackgroundColor 등), 템플릿 적용
+     * (persistTemplateStyle)은 모두 DetailScreen의 controlsEnabled가 확인하는
+     * Saving 상태만으로는 뒤로 가기를 막지 못한다 — 아이콘 뒤로 가기 버튼은
+     * enabled=controlsEnabled로 저장 중 클릭을 막지만, 시스템 back
+     * (BackHandler)은 이 플래그를 전혀 확인하지 않아 저장이 실제 DAO 쓰기에
+     * 닿기 전에도 화면을 나갈 수 있다. 화면 이탈 직전 이 함수로 아직 끝나지
+     * 않은 저장들이 완료되기를 기다린 뒤 navigation을 진행해야, ViewModelStore가
+     * clear()되어 viewModelScope가 취소되기 전에 마지막 값이 Room에 반영된다.
+     * 각 Job은 실패를 자체적으로 롤백하고 CancellationException을 rethrow하므로
+     * 여기서는 완료 여부만 기다리면 된다(join은 예외를 전파하지 않는다). 혹시
+     * 모를 비정상적 지연으로 navigation이 무기한 멈추지 않도록 상한 시간을 둔다.
      */
     suspend fun awaitPendingStyleSaves() {
         val pendingJobs =
@@ -3577,6 +3596,11 @@ class DetailViewModel @Inject constructor(
                 stampPhotoZoomSaveJob,
                 polaroidPhotoZoomSaveJob,
                 tapedFilmPhotoZoomSaveJob,
+                backgroundColorSaveJob,
+                backgroundPatternSaveJob,
+                messageFontSaveJob,
+                layoutStyleSaveJob,
+                dateFormatSaveJob,
                 templateStyleSaveJob
             ).filter { it.isActive }
 

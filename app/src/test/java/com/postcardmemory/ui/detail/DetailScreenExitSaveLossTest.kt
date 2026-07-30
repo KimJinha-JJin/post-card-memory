@@ -4,10 +4,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,12 +36,14 @@ class DetailScreenExitSaveLossTest {
     private class FakeRoom {
         var fieldA: Int = 0
         var fieldB: Int = 0
+        var fieldC: Int = 0
     }
 
     /** viewModelScope에 해당 — ViewModelStore.clear()가 parentJob을 취소하면 함께 취소된다. */
     private class FakeViewModel(parentJob: Job) {
         var uiFieldA: Int = 0
         var uiFieldB: Int = 0
+        var uiFieldC: Int = 0
         val room = FakeRoom()
         private val scope = CoroutineScope(parentJob)
         private val styleWriteMutex = Mutex()
@@ -83,6 +87,50 @@ class DetailScreenExitSaveLossTest {
             }
             templateSaveJob = job
             return job
+        }
+
+        /**
+         * DetailViewModel.awaitPendingStyleSaves()와 동일한 형태 — 단, 실제
+         * 코드처럼 fieldASaveJob/templateSaveJob만 기다리고 아래
+         * updateFieldC(색/패턴/폰트/레이아웃/날짜형식처럼 Job 추적이 없는
+         * styleWriteMutex 저장군을 대표)는 목록에 없다.
+         */
+        suspend fun awaitPendingStyleSaves() {
+            val pendingJobs =
+                listOfNotNull(fieldASaveJob, templateSaveJob)
+                    .filter { it.isActive }
+
+            if (pendingJobs.isEmpty()) {
+                return
+            }
+
+            withTimeoutOrNull(2_000L) {
+                pendingJobs.joinAll()
+            }
+        }
+
+        /**
+         * DetailViewModel.updateBackgroundColor/updateBackgroundPattern/
+         * updateMessageFont/updateLayoutStyle/updateDateFormat과 동일한 형태:
+         * styleWriteMutex로 직렬화되지만 Job을 클래스 필드에 보관하지 않는
+         * "jobless" 저장. awaitPendingStyleSaves()가 이 저장을 기다릴 방법이
+         * 없다는 것을 보이기 위한 대역이다. 실제 코드처럼 DetailScreen이
+         * 이 Job을 사용할 방법은 없으므로, 아래 반환값은 테스트가 cancel 이후
+         * 코루틴이 실제로 취소 처리를 마쳤는지 결정론적으로 join하기 위한
+         * 것일 뿐 production 경로를 대표하지 않는다.
+         */
+        fun updateFieldC(
+            newValue: Int,
+            beforeWrite: suspend () -> Unit = {}
+        ): Job {
+            uiFieldC = newValue
+
+            return scope.launch {
+                beforeWrite()
+                styleWriteMutex.withLock {
+                    room.fieldC = uiFieldC
+                }
+            }
         }
     }
 
@@ -176,4 +224,43 @@ class DetailScreenExitSaveLossTest {
             assertEquals(100, vm.room.fieldA) // Room에는 템플릿의 100만 남는다 -> 마지막 조작이 사라져 있다
             assertEquals(200, vm.room.fieldB) // 템플릿의 나머지 값은 그대로 유지된다
         }
+
+    // ---- 시나리오 E: awaitPendingStyleSaves()를 기다려도 Job 추적이 없는
+    //      저장(배경색/배경 패턴/폰트/레이아웃/날짜 형식과 동일한 형태)은
+    //      여전히 유실된다 ----
+    //
+    // DetailScreen.navigateBackAfterPendingStyleSaves()는 뒤로 가기 전
+    // viewModel.awaitPendingStyleSaves()를 기다린 뒤에만 onNavigateBack()을
+    // 호출한다(5c17c2d). 하지만 DetailViewModel.updateBackgroundColor()/
+    // updateBackgroundPattern()/updateMessageFont()/updateLayoutStyle()/
+    // updateDateFormat()은 styleWriteMutex로 직렬화될 뿐 Job을 어디에도
+    // 보관하지 않아 awaitPendingStyleSaves()의 listOfNotNull(...)에 애초에
+    // 들어가지 않는다. 그 결과 이 저장군은 await가 끝나자마자(할 일이
+    // 없다고 판단하고) 즉시 진행되는 navigation에 의해 여전히 취소될 수
+    // 있다 — 아이콘 뒤로 가기 버튼은 controlsEnabled(backgroundUpdateState
+    // 등 Saving 플래그)로 막히지만, 시스템 back(BackHandler)은 그 플래그를
+    // 전혀 확인하지 않으므로 이 경로에서 특히 그렇다.
+    @Test
+    fun awaitPendingStyleSaves_doesNotCoverJoblessSave_fieldCStillLost() = runBlocking {
+        val parentJob = SupervisorJob()
+        val vm = FakeViewModel(parentJob)
+        val reachedDispatchPoint = CompletableDeferred<Unit>()
+
+        val fieldCJob = vm.updateFieldC(newValue = 7) {
+            reachedDispatchPoint.await()
+        }
+
+        // 실제 DetailScreen처럼 이탈 전 awaitPendingStyleSaves()를 기다린다.
+        // fieldASaveJob/templateSaveJob이 모두 비어 있으므로 즉시 반환된다.
+        vm.awaitPendingStyleSaves()
+
+        // await가 fieldC 저장을 애초에 몰랐으므로, 아직 Dispatchers.IO
+        // 디스패치 지점(beforeWrite)에 멈춰 있는 채로 scope가 취소된다.
+        parentJob.cancel()
+        fieldCJob.join()
+
+        assertTrue(fieldCJob.isCancelled)
+        assertEquals(7, vm.uiFieldC) // 화면에는 마지막 값이 반영돼 있었지만
+        assertEquals(0, vm.room.fieldC) // await까지 기다렸는데도 Room에는 끝내 쓰이지 못했다
+    }
 }
