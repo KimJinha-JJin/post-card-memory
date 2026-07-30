@@ -424,6 +424,16 @@ class DetailViewModel @Inject constructor(
 
     private var dateFormatSaveJob: Job? = null
 
+    private var messageUpdateJob: Job? = null
+
+    private var confirmSaveJob: Job? = null
+
+    private var userTemplateSaveJob: Job? = null
+
+    private var userTemplateRenameJob: Job? = null
+
+    private var userTemplateOverwriteJob: Job? = null
+
     /**
      * 개별 스타일 저장(위 Job들)과 템플릿 일괄 저장(persistTemplateStyle)의
      * 실제 DAO 쓰기 구간을 직렬화한다. 각 저장은 이 Mutex를 획득한 시점에
@@ -797,7 +807,7 @@ class DetailViewModel @Inject constructor(
         draftAutosaveJob?.cancel()
         _confirmSaveState.value = ConfirmSaveState.Saving
 
-        viewModelScope.launch(Dispatchers.IO) {
+        confirmSaveJob = viewModelScope.launch(Dispatchers.IO) {
             val stickersSaved = persistStickerEditState(postcardId)
             val sealsSaved = persistSealEditState(postcardId)
             val allSaved = shouldConfirmSaveSucceed(stickersSaved, sealsSaved)
@@ -811,7 +821,13 @@ class DetailViewModel @Inject constructor(
             }
 
             withContext(Dispatchers.Main) {
+                // 스티커 저장 자체는 성공해도 도장 저장이 실패하면 전체 결과는
+                // Failed이므로, 이 시점(allSaved 확정 후)에야 스티커 undo/redo
+                // 이력을 지운다. persistStickerEditState 안에서 자신의 성공만
+                // 보고 바로 지우면, 도장 저장 실패로 사용자가 재시도해야 하는
+                // 상황에서 스티커 되돌리기 능력만 먼저 사라지는 비대칭이 생긴다.
                 if (allSaved) {
+                    clearStickerHistory()
                     _draftSaveStatus.value = DraftSaveStatus.Idle
                 }
                 _confirmSaveState.value =
@@ -912,7 +928,6 @@ class DetailViewModel @Inject constructor(
         if (updatedStickers != _photoStickers.value) {
             _photoStickers.value = updatedStickers
         }
-        clearStickerHistory()
 
         return true
     }
@@ -1684,11 +1699,27 @@ class DetailViewModel @Inject constructor(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _postcard.value =
-                    _postcard.value?.applyTemplateStyle(previousStyle)
+                // 이 저장이 실패로 끝나는 사이 개별 슬라이더/색상/폰트 등
+                // 조작이 끼어들어 화면이 이미 이 템플릿 style과 달라졌다면,
+                // 20개 필드를 한꺼번에 previousStyle로 되돌리면 그 최신
+                // 개별 조작(이미 Room에 커밋됐을 수도 있는)까지 함께 지워
+                // 버린다. 화면이 여전히 이 템플릿을 그대로 반영하고 있을
+                // 때만 되돌린다 — 템플릿 적용 자체의 undo/redo, 도장 등
+                // 나머지 실패 처리(onSaveFailed)는 이 저장이 실패했다는
+                // 사실 자체에 대한 것이라 별개로 항상 실행한다.
+                val reverted =
+                    _postcard.value?.toTemplateStyle() == style
+                if (reverted) {
+                    _postcard.value =
+                        _postcard.value?.applyTemplateStyle(previousStyle)
+                }
                 onSaveFailed()
                 _textScaleSaveErrors.trySend(
-                    "템플릿 스타일을 저장하지 못했어. 이전 상태로 되돌렸어."
+                    if (reverted) {
+                        "템플릿 스타일을 저장하지 못했어. 이전 상태로 되돌렸어."
+                    } else {
+                        "템플릿 스타일을 저장하지 못했어."
+                    }
                 )
             }
         }
@@ -1797,7 +1828,7 @@ class DetailViewModel @Inject constructor(
                 seal = seal
             )
 
-        viewModelScope.launch(Dispatchers.IO) {
+        userTemplateSaveJob = viewModelScope.launch(Dispatchers.IO) {
             val previewBitmap =
                 renderTemplatePreviewBitmap(
                     imagePath = currentPostcard.imagePath,
@@ -1932,7 +1963,7 @@ class DetailViewModel @Inject constructor(
                 updatedAtMillis = System.currentTimeMillis()
             )
 
-        viewModelScope.launch(Dispatchers.IO) {
+        userTemplateRenameJob = viewModelScope.launch(Dispatchers.IO) {
             val saved =
                 PostcardTemplateStorage.saveTemplateAtomically(
                     context = context,
@@ -1999,7 +2030,7 @@ class DetailViewModel @Inject constructor(
                 updatedAtMillis = System.currentTimeMillis()
             )
 
-        viewModelScope.launch(Dispatchers.IO) {
+        userTemplateOverwriteJob = viewModelScope.launch(Dispatchers.IO) {
             val previewBitmap =
                 renderTemplatePreviewBitmap(
                     imagePath = currentPostcard.imagePath,
@@ -2275,18 +2306,31 @@ class DetailViewModel @Inject constructor(
         val normalizedMessage =
             message.take(120)
 
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.updatePostcardMessage(
-                    id = currentPostcard.id,
-                    message = normalizedMessage
+        messageUpdateJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.updatePostcardMessage(
+                        id = currentPostcard.id,
+                        message = normalizedMessage
+                    )
+                }
+
+                _postcard.value =
+                    currentPostcard.copy(
+                        message = normalizedMessage
+                    )
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                // 다른 update 함수들과 달리 이 값을 관찰하는 UI 상태가 없어
+                // _postcard.value는 원래 값 그대로 두고(쓰기 전에 실패했으므로
+                // 이미 안전) 로그만 남긴다. 실패해도 앱이 죽지 않게 하는 것이
+                // 목적이다.
+                Log.w(
+                    TAG,
+                    "글귀 저장 실패: ${exception.message}"
                 )
             }
-
-            _postcard.value =
-                currentPostcard.copy(
-                    message = normalizedMessage
-                )
         }
     }
 
@@ -2351,10 +2395,13 @@ class DetailViewModel @Inject constructor(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _postcard.value =
-                    _postcard.value?.copy(
-                        messageFont = previousFont
-                    )
+                // 이미 더 최신 폰트 조작이 반영됐다면 그 값을 건드리지 않는다.
+                if (_postcard.value?.messageFont == normalizedFont) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            messageFont = previousFont
+                        )
+                }
                 _fontUpdateState.value =
                     FontUpdateState.Error(
                         exception.message
@@ -2423,10 +2470,12 @@ class DetailViewModel @Inject constructor(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _postcard.value =
-                    _postcard.value?.copy(
-                        layoutStyle = previousLayoutStyle
-                    )
+                if (_postcard.value?.layoutStyle == normalizedLayoutStyle) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            layoutStyle = previousLayoutStyle
+                        )
+                }
                 _layoutUpdateState.value =
                     LayoutUpdateState.Error(
                         exception.message
@@ -2495,10 +2544,12 @@ class DetailViewModel @Inject constructor(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _postcard.value =
-                    _postcard.value?.copy(
-                        dateFormat = previousDateFormat
-                    )
+                if (_postcard.value?.dateFormat == normalizedDateFormat) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            dateFormat = previousDateFormat
+                        )
+                }
                 _dateFormatUpdateState.value =
                     DateFormatUpdateState.Error(
                         exception.message
@@ -2574,10 +2625,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            messageTextScale = previousScale
-                        )
+                    if (_postcard.value?.messageTextScale == normalizedScale) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                messageTextScale = previousScale
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "글귀 크기를 저장하지 못했어."
                     )
@@ -2644,10 +2697,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            dateTextScale = previousScale
-                        )
+                    if (_postcard.value?.dateTextScale == normalizedScale) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                dateTextScale = previousScale
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "날짜 크기를 저장하지 못했어."
                     )
@@ -2715,11 +2770,13 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            backgroundPatternDensity =
-                                previousDensity
-                        )
+                    if (_postcard.value?.backgroundPatternDensity == normalizedDensity) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                backgroundPatternDensity =
+                                    previousDensity
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "무늬 세기를 저장하지 못했어."
                     )
@@ -2786,10 +2843,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            stampPhotoScale = previousScale
-                        )
+                    if (_postcard.value?.stampPhotoScale == normalizedScale) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                stampPhotoScale = previousScale
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 크기를 저장하지 못했어."
                     )
@@ -2856,10 +2915,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            polaroidPhotoScale = previousScale
-                        )
+                    if (_postcard.value?.polaroidPhotoScale == normalizedScale) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                polaroidPhotoScale = previousScale
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 크기를 저장하지 못했어."
                     )
@@ -2926,10 +2987,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            photoEdgeBlur = previousEdgeBlur
-                        )
+                    if (_postcard.value?.photoEdgeBlur == normalizedEdgeBlur) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                photoEdgeBlur = previousEdgeBlur
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "가장자리 블러를 저장하지 못했어."
                     )
@@ -3004,11 +3067,16 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            stampPhotoOffsetX = previousOffsetX,
-                            stampPhotoOffsetY = previousOffsetY
-                        )
+                    if (
+                        _postcard.value?.stampPhotoOffsetX == normalizedOffsetX &&
+                        _postcard.value?.stampPhotoOffsetY == normalizedOffsetY
+                    ) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                stampPhotoOffsetX = previousOffsetX,
+                                stampPhotoOffsetY = previousOffsetY
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 위치를 저장하지 못했어."
                     )
@@ -3083,11 +3151,16 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            polaroidPhotoOffsetX = previousOffsetX,
-                            polaroidPhotoOffsetY = previousOffsetY
-                        )
+                    if (
+                        _postcard.value?.polaroidPhotoOffsetX == normalizedOffsetX &&
+                        _postcard.value?.polaroidPhotoOffsetY == normalizedOffsetY
+                    ) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                polaroidPhotoOffsetX = previousOffsetX,
+                                polaroidPhotoOffsetY = previousOffsetY
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 위치를 저장하지 못했어."
                     )
@@ -3162,11 +3235,16 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            tapedFilmPhotoOffsetX = previousOffsetX,
-                            tapedFilmPhotoOffsetY = previousOffsetY
-                        )
+                    if (
+                        _postcard.value?.tapedFilmPhotoOffsetX == normalizedOffsetX &&
+                        _postcard.value?.tapedFilmPhotoOffsetY == normalizedOffsetY
+                    ) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                tapedFilmPhotoOffsetX = previousOffsetX,
+                                tapedFilmPhotoOffsetY = previousOffsetY
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 위치를 저장하지 못했어."
                     )
@@ -3231,10 +3309,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            stampPhotoZoom = previousZoom
-                        )
+                    if (_postcard.value?.stampPhotoZoom == normalizedZoom) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                stampPhotoZoom = previousZoom
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 확대 배율을 저장하지 못했어."
                     )
@@ -3299,10 +3379,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            polaroidPhotoZoom = previousZoom
-                        )
+                    if (_postcard.value?.polaroidPhotoZoom == normalizedZoom) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                polaroidPhotoZoom = previousZoom
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 확대 배율을 저장하지 못했어."
                     )
@@ -3367,10 +3449,12 @@ class DetailViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            tapedFilmPhotoZoom = previousZoom
-                        )
+                    if (_postcard.value?.tapedFilmPhotoZoom == normalizedZoom) {
+                        _postcard.value =
+                            _postcard.value?.copy(
+                                tapedFilmPhotoZoom = previousZoom
+                            )
+                    }
                     _textScaleSaveErrors.trySend(
                         "사진 확대 배율을 저장하지 못했어."
                     )
@@ -3549,10 +3633,12 @@ class DetailViewModel @Inject constructor(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _postcard.value =
-                    _postcard.value?.copy(
-                        backgroundPattern = previousPattern
-                    )
+                if (_postcard.value?.backgroundPattern == normalizedPattern) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backgroundPattern = previousPattern
+                        )
+                }
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Error(
                         exception.message
@@ -3570,16 +3656,26 @@ class DetailViewModel @Inject constructor(
     /**
      * 슬라이더 계열 저장(saveStampPhotoScale 등), 배경색·배경 패턴·폰트·
      * 레이아웃·날짜 형식 저장(updateBackgroundColor 등), 템플릿 적용
-     * (persistTemplateStyle)은 모두 DetailScreen의 controlsEnabled가 확인하는
-     * Saving 상태만으로는 뒤로 가기를 막지 못한다 — 아이콘 뒤로 가기 버튼은
-     * enabled=controlsEnabled로 저장 중 클릭을 막지만, 시스템 back
-     * (BackHandler)은 이 플래그를 전혀 확인하지 않아 저장이 실제 DAO 쓰기에
-     * 닿기 전에도 화면을 나갈 수 있다. 화면 이탈 직전 이 함수로 아직 끝나지
-     * 않은 저장들이 완료되기를 기다린 뒤 navigation을 진행해야, ViewModelStore가
-     * clear()되어 viewModelScope가 취소되기 전에 마지막 값이 Room에 반영된다.
+     * (persistTemplateStyle), 글귀 저장(updateMessage), 스티커·도장 확정
+     * 저장(saveEditsAndClearDraft), 내 템플릿 저장/이름변경/덮어쓰기는 모두
+     * DetailScreen의 controlsEnabled가 확인하는 Saving 상태만으로는 뒤로
+     * 가기를 막지 못한다 — 아이콘 뒤로 가기 버튼은 enabled=controlsEnabled로
+     * 저장 중 클릭을 막지만, 시스템 back(BackHandler)은 이 플래그를 전혀
+     * 확인하지 않아 저장이 실제 DAO/파일 쓰기에 닿기 전에도 화면을 나갈 수
+     * 있다. 화면 이탈 직전 이 함수로 아직 끝나지 않은 저장들이 완료되기를
+     * 기다린 뒤 navigation을 진행해야, ViewModelStore가 clear()되어
+     * viewModelScope가 취소되기 전에 마지막 값이 Room/파일에 반영된다.
      * 각 Job은 실패를 자체적으로 롤백하고 CancellationException을 rethrow하므로
      * 여기서는 완료 여부만 기다리면 된다(join은 예외를 전파하지 않는다). 혹시
      * 모를 비정상적 지연으로 navigation이 무기한 멈추지 않도록 상한 시간을 둔다.
+     *
+     * 내 템플릿 저장/이름변경/덮어쓰기 Job은, 각 다이얼로그의 "취소" 버튼과
+     * 바깥 탭 dismiss가 InProgress/Saving 여부와 무관하게 항상 활성화돼
+     * 있어(확인 버튼만 저장 중 비활성화됨) 저장이 실제 파일 쓰기에 닿기
+     * 전에도 다이얼로그를 닫을 수 있다. 다이얼로그를 닫아도 코루틴 자체는
+     * 취소되지 않지만, 곧바로 화면 전체에서 시스템 back까지 누르면
+     * ViewModelStore가 clear될 수 있어 다른 저장들과 동일하게 여기서
+     * 함께 기다린다.
      */
     suspend fun awaitPendingStyleSaves() {
         val pendingJobs =
@@ -3601,7 +3697,12 @@ class DetailViewModel @Inject constructor(
                 messageFontSaveJob,
                 layoutStyleSaveJob,
                 dateFormatSaveJob,
-                templateStyleSaveJob
+                templateStyleSaveJob,
+                messageUpdateJob,
+                confirmSaveJob,
+                userTemplateSaveJob,
+                userTemplateRenameJob,
+                userTemplateOverwriteJob
             ).filter { it.isActive }
 
         if (pendingJobs.isEmpty()) {

@@ -76,7 +76,13 @@ class StyleSaveRaceTest {
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    ui.fieldA = previousValue
+                    // 이미 더 최신 조작이 반영됐다면(fieldA가 더 이상 이 저장이
+                    // 낙관적으로 썼던 값이 아니라면) 되돌리지 않는다 — 그렇지
+                    // 않으면 늦게 실패를 확인한 옛 저장이 그 사이 성공적으로
+                    // 커밋된 최신 값을 덮어쓴다.
+                    if (ui.fieldA == newValue) {
+                        ui.fieldA = previousValue
+                    }
                     errors += "fieldA save failed"
                 }
             }
@@ -89,6 +95,7 @@ class StyleSaveRaceTest {
             scope: CoroutineScope,
             newA: Int,
             newB: Int,
+            failWith: Exception? = null,
             beforeWrite: suspend () -> Unit = {}
         ): Job {
             val previousA = ui.fieldA
@@ -103,6 +110,7 @@ class StyleSaveRaceTest {
                     styleWriteMutex.withLock {
                         val latestA = ui.fieldA // Mutex를 획득한 이 순간 다시 읽기
                         val latestB = ui.fieldB
+                        if (failWith != null) throw failWith
                         room.fieldA = latestA
                         room.fieldB = latestB
                         room.writeLog += "template=($latestA,$latestB)"
@@ -110,8 +118,14 @@ class StyleSaveRaceTest {
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    ui.fieldA = previousA
-                    ui.fieldB = previousB
+                    // persistTemplateStyle과 동일하게, 화면이 여전히 이 템플릿
+                    // 값(newA, newB) 그대로일 때만 20개 필드 전체를 되돌린다 —
+                    // 그 사이 개별 슬라이더 조작이 fieldA만 바꿔놨다면 그 최신
+                    // 조작까지 함께 지우면 안 된다.
+                    if (ui.fieldA == newA && ui.fieldB == newB) {
+                        ui.fieldA = previousA
+                        ui.fieldB = previousB
+                    }
                     errors += "template save failed"
                 }
             }
@@ -257,5 +271,75 @@ class StyleSaveRaceTest {
 
         assertEquals(7, vm.ui.fieldA)
         assertEquals(7, vm.room.fieldA)
+    }
+
+    // ---- 실패한 저장의 롤백이 그 사이 성공적으로 커밋된 더 최신 값을 덮어쓰면 안 된다 ----
+    // (건강검진 2026-07-30에서 발견: 실제 DetailViewModel의 16개 저장 함수와
+    // persistTemplateStyle 모두 이 가드가 빠져 있었다 — job1이 실패로 catch에
+    // 들어가기 전, 서로 다른 Job이라 취소되지 않는 job2가 먼저 성공 커밋되면
+    // job1의 무조건 롤백이 job2의 값을 되돌려 Room/화면이 갈라졌다.)
+
+    @Test
+    fun templateFails_afterIndividualCommittedNewerValue_doesNotStompIt() = runBlocking {
+        val vm = FakeViewModel()
+        val letTemplateProceed = CompletableDeferred<Unit>()
+
+        // 1. 템플릿 적용이 실패하도록 하고, 실제 쓰기 직전(Dispatchers.IO 디스패치
+        //    지연에 해당)까지만 진행하고 멈춰 있다.
+        val templateJob = vm.applyTemplate(
+            this,
+            newA = 100,
+            newB = 200,
+            failWith = IllegalStateException("db failed")
+        ) {
+            letTemplateProceed.await()
+        }
+
+        // 2. 그 사이 사용자가 fieldA를 직접 조절 — applyTemplate은 fieldASaveJob을
+        //    취소하지 않는 별개의 Job(templateSaveJob)이라 이 저장은 방해받지
+        //    않고 지연 없이 성공적으로 커밋된다.
+        val individualJob = vm.saveFieldA(this, newValue = 55)
+        individualJob.join()
+
+        // 3. 뒤늦게 템플릿 저장이 실제 쓰기를 시도해 실패한다.
+        letTemplateProceed.complete(Unit)
+        templateJob.join()
+
+        // 사용자가 마지막으로 조절한 값(55)이 그대로 유지돼야 한다 — 실패한
+        // 템플릿의 롤백이 previousA(0)로 되돌리면 안 된다.
+        assertEquals(1, vm.errors.size)
+        assertEquals(55, vm.ui.fieldA)
+        assertEquals(55, vm.room.fieldA)
+    }
+
+    @Test
+    fun individualFails_afterTemplateCommittedNewerValue_doesNotStompIt() = runBlocking {
+        val vm = FakeViewModel()
+        val letIndividualProceed = CompletableDeferred<Unit>()
+
+        // 1. fieldA 개별 저장이 실패하도록 하고, 실제 쓰기 직전까지만 진행하고
+        //    멈춰 있다.
+        val individualJob = vm.saveFieldA(
+            this,
+            newValue = 1,
+            failWith = IllegalStateException("db failed")
+        ) {
+            letIndividualProceed.await()
+        }
+
+        // 2. 그 사이 템플릿을 적용 — 서로 다른 Job이라 방해받지 않고 지연 없이
+        //    성공적으로 커밋된다.
+        val templateJob = vm.applyTemplate(this, newA = 100, newB = 200)
+        templateJob.join()
+
+        // 3. 뒤늦게 개별 저장이 실제 쓰기를 시도해 실패한다.
+        letIndividualProceed.complete(Unit)
+        individualJob.join()
+
+        // 템플릿이 커밋한 값(100)이 그대로 유지돼야 한다 — 실패한 개별 저장의
+        // 롤백이 previousValue(0)로 되돌리면 안 된다.
+        assertEquals(1, vm.errors.size)
+        assertEquals(100, vm.ui.fieldA)
+        assertEquals(100, vm.room.fieldA)
     }
 }
