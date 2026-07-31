@@ -12,10 +12,29 @@ class PostcardRepository @Inject constructor(
     fun getAllPostcards(): Flow<List<Postcard>> =
         dao.getAllPostcards()
 
+    fun getFutureMailPostcards(): Flow<List<Postcard>> =
+        dao.getFutureMailPostcards()
+
     suspend fun getPostcardById(
         id: Long
     ): Postcard? =
         dao.getPostcardById(id)
+
+    suspend fun sendToFutureMailbox(
+        id: Long,
+        deliverAt: Long
+    ) {
+        dao.sendToFutureMailbox(
+            id = id,
+            deliverAt = deliverAt
+        )
+    }
+
+    suspend fun openFutureMail(
+        id: Long
+    ) {
+        dao.openFutureMail(id)
+    }
 
     suspend fun insertPostcard(
         postcard: Postcard

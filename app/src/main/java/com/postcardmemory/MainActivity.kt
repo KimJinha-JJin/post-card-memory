@@ -13,6 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.postcardmemory.ui.camera.CameraScreen
 import com.postcardmemory.ui.detail.DetailScreen
+import com.postcardmemory.ui.futuremail.FutureMailboxScreen
 import com.postcardmemory.ui.gallery.GalleryScreen
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.PostCardMemoryTheme
@@ -44,6 +45,17 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigateToDetail = { id ->
                                     navController.navigate("detail/$id")
+                                },
+                                onNavigateToFutureMailbox = {
+                                    navController.navigate("futureMailbox")
+                                }
+                            )
+                        }
+
+                        composable("futureMailbox") {
+                            FutureMailboxScreen(
+                                onNavigateBack = {
+                                    navController.popBackStack()
                                 }
                             )
                         }

@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -360,6 +360,35 @@ abstract class PostcardDatabase : RoomDatabase() {
                         UPDATE postcards
                         SET layoutStyle = 'STAMP'
                         WHERE layoutStyle NOT IN ('STAMP', 'POLAROID', 'TAPED_FILM', 'LETTER')
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        /**
+         * "미래의 나에게 보내기" 기능. 기존 행은 전부 futureMailState='NONE',
+         * futureMailDeliverAt=NULL로 채워져 지금까지와 동일하게 갤러리에
+         * 보인다(DEFAULT 'NONE' + ADD COLUMN은 기존 행에도 소급 적용됨).
+         */
+        val MIGRATION_15_16 =
+            object : Migration(
+                startVersion = 15,
+                endVersion = 16
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN futureMailState TEXT NOT NULL DEFAULT 'NONE'
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN futureMailDeliverAt INTEGER DEFAULT NULL
                         """.trimIndent()
                     )
                 }

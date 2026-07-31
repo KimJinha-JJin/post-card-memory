@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
@@ -199,6 +200,7 @@ private fun rememberShakeTrigger(enabled: Boolean): Int {
 fun GalleryScreen(
     onNavigateToCamera: () -> Unit,
     onNavigateToDetail: (Long) -> Unit,
+    onNavigateToFutureMailbox: () -> Unit,
     viewModel: GalleryViewModel = hiltViewModel()
 ) {
     val postcards by viewModel.postcards.collectAsState()
@@ -484,6 +486,19 @@ fun GalleryScreen(
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "엽서 검색",
+                                    tint = InkSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        Box {
+                            IconButton(
+                                onClick = onNavigateToFutureMailbox
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MailOutline,
+                                    contentDescription = "미래 우체통",
                                     tint = InkSecondary,
                                     modifier = Modifier.size(20.dp)
                                 )

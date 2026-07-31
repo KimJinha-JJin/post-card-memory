@@ -178,6 +178,20 @@ sealed interface PostcardDeleteState {
     ) : PostcardDeleteState
 }
 
+/** "미래의 나에게 보내기" 발송 상태. */
+sealed interface FutureMailSendState {
+
+    data object Idle : FutureMailSendState
+
+    data object Sending : FutureMailSendState
+
+    data object Sent : FutureMailSendState
+
+    data class Error(
+        val message: String
+    ) : FutureMailSendState
+}
+
 sealed interface BackgroundUpdateState {
 
     data object Idle : BackgroundUpdateState
@@ -302,6 +316,18 @@ class DetailViewModel @Inject constructor(
     fun acknowledgeDeleteError() {
         if (_deleteState.value is PostcardDeleteState.Error) {
             _deleteState.value = PostcardDeleteState.Idle
+        }
+    }
+
+    private val _futureMailSendState =
+        MutableStateFlow<FutureMailSendState>(FutureMailSendState.Idle)
+
+    val futureMailSendState: StateFlow<FutureMailSendState> =
+        _futureMailSendState
+
+    fun acknowledgeFutureMailSendError() {
+        if (_futureMailSendState.value is FutureMailSendState.Error) {
+            _futureMailSendState.value = FutureMailSendState.Idle
         }
     }
 
@@ -4424,6 +4450,44 @@ class DetailViewModel @Inject constructor(
             }
 
             _deleteState.value = PostcardDeleteState.Deleted
+        }
+    }
+
+    /**
+     * 완성된 엽서를 미래 날짜로 봉인해 보낸다. 삭제와 달리 어떤 파일도
+     * 지우지 않는다 — futureMailState/futureMailDeliverAt만 바뀌어 갤러리
+     * 조회에서 제외될 뿐, 사진·스티커·도장 등 실제 자산은 그대로 보존된다.
+     * deletionManager를 재사용하지 않는 이유가 바로 이것이다.
+     */
+    fun sendToFuture(deliverAtMillis: Long) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        if (_futureMailSendState.value is FutureMailSendState.Sending) {
+            return
+        }
+
+        _futureMailSendState.value = FutureMailSendState.Sending
+
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.sendToFutureMailbox(
+                        id = currentPostcard.id,
+                        deliverAt = deliverAtMillis
+                    )
+                }
+
+                _futureMailSendState.value = FutureMailSendState.Sent
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                _futureMailSendState.value =
+                    FutureMailSendState.Error(
+                        "보내지 못했어. 다시 시도해줘."
+                    )
+            }
         }
     }
 

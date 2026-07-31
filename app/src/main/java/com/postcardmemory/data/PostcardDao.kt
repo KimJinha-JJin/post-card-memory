@@ -10,12 +10,35 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface PostcardDao {
 
+    /**
+     * 일반 갤러리(3열 그리드/세부 기록 보기 공통 원천)용 조회. 미래로
+     * 발송된(futureMailState != 'NONE') 엽서는 여기서 제외해 두 보기가
+     * 항상 같은 결과를 보게 한다.
+     */
     @Query(
         "SELECT * FROM postcards " +
+                "WHERE futureMailState = 'NONE' " +
                 "ORDER BY capturedAt DESC"
     )
     fun getAllPostcards(): Flow<List<Postcard>>
 
+    /**
+     * 미래 우체통용 조회. 상태와 무관하게 id로 직접 조회하는
+     * getPostcardById()와 달리, 배송 중인 엽서만 도착일 오름차순으로 가져온다.
+     */
+    @Query(
+        "SELECT * FROM postcards " +
+                "WHERE futureMailState = 'SENT' " +
+                "ORDER BY futureMailDeliverAt ASC"
+    )
+    fun getFutureMailPostcards(): Flow<List<Postcard>>
+
+    /**
+     * id로 직접 조회 — 상태 필터를 걸지 않는다. 미래로 발송된 엽서도
+     * (내용을 보여주기 위해서가 아니라) 봉인 안내 화면을 그리기 위해
+     * DetailViewModel이 이 함수로 로드해야 하므로, 노출 차단은 DAO가 아니라
+     * UI 레이어(DetailScreen)의 상태 분기 책임이다.
+     */
     @Query(
         "SELECT * FROM postcards " +
                 "WHERE id = :id"
@@ -23,6 +46,32 @@ interface PostcardDao {
     suspend fun getPostcardById(
         id: Long
     ): Postcard?
+
+    @Query(
+        """
+        UPDATE postcards
+        SET futureMailState = 'SENT',
+            futureMailDeliverAt = :deliverAt
+        WHERE id = :id
+        """
+    )
+    suspend fun sendToFutureMailbox(
+        id: Long,
+        deliverAt: Long
+    )
+
+    /** 개봉: 상태를 되돌리는 것뿐, 파일/이미지 등 어떤 자산도 건드리지 않는다. */
+    @Query(
+        """
+        UPDATE postcards
+        SET futureMailState = 'NONE',
+            futureMailDeliverAt = NULL
+        WHERE id = :id
+        """
+    )
+    suspend fun openFutureMail(
+        id: Long
+    )
 
     @Insert(
         onConflict = OnConflictStrategy.REPLACE

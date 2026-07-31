@@ -7,6 +7,10 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +73,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Wallpaper
@@ -76,10 +81,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -149,6 +158,13 @@ import com.postcardmemory.ui.components.PostcardLayoutPicker
 import com.postcardmemory.ui.components.PostcardLayoutStyle
 import com.postcardmemory.ui.components.PostcardTextFont
 import com.postcardmemory.ui.components.SealPreviewContent
+import com.postcardmemory.data.FUTURE_MAIL_STATE_SENT
+import com.postcardmemory.ui.futuremail.daysUntilFutureMail
+import com.postcardmemory.ui.futuremail.isFutureMailArrived
+import com.postcardmemory.ui.futuremail.isSelectableFutureMailDate
+import com.postcardmemory.ui.futuremail.localStartOfDayToMaterialDatePickerUtcMillis
+import com.postcardmemory.ui.futuremail.materialDatePickerUtcMillisToLocalStartOfDay
+import com.postcardmemory.ui.futuremail.startOfDayMillis
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.SunsetGold
@@ -990,6 +1006,121 @@ private fun PostcardPreviewContent(
     }
 }
 
+/**
+ * 미래로 발송된(futureMailState=SENT) 엽서를 detail/{id} 딥링크로 직접
+ * 열었을 때 보여주는 봉인 안내 화면. 사진/문구/스티커/도장 등 실제 내용은
+ * 절대 노출하지 않는다 — [DetailScreen]에서 postcard가 SENT면 이 화면만
+ * 그리고 나머지 편집 UI 트리는 아예 컴포지션되지 않는다.
+ */
+@Composable
+private fun FutureMailSealedContent(
+    deliverAtMillis: Long?,
+    onNavigateBack: () -> Unit
+) {
+    val now = remember { System.currentTimeMillis() }
+
+    val arrived = remember(deliverAtMillis, now) {
+        deliverAtMillis != null && isFutureMailArrived(deliverAtMillis, now)
+    }
+
+    val daysLeft = remember(deliverAtMillis, now) {
+        deliverAtMillis?.let { daysUntilFutureMail(it, now) }
+    }
+
+    val formattedDate = remember(deliverAtMillis) {
+        deliverAtMillis?.let {
+            DateTimeFormatter
+                .ofPattern("yyyy년 M월 d일", Locale.KOREA)
+                .format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ScreenBackgroundGray)
+    ) {
+        IconButton(
+            onClick = onNavigateBack,
+            modifier = Modifier
+                .padding(8.dp)
+                .align(Alignment.TopStart)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "뒤로가기",
+                tint = BrutalBlack
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(
+                        color = PaperTray,
+                        shape = CircleShape
+                    )
+                    .padding(
+                        horizontal = 38.dp,
+                        vertical = 32.dp
+                    )
+            ) {
+                Text(
+                    text = "💌",
+                    fontSize = 64.sp
+                )
+            }
+
+            Text(
+                text = if (arrived) "엽서가 도착했어요" else "아직 여행 중이에요",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = InkPrimary,
+                modifier = Modifier.padding(top = 24.dp)
+            )
+
+            Text(
+                text = if (arrived) {
+                    "미래 우체통에서 열어보기를 눌러야\n다시 볼 수 있어요."
+                } else {
+                    "한 번 보낸 엽서는\n다시 열어볼 수 없어요."
+                },
+                fontSize = 15.sp,
+                color = InkSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+
+            if (!arrived && formattedDate != null) {
+                Text(
+                    text = "${formattedDate}에 다시 만나요.",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = InkPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+
+            if (!arrived && daysLeft != null && daysLeft > 0) {
+                Text(
+                    text = "D-$daysLeft",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SunsetGold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     postcardId: Long,
@@ -998,6 +1129,7 @@ fun DetailScreen(
 ) {
     val postcard by viewModel.postcard.collectAsState()
     val deleteState by viewModel.deleteState.collectAsState()
+    val futureMailSendState by viewModel.futureMailSendState.collectAsState()
     val exportState by viewModel.exportState.collectAsState()
     val shareState by viewModel.shareState.collectAsState()
     val draftSaveStatus by viewModel.draftSaveStatus.collectAsState()
@@ -1013,6 +1145,18 @@ fun DetailScreen(
 
     var showDeleteDialog by remember {
         mutableStateOf(false)
+    }
+
+    var showFutureMailDatePicker by remember {
+        mutableStateOf(false)
+    }
+
+    var showFutureMailConfirmDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var pendingFutureMailDeliverAt by remember {
+        mutableStateOf<Long?>(null)
     }
 
     var moreMenuExpanded by remember {
@@ -1361,6 +1505,20 @@ fun DetailScreen(
         navigateBackAfterPendingStyleSaves()
     }
 
+    // 미래로 발송된 엽서는 직접 detail/{id} 딥링크로 들어오더라도 편집
+    // UI/미리보기를 절대 그리지 않는다 — 아래 이 시점 이후의 코드(편집기,
+    // 상단 액션 바, 공유·내보내기 다이얼로그 등)는 SENT 상태에서는 아예
+    // 도달하지 않는다. 편집 UI가 없으니 어떤 조작도 트리거될 수 없어
+    // controlsEnabled 등 다른 가드와 별개로 완전히 차단된다.
+    val sealedPostcard = postcard
+    if (sealedPostcard != null && sealedPostcard.futureMailState == FUTURE_MAIL_STATE_SENT) {
+        FutureMailSealedContent(
+            deliverAtMillis = sealedPostcard.futureMailDeliverAt,
+            onNavigateBack = navigateBackAfterPendingStyleSaves
+        )
+        return
+    }
+
     LaunchedEffect(deleteState) {
         when (val currentDeleteState = deleteState) {
             is PostcardDeleteState.Deleted -> {
@@ -1374,6 +1532,25 @@ fun DetailScreen(
                     Toast.LENGTH_SHORT
                 ).show()
                 viewModel.acknowledgeDeleteError()
+            }
+
+            else -> Unit
+        }
+    }
+
+    LaunchedEffect(futureMailSendState) {
+        when (val currentFutureMailSendState = futureMailSendState) {
+            is FutureMailSendState.Sent -> {
+                onNavigateBack()
+            }
+
+            is FutureMailSendState.Error -> {
+                Toast.makeText(
+                    context,
+                    currentFutureMailSendState.message,
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.acknowledgeFutureMailSendError()
             }
 
             else -> Unit
@@ -4302,6 +4479,24 @@ fun DetailScreen(
                     ) {
                         DropdownMenuItem(
                             text = {
+                                Text(text = "💌 미래의 나에게 보내기")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = null,
+                                    tint = InkPrimary
+                                )
+                            },
+                            enabled = controlsEnabled,
+                            onClick = {
+                                moreMenuExpanded = false
+                                showFutureMailDatePicker = true
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = {
                                 Text(
                                     text = "삭제",
                                     color = GalleryDangerRed
@@ -4918,6 +5113,139 @@ fun DetailScreen(
                 }
             }
         )
+    }
+
+    if (showFutureMailDatePicker) {
+        val nowMillis = remember { System.currentTimeMillis() }
+
+        val tomorrowLocalStartOfDay = remember(nowMillis) {
+            startOfDayMillis(nowMillis + 24L * 60 * 60 * 1000)
+        }
+
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis =
+                localStartOfDayToMaterialDatePickerUtcMillis(tomorrowLocalStartOfDay),
+            selectableDates = remember {
+                object : SelectableDates {
+                    override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                        isSelectableFutureMailDate(
+                            selectedDateMillis =
+                                materialDatePickerUtcMillisToLocalStartOfDay(utcTimeMillis),
+                            nowMillis = nowMillis
+                        )
+                }
+            }
+        )
+
+        DatePickerDialog(
+            onDismissRequest = {
+                showFutureMailDatePicker = false
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selectedUtcMillis = datePickerState.selectedDateMillis
+                        if (selectedUtcMillis != null) {
+                            pendingFutureMailDeliverAt =
+                                materialDatePickerUtcMillisToLocalStartOfDay(selectedUtcMillis)
+                            showFutureMailDatePicker = false
+                            showFutureMailConfirmDialog = true
+                        }
+                    },
+                    enabled = datePickerState.selectedDateMillis != null
+                ) {
+                    Text("다음")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showFutureMailDatePicker = false
+                    }
+                ) {
+                    Text("취소")
+                }
+            }
+        ) {
+            DatePicker(
+                state = datePickerState,
+                title = {
+                    Text(
+                        text = "이 엽서를 언제 다시 만나고 싶나요?",
+                        modifier = Modifier.padding(
+                            start = 24.dp,
+                            end = 12.dp,
+                            top = 16.dp
+                        )
+                    )
+                },
+                headline = {
+                    Text(
+                        text = "한 번 보낸 엽서는 도착하는 날까지\n다시 열어볼 수 없어요.",
+                        color = InkSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(
+                            start = 24.dp,
+                            end = 12.dp,
+                            bottom = 8.dp
+                        )
+                    )
+                }
+            )
+        }
+    }
+
+    if (showFutureMailConfirmDialog) {
+        val deliverAt = pendingFutureMailDeliverAt
+
+        if (deliverAt != null) {
+            val formattedDate = remember(deliverAt) {
+                DateTimeFormatter
+                    .ofPattern("yyyy년 M월 d일", Locale.KOREA)
+                    .format(Instant.ofEpochMilli(deliverAt).atZone(ZoneId.systemDefault()))
+            }
+
+            AlertDialog(
+                onDismissRequest = {
+                    showFutureMailConfirmDialog = false
+                },
+                title = {
+                    Text(
+                        text = "정말 보낼까요?",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "${formattedDate}까지\n이 엽서를 다시 열어볼 수 없어요."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.sendToFuture(deliverAt)
+                            showFutureMailConfirmDialog = false
+                            pendingFutureMailDeliverAt = null
+                        }
+                    ) {
+                        Text(
+                            text = "엽서 보내기",
+                            color = SunsetGold,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showFutureMailConfirmDialog = false
+                        }
+                    ) {
+                        Text("아직 안 보낼래요")
+                    }
+                }
+            )
+        }
     }
 
     if (exportState is ExportState.Success) {

@@ -53,5 +53,14 @@ data class Postcard(
     @ColumnInfo(defaultValue = "1.0")
     val polaroidPhotoZoom: Float = 1f,
     @ColumnInfo(defaultValue = "1.0")
-    val tapedFilmPhotoZoom: Float = 1f
+    val tapedFilmPhotoZoom: Float = 1f,
+    @ColumnInfo(defaultValue = "'NONE'")
+    val futureMailState: String = FUTURE_MAIL_STATE_NONE,
+    val futureMailDeliverAt: Long? = null
 )
+
+/** 일반 엽서. 갤러리에 보인다. */
+const val FUTURE_MAIL_STATE_NONE = "NONE"
+
+/** 미래로 발송되어 갤러리에서 사라진 엽서. futureMailDeliverAt이 지나야 열어볼 수 있다. */
+const val FUTURE_MAIL_STATE_SENT = "SENT"
