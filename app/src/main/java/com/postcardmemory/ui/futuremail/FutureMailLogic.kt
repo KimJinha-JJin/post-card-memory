@@ -6,6 +6,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 
 /**
  * 미래 엽서 기능의 날짜 판정을 전부 이 파일에 모은다. 앱 전체가 capturedAt과
@@ -89,10 +90,37 @@ internal fun localStartOfDayToMaterialDatePickerUtcMillis(
 data class FutureMailGroup(
     val deliverAtMillis: Long,
     val arrived: Boolean,
+    val progressPercent: Int,
     val postcardIds: List<Long>
 ) {
     val count: Int get() = postcardIds.size
 }
+
+fun futureMailProgressPercent(
+    sentAtMillis: Long,
+    deliverAtMillis: Long,
+    nowMillis: Long,
+    zone: ZoneId = ZoneId.systemDefault()
+): Int {
+    val sentDay = startOfDayMillis(sentAtMillis, zone)
+    val deliverDay = startOfDayMillis(deliverAtMillis, zone)
+    val nowDay = startOfDayMillis(nowMillis, zone)
+    val totalMillis = deliverDay - sentDay
+
+    if (totalMillis <= 0L) {
+        return if (nowDay >= deliverDay) 100 else 0
+    }
+
+    val elapsedMillis = nowDay - sentDay
+    return (elapsedMillis.toDouble() / totalMillis.toDouble() * 100.0)
+        .roundToInt()
+        .coerceIn(0, 100)
+}
+
+fun futureMailShipSlotIndex(progressPercent: Int): Int =
+    (progressPercent.coerceIn(0, 100) / 100.0 * 10.0)
+        .roundToInt()
+        .coerceIn(0, 10)
 
 /**
  * 배송 중인(SENT) 엽서 목록을 도착일(자정 기준) 단위로 묶어 날짜순으로
@@ -108,9 +136,23 @@ fun buildFutureMailGroups(
         .filter { it.futureMailState == FUTURE_MAIL_STATE_SENT && it.futureMailDeliverAt != null }
         .groupBy { startOfDayMillis(it.futureMailDeliverAt!!, zone) }
         .map { (deliverAtDay, group) ->
+            val progressPercent = group
+                .map {
+                    futureMailProgressPercent(
+                        sentAtMillis = it.capturedAt,
+                        deliverAtMillis = deliverAtDay,
+                        nowMillis = nowMillis,
+                        zone = zone
+                    )
+                }
+                .average()
+                .roundToInt()
+                .coerceIn(0, 100)
+
             FutureMailGroup(
                 deliverAtMillis = deliverAtDay,
                 arrived = isFutureMailArrived(deliverAtDay, nowMillis, zone),
+                progressPercent = progressPercent,
                 postcardIds = group.map { it.id }
             )
         }

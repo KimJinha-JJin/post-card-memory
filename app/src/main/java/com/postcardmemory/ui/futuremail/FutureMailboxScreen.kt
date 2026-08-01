@@ -31,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -168,53 +170,125 @@ private fun FutureMailGroupCard(
         daysUntilFutureMail(group.deliverAtMillis, System.currentTimeMillis())
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(
                 color = PaperSurface,
                 shape = RoundedCornerShape(16.dp)
             )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = if (group.arrived) "💌 $dateLabel" else "📮 $dateLabel",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = InkPrimary
-            )
-
-            Text(
-                text = buildString {
-                    append("${group.count}건")
-                    if (!group.arrived && daysLeft > 0) {
-                        append(" · D-$daysLeft")
-                    }
-                },
-                fontSize = 13.sp,
-                color = InkSecondary,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-
-        if (group.arrived) {
-            Button(
-                onClick = onOpen,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SunsetGold,
-                    contentColor = PaperSurface
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (group.arrived) "💌 $dateLabel" else "📮 $dateLabel",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = InkPrimary
                 )
-            ) {
-                Text("열어보기")
+
+                Text(
+                    text = buildString {
+                        append("${group.count}건")
+                        if (!group.arrived && daysLeft > 0) {
+                            append(" · D-$daysLeft")
+                        }
+                        append(" · ${group.progressPercent}%")
+                    },
+                    fontSize = 13.sp,
+                    color = InkSecondary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
-        } else {
-            Text(
-                text = "여행 중",
-                fontSize = 13.sp,
-                color = InkSecondary
-            )
+
+            if (group.arrived) {
+                Button(
+                    onClick = onOpen,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SunsetGold,
+                        contentColor = PaperSurface
+                    )
+                ) {
+                    Text("열어보기")
+                }
+            } else {
+                Text(
+                    text = "여행 중",
+                    fontSize = 13.sp,
+                    color = InkSecondary
+                )
+            }
         }
+
+        FutureMailNavigationLine(
+            progressPercent = group.progressPercent,
+            daysLeft = daysLeft,
+            modifier = Modifier.padding(top = 8.dp)
+        )
     }
 }
+
+@Composable
+private fun FutureMailNavigationLine(
+    progressPercent: Int,
+    daysLeft: Long,
+    modifier: Modifier = Modifier
+) {
+    val shipIndex = remember(progressPercent) {
+        futureMailShipSlotIndex(progressPercent)
+    }
+    val accessibilityLabel = buildString {
+        append("엽서 여행 진행도 ${progressPercent}퍼센트")
+        if (daysLeft > 0) {
+            append(", 도착까지 ${daysLeft}일")
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {
+                contentDescription = accessibilityLabel
+            },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "\u25B4",
+            fontSize = 13.sp,
+            color = InkSecondary
+        )
+
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(FUTURE_MAIL_ROUTE_SLOT_COUNT) { index ->
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (index == shipIndex) "\u26F5\uFE0E" else "\u00B7",
+                        fontSize = 13.sp,
+                        color = InkSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "\u25B4",
+            fontSize = 13.sp,
+            color = InkSecondary
+        )
+    }
+}
+
+private const val FUTURE_MAIL_ROUTE_SLOT_COUNT = 11

@@ -103,6 +103,57 @@ class FutureMailLogicTest {
         assertTrue(daysUntilFutureMail(deliverAt, now, zone) <= 0)
     }
 
+    // ---- futureMailProgressPercent / futureMailShipSlotIndex ----
+
+    @Test
+    fun progressPercent_startMiddleArrival_areClampedToExpectedBounds() {
+        val sentAt = epochMillisOf(2026, 1, 1)
+        val deliverAt = epochMillisOf(2026, 1, 11)
+
+        assertEquals(0, futureMailProgressPercent(sentAt, deliverAt, epochMillisOf(2025, 12, 31), zone))
+        assertEquals(0, futureMailProgressPercent(sentAt, deliverAt, sentAt, zone))
+        assertEquals(50, futureMailProgressPercent(sentAt, deliverAt, epochMillisOf(2026, 1, 6), zone))
+        assertEquals(100, futureMailProgressPercent(sentAt, deliverAt, deliverAt, zone))
+        assertEquals(100, futureMailProgressPercent(sentAt, deliverAt, epochMillisOf(2026, 1, 20), zone))
+    }
+
+    @Test
+    fun shipSlotIndex_mapsProgressBoundariesToElevenSlots() {
+        val cases = mapOf(
+            -10 to 0,
+            0 to 0,
+            1 to 0,
+            24 to 2,
+            25 to 3,
+            49 to 5,
+            50 to 5,
+            51 to 5,
+            75 to 8,
+            99 to 10,
+            100 to 10,
+            140 to 10
+        )
+
+        cases.forEach { (progress, expectedSlot) ->
+            assertEquals(expectedSlot, futureMailShipSlotIndex(progress))
+        }
+    }
+
+    @Test
+    fun shipSlotIndex_staysInRangeAndNeverMovesBackwardAsProgressIncreases() {
+        var previousSlot = 0
+
+        for (progress in -20..120) {
+            val slot = futureMailShipSlotIndex(progress)
+
+            assertTrue(slot in 0..10)
+            if (progress >= 0) {
+                assertTrue(slot >= previousSlot)
+                previousSlot = slot
+            }
+        }
+    }
+
     // ---- Material3 DatePicker <-> local start-of-day conversion ----
 
     @Test
@@ -136,6 +187,7 @@ class FutureMailLogicTest {
         id = id,
         imagePath = "/$id.jpg",
         title = "postcard-$id",
+        capturedAt = epochMillisOf(2026, 7, 31),
         futureMailState = FUTURE_MAIL_STATE_SENT,
         futureMailDeliverAt = deliverAt
     )
