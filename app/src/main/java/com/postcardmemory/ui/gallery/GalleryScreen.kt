@@ -30,28 +30,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MailOutline
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +66,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +75,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
@@ -82,12 +91,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
@@ -110,6 +121,7 @@ import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 
 private val ViewModeSaver = Saver<GalleryViewMode, String>(
@@ -218,7 +230,6 @@ fun GalleryScreen(
     val isPondModeOn = playMode == GalleryPlayMode.POND
     val isSheepRanchModeOn = playMode == GalleryPlayMode.SHEEP_RANCH
     val isRaceModeOn = playMode == GalleryPlayMode.RACE
-    val isPlayModeOn = playMode != GalleryPlayMode.NONE
 
     val shakeTrigger = rememberShakeTrigger(enabled = isPondModeOn)
 
@@ -260,15 +271,17 @@ fun GalleryScreen(
         mutableStateOf(false)
     }
 
-    var playModeMenuExpanded by remember {
-        mutableStateOf(false)
-    }
-
     var viewMenuExpanded by remember {
         mutableStateOf(false)
     }
 
     var sortMenuExpanded by remember {
+        mutableStateOf(false)
+    }
+
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+    var isDrawerActionPending by remember {
         mutableStateOf(false)
     }
 
@@ -296,6 +309,19 @@ fun GalleryScreen(
         toggleSelection(id)
     }
 
+    fun runDrawerActionAfterClose(action: () -> Unit) {
+        if (isDrawerActionPending) {
+            return
+        }
+
+        isDrawerActionPending = true
+        drawerScope.launch {
+            drawerState.close()
+            action()
+            isDrawerActionPending = false
+        }
+    }
+
     BackHandler(enabled = selectionMode) {
         selectedIds = emptySet()
     }
@@ -303,6 +329,12 @@ fun GalleryScreen(
     BackHandler(enabled = isSearchActive && !selectionMode) {
         isSearchActive = false
         searchQuery = ""
+    }
+
+    BackHandler(enabled = drawerState.isOpen) {
+        drawerScope.launch {
+            drawerState.close()
+        }
     }
 
     val searchFocusRequester = remember { FocusRequester() }
@@ -314,7 +346,32 @@ fun GalleryScreen(
         }
     }
 
-    Scaffold(
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = !selectionMode && !isSearchActive,
+        drawerContent = {
+            GalleryFeatureDrawer(
+                playMode = playMode,
+                onNavigateToFutureMailbox = {
+                    runDrawerActionAfterClose {
+                        onNavigateToFutureMailbox()
+                    }
+                },
+                onPlayModeSelected = { selectedMode ->
+                    runDrawerActionAfterClose {
+                        selectedIds = emptySet()
+                        playMode = if (playMode == selectedMode) {
+                            GalleryPlayMode.NONE
+                        } else {
+                            selectedMode
+                        }
+                        viewMode = GalleryViewMode.COMPACT_GRID
+                    }
+                }
+            )
+        }
+    ) {
+        Scaffold(
         containerColor = GalleryPaperWhite,
 
         topBar = {
@@ -468,11 +525,28 @@ fun GalleryScreen(
                             ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(
+                            onClick = {
+                                drawerScope.launch {
+                                    drawerState.open()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "기능 메뉴 열기",
+                                tint = InkSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
                         Text(
                             text = "포스트카드 메모리",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = InkPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
 
@@ -488,119 +562,6 @@ fun GalleryScreen(
                                     contentDescription = "엽서 검색",
                                     tint = InkSecondary,
                                     modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        Box {
-                            IconButton(
-                                onClick = onNavigateToFutureMailbox
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MailOutline,
-                                    contentDescription = "미래 우체통",
-                                    tint = InkSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        Box {
-                            IconButton(
-                                onClick = {
-                                    playModeMenuExpanded = true
-                                }
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .background(
-                                            color = if (isPlayModeOn) {
-                                                SunsetGold.copy(alpha = 0.16f)
-                                            } else {
-                                                Color.Transparent
-                                            },
-                                            shape = CircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.EmojiEmotions,
-                                        contentDescription = if (isPlayModeOn) {
-                                            "현재 놀이 모드: ${playModeLabel(playMode)}"
-                                        } else {
-                                            "놀이 모드 선택"
-                                        },
-                                        tint = if (isPlayModeOn) {
-                                            SunsetGold
-                                        } else {
-                                            InkSecondary
-                                        },
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .semantics {
-                                                stateDescription = if (isPlayModeOn) {
-                                                    "켜짐"
-                                                } else {
-                                                    "꺼짐"
-                                                }
-                                            }
-                                    )
-                                }
-                            }
-
-                            DropdownMenu(
-                                expanded = playModeMenuExpanded,
-                                onDismissRequest = {
-                                    playModeMenuExpanded = false
-                                }
-                            ) {
-                                PlayModeMenuItem(
-                                    emoji = "💧",
-                                    label = "엽서의 연못",
-                                    selected = isPondModeOn,
-                                    onClick = {
-                                        selectedIds = emptySet()
-                                        playMode = if (isPondModeOn) {
-                                            GalleryPlayMode.NONE
-                                        } else {
-                                            GalleryPlayMode.POND
-                                        }
-                                        viewMode = GalleryViewMode.COMPACT_GRID
-                                        playModeMenuExpanded = false
-                                    }
-                                )
-
-                                PlayModeMenuItem(
-                                    emoji = "🐑",
-                                    label = "양떼목장",
-                                    selected = isSheepRanchModeOn,
-                                    onClick = {
-                                        selectedIds = emptySet()
-                                        playMode = if (isSheepRanchModeOn) {
-                                            GalleryPlayMode.NONE
-                                        } else {
-                                            GalleryPlayMode.SHEEP_RANCH
-                                        }
-                                        viewMode = GalleryViewMode.COMPACT_GRID
-                                        playModeMenuExpanded = false
-                                    }
-                                )
-
-                                PlayModeMenuItem(
-                                    emoji = "🏎️",
-                                    label = "엽서 쫑쫑컵",
-                                    selected = isRaceModeOn,
-                                    onClick = {
-                                        selectedIds = emptySet()
-                                        playMode = if (isRaceModeOn) {
-                                            GalleryPlayMode.NONE
-                                        } else {
-                                            GalleryPlayMode.RACE
-                                        }
-                                        viewMode = GalleryViewMode.COMPACT_GRID
-                                        playModeMenuExpanded = false
-                                    }
                                 )
                             }
                         }
@@ -680,7 +641,7 @@ fun GalleryScreen(
                                 }
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Sort,
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
                                     contentDescription = "정렬 방식 변경",
                                     tint = InkSecondary,
                                     modifier = Modifier.size(20.dp)
@@ -870,6 +831,7 @@ fun GalleryScreen(
             }
         }
     }
+    }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -925,23 +887,113 @@ fun GalleryScreen(
     }
 }
 
-private fun playModeLabel(mode: GalleryPlayMode): String =
-    when (mode) {
-        GalleryPlayMode.POND -> "엽서의 연못"
-        GalleryPlayMode.SHEEP_RANCH -> "양떼목장"
-        GalleryPlayMode.RACE -> "엽서 쫑쫑컵"
-        GalleryPlayMode.NONE -> ""
+@Composable
+private fun GalleryFeatureDrawer(
+    playMode: GalleryPlayMode,
+    onNavigateToFutureMailbox: () -> Unit,
+    onPlayModeSelected: (GalleryPlayMode) -> Unit
+) {
+    ModalDrawerSheet(
+        modifier = Modifier.width(304.dp),
+        drawerContainerColor = PaperSurface
+    ) {
+        Text(
+            text = "post-card-memory",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = InkPrimary,
+            modifier = Modifier
+                .padding(
+                    start = 24.dp,
+                    top = 24.dp,
+                    end = 24.dp,
+                    bottom = 18.dp
+                )
+                .semantics {
+                    heading()
+                }
+        )
+
+        NavigationDrawerItem(
+            label = {
+                Text(
+                    text = "미래 우체통",
+                    color = InkPrimary
+                )
+            },
+            selected = false,
+            onClick = onNavigateToFutureMailbox,
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.MailOutline,
+                    contentDescription = null,
+                    tint = InkSecondary
+                )
+            },
+            modifier = Modifier.padding(horizontal = 12.dp)
+        )
+
+        HorizontalDivider(
+            color = PaperDivider,
+            modifier = Modifier.padding(
+                horizontal = 24.dp,
+                vertical = 18.dp
+            )
+        )
+
+        Text(
+            text = "특별한 갤러리",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = InkSecondary,
+            modifier = Modifier
+                .padding(
+                    horizontal = 24.dp,
+                    vertical = 8.dp
+                )
+                .semantics {
+                    heading()
+                }
+        )
+
+        GalleryPlayModeDrawerItem(
+            icon = PondDrawerIcon,
+            label = "엽서의 연못",
+            selected = playMode == GalleryPlayMode.POND,
+            onClick = {
+                onPlayModeSelected(GalleryPlayMode.POND)
+            }
+        )
+
+        GalleryPlayModeDrawerItem(
+            icon = SheepDrawerIcon,
+            label = "양떼목장",
+            selected = playMode == GalleryPlayMode.SHEEP_RANCH,
+            onClick = {
+                onPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)
+            }
+        )
+
+        GalleryPlayModeDrawerItem(
+            icon = CheckFlagDrawerIcon,
+            label = "엽서 쫑쫑컵",
+            selected = playMode == GalleryPlayMode.RACE,
+            onClick = {
+                onPlayModeSelected(GalleryPlayMode.RACE)
+            }
+        )
     }
+}
 
 @Composable
-private fun PlayModeMenuItem(
-    emoji: String,
+private fun GalleryPlayModeDrawerItem(
+    icon: ImageVector,
     label: String,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    DropdownMenuItem(
-        text = {
+    NavigationDrawerItem(
+        label = {
             Text(
                 text = label,
                 color = InkPrimary,
@@ -952,13 +1004,17 @@ private fun PlayModeMenuItem(
                 }
             )
         },
-        leadingIcon = {
-            Text(
-                text = emoji,
-                fontSize = 16.sp
+        selected = selected,
+        onClick = onClick,
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = InkSecondary,
+                modifier = Modifier.size(20.dp)
             )
         },
-        trailingIcon = {
+        badge = {
             if (selected) {
                 Icon(
                     imageVector = Icons.Default.Check,
@@ -967,14 +1023,136 @@ private fun PlayModeMenuItem(
                 )
             }
         },
-        modifier = if (selected) {
-            Modifier.background(SunsetGold.copy(alpha = 0.16f))
-        } else {
-            Modifier
-        },
-        onClick = onClick
+        modifier = Modifier.padding(horizontal = 12.dp)
     )
 }
+
+private val PondDrawerIcon: ImageVector =
+    ImageVector.Builder(
+        name = "PondDrawerIcon",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(4f, 8f)
+            curveTo(6f, 6.4f, 8f, 6.4f, 10f, 8f)
+            curveTo(12f, 9.6f, 14f, 9.6f, 16f, 8f)
+            curveTo(17.5f, 6.8f, 19f, 6.8f, 20f, 8f)
+
+            moveTo(4f, 12f)
+            curveTo(6f, 10.4f, 8f, 10.4f, 10f, 12f)
+            curveTo(12f, 13.6f, 14f, 13.6f, 16f, 12f)
+            curveTo(17.5f, 10.8f, 19f, 10.8f, 20f, 12f)
+
+            moveTo(4f, 16f)
+            curveTo(6f, 14.4f, 8f, 14.4f, 10f, 16f)
+            curveTo(12f, 17.6f, 14f, 17.6f, 16f, 16f)
+            curveTo(17.5f, 14.8f, 19f, 14.8f, 20f, 16f)
+        }
+    }.build()
+
+private val SheepDrawerIcon: ImageVector =
+    ImageVector.Builder(
+        name = "SheepDrawerIcon",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(6.5f, 17.5f)
+            lineTo(6.5f, 20f)
+            lineTo(8.2f, 20f)
+            lineTo(8.2f, 17.8f)
+            close()
+
+            moveTo(14.2f, 17.8f)
+            lineTo(14.2f, 20f)
+            lineTo(15.9f, 20f)
+            lineTo(15.9f, 17.5f)
+            close()
+        }
+
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(6.8f, 16.8f)
+            curveTo(4.7f, 16.1f, 3.6f, 14.4f, 4f, 12.4f)
+            curveTo(4.4f, 10.5f, 6f, 9.3f, 7.8f, 9.5f)
+            curveTo(8.5f, 7.9f, 10.1f, 7f, 11.8f, 7.3f)
+            curveTo(13.5f, 7.6f, 14.6f, 8.8f, 14.8f, 10.3f)
+            curveTo(16.5f, 10.4f, 17.8f, 11.7f, 17.9f, 13.4f)
+            curveTo(18f, 15.6f, 16.4f, 17.1f, 14.2f, 17.2f)
+            lineTo(8.5f, 17.2f)
+            curveTo(8f, 17.2f, 7.4f, 17.1f, 6.8f, 16.8f)
+            close()
+        }
+
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(17.1f, 10.3f)
+            curveTo(18.8f, 10.1f, 20.2f, 11.3f, 20.3f, 13f)
+            curveTo(20.4f, 14.8f, 19.1f, 16.1f, 17.5f, 16.1f)
+            curveTo(17.3f, 14.6f, 17.2f, 12.2f, 17.1f, 10.3f)
+            close()
+        }
+    }.build()
+
+private val CheckFlagDrawerIcon: ImageVector =
+    ImageVector.Builder(
+        name = "CheckFlagDrawerIcon",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(5f, 4f)
+            lineTo(6.8f, 4f)
+            lineTo(6.8f, 20f)
+            lineTo(5f, 20f)
+            close()
+        }
+
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.7f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(6.8f, 5f)
+            lineTo(18.6f, 5f)
+            lineTo(18.6f, 13f)
+            lineTo(6.8f, 13f)
+            close()
+        }
+
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(8.3f, 6.5f)
+            lineTo(11.4f, 6.5f)
+            lineTo(11.4f, 9.1f)
+            lineTo(8.3f, 9.1f)
+            close()
+
+            moveTo(14.5f, 6.5f)
+            lineTo(17.1f, 6.5f)
+            lineTo(17.1f, 9.1f)
+            lineTo(14.5f, 9.1f)
+            close()
+
+            moveTo(11.4f, 9.1f)
+            lineTo(14.5f, 9.1f)
+            lineTo(14.5f, 11.6f)
+            lineTo(11.4f, 11.6f)
+            close()
+        }
+    }.build()
 
 @Composable
 private fun GalleryGrid(
