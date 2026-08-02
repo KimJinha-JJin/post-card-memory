@@ -385,6 +385,63 @@ object PostcardRenderSpec {
         canvas.restore()
     }
 
+    /**
+     * 낙서 획을 엽서 최상단에 그린다. 미리보기(Compose Canvas의 nativeCanvas)와
+     * PostcardImageExporter가 이 함수 하나만 공유해서 호출하므로, 좌표·굵기
+     * 계산이 두 경로에서 따로 갈라질 수 없다 — drawBaseContent와 동일한
+     * targetSize/LOGICAL_SIZE 스케일 방식을 그대로 재사용한다.
+     */
+    fun drawDoodleStrokes(
+        canvas: Canvas,
+        strokes: List<DoodleStroke>,
+        targetSize: Float = LOGICAL_SIZE
+    ) {
+        if (strokes.isEmpty()) return
+
+        val scale = targetSize / LOGICAL_SIZE
+
+        canvas.save()
+        canvas.scale(scale, scale)
+        canvas.clipRect(0f, 0f, LOGICAL_SIZE, LOGICAL_SIZE)
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+
+        for (stroke in strokes) {
+            if (stroke.points.isEmpty()) continue
+
+            paint.color = stroke.colorArgb.toInt()
+            paint.strokeWidth = stroke.width.logicalWidth
+
+            if (stroke.points.size == 1) {
+                val dot = stroke.points[0]
+                paint.style = Paint.Style.FILL
+                canvas.drawCircle(
+                    dot.x * LOGICAL_SIZE,
+                    dot.y * LOGICAL_SIZE,
+                    stroke.width.logicalWidth / 2f,
+                    paint
+                )
+                paint.style = Paint.Style.STROKE
+                continue
+            }
+
+            val path = Path()
+            val first = stroke.points[0]
+            path.moveTo(first.x * LOGICAL_SIZE, first.y * LOGICAL_SIZE)
+            for (index in 1 until stroke.points.size) {
+                val point = stroke.points[index]
+                path.lineTo(point.x * LOGICAL_SIZE, point.y * LOGICAL_SIZE)
+            }
+            canvas.drawPath(path, paint)
+        }
+
+        canvas.restore()
+    }
+
     fun decodeSourceBitmap(
         sourceFile: File
     ): Bitmap {

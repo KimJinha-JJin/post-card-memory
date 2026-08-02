@@ -1,5 +1,9 @@
 package com.postcardmemory.ui.detail
 
+import com.postcardmemory.utils.DoodlePoint
+import com.postcardmemory.utils.DoodleStroke
+import com.postcardmemory.utils.DoodleStrokeWidth
+import com.postcardmemory.utils.serialize as serializeDoodleStroke
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -94,6 +98,80 @@ class PostcardEditDraftTest {
         val result = parsePostcardEditDraft(garbage)
 
         assertNull(result)
+    }
+
+    // ---- 낙서(DoodleStroke)는 Uri를 다루지 않으므로 스티커/도장과 달리 전체 왕복을 검증할 수 있다 ----
+
+    private fun sampleDoodleStroke(id: String = "stroke-1") =
+        DoodleStroke(
+            id = id,
+            points = listOf(
+                DoodlePoint(0f, 0f),
+                DoodlePoint(0.5f, 0.5f),
+                DoodlePoint(1f, 1f)
+            ),
+            colorArgb = 0xFF252525L,
+            width = DoodleStrokeWidth.THICK
+        )
+
+    @Test
+    fun serialize_thenParse_roundTripsDoodleStrokes() {
+        val original = emptyDraft().copy(
+            doodleStrokes = listOf(sampleDoodleStroke("a"), sampleDoodleStroke("b"))
+        )
+
+        val parsed = parsePostcardEditDraft(original.serialize())
+
+        assertNotNull(parsed)
+        assertEquals(original, parsed)
+    }
+
+    @Test
+    fun serialize_thenParse_preservesDoodleAndStickerSealCountsTogether() {
+        val original = emptyDraft().copy(
+            doodleStrokes = listOf(sampleDoodleStroke())
+        )
+
+        val parsed = parsePostcardEditDraft(original.serialize())
+
+        assertNotNull(parsed)
+        assertEquals(1, parsed!!.doodleStrokes.size)
+        assertTrue(parsed.stickers.isEmpty())
+        assertTrue(parsed.seals.isEmpty())
+    }
+
+    @Test
+    fun parsePostcardEditDraft_missingDoodleCountField_treatedAsNoDoodles() {
+        // DRAFT_FORMAT_VERSION=1 시절(낙서 도입 전)에 저장된 초안: meta가 9개 필드뿐.
+        val text = "POSTCARD_DRAFT_V1\n1\t1\t1\t1\t1\t~\t~\t0\t0"
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertTrue(parsed!!.doodleStrokes.isEmpty())
+    }
+
+    @Test
+    fun parsePostcardEditDraft_returnsNullWhenDeclaredDoodleCountExceedsBodyLines() {
+        val text = "POSTCARD_DRAFT_V1\n1\t1\t1\t1\t1\t~\t~\t0\t0\t3"
+
+        assertNull(parsePostcardEditDraft(text))
+    }
+
+    @Test
+    fun parsePostcardEditDraft_skipsCorruptedDoodleLineButKeepsRest() {
+        val goodStroke = sampleDoodleStroke("good")
+        val text = listOf(
+            "POSTCARD_DRAFT_V1",
+            "1\t1\t1\t1\t1\t~\t~\t0\t0\t2",
+            "corrupted-doodle-line",
+            goodStroke.serializeDoodleStroke()
+        ).joinToString("\n")
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertEquals(listOf(goodStroke), parsed!!.doodleStrokes)
     }
 
     @Test

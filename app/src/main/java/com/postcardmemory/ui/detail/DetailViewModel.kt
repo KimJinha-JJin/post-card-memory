@@ -16,6 +16,7 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.ConfirmedEditStateStorage
+import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.PhotoColorExtractor
 import com.postcardmemory.utils.PhotoStickerImageStorage
 import com.postcardmemory.utils.PostcardDeletionManager
@@ -24,6 +25,8 @@ import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardImageStorage
 import com.postcardmemory.utils.PostcardRenderSpec
 import com.postcardmemory.utils.PostcardTemplateStorage
+import com.postcardmemory.utils.deserializeDoodleStroke
+import com.postcardmemory.utils.serialize as serializeDoodleStroke
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -53,6 +56,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val TAG = "DetailViewModel"
 private const val SEAL_HISTORY_LIMIT = 50
 private const val STICKER_HISTORY_LIMIT = 30
+private const val DOODLE_HISTORY_LIMIT = 50
 private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
 private const val TEMPLATE_STYLE_HISTORY_LIMIT = 50
 private const val MAX_TEMPLATE_NAME_LENGTH = 20
@@ -109,11 +113,12 @@ sealed interface ConfirmSaveState {
     data object Failed : ConfirmSaveState
 }
 
-/** 스티커·도장 저장이 모두 성공했을 때만 확정 저장 전체를 성공으로 본다. */
+/** 스티커·도장·낙서 저장이 모두 성공했을 때만 확정 저장 전체를 성공으로 본다. */
 internal fun shouldConfirmSaveSucceed(
     stickersSaved: Boolean,
-    sealsSaved: Boolean
-): Boolean = stickersSaved && sealsSaved
+    sealsSaved: Boolean,
+    doodlesSaved: Boolean = true
+): Boolean = stickersSaved && sealsSaved && doodlesSaved
 
 /** 이미 확정 저장이 진행 중이면 완료 버튼 연타로 새 저장을 또 시작하지 않는다. */
 internal fun canStartConfirmSave(
@@ -521,6 +526,7 @@ class DetailViewModel @Inject constructor(
     /** "원래대로"를 눌렀을 때 되돌아갈 확정 저장 상태(임시저장 적용 직전 스냅샷). */
     private var confirmedStickersBaseline: List<PhotoStickerItem> = emptyList()
     private var confirmedSealsBaseline: List<PostcardSealItem> = emptyList()
+    private var confirmedDoodlesBaseline: List<DoodleStroke> = emptyList()
 
     /**
      * 새 postcardId로 상세 화면에 진입할 때 한 번만 호출한다.
@@ -544,23 +550,28 @@ class DetailViewModel @Inject constructor(
         _draftSaveStatus.value = DraftSaveStatus.Idle
         confirmedStickersBaseline = emptyList()
         confirmedSealsBaseline = emptyList()
+        confirmedDoodlesBaseline = emptyList()
 
         clearStickerHistory()
         clearSealHistory()
+        clearDoodleHistory()
 
         viewModelScope.launch(Dispatchers.IO) {
             val confirmedStickers = readConfirmedStickerState(postcardId)
             val confirmedSeals = readConfirmedSealState(postcardId)
+            val confirmedDoodles = readConfirmedDoodleState(postcardId)
 
             withContext(Dispatchers.Main) {
                 _photoStickers.value = confirmedStickers
                 _selectedStickerId.value = null
                 _photoSeals.value = confirmedSeals
                 _selectedSealId.value = null
+                _doodleStrokes.value = confirmedDoodles
             }
 
             confirmedStickersBaseline = confirmedStickers
             confirmedSealsBaseline = confirmedSeals
+            confirmedDoodlesBaseline = confirmedDoodles
 
             val existingDraft =
                 PostcardDraftStorage.loadDraft(context, postcardId)
@@ -578,6 +589,7 @@ class DetailViewModel @Inject constructor(
                     _selectedStickerId.value = existingDraft.selectedStickerId
                     _photoSeals.value = existingDraft.seals
                     _selectedSealId.value = existingDraft.selectedSealId
+                    _doodleStrokes.value = existingDraft.doodleStrokes
                 }
 
                 _draftAutoRestoredEvents.trySend(Unit)
@@ -661,9 +673,11 @@ class DetailViewModel @Inject constructor(
         _selectedStickerId.value = null
         _photoSeals.value = confirmedSealsBaseline
         _selectedSealId.value = null
+        _doodleStrokes.value = confirmedDoodlesBaseline
 
         clearStickerHistory()
         clearSealHistory()
+        clearDoodleHistory()
 
         viewModelScope.launch(Dispatchers.IO) {
             draftSaveMutex.withLock {
@@ -756,6 +770,7 @@ class DetailViewModel @Inject constructor(
         val snapshotSelectedStickerId = _selectedStickerId.value
         val snapshotSeals = _photoSeals.value
         val snapshotSelectedSealId = _selectedSealId.value
+        val snapshotDoodleStrokes = _doodleStrokes.value
 
         _draftSaveStatus.value = DraftSaveStatus.Saving
 
@@ -786,7 +801,8 @@ class DetailViewModel @Inject constructor(
                     stickers = promoted,
                     selectedStickerId = snapshotSelectedStickerId,
                     seals = snapshotSeals,
-                    selectedSealId = snapshotSelectedSealId
+                    selectedSealId = snapshotSelectedSealId,
+                    doodleStrokes = snapshotDoodleStrokes
                 )
 
                 val saved =
@@ -840,7 +856,9 @@ class DetailViewModel @Inject constructor(
         confirmSaveJob = viewModelScope.launch(Dispatchers.IO) {
             val stickersSaved = persistStickerEditState(postcardId)
             val sealsSaved = persistSealEditState(postcardId)
-            val allSaved = shouldConfirmSaveSucceed(stickersSaved, sealsSaved)
+            val doodlesSaved = persistDoodleEditState(postcardId)
+            val allSaved =
+                shouldConfirmSaveSucceed(stickersSaved, sealsSaved, doodlesSaved)
 
             if (allSaved) {
                 draftSaveMutex.withLock {
@@ -851,13 +869,14 @@ class DetailViewModel @Inject constructor(
             }
 
             withContext(Dispatchers.Main) {
-                // 스티커 저장 자체는 성공해도 도장 저장이 실패하면 전체 결과는
+                // 스티커 저장 자체는 성공해도 도장·낙서 저장이 실패하면 전체 결과는
                 // Failed이므로, 이 시점(allSaved 확정 후)에야 스티커 undo/redo
                 // 이력을 지운다. persistStickerEditState 안에서 자신의 성공만
-                // 보고 바로 지우면, 도장 저장 실패로 사용자가 재시도해야 하는
+                // 보고 바로 지우면, 도장·낙서 저장 실패로 사용자가 재시도해야 하는
                 // 상황에서 스티커 되돌리기 능력만 먼저 사라지는 비대칭이 생긴다.
                 if (allSaved) {
                     clearStickerHistory()
+                    clearDoodleHistory()
                     _draftSaveStatus.value = DraftSaveStatus.Idle
                 }
                 _confirmSaveState.value =
@@ -1059,6 +1078,54 @@ class DetailViewModel @Inject constructor(
             }
     }
 
+    // ---- 낙서 상태 ----
+
+    private val _doodleStrokes =
+        MutableStateFlow(listOf<DoodleStroke>())
+
+    val doodleStrokes: StateFlow<List<DoodleStroke>> =
+        _doodleStrokes
+
+    fun setDoodleStrokes(
+        strokes: List<DoodleStroke>
+    ) {
+        _doodleStrokes.value = strokes
+        scheduleDraftAutosave()
+    }
+
+    /** 낙서 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
+    private suspend fun persistDoodleEditState(
+        postcardId: Long
+    ): Boolean {
+        val stateFile =
+            File(context.filesDir, "doodle_states/$postcardId.txt")
+
+        return ConfirmedEditStateStorage.writeTextAtomically(
+            targetFile = stateFile,
+            content = _doodleStrokes.value.joinToString("\n") {
+                it.serializeDoodleStroke()
+            }
+        )
+    }
+
+    /** 확정 저장된 낙서 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
+    private suspend fun readConfirmedDoodleState(
+        postcardId: Long
+    ): List<DoodleStroke> {
+        val file =
+            File(
+                context.filesDir,
+                "doodle_states/$postcardId.txt"
+            )
+        if (!file.exists()) return emptyList()
+
+        return file.readLines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                deserializeDoodleStroke(line)
+            }
+    }
+
     private data class SealSnapshot(
         val seals: List<PostcardSealItem>,
         val selectedSealId: String?
@@ -1136,6 +1203,80 @@ class DetailViewModel @Inject constructor(
         _photoSeals.value = next.seals
         _selectedSealId.value = next.selectedSealId
         updateSealHistoryAvailability()
+        scheduleDraftAutosave()
+    }
+
+    private data class DoodleSnapshot(
+        val strokes: List<DoodleStroke>
+    )
+
+    private val doodleUndoStack =
+        ArrayDeque<DoodleSnapshot>()
+
+    private val doodleRedoStack =
+        ArrayDeque<DoodleSnapshot>()
+
+    private val _canUndoDoodle =
+        MutableStateFlow(false)
+
+    val canUndoDoodle: StateFlow<Boolean> =
+        _canUndoDoodle
+
+    private val _canRedoDoodle =
+        MutableStateFlow(false)
+
+    val canRedoDoodle: StateFlow<Boolean> =
+        _canRedoDoodle
+
+    private fun updateDoodleHistoryAvailability() {
+        _canUndoDoodle.value = doodleUndoStack.isNotEmpty()
+        _canRedoDoodle.value = doodleRedoStack.isNotEmpty()
+    }
+
+    private fun clearDoodleHistory() {
+        doodleUndoStack.clear()
+        doodleRedoStack.clear()
+        updateDoodleHistoryAvailability()
+    }
+
+    /**
+     * 낙서 한 획(펜 확정, 지우개 동작, 전체 지우기)을 시작하기 직전에 호출한다.
+     * sealUndoStack/stickerUndoStack과 동일하게 변경 직전의 전체 목록을
+     * 스냅샷으로 남기는 방식이라, 별도 재설계 없이 기존 Undo/Redo 체계에
+     * 그대로 편입된다.
+     */
+    fun recordDoodleSnapshotForUndo() {
+        doodleUndoStack.addLast(
+            DoodleSnapshot(strokes = _doodleStrokes.value)
+        )
+        if (doodleUndoStack.size > DOODLE_HISTORY_LIMIT) {
+            doodleUndoStack.removeFirst()
+        }
+        doodleRedoStack.clear()
+        updateDoodleHistoryAvailability()
+    }
+
+    fun undoDoodleChange() {
+        val previous =
+            doodleUndoStack.removeLastOrNull() ?: return
+
+        doodleRedoStack.addLast(
+            DoodleSnapshot(strokes = _doodleStrokes.value)
+        )
+        _doodleStrokes.value = previous.strokes
+        updateDoodleHistoryAvailability()
+        scheduleDraftAutosave()
+    }
+
+    fun redoDoodleChange() {
+        val next =
+            doodleRedoStack.removeLastOrNull() ?: return
+
+        doodleUndoStack.addLast(
+            DoodleSnapshot(strokes = _doodleStrokes.value)
+        )
+        _doodleStrokes.value = next.strokes
+        updateDoodleHistoryAvailability()
         scheduleDraftAutosave()
     }
 
@@ -4332,7 +4473,8 @@ class DetailViewModel @Inject constructor(
                             context = context,
                             postcard = currentPostcard,
                             stickerOverlays = stickerOverlays,
-                            sealOverlays = sealOverlays
+                            sealOverlays = sealOverlays,
+                            doodleStrokes = _doodleStrokes.value
                         )
                 }
 
@@ -4383,7 +4525,8 @@ class DetailViewModel @Inject constructor(
                             context = context,
                             postcard = currentPostcard,
                             stickerOverlays = stickerOverlays,
-                            sealOverlays = sealOverlays
+                            sealOverlays = sealOverlays,
+                            doodleStrokes = _doodleStrokes.value
                         )
                 }
 

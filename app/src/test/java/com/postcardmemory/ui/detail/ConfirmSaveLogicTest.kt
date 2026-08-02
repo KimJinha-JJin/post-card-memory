@@ -42,6 +42,28 @@ class ConfirmSaveLogicTest {
     }
 
     @Test
+    fun shouldConfirmSaveSucceed_whenStickersSealsAndDoodlesAllSaved() {
+        assertTrue(
+            shouldConfirmSaveSucceed(
+                stickersSaved = true,
+                sealsSaved = true,
+                doodlesSaved = true
+            )
+        )
+    }
+
+    @Test
+    fun shouldConfirmSaveSucceed_failsWhenDoodlesSaveFailsEvenIfRestSucceed() {
+        assertFalse(
+            shouldConfirmSaveSucceed(
+                stickersSaved = true,
+                sealsSaved = true,
+                doodlesSaved = false
+            )
+        )
+    }
+
+    @Test
     fun canStartConfirmSave_blocksWhileSaving() {
         assertFalse(canStartConfirmSave(ConfirmSaveState.Saving))
     }

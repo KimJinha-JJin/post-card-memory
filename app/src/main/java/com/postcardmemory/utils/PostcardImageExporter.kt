@@ -78,7 +78,8 @@ object PostcardImageExporter {
         context: Context,
         postcard: Postcard,
         stickerOverlays: List<StickerOverlay> = emptyList(),
-        sealOverlays: List<SealOverlay> = emptyList()
+        sealOverlays: List<SealOverlay> = emptyList(),
+        doodleStrokes: List<DoodleStroke> = emptyList()
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
@@ -86,7 +87,8 @@ object PostcardImageExporter {
                     context = context,
                     postcard = postcard,
                     stickerOverlays = stickerOverlays,
-                    sealOverlays = sealOverlays
+                    sealOverlays = sealOverlays,
+                    doodleStrokes = doodleStrokes
                 )
 
             try {
@@ -106,7 +108,8 @@ object PostcardImageExporter {
         context: Context,
         postcard: Postcard,
         stickerOverlays: List<StickerOverlay> = emptyList(),
-        sealOverlays: List<SealOverlay> = emptyList()
+        sealOverlays: List<SealOverlay> = emptyList(),
+        doodleStrokes: List<DoodleStroke> = emptyList()
     ): Result<File> {
         return runCatching {
             val outputBitmap =
@@ -114,7 +117,8 @@ object PostcardImageExporter {
                     context = context,
                     postcard = postcard,
                     stickerOverlays = stickerOverlays,
-                    sealOverlays = sealOverlays
+                    sealOverlays = sealOverlays,
+                    doodleStrokes = doodleStrokes
                 )
 
             try {
@@ -250,7 +254,8 @@ object PostcardImageExporter {
         context: Context,
         postcard: Postcard,
         stickerOverlays: List<StickerOverlay>,
-        sealOverlays: List<SealOverlay> = emptyList()
+        sealOverlays: List<SealOverlay> = emptyList(),
+        doodleStrokes: List<DoodleStroke> = emptyList()
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -322,6 +327,15 @@ object PostcardImageExporter {
                     sealOverlay = overlay
                 )
             }
+
+            // 낙서는 사진·스티커·도장보다 항상 위에 그린다 — 미리보기(DetailScreen의
+            // Canvas)와 동일하게 PostcardRenderSpec.drawDoodleStrokes 하나만 공유해서
+            // 호출하므로 좌표·굵기 계산이 두 경로에서 갈라지지 않는다.
+            PostcardRenderSpec.drawDoodleStrokes(
+                canvas = canvas,
+                strokes = doodleStrokes,
+                targetSize = OUTPUT_SIZE.toFloat()
+            )
 
             return outputBitmap
         } finally {

@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Fullscreen
@@ -124,6 +125,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -144,6 +146,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import kotlin.math.atan2
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -180,9 +183,15 @@ import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.ScreenBackgroundGray
+import com.postcardmemory.ui.theme.SealInkBlack
 import com.postcardmemory.ui.theme.SurfaceGray
+import com.postcardmemory.ui.theme.sealInkColors
+import com.postcardmemory.utils.DoodlePoint
+import com.postcardmemory.utils.DoodleStroke
+import com.postcardmemory.utils.DoodleStrokeWidth
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardRenderSpec
+import com.postcardmemory.utils.sanitizedDoodlePoint
 
 private enum class StickerEditMode {
     Move,
@@ -377,6 +386,102 @@ private val SEAL_SELECTED_MIN_GESTURE_SIZE = 120.dp
 
 /** 엽서 한 장에 추가할 수 있는 도장 총 개수(종류 무관 합산). */
 const val MAX_SEAL_COUNT = 2
+
+/**
+ * 낙서 미리보기 화면 좌표(postcardPreviewSize 기준 px)를 엽서 정규화 좌표로
+ * 변환한다. 경계를 살짝 벗어난 좌표는 sanitizedDoodlePoint가 [0,1]로
+ * 고정해 그리는 도중 엽서 밖으로 나가도 안전하게 경계선을 따라 이어진다.
+ * postcardSize가 아직 측정되지 않았으면(0 이하) null을 반환한다.
+ */
+internal fun normalizedDoodlePoint(
+    offset: Offset,
+    postcardSize: IntSize
+): DoodlePoint? {
+    if (postcardSize.width <= 0 || postcardSize.height <= 0) {
+        return null
+    }
+
+    return sanitizedDoodlePoint(
+        x = offset.x / postcardSize.width.toFloat(),
+        y = offset.y / postcardSize.height.toFloat()
+    )
+}
+
+/** 낙서 탭의 페이지 인덱스. 다른 탭에서는 낙서 입력·지우개 판정을 시작하지 않는다. */
+internal const val DOODLE_TAB_PAGE_INDEX = 5
+
+/** 이 거리(정규화 좌표 기준 화면 px)보다 가까운 점은 새로 추가하지 않아 획 데이터가 과도하게 촘촘해지지 않게 한다. */
+private const val MIN_DOODLE_POINT_SPACING_PX = 3f
+
+private fun distanceFromPointToSegment(
+    px: Float,
+    py: Float,
+    ax: Float,
+    ay: Float,
+    bx: Float,
+    by: Float
+): Float {
+    val abx = bx - ax
+    val aby = by - ay
+    val lengthSquared = abx * abx + aby * aby
+
+    if (lengthSquared <= 0f) {
+        val dx = px - ax
+        val dy = py - ay
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    val t = (((px - ax) * abx) + ((py - ay) * aby)) / lengthSquared
+    val clampedT = t.coerceIn(0f, 1f)
+    val closestX = ax + clampedT * abx
+    val closestY = ay + clampedT * aby
+    val dx = px - closestX
+    val dy = py - closestY
+
+    return sqrt(dx * dx + dy * dy)
+}
+
+/**
+ * 지우개가 이 획에 닿았는지 판정한다. 판정 반경은 지우개로 선택한 굵기와
+ * 지워질 획 자체의 굵기를 함께 고려한다(굵은 획일수록, 굵은 지우개일수록
+ * 쉽게 지워짐). 정규화 좌표(0..1) 공간에서 계산하므로 미리보기·exporter의
+ * 화면 크기 차이와 무관하게 항상 같은 획이 지워진다.
+ */
+internal fun doodleEraserHitsStroke(
+    touchPoint: DoodlePoint,
+    stroke: DoodleStroke,
+    eraserWidth: DoodleStrokeWidth
+): Boolean {
+    if (stroke.points.isEmpty()) return false
+
+    val hitRadius =
+        (eraserWidth.logicalWidth / 2f + stroke.width.logicalWidth / 2f) /
+                PostcardRenderSpec.LOGICAL_SIZE
+
+    if (stroke.points.size == 1) {
+        val point = stroke.points[0]
+        val dx = touchPoint.x - point.x
+        val dy = touchPoint.y - point.y
+        return sqrt(dx * dx + dy * dy) <= hitRadius
+    }
+
+    for (index in 0 until stroke.points.size - 1) {
+        val a = stroke.points[index]
+        val b = stroke.points[index + 1]
+        val distance =
+            distanceFromPointToSegment(
+                px = touchPoint.x,
+                py = touchPoint.y,
+                ax = a.x,
+                ay = a.y,
+                bx = b.x,
+                by = b.y
+            )
+        if (distance <= hitRadius) return true
+    }
+
+    return false
+}
 
 internal fun createStickerOverlayForExport(
     stickerUri: Uri?,
@@ -1186,6 +1291,10 @@ fun DetailScreen(
     val latestPhotoSeals by rememberUpdatedState(photoSeals)
     val canUndoSeal by viewModel.canUndoSeal.collectAsState()
     val canRedoSeal by viewModel.canRedoSeal.collectAsState()
+    val doodleStrokes by viewModel.doodleStrokes.collectAsState()
+    val latestDoodleStrokes by rememberUpdatedState(doodleStrokes)
+    val canUndoDoodle by viewModel.canUndoDoodle.collectAsState()
+    val canRedoDoodle by viewModel.canRedoDoodle.collectAsState()
     val canUndoPhotoTransform by viewModel.canUndoPhotoTransform.collectAsState()
     val canRedoPhotoTransform by viewModel.canRedoPhotoTransform.collectAsState()
     val canUndoTemplateStyle by viewModel.canUndoTemplateStyle.collectAsState()
@@ -1237,6 +1346,25 @@ fun DetailScreen(
 
     var sealSizes by remember {
         mutableStateOf(mapOf<String, IntSize>())
+    }
+
+    var doodleTool by remember {
+        mutableStateOf(DoodleTool.PEN)
+    }
+    val latestDoodleTool by rememberUpdatedState(doodleTool)
+    var doodleColorArgb by remember {
+        mutableStateOf(SealInkBlack.toArgb().toLong() and 0xFFFFFFFFL)
+    }
+    val latestDoodleColorArgb by rememberUpdatedState(doodleColorArgb)
+    var doodleWidth by remember {
+        mutableStateOf(DoodleStrokeWidth.MEDIUM)
+    }
+    val latestDoodleWidth by rememberUpdatedState(doodleWidth)
+    var currentDoodleStrokePoints by remember {
+        mutableStateOf(listOf<DoodlePoint>())
+    }
+    var isDrawingDoodle by remember {
+        mutableStateOf(false)
     }
 
     var backgroundRemovalError by remember {
@@ -1398,11 +1526,14 @@ fun DetailScreen(
     }
 
     val customizationPagerState = rememberPagerState(
-        pageCount = { 5 }
+        pageCount = { 6 }
+    )
+    val latestCustomizationPage by rememberUpdatedState(
+        customizationPagerState.currentPage
     )
     val customizationPagerScope = rememberCoroutineScope()
     val customizationPageLabels = remember {
-        listOf("사진", "배경", "텍스트", "스티커", "도장")
+        listOf("사진", "배경", "텍스트", "스티커", "도장", "낙서")
     }
     val customizationPageIcons = remember {
         listOf(
@@ -1410,7 +1541,8 @@ fun DetailScreen(
             Icons.Default.Wallpaper,
             Icons.Default.TextFields,
             Icons.Default.EmojiEmotions,
-            Icons.Default.Verified
+            Icons.Default.Verified,
+            Icons.Default.Draw
         )
     }
     val selectedLayout =
@@ -1882,7 +2014,11 @@ fun DetailScreen(
 
                                     launch {
                                     detectTransformGestures { _, pan, zoom, _ ->
-                                        if (!latestControlsEnabled) {
+                                        if (
+                                            !latestControlsEnabled ||
+                                            latestCustomizationPage ==
+                                            DOODLE_TAB_PAGE_INDEX
+                                        ) {
                                             return@detectTransformGestures
                                         }
 
@@ -2137,7 +2273,12 @@ fun DetailScreen(
                                             scaleY =
                                                 if (sticker.flipVertical) -1f else 1f
                                         }
-                                        .pointerInput(
+                                        .then(
+                                            if (
+                                                latestCustomizationPage !=
+                                                DOODLE_TAB_PAGE_INDEX
+                                            ) {
+                                                Modifier.pointerInput(
                                             sticker.id,
                                             postcardPreviewSize,
                                             perStickerEditMode,
@@ -2357,6 +2498,10 @@ fun DetailScreen(
                                         }
                                         }  // launch (mode gesture)
                                         }  // coroutineScope
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
                                 )
 
                                 if (isVisuallySelected && perStickerEditMode == StickerEditMode.Rotate) {
@@ -2365,7 +2510,12 @@ fun DetailScreen(
                                             .align(Alignment.TopCenter)
                                             .offset(y = (-22).dp)
                                             .size(stickerScaleHandleTouchSize)
-                                            .pointerInput(
+                                            .then(
+                                                if (
+                                                    latestCustomizationPage !=
+                                                    DOODLE_TAB_PAGE_INDEX
+                                                ) {
+                                                    Modifier.pointerInput(
                                                 sticker.id,
                                                 postcardPreviewSize,
                                                 stickerScaleHandleTouchPx,
@@ -2504,7 +2654,11 @@ fun DetailScreen(
                                                         rotationGestureActive = false
                                                     }
                                                 )
-                                            },
+                                            }
+                                                } else {
+                                                    Modifier
+                                                }
+                                            ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Box(
@@ -2593,7 +2747,12 @@ fun DetailScreen(
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
                                             .size(stickerScaleHandleTouchSize)
-                                            .pointerInput(
+                                            .then(
+                                                if (
+                                                    latestCustomizationPage !=
+                                                    DOODLE_TAB_PAGE_INDEX
+                                                ) {
+                                                    Modifier.pointerInput(
                                                 sticker.id,
                                                 postcardPreviewSize,
                                                 stickerScaleHandleTouchPx,
@@ -2746,7 +2905,11 @@ fun DetailScreen(
                                                         scaleGestureActive = false
                                                     }
                                                 )
-                                            },
+                                            }
+                                                } else {
+                                                    Modifier
+                                                }
+                                            ),
                                         contentAlignment = Alignment.BottomEnd
                                     ) {
                                         Box(
@@ -2816,7 +2979,12 @@ fun DetailScreen(
                                         rotationZ =
                                             seal.rotationDegrees
                                     }
-                                    .pointerInput(
+                                    .then(
+                                        if (
+                                            latestCustomizationPage !=
+                                            DOODLE_TAB_PAGE_INDEX
+                                        ) {
+                                            Modifier.pointerInput(
                                         seal.id,
                                         postcardPreviewSize,
                                         isFocusPreviewMode
@@ -2986,7 +3154,11 @@ fun DetailScreen(
                                                 }
                                             }
                                         }
-                                    },
+                                    }
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Box(
@@ -3030,6 +3202,176 @@ fun DetailScreen(
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
+                            }
+                        }
+
+                        // 낙서는 사진·스티커·도장보다 항상 위에 그린다 — 이 Box의
+                        // 마지막 자식이라 z-order상 최상단이다. pointerInput 블록
+                        // 안에서 return하는 것만으로는 이 Canvas가 다른 탭에서도
+                        // 터치를 가로채는 걸 막지 못했다(스티커·도장 드래그·삭제
+                        // 버튼이 전부 막히는 회귀가 실기기에서 확인됨) — 그래서
+                        // 낙서 탭이 아닐 때는 pointerInput 자체를 아예 붙이지
+                        // 않는다(Modifier.then으로 조건부 부착).
+                        val isDoodleInputActive =
+                            customizationPagerState.currentPage ==
+                            DOODLE_TAB_PAGE_INDEX &&
+                            !isFocusPreviewMode
+
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (isDoodleInputActive) {
+                                        Modifier.pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        val down =
+                                            awaitFirstDown(
+                                                requireUnconsumed = false
+                                            )
+                                        down.consume()
+
+                                        if (latestDoodleTool == DoodleTool.ERASER) {
+                                            var erasedAnyInThisGesture = false
+
+                                            fun eraseAt(position: Offset) {
+                                                val touchPoint =
+                                                    normalizedDoodlePoint(
+                                                        position,
+                                                        postcardPreviewSize
+                                                    ) ?: return
+
+                                                val remaining =
+                                                    latestDoodleStrokes.filterNot { stroke ->
+                                                        doodleEraserHitsStroke(
+                                                            touchPoint = touchPoint,
+                                                            stroke = stroke,
+                                                            eraserWidth = latestDoodleWidth
+                                                        )
+                                                    }
+
+                                                if (remaining.size != latestDoodleStrokes.size) {
+                                                    if (!erasedAnyInThisGesture) {
+                                                        viewModel.recordDoodleSnapshotForUndo()
+                                                        erasedAnyInThisGesture = true
+                                                    }
+                                                    viewModel.setDoodleStrokes(remaining)
+                                                }
+                                            }
+
+                                            eraseAt(down.position)
+
+                                            var keepGoing = true
+                                            while (keepGoing) {
+                                                val event = awaitPointerEvent()
+                                                val change =
+                                                    event.changes.firstOrNull {
+                                                        it.id == down.id
+                                                    }
+                                                if (change != null && change.pressed) {
+                                                    change.consume()
+                                                    eraseAt(change.position)
+                                                }
+                                                keepGoing =
+                                                    event.changes.any { it.pressed }
+                                            }
+                                        } else {
+                                            var lastRawPosition = down.position
+                                            val firstPoint =
+                                                normalizedDoodlePoint(
+                                                    down.position,
+                                                    postcardPreviewSize
+                                                )
+                                            currentDoodleStrokePoints =
+                                                if (firstPoint != null) {
+                                                    listOf(firstPoint)
+                                                } else {
+                                                    emptyList()
+                                                }
+                                            isDrawingDoodle = true
+
+                                            // 그리는 도중 탭이 바뀌거나 화면을 벗어나면 이
+                                            // pointerInput 코루틴이 취소되는데, finally가 없으면
+                                            // isDrawingDoodle/currentDoodleStrokePoints가 남아
+                                            // 다음 낙서 탭 재진입 시 미완성 선이 잠깐 보일 수 있다.
+                                            try {
+                                                var keepGoing = true
+                                                while (keepGoing) {
+                                                    val event = awaitPointerEvent()
+                                                    val change =
+                                                        event.changes.firstOrNull {
+                                                            it.id == down.id
+                                                        }
+                                                    if (change != null && change.pressed) {
+                                                        change.consume()
+
+                                                        val dx =
+                                                            change.position.x - lastRawPosition.x
+                                                        val dy =
+                                                            change.position.y - lastRawPosition.y
+
+                                                        if (
+                                                            dx * dx + dy * dy >=
+                                                            MIN_DOODLE_POINT_SPACING_PX *
+                                                            MIN_DOODLE_POINT_SPACING_PX
+                                                        ) {
+                                                            val point =
+                                                                normalizedDoodlePoint(
+                                                                    change.position,
+                                                                    postcardPreviewSize
+                                                                )
+                                                            if (point != null) {
+                                                                currentDoodleStrokePoints =
+                                                                    currentDoodleStrokePoints + point
+                                                            }
+                                                            lastRawPosition = change.position
+                                                        }
+                                                    }
+                                                    keepGoing =
+                                                        event.changes.any { it.pressed }
+                                                }
+
+                                                if (currentDoodleStrokePoints.isNotEmpty()) {
+                                                    viewModel.recordDoodleSnapshotForUndo()
+                                                    viewModel.setDoodleStrokes(
+                                                        latestDoodleStrokes + DoodleStroke(
+                                                            points = currentDoodleStrokePoints,
+                                                            colorArgb = latestDoodleColorArgb,
+                                                            width = latestDoodleWidth
+                                                        )
+                                                    )
+                                                }
+                                            } finally {
+                                                currentDoodleStrokePoints = emptyList()
+                                                isDrawingDoodle = false
+                                            }
+                                        }
+                                    }
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            val visibleStrokes =
+                                if (
+                                    isDrawingDoodle &&
+                                    currentDoodleStrokePoints.isNotEmpty()
+                                ) {
+                                    doodleStrokes + DoodleStroke(
+                                        points = currentDoodleStrokePoints,
+                                        colorArgb = doodleColorArgb,
+                                        width = doodleWidth
+                                    )
+                                } else {
+                                    doodleStrokes
+                                }
+
+                            drawIntoCanvas { canvas ->
+                                PostcardRenderSpec.drawDoodleStrokes(
+                                    canvas = canvas.nativeCanvas,
+                                    strokes = visibleStrokes,
+                                    targetSize = size.width
+                                )
                             }
                         }
                     }
@@ -4083,6 +4425,39 @@ fun DetailScreen(
                                     },
                                     canUndoSeal = canUndoSeal,
                                     canRedoSeal = canRedoSeal,
+                                    enabled = controlsEnabled,
+                                    modifier = Modifier.fillMaxWidth(0.92f)
+                                )
+                            }
+                        }
+
+                        5 -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                DoodlePanel(
+                                    doodleTool = doodleTool,
+                                    onToolSelected = { doodleTool = it },
+                                    doodleColorArgb = doodleColorArgb,
+                                    onColorSelected = { doodleColorArgb = it },
+                                    doodleWidth = doodleWidth,
+                                    onWidthSelected = { doodleWidth = it },
+                                    strokeCount = doodleStrokes.size,
+                                    onClearAll = {
+                                        if (doodleStrokes.isNotEmpty()) {
+                                            viewModel.recordDoodleSnapshotForUndo()
+                                            viewModel.setDoodleStrokes(emptyList())
+                                        }
+                                    },
+                                    onUndo = {
+                                        viewModel.undoDoodleChange()
+                                    },
+                                    onRedo = {
+                                        viewModel.redoDoodleChange()
+                                    },
+                                    canUndo = canUndoDoodle,
+                                    canRedo = canRedoDoodle,
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 )

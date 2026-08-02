@@ -1,11 +1,15 @@
 package com.postcardmemory.ui.detail
 
-const val DRAFT_FORMAT_VERSION = 1
+import com.postcardmemory.utils.DoodleStroke
+import com.postcardmemory.utils.deserializeDoodleStroke
+import com.postcardmemory.utils.serialize as serializeDoodleStroke
+
+const val DRAFT_FORMAT_VERSION = 2
 
 private const val DRAFT_HEADER = "POSTCARD_DRAFT_V1"
 
 /**
- * 완성 저장본과 분리된, 진행 중인 스티커·도장 편집 상태의 스냅샷.
+ * 완성 저장본과 분리된, 진행 중인 스티커·도장·낙서 편집 상태의 스냅샷.
  * 사진·배경·문구·날짜·폰트·레이아웃은 Room에 이미 실시간 저장되므로 여기 포함하지 않는다.
  */
 data class PostcardEditDraft(
@@ -17,7 +21,8 @@ data class PostcardEditDraft(
     val stickers: List<PhotoStickerItem>,
     val selectedStickerId: String?,
     val seals: List<PostcardSealItem>,
-    val selectedSealId: String?
+    val selectedSealId: String?,
+    val doodleStrokes: List<DoodleStroke> = emptyList()
 )
 
 /** 오래된 저장 요청이 최신 상태를 덮어쓰지 않도록 하는 순수 판정 함수. */
@@ -36,19 +41,24 @@ fun PostcardEditDraft.serialize(): String {
         selectedStickerId ?: "~",
         selectedSealId ?: "~",
         stickers.size.toString(),
-        seals.size.toString()
+        seals.size.toString(),
+        doodleStrokes.size.toString()
     ).joinToString("\t")
 
     val lines = mutableListOf(DRAFT_HEADER, metaLine)
     stickers.forEach { lines += it.serialize() }
     seals.forEach { lines += it.serialize() }
+    doodleStrokes.forEach { lines += it.serializeDoodleStroke() }
 
     return lines.joinToString("\n")
 }
 
 /**
  * 손상되었거나 형식이 맞지 않는 초안은 예외를 던지지 않고 null을 반환한다.
- * 개별 스티커/도장 라인이 손상됐으면 해당 항목만 건너뛰고 나머지는 복구한다.
+ * 개별 스티커/도장/낙서 라인이 손상됐으면 해당 항목만 건너뛰고 나머지는 복구한다.
+ *
+ * meta 필드가 9개뿐인 구버전(DRAFT_FORMAT_VERSION=1) 초안은 낙서 개수 필드가
+ * 없으므로 낙서 없는 초안으로 해석한다 — 낙서 도입 전에 저장된 초안도 그대로 복원된다.
  */
 fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
     val lines = text.split("\n")
@@ -68,11 +78,12 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
         val selectedSealId = meta[6].takeIf { it != "~" }
         val stickerCount = meta[7].toInt()
         val sealCount = meta[8].toInt()
+        val doodleCount = meta.getOrNull(9)?.toIntOrNull() ?: 0
 
-        if (stickerCount < 0 || sealCount < 0) return null
+        if (stickerCount < 0 || sealCount < 0 || doodleCount < 0) return null
 
         val bodyLines = lines.drop(2)
-        if (bodyLines.size < stickerCount + sealCount) return null
+        if (bodyLines.size < stickerCount + sealCount + doodleCount) return null
 
         val stickers = bodyLines
             .subList(0, stickerCount)
@@ -81,6 +92,13 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
         val seals = bodyLines
             .subList(stickerCount, stickerCount + sealCount)
             .mapNotNull { deserializePostcardSealItem(it) }
+
+        val doodleStrokes = bodyLines
+            .subList(
+                stickerCount + sealCount,
+                stickerCount + sealCount + doodleCount
+            )
+            .mapNotNull { deserializeDoodleStroke(it) }
 
         PostcardEditDraft(
             draftFormatVersion = formatVersion,
@@ -91,7 +109,8 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
             stickers = stickers,
             selectedStickerId = selectedStickerId,
             seals = seals,
-            selectedSealId = selectedSealId
+            selectedSealId = selectedSealId,
+            doodleStrokes = doodleStrokes
         )
     }.getOrNull()
 }

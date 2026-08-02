@@ -2,6 +2,9 @@ package com.postcardmemory.ui.detail
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
+import com.postcardmemory.utils.DoodlePoint
+import com.postcardmemory.utils.DoodleStroke
+import com.postcardmemory.utils.DoodleStrokeWidth
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -348,5 +351,150 @@ class PostcardOverlayExportLogicTest {
 
         assertEquals(450f, centered.x, 0.01f)
         assertEquals(450f, centered.y, 0.01f)
+    }
+
+    // ---- normalizedDoodlePoint ----
+
+    @Test
+    fun normalizedDoodlePoint_topLeftCorner_isZeroZero() {
+        val point = normalizedDoodlePoint(Offset(0f, 0f), postcard)
+
+        assertEquals(0f, point!!.x, 0.001f)
+        assertEquals(0f, point.y, 0.001f)
+    }
+
+    @Test
+    fun normalizedDoodlePoint_bottomRightCorner_isOneOne() {
+        val point = normalizedDoodlePoint(Offset(1000f, 1000f), postcard)
+
+        assertEquals(1f, point!!.x, 0.001f)
+        assertEquals(1f, point.y, 0.001f)
+    }
+
+    @Test
+    fun normalizedDoodlePoint_center_isHalfHalf() {
+        val point = normalizedDoodlePoint(Offset(500f, 500f), postcard)
+
+        assertEquals(0.5f, point!!.x, 0.001f)
+        assertEquals(0.5f, point.y, 0.001f)
+    }
+
+    @Test
+    fun normalizedDoodlePoint_differentCanvasSize_producesSameNormalizedPosition() {
+        val smallCanvas = IntSize(400, 400)
+
+        val onThousandCanvas = normalizedDoodlePoint(Offset(250f, 250f), postcard)
+        val onSmallCanvas = normalizedDoodlePoint(Offset(100f, 100f), smallCanvas)
+
+        assertEquals(onThousandCanvas!!.x, onSmallCanvas!!.x, 0.001f)
+        assertEquals(onThousandCanvas.y, onSmallCanvas.y, 0.001f)
+    }
+
+    @Test
+    fun normalizedDoodlePoint_outsideBounds_isClampedNotDropped() {
+        // 그리는 도중 손가락이 엽서 경계를 벗어나도 입력을 끊지 않고
+        // 좌표를 경계로 고정한다(§10: 저장 좌표를 유효 범위로 제한).
+        val point = normalizedDoodlePoint(Offset(-50f, 1200f), postcard)
+
+        assertEquals(0f, point!!.x, 0.001f)
+        assertEquals(1f, point.y, 0.001f)
+    }
+
+    @Test
+    fun normalizedDoodlePoint_returnsNullWhenPostcardSizeNotMeasuredYet() {
+        assertEquals(null, normalizedDoodlePoint(Offset(10f, 10f), IntSize(0, 0)))
+    }
+
+    // ---- doodleEraserHitsStroke ----
+
+    private fun horizontalStroke(
+        width: DoodleStrokeWidth = DoodleStrokeWidth.MEDIUM
+    ) = DoodleStroke(
+        points = listOf(DoodlePoint(0.2f, 0.5f), DoodlePoint(0.8f, 0.5f)),
+        colorArgb = 0xFF000000L,
+        width = width
+    )
+
+    @Test
+    fun doodleEraserHitsStroke_touchDirectlyOnLine_hits() {
+        val hit = doodleEraserHitsStroke(
+            touchPoint = DoodlePoint(0.5f, 0.5f),
+            stroke = horizontalStroke(),
+            eraserWidth = DoodleStrokeWidth.MEDIUM
+        )
+
+        assertTrue(hit)
+    }
+
+    @Test
+    fun doodleEraserHitsStroke_touchFarFromLine_misses() {
+        val hit = doodleEraserHitsStroke(
+            touchPoint = DoodlePoint(0.5f, 0.9f),
+            stroke = horizontalStroke(),
+            eraserWidth = DoodleStrokeWidth.MEDIUM
+        )
+
+        assertFalse(hit)
+    }
+
+    @Test
+    fun doodleEraserHitsStroke_touchOutsideSegmentRange_misses() {
+        // x=0.2~0.8 구간 밖(x=0.95)은 아무리 y가 맞아도 스칠 수 없다.
+        val hit = doodleEraserHitsStroke(
+            touchPoint = DoodlePoint(0.95f, 0.5f),
+            stroke = horizontalStroke(),
+            eraserWidth = DoodleStrokeWidth.MEDIUM
+        )
+
+        assertFalse(hit)
+    }
+
+    @Test
+    fun doodleEraserHitsStroke_thickerStrokeIsEasierToHit() {
+        val nearMissPoint = DoodlePoint(0.5f, 0.514f)
+
+        assertFalse(
+            doodleEraserHitsStroke(
+                nearMissPoint,
+                horizontalStroke(width = DoodleStrokeWidth.THIN),
+                DoodleStrokeWidth.THIN
+            )
+        )
+        assertTrue(
+            doodleEraserHitsStroke(
+                nearMissPoint,
+                horizontalStroke(width = DoodleStrokeWidth.THICK),
+                DoodleStrokeWidth.THIN
+            )
+        )
+    }
+
+    @Test
+    fun doodleEraserHitsStroke_singlePointDot_hitsWithinRadius() {
+        val dot = DoodleStroke(
+            points = listOf(DoodlePoint(0.5f, 0.5f)),
+            colorArgb = 0xFF000000L,
+            width = DoodleStrokeWidth.MEDIUM
+        )
+
+        assertTrue(
+            doodleEraserHitsStroke(DoodlePoint(0.5f, 0.5f), dot, DoodleStrokeWidth.MEDIUM)
+        )
+        assertFalse(
+            doodleEraserHitsStroke(DoodlePoint(0.9f, 0.9f), dot, DoodleStrokeWidth.MEDIUM)
+        )
+    }
+
+    @Test
+    fun doodleEraserHitsStroke_emptyStroke_neverHits() {
+        val empty = DoodleStroke(
+            points = emptyList(),
+            colorArgb = 0xFF000000L,
+            width = DoodleStrokeWidth.MEDIUM
+        )
+
+        assertFalse(
+            doodleEraserHitsStroke(DoodlePoint(0.5f, 0.5f), empty, DoodleStrokeWidth.THICK)
+        )
     }
 }

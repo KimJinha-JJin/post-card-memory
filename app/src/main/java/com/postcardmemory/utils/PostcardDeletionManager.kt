@@ -129,6 +129,10 @@ internal fun cleanupPostcardOwnedAssets(
         "sealState",
         File(filesDir, "seal_states/${postcard.id}.txt")
     )
+    deleteFile(
+        "doodleState",
+        File(filesDir, "doodle_states/${postcard.id}.txt")
+    )
 
     // 5. 편집 초안 — PostcardDraftStorage.deleteDraft가 초안 텍스트와
     // 2일차에 추가된 초안 전용 누끼 디렉터리(draft_sticker_bgs/<id>/)를

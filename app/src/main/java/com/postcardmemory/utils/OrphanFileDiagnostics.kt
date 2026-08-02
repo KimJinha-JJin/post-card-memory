@@ -41,7 +41,7 @@ data class OrphanScanResult(
  * 파일을 지우거나 옮기지 않는다 — 삭제는 이 도구가 하지 않는 별도 작업이다.
  *
  * PostcardDeletionManager와 같은 filesDir 하위 경로 규칙(sticker_states/,
- * seal_states/, sticker_bgs/<id>/, sticker_originals/<id>/,
+ * seal_states/, doodle_states/, sticker_bgs/<id>/, sticker_originals/<id>/,
  * draft_sticker_bgs/<id>/, drafts/edit_state/<id>.draft.txt)을 그대로
  * 따르되, 그 파일들을 지우는 대신 목록만 만든다.
  */
@@ -125,6 +125,14 @@ object OrphanFileDiagnostics {
                 existingPostcardIds = existingPostcardIds,
                 unclassified = unclassified,
                 reason = "Room에 존재하지 않는 postcardId의 도장 상태 파일"
+            ),
+            scanPostcardIdFiles(
+                type = "doodleState",
+                directory = File(rootDirectory, "doodle_states"),
+                suffix = ".txt",
+                existingPostcardIds = existingPostcardIds,
+                unclassified = unclassified,
+                reason = "Room에 존재하지 않는 postcardId의 낙서 상태 파일"
             ),
             scanPostcardIdFiles(
                 type = "editDraft",
