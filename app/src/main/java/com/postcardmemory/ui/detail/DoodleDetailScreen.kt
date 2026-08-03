@@ -3,6 +3,7 @@ package com.postcardmemory.ui.detail
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,12 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Draw
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,12 +46,7 @@ import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.sealInkColors
 import com.postcardmemory.utils.DoodleStrokeWidth
-
-/** 낙서 탭에서 선택 가능한 도구. v1은 펜과 지우개 둘뿐이다. */
-enum class DoodleTool {
-    PEN,
-    ERASER
-}
+import com.postcardmemory.utils.DoodleTool
 
 @Composable
 fun DoodlePanel(
@@ -113,7 +112,12 @@ fun DoodlePanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // 도구가 4개라 좁은 화면이나 큰 글자 설정에서는 한 줄을 넘길 수 있다.
+        // 잘려서 안 보이는 대신 가로로 밀어 볼 수 있게 한다(굵기 줄도 동일).
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DoodleToolTile(
@@ -122,6 +126,22 @@ fun DoodlePanel(
                 selected = doodleTool == DoodleTool.PEN,
                 enabled = enabled,
                 onClick = { onToolSelected(DoodleTool.PEN) }
+            )
+
+            DoodleToolTile(
+                label = "형광펜",
+                icon = Icons.Default.BorderColor,
+                selected = doodleTool == DoodleTool.HIGHLIGHTER,
+                enabled = enabled,
+                onClick = { onToolSelected(DoodleTool.HIGHLIGHTER) }
+            )
+
+            DoodleToolTile(
+                label = "점선",
+                icon = Icons.Default.MoreHoriz,
+                selected = doodleTool == DoodleTool.DOTTED,
+                enabled = enabled,
+                onClick = { onToolSelected(DoodleTool.DOTTED) }
             )
 
             DoodleToolTile(
@@ -204,6 +224,9 @@ fun DoodlePanel(
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             DoodleWidthTile(

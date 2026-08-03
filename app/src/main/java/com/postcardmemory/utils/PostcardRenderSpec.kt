@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.graphics.Path
@@ -32,6 +33,12 @@ object PostcardRenderSpec {
     const val LOGICAL_SIZE = 2048f
     const val OUTPUT_SIZE = 2048
     const val STAMP_BORDER_WIDTH = 18f
+    /** 점선의 그리는 구간. 0에 가까울수록 Cap.ROUND가 만드는 동그란 점이 된다. */
+    private const val DOTTED_DOT_LENGTH = 0.1f
+
+    /** 점선의 빈 구간을 획 굵기의 몇 배로 둘지. 점 지름보다 커야 점이 붙어 보이지 않는다. */
+    private const val DOTTED_GAP_MULTIPLIER = 2.2f
+
     private const val SPECKLE_PATTERN_SEED = 20240704L
     private const val SPECKLE_COUNT = 900
     private const val STAMP_BASE_PHOTO_SIZE = 1000f
@@ -386,6 +393,19 @@ object PostcardRenderSpec {
     }
 
     /**
+     * 점선 도구의 대시 패턴.
+     *
+     * 그리는 구간(on)을 거의 0으로 두면 Cap.ROUND가 굵기만 한 동그란 점을
+     * 만든다. 빈 구간(off)은 굵기에 비례시켜, 굵기 단계를 바꾸면 점 크기와
+     * 간격이 함께 커지고 좁아진다. 간격 단위가 LOGICAL_SIZE 기준이라
+     * 미리보기와 내보내기에서 같은 비율로 나온다.
+     */
+    private fun dottedPathEffect(strokeWidth: Float): DashPathEffect {
+        val gap = (strokeWidth * DOTTED_GAP_MULTIPLIER).coerceAtLeast(1f)
+        return DashPathEffect(floatArrayOf(DOTTED_DOT_LENGTH, gap), 0f)
+    }
+
+    /**
      * 낙서 획을 엽서 최상단에 그린다. 미리보기(Compose Canvas의 nativeCanvas)와
      * PostcardImageExporter가 이 함수 하나만 공유해서 호출하므로, 좌표·굵기
      * 계산이 두 경로에서 따로 갈라질 수 없다 — drawBaseContent와 동일한
@@ -413,16 +433,32 @@ object PostcardRenderSpec {
         for (stroke in strokes) {
             if (stroke.points.isEmpty()) continue
 
+            val strokeWidth = stroke.renderWidth
+
+            // 획마다 색·알파·굵기·PathEffect를 매번 다시 지정한다. 앞 획이
+            // 형광펜이나 점선이어도 다음 획에 설정이 새지 않는다.
             paint.color = stroke.colorArgb.toInt()
-            paint.strokeWidth = stroke.width.logicalWidth
+            if (stroke.tool == DoodleTool.HIGHLIGHTER) {
+                // color 대입이 알파를 색 원본값(불투명)으로 되돌리므로 그 뒤에 적용한다.
+                paint.alpha = HIGHLIGHTER_ALPHA
+            }
+            paint.strokeWidth = strokeWidth
+            paint.pathEffect =
+                if (stroke.tool == DoodleTool.DOTTED) {
+                    dottedPathEffect(strokeWidth)
+                } else {
+                    null
+                }
 
             if (stroke.points.size == 1) {
+                // 점 하나짜리 획(짧게 탭)은 점선이어도 점 하나로 찍는다 —
+                // PathEffect는 경로 길이를 나누는 방식이라 길이가 없으면 의미가 없다.
                 val dot = stroke.points[0]
                 paint.style = Paint.Style.FILL
                 canvas.drawCircle(
                     dot.x * LOGICAL_SIZE,
                     dot.y * LOGICAL_SIZE,
-                    stroke.width.logicalWidth / 2f,
+                    strokeWidth / 2f,
                     paint
                 )
                 paint.style = Paint.Style.STROKE

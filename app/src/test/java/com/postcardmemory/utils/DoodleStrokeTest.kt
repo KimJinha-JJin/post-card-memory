@@ -109,6 +109,94 @@ class DoodleStrokeTest {
         assertTrue(result == null || result.points.isNotEmpty())
     }
 
+    // ---- tool 필드 (형광펜·점선 도입) ----
+
+    @Test
+    fun serialize_thenParse_roundTripsAllStorableTools() {
+        // ERASER는 획으로 저장되지 않으므로 왕복 대상이 아니다.
+        listOf(DoodleTool.PEN, DoodleTool.HIGHLIGHTER, DoodleTool.DOTTED)
+            .forEach { tool ->
+                val stroke = sampleStroke().copy(tool = tool)
+                assertEquals(stroke, deserializeDoodleStroke(stroke.serialize()))
+            }
+    }
+
+    @Test
+    fun parse_legacyFourFieldLine_restoresAsPen_doesNotDiscardStroke() {
+        // 도구 필드가 없던 시절에 저장된 낙서. 반드시 살아남아야 한다.
+        val line =
+            listOf("stroke-1", "16777215", "MEDIUM", "0.1,0.1;0.9,0.9")
+                .joinToString("\t")
+
+        val parsed = deserializeDoodleStroke(line)
+
+        assertEquals(DoodleTool.PEN, parsed?.tool)
+        assertEquals(
+            listOf(DoodlePoint(0.1f, 0.1f), DoodlePoint(0.9f, 0.9f)),
+            parsed?.points
+        )
+    }
+
+    @Test
+    fun parse_unknownTool_restoresAsPen_doesNotDiscardStroke() {
+        val line =
+            listOf(
+                "stroke-1",
+                "16777215",
+                "MEDIUM",
+                "0.1,0.1",
+                "UNKNOWN_FUTURE_TOOL"
+            ).joinToString("\t")
+
+        val parsed = deserializeDoodleStroke(line)
+
+        assertEquals(DoodleTool.PEN, parsed?.tool)
+        assertEquals(listOf(DoodlePoint(0.1f, 0.1f)), parsed?.points)
+    }
+
+    @Test
+    fun parse_blankTool_restoresAsPen() {
+        val line =
+            listOf("stroke-1", "16777215", "MEDIUM", "0.1,0.1", "")
+                .joinToString("\t")
+
+        assertEquals(DoodleTool.PEN, deserializeDoodleStroke(line)?.tool)
+    }
+
+    @Test
+    fun parse_storedEraserTool_restoresAsPen() {
+        // 지우개는 획을 남기지 않는 도구라 저장값으로 들어오면 펜으로 본다.
+        val line =
+            listOf("stroke-1", "16777215", "MEDIUM", "0.1,0.1", "ERASER")
+                .joinToString("\t")
+
+        assertEquals(DoodleTool.PEN, deserializeDoodleStroke(line)?.tool)
+    }
+
+    // ---- renderWidth (렌더러와 지우개 판정이 공유하는 값) ----
+
+    @Test
+    fun renderWidth_highlighterIsWiderThanSameWidthPen() {
+        val pen = sampleStroke().copy(tool = DoodleTool.PEN)
+        val highlighter = sampleStroke().copy(tool = DoodleTool.HIGHLIGHTER)
+
+        assertTrue(highlighter.renderWidth > pen.renderWidth)
+        assertEquals(
+            DoodleStrokeWidth.MEDIUM.logicalWidth * HIGHLIGHTER_WIDTH_MULTIPLIER,
+            highlighter.renderWidth
+        )
+    }
+
+    @Test
+    fun renderWidth_penAndDottedUseStoredWidthUnchanged() {
+        listOf(DoodleTool.PEN, DoodleTool.DOTTED).forEach { tool ->
+            DoodleStrokeWidth.entries.forEach { width ->
+                val stroke = sampleStroke().copy(tool = tool, width = width)
+                assertEquals(width.logicalWidth, stroke.renderWidth)
+            }
+        }
+    }
+
     @Test
     fun sanitizedDoodlePoint_clampsOutOfRangeValues() {
         val point = sanitizedDoodlePoint(1.5f, -0.5f)

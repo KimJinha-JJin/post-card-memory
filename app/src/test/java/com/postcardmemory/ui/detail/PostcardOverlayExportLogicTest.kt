@@ -5,6 +5,8 @@ import androidx.compose.ui.unit.IntSize
 import com.postcardmemory.utils.DoodlePoint
 import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.DoodleStrokeWidth
+import com.postcardmemory.utils.DoodleTool
+import com.postcardmemory.utils.PostcardRenderSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -495,6 +497,33 @@ class PostcardOverlayExportLogicTest {
 
         assertFalse(
             doodleEraserHitsStroke(DoodlePoint(0.5f, 0.5f), empty, DoodleStrokeWidth.THICK)
+        )
+    }
+
+    @Test
+    fun doodleEraserHitsStroke_highlighterErasesAtItsWiderVisibleWidth() {
+        // 형광펜은 같은 굵기 단계의 펜보다 넓게 그려진다. 펜이라면 빗나갈
+        // 거리에서도 형광펜은 눈에 보이는 만큼 지워져야 한다.
+        val penHitRadius =
+            DoodleStrokeWidth.MEDIUM.logicalWidth /
+                    PostcardRenderSpec.LOGICAL_SIZE
+        val justOutsidePen = 0.5f + penHitRadius * 1.2f
+
+        val touch = DoodlePoint(0.5f, justOutsidePen)
+
+        assertFalse(
+            doodleEraserHitsStroke(
+                touch,
+                horizontalStroke().copy(tool = DoodleTool.PEN),
+                DoodleStrokeWidth.MEDIUM
+            )
+        )
+        assertTrue(
+            doodleEraserHitsStroke(
+                touch,
+                horizontalStroke().copy(tool = DoodleTool.HIGHLIGHTER),
+                DoodleStrokeWidth.MEDIUM
+            )
         )
     }
 }

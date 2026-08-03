@@ -189,8 +189,10 @@ import com.postcardmemory.ui.theme.sealInkColors
 import com.postcardmemory.utils.DoodlePoint
 import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.DoodleStrokeWidth
+import com.postcardmemory.utils.DoodleTool
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardRenderSpec
+import com.postcardmemory.utils.renderWidth
 import com.postcardmemory.utils.sanitizedDoodlePoint
 
 private enum class StickerEditMode {
@@ -452,6 +454,9 @@ private fun distanceFromPointToSegment(
  * 지워질 획 자체의 굵기를 함께 고려한다(굵은 획일수록, 굵은 지우개일수록
  * 쉽게 지워짐). 정규화 좌표(0..1) 공간에서 계산하므로 미리보기·exporter의
  * 화면 크기 차이와 무관하게 항상 같은 획이 지워진다.
+ *
+ * 획 쪽 반경은 저장된 굵기가 아니라 renderWidth(도구 배율 반영)를 쓴다 —
+ * 형광펜처럼 화면에 더 넓게 그려지는 도구도 보이는 만큼 지워져야 한다.
  */
 internal fun doodleEraserHitsStroke(
     touchPoint: DoodlePoint,
@@ -461,7 +466,7 @@ internal fun doodleEraserHitsStroke(
     if (stroke.points.isEmpty()) return false
 
     val hitRadius =
-        (eraserWidth.logicalWidth / 2f + stroke.width.logicalWidth / 2f) /
+        (eraserWidth.logicalWidth / 2f + stroke.renderWidth / 2f) /
                 PostcardRenderSpec.LOGICAL_SIZE
 
     if (stroke.points.size == 1) {
@@ -3348,7 +3353,8 @@ fun DetailScreen(
                                                         latestDoodleStrokes + DoodleStroke(
                                                             points = currentDoodleStrokePoints,
                                                             colorArgb = latestDoodleColorArgb,
-                                                            width = latestDoodleWidth
+                                                            width = latestDoodleWidth,
+                                                            tool = latestDoodleTool
                                                         )
                                                     )
                                                 }
@@ -3372,7 +3378,8 @@ fun DetailScreen(
                                     doodleStrokes + DoodleStroke(
                                         points = currentDoodleStrokePoints,
                                         colorArgb = doodleColorArgb,
-                                        width = doodleWidth
+                                        width = doodleWidth,
+                                        tool = doodleTool
                                     )
                                 } else {
                                     doodleStrokes
