@@ -256,7 +256,7 @@ fun PhotoStickerPickerPanel(
                             .clickable(enabled = enabled) {
                                 onSelectSticker(sticker.id)
                             }
-                            .padding(3.dp),
+                            .padding(6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         AsyncImage(
@@ -308,7 +308,7 @@ fun PhotoStickerPickerPanel(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
                         tint = GraphiteAccent,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Text(
                         text = "추가",
@@ -333,24 +333,11 @@ fun PhotoStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                EditorOutlineButton(
-                    text = "복제",
-                    onClick = { onDuplicateSticker(selectedSticker.id) },
-                    enabled = enabled
-                )
-
-                EditorOutlineButton(
-                    text = "삭제",
-                    icon = Icons.Default.Delete,
-                    onClick = { onDeleteSticker(selectedSticker.id) },
-                    enabled = enabled,
-                    contentColor = GalleryDangerRed,
-                    borderColor = GalleryDangerRed
-                )
-            }
+            EditorOutlineButton(
+                text = "복제",
+                onClick = { onDuplicateSticker(selectedSticker.id) },
+                enabled = enabled
+            )
 
             backgroundRemovalError?.let { errorMessage ->
                 Spacer(modifier = Modifier.height(8.dp))
@@ -361,6 +348,23 @@ fun PhotoStickerPickerPanel(
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            EditorOutlineButton(
+                text = "삭제",
+                icon = Icons.Default.Delete,
+                onClick = { onDeleteSticker(selectedSticker.id) },
+                enabled = enabled,
+                contentColor = GalleryDangerRed,
+                borderColor = GalleryDangerRed
+            )
+        } else if (photoStickers.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            EditorEmptyHint(
+                text = "편집할 스티커를 선택해."
+            )
         }
 
         if (photoStickers.isEmpty()) {

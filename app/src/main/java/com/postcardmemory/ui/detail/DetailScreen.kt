@@ -407,6 +407,12 @@ internal fun normalizedDoodlePoint(
     )
 }
 
+/** 스티커 탭의 페이지 인덱스. 다른 탭에서는 스티커 선택 표시·조작 손잡이·제스처를 시작하지 않는다. */
+internal const val STICKER_TAB_PAGE_INDEX = 3
+
+/** 도장 탭의 페이지 인덱스. 다른 탭에서는 도장 선택 표시·제스처를 시작하지 않는다. */
+internal const val SEAL_TAB_PAGE_INDEX = 4
+
 /** 낙서 탭의 페이지 인덱스. 다른 탭에서는 낙서 입력·지우개 판정을 시작하지 않는다. */
 internal const val DOODLE_TAB_PAGE_INDEX = 5
 
@@ -2188,7 +2194,10 @@ fun DetailScreen(
                             val isSelected =
                                 sticker.id == selectedStickerId
                             val isVisuallySelected =
-                                isSelected && !isFocusPreviewMode
+                                isSelected &&
+                                        !isFocusPreviewMode &&
+                                        latestCustomizationPage ==
+                                        STICKER_TAB_PAGE_INDEX
                             val perStickerEditMode =
                                 if (isSelected) {
                                     resolvedStickerEditMode
@@ -2275,8 +2284,8 @@ fun DetailScreen(
                                         }
                                         .then(
                                             if (
-                                                latestCustomizationPage !=
-                                                DOODLE_TAB_PAGE_INDEX
+                                                latestCustomizationPage ==
+                                                STICKER_TAB_PAGE_INDEX
                                             ) {
                                                 Modifier.pointerInput(
                                             sticker.id,
@@ -2512,8 +2521,8 @@ fun DetailScreen(
                                             .size(stickerScaleHandleTouchSize)
                                             .then(
                                                 if (
-                                                    latestCustomizationPage !=
-                                                    DOODLE_TAB_PAGE_INDEX
+                                                    latestCustomizationPage ==
+                                                    STICKER_TAB_PAGE_INDEX
                                                 ) {
                                                     Modifier.pointerInput(
                                                 sticker.id,
@@ -2749,8 +2758,8 @@ fun DetailScreen(
                                             .size(stickerScaleHandleTouchSize)
                                             .then(
                                                 if (
-                                                    latestCustomizationPage !=
-                                                    DOODLE_TAB_PAGE_INDEX
+                                                    latestCustomizationPage ==
+                                                    STICKER_TAB_PAGE_INDEX
                                                 ) {
                                                     Modifier.pointerInput(
                                                 sticker.id,
@@ -2936,7 +2945,10 @@ fun DetailScreen(
                             val isSealSelected =
                                 seal.id == selectedSealId
                             val isSealVisuallySelected =
-                                isSealSelected && !isFocusPreviewMode
+                                isSealSelected &&
+                                        !isFocusPreviewMode &&
+                                        latestCustomizationPage ==
+                                        SEAL_TAB_PAGE_INDEX
                             val currentSealOffset =
                                 seal.offset
 
@@ -2981,8 +2993,8 @@ fun DetailScreen(
                                     }
                                     .then(
                                         if (
-                                            latestCustomizationPage !=
-                                            DOODLE_TAB_PAGE_INDEX
+                                            latestCustomizationPage ==
+                                            SEAL_TAB_PAGE_INDEX
                                         ) {
                                             Modifier.pointerInput(
                                         seal.id,
@@ -3405,7 +3417,11 @@ fun DetailScreen(
                 val canMoveSelectedStickerBackward =
                     selectedStickerIndex > 0
 
-                if (selectedSticker != null) {
+                if (
+                    selectedSticker != null &&
+                    customizationPagerState.currentPage ==
+                    STICKER_TAB_PAGE_INDEX
+                ) {
                     Spacer(
                         modifier = Modifier.height(12.dp)
                     )

@@ -117,7 +117,7 @@ fun SealPickerPanel(
                 )
 
                 Text(
-                    text = "${photoSeals.size}개",
+                    text = "${photoSeals.size} / ${MAX_SEAL_COUNT}개",
                     color = GraphiteAccent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
