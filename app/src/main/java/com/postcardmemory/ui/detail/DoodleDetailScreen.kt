@@ -153,6 +153,17 @@ fun DoodlePanel(
             )
         }
 
+        // 직선은 전용 버튼이 없는 손가락 동작이라 안내가 없으면 찾을 수 없다.
+        // 빈 상태 안내에만 넣으면 이미 낙서가 있는 사람은 못 보므로 획 개수와
+        // 무관하게 띄우고, 직선이 적용되지 않는 지우개일 때만 감춘다.
+        if (doodleTool != DoodleTool.ERASER) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            EditorEmptyHint(
+                text = "길게 누른 채 끌면 직선을 그릴 수 있어."
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(

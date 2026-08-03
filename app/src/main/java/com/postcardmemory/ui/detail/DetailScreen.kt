@@ -120,6 +120,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -133,6 +134,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -1377,6 +1379,9 @@ fun DetailScreen(
     var isDrawingDoodle by remember {
         mutableStateOf(false)
     }
+
+    /** 낙서가 직선 입력으로 전환된 순간을 손끝으로 알리는 데만 쓴다. */
+    val hapticFeedback = LocalHapticFeedback.current
 
     var backgroundRemovalError by remember {
         mutableStateOf<String?>(null)
@@ -3311,47 +3316,158 @@ fun DetailScreen(
                                             // isDrawingDoodle/currentDoodleStrokePoints가 남아
                                             // 다음 낙서 탭 재진입 시 미완성 선이 잠깐 보일 수 있다.
                                             try {
-                                                var keepGoing = true
-                                                while (keepGoing) {
-                                                    val event = awaitPointerEvent()
-                                                    val change =
-                                                        event.changes.firstOrNull {
-                                                            it.id == down.id
-                                                        }
-                                                    if (change != null && change.pressed) {
-                                                        change.consume()
+                                                // 1단계: 자유곡선인지 직선인지 정한다.
+                                                // 손가락을 가만히 두면 포인터 이벤트가 오지 않으므로
+                                                // 길게 누르기는 타임아웃으로만 판정할 수 있다. 시간 안에
+                                                // touchSlop을 넘게 움직이면 자유곡선, 넘지 않은 채로
+                                                // 시간이 지나면 직선이다. 판정 기준은 Android 기본
+                                                // 제스처 값을 그대로 쓴다(마법 숫자를 새로 만들지 않는다).
+                                                // 한 번 정해진 모드는 손가락을 뗄 때까지 바뀌지 않는다.
+                                                val slop = viewConfiguration.touchSlop
+                                                var freeDrawResumeAt: Offset? = null
+                                                var allPointersUp = false
 
-                                                        val dx =
-                                                            change.position.x - lastRawPosition.x
-                                                        val dy =
-                                                            change.position.y - lastRawPosition.y
+                                                val decidedBeforeHold =
+                                                    withTimeoutOrNull(
+                                                        viewConfiguration.longPressTimeoutMillis
+                                                    ) {
+                                                        while (true) {
+                                                            val event = awaitPointerEvent()
+                                                            val change =
+                                                                event.changes.firstOrNull {
+                                                                    it.id == down.id
+                                                                }
 
-                                                        if (
-                                                            dx * dx + dy * dy >=
-                                                            MIN_DOODLE_POINT_SPACING_PX *
-                                                            MIN_DOODLE_POINT_SPACING_PX
-                                                        ) {
-                                                            val point =
-                                                                normalizedDoodlePoint(
-                                                                    change.position,
-                                                                    postcardPreviewSize
-                                                                )
-                                                            if (point != null) {
-                                                                currentDoodleStrokePoints =
-                                                                    currentDoodleStrokePoints + point
+                                                            if (change != null && change.pressed) {
+                                                                change.consume()
+
+                                                                val dx =
+                                                                    change.position.x -
+                                                                            down.position.x
+                                                                val dy =
+                                                                    change.position.y -
+                                                                            down.position.y
+
+                                                                if (
+                                                                    dx * dx + dy * dy >
+                                                                    slop * slop
+                                                                ) {
+                                                                    freeDrawResumeAt =
+                                                                        change.position
+                                                                    return@withTimeoutOrNull Unit
+                                                                }
                                                             }
-                                                            lastRawPosition = change.position
+
+                                                            if (event.changes.none { it.pressed }) {
+                                                                allPointersUp = true
+                                                                return@withTimeoutOrNull Unit
+                                                            }
                                                         }
                                                     }
-                                                    keepGoing =
-                                                        event.changes.any { it.pressed }
+
+                                                val straightLineMode =
+                                                    decidedBeforeHold == null
+
+                                                if (!allPointersUp) {
+                                                    if (straightLineMode) {
+                                                        // 직선 상태로 처음 들어간 순간에만 한 번 알린다.
+                                                        hapticFeedback.performHapticFeedback(
+                                                            HapticFeedbackType.LongPress
+                                                        )
+                                                    } else {
+                                                        // slop을 넘은 그 지점부터 자유곡선을 이어 그린다.
+                                                        freeDrawResumeAt?.let { resumePosition ->
+                                                            normalizedDoodlePoint(
+                                                                resumePosition,
+                                                                postcardPreviewSize
+                                                            )?.let { resumePoint ->
+                                                                currentDoodleStrokePoints =
+                                                                    currentDoodleStrokePoints +
+                                                                            resumePoint
+                                                            }
+                                                            lastRawPosition = resumePosition
+                                                        }
+                                                    }
+
+                                                    var keepGoing = true
+                                                    while (keepGoing) {
+                                                        val event = awaitPointerEvent()
+                                                        val change =
+                                                            event.changes.firstOrNull {
+                                                                it.id == down.id
+                                                            }
+                                                        if (change != null && change.pressed) {
+                                                            change.consume()
+
+                                                            if (straightLineMode) {
+                                                                // 시작점은 고정하고 끝점만 따라간다 —
+                                                                // 손가락이 굽은 경로로 지나가도
+                                                                // 중간 경로는 남기지 않는다.
+                                                                val endPoint =
+                                                                    normalizedDoodlePoint(
+                                                                        change.position,
+                                                                        postcardPreviewSize
+                                                                    )
+                                                                if (
+                                                                    firstPoint != null &&
+                                                                    endPoint != null
+                                                                ) {
+                                                                    currentDoodleStrokePoints =
+                                                                        listOf(
+                                                                            firstPoint,
+                                                                            endPoint
+                                                                        )
+                                                                }
+                                                            } else {
+                                                                val dx =
+                                                                    change.position.x -
+                                                                            lastRawPosition.x
+                                                                val dy =
+                                                                    change.position.y -
+                                                                            lastRawPosition.y
+
+                                                                if (
+                                                                    dx * dx + dy * dy >=
+                                                                    MIN_DOODLE_POINT_SPACING_PX *
+                                                                    MIN_DOODLE_POINT_SPACING_PX
+                                                                ) {
+                                                                    val point =
+                                                                        normalizedDoodlePoint(
+                                                                            change.position,
+                                                                            postcardPreviewSize
+                                                                        )
+                                                                    if (point != null) {
+                                                                        currentDoodleStrokePoints =
+                                                                            currentDoodleStrokePoints + point
+                                                                    }
+                                                                    lastRawPosition = change.position
+                                                                }
+                                                            }
+                                                        }
+                                                        keepGoing =
+                                                            event.changes.any { it.pressed }
+                                                    }
                                                 }
 
-                                                if (currentDoodleStrokePoints.isNotEmpty()) {
+                                                // 직선인데 시작점에서 사실상 움직이지 않았다면 길이 0짜리
+                                                // 획 대신 짧은 탭과 같은 점 하나로 남긴다.
+                                                val confirmedPoints =
+                                                    currentDoodleStrokePoints.let { points ->
+                                                        if (
+                                                            points.size == 2 &&
+                                                            points[0] == points[1]
+                                                        ) {
+                                                            listOf(points[0])
+                                                        } else {
+                                                            points
+                                                        }
+                                                    }
+
+                                                if (confirmedPoints.isNotEmpty()) {
                                                     viewModel.recordDoodleSnapshotForUndo()
                                                     viewModel.setDoodleStrokes(
                                                         latestDoodleStrokes + DoodleStroke(
-                                                            points = currentDoodleStrokePoints,
+                                                            points = confirmedPoints,
                                                             colorArgb = latestDoodleColorArgb,
                                                             width = latestDoodleWidth,
                                                             tool = latestDoodleTool
