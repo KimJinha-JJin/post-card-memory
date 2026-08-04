@@ -18,6 +18,11 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,6 +44,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -65,6 +71,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -144,6 +151,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import kotlin.math.abs
@@ -155,6 +164,17 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.EditorSlider
+import com.postcardmemory.ui.components.ENVELOPE_CARD_HEIGHT_FRACTION
+import com.postcardmemory.ui.components.ENVELOPE_FLAP_CLOSED_PEAK_FRACTION
+import com.postcardmemory.ui.components.ENVELOPE_FLAP_RESTING_PEAK_FRACTION
+import com.postcardmemory.ui.components.ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION
+import com.postcardmemory.ui.components.ENVELOPE_POCKET_TOP_FRACTION
+import com.postcardmemory.ui.components.EnvelopeBack
+import com.postcardmemory.ui.components.EnvelopeFlap
+import com.postcardmemory.ui.components.EnvelopeFrontPocket
+import com.postcardmemory.ui.components.EnvelopePostmark
+import com.postcardmemory.ui.components.EnvelopeSheet
+import com.postcardmemory.ui.components.EnvelopeStyle
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
@@ -1358,6 +1378,21 @@ fun DetailScreen(
         mutableStateOf(false)
     }
 
+    var showEnvelopeSheet by remember {
+        mutableStateOf(false)
+    }
+
+    // 봉투가 있는 엽서를 열면 기본으로 봉투 보기부터 보여준다(작업지시서
+    // 7.3). postcardId로만 키를 잡아서, 봉투 스타일만 바꿀 때는 사용자가
+    // 골라둔 엽서/봉투 보기 상태가 리셋되지 않는다.
+    var showEnvelopeView by rememberSaveable(postcardId) {
+        mutableStateOf(true)
+    }
+
+    var showPostmarkPrompt by remember {
+        mutableStateOf(false)
+    }
+
     var showMessageDialog by remember {
         mutableStateOf(false)
     }
@@ -2048,14 +2083,196 @@ fun DetailScreen(
                 val postcardPreviewWidthFraction =
                     if (isFocusPreviewMode) 0.96f else 0.8f
 
+                val envelopeStyle =
+                    remember(pc.envelopeStyle) {
+                        EnvelopeStyle.fromStoredValue(pc.envelopeStyle)
+                    }
+                val showEnvelope =
+                    showEnvelopeView && envelopeStyle != null
+
+                // 실제로 봉투 입구를 벌리고 엽서를 밀어넣는 순서를 그대로 재현한다.
+                // flapProgress: 0=닫힘 → 1=평상시 열림 → 2=입구를 활짝 벌린 상태
+                // (0~1과 1~2 두 구간을 하나의 값으로 표현). cardProgress: 0=봉투
+                // 바깥 위쪽(안 보임) → 1=봉투 속에 정착. 봉투 보기를 켜면 먼저
+                // 플랩이 활짝 벌어진 뒤(1단계) 엽서가 스윽 들어가며 플랩이 평상시
+                // 위치로 가라앉는다(2단계). 꺼질 때는 반대로 엽서가 먼저 빠져나간다.
+                val flapProgress = remember { Animatable(0f) }
+                val cardProgress = remember { Animatable(0f) }
+
+                LaunchedEffect(showEnvelope) {
+                    if (showEnvelope) {
+                        flapProgress.animateTo(
+                            targetValue = 2f,
+                            animationSpec = tween(
+                                durationMillis = 220,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                        launch {
+                            flapProgress.animateTo(
+                                targetValue = 1f,
+                                animationSpec = tween(
+                                    durationMillis = 420,
+                                    easing = FastOutSlowInEasing
+                                )
+                            )
+                        }
+                        cardProgress.animateTo(
+                            targetValue = 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    } else {
+                        launch {
+                            cardProgress.animateTo(
+                                targetValue = 0f,
+                                animationSpec = tween(
+                                    durationMillis = 240,
+                                    easing = FastOutSlowInEasing
+                                )
+                            )
+                        }
+                        flapProgress.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(
+                                durationMillis = 240,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                    }
+                }
+
+                val envelopeVisible =
+                    envelopeStyle != null &&
+                            (
+                                    showEnvelope ||
+                                            cardProgress.value > 0.001f ||
+                                            flapProgress.value > 0.001f
+                                    )
+
+                val flapPeakFraction =
+                    if (flapProgress.value <= 1f) {
+                        lerp(
+                            ENVELOPE_FLAP_CLOSED_PEAK_FRACTION,
+                            ENVELOPE_FLAP_RESTING_PEAK_FRACTION,
+                            flapProgress.value
+                        )
+                    } else {
+                        lerp(
+                            ENVELOPE_FLAP_RESTING_PEAK_FRACTION,
+                            ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION,
+                            flapProgress.value - 1f
+                        )
+                    }
+
+                val cardRestOffsetPx =
+                    with(LocalDensity.current) { 6.dp.toPx() }
+                val cardTravelPx =
+                    with(LocalDensity.current) { 120.dp.toPx() }
+                val cardOffsetYPx =
+                    cardRestOffsetPx -
+                            cardTravelPx * (1f - cardProgress.value)
+
+                if (envelopeStyle != null && !isFocusPreviewMode) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(postcardPreviewWidthFraction)
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        StickerEditModeButton(
+                            label = "엽서 보기",
+                            selected = !showEnvelope,
+                            enabled = controlsEnabled,
+                            onClick = { showEnvelopeView = false }
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        StickerEditModeButton(
+                            label = "봉투 보기",
+                            selected = showEnvelope,
+                            enabled = controlsEnabled,
+                            onClick = { showEnvelopeView = true }
+                        )
+                    }
+                }
+
                 Box(
-                    modifier = Modifier.fillMaxWidth(
-                        postcardPreviewWidthFraction
-                    )
+                    modifier = Modifier
+                        .fillMaxWidth(
+                            postcardPreviewWidthFraction
+                        )
+                        .then(
+                            if (envelopeVisible) {
+                                Modifier
+                                    .aspectRatio(1.3f)
+                                    .clip(RoundedCornerShape(10.dp))
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
+                    if (envelopeVisible) {
+                        // 레이어 순서(뒤→앞): 몸통 → 엽서(다음 Box) → 앞주머니 →
+                        // 플랩 → 소인. zIndex로 고정하므로 선언 순서와는 무관하다.
+                        // 앞주머니가 엽서보다 위에 있어야 엽서가 주머니 시작선
+                        // 아래로 내려온 부분이 실제로 가려져 "속으로 들어갔다"는
+                        // 착시가 생긴다.
+                        EnvelopeBack(
+                            style = envelopeStyle,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        EnvelopeFrontPocket(
+                            style = envelopeStyle,
+                            topFraction = ENVELOPE_POCKET_TOP_FRACTION,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(2f)
+                        )
+
+                        EnvelopeFlap(
+                            style = envelopeStyle,
+                            peakHeightFraction = flapPeakFraction,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(3f)
+                        )
+
+                        if (pc.envelopePostmarked) {
+                            EnvelopePostmark(
+                                postcardCapturedAt = pc.capturedAt,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .alpha(cardProgress.value)
+                                    .zIndex(4f)
+                            )
+                        }
+                    }
+
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .then(
+                                if (envelopeVisible) {
+                                    Modifier
+                                        .align(Alignment.TopCenter)
+                                        .fillMaxHeight(
+                                            ENVELOPE_CARD_HEIGHT_FRACTION
+                                        )
+                                        .offset {
+                                            IntOffset(
+                                                0,
+                                                cardOffsetYPx.roundToInt()
+                                            )
+                                        }
+                                        .zIndex(1f)
+                                } else {
+                                    Modifier.fillMaxWidth()
+                                }
+                            )
                             .aspectRatio(1f)
                             .clip(RectangleShape)
                             .background(
@@ -4937,149 +5154,6 @@ fun DetailScreen(
                     )
                 }
 
-                IconButton(
-                    onClick = {
-                        postcard?.let { pc ->
-                            if (postcardPreviewSize == IntSize.Zero) {
-                                Toast.makeText(
-                                    context,
-                                    "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@let
-                            }
-
-                            viewModel.exportPostcardToGallery(
-                                stickerOverlays =
-                                    createStickerOverlaysForExport(
-                                        photoStickers =
-                                            photoStickers,
-                                        postcardSize =
-                                            postcardPreviewSize,
-                                        stickerSizes =
-                                            stickerSizes,
-                                        baseStickerPx =
-                                            baseStickerPx
-                                    ),
-                                sealOverlays =
-                                    createSealOverlaysForExport(
-                                        photoSeals =
-                                            photoSeals,
-                                        postcardSize =
-                                            postcardPreviewSize,
-                                        sealSizes =
-                                            sealSizes,
-                                        baseSealPx =
-                                            baseSealPx,
-                                        minimumVisibleEdgePx =
-                                            sealMinVisibleEdgePx,
-                                        capturedAtMillis =
-                                            pc.capturedAt
-                                    )
-                            )
-                        }
-                    },
-                    enabled = controlsEnabled
-                ) {
-                    if (
-                        exportState
-                                is ExportState.Exporting
-                    ) {
-                        CircularProgressIndicator(
-                            color = BrutalCoral,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector =
-                                Icons.Default.Download,
-                            contentDescription =
-                                "갤러리에 저장",
-                            tint = BrutalCoral
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = {
-                        postcard?.let { pc ->
-                            if (postcardPreviewSize == IntSize.Zero) {
-                                Toast.makeText(
-                                    context,
-                                    "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@let
-                            }
-
-                            viewModel.sharePostcard(
-                                stickerOverlays =
-                                    createStickerOverlaysForExport(
-                                        photoStickers =
-                                            photoStickers,
-                                        postcardSize =
-                                            postcardPreviewSize,
-                                        stickerSizes =
-                                            stickerSizes,
-                                        baseStickerPx =
-                                            baseStickerPx
-                                    ),
-                                sealOverlays =
-                                    createSealOverlaysForExport(
-                                        photoSeals =
-                                            photoSeals,
-                                        postcardSize =
-                                            postcardPreviewSize,
-                                        sealSizes =
-                                            sealSizes,
-                                        baseSealPx =
-                                            baseSealPx,
-                                        minimumVisibleEdgePx =
-                                            sealMinVisibleEdgePx,
-                                        capturedAtMillis =
-                                            pc.capturedAt
-                                    )
-                            )
-                        }
-                    },
-                    enabled = controlsEnabled
-                ) {
-                    if (
-                        shareState
-                                is ShareState.Preparing
-                    ) {
-                        CircularProgressIndicator(
-                            color = BrutalBlack,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector =
-                                Icons.Default.Share,
-                            contentDescription =
-                                "엽서 공유하기",
-                            tint = BrutalBlack
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = {
-                        moreMenuExpanded = false
-                        showPhotoSourceMenu = false
-                        isFocusPreviewMode = true
-                    },
-                    enabled = controlsEnabled
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Fullscreen,
-                        contentDescription = "집중 미리보기",
-                        tint = BrutalBlack
-                    )
-                }
-
                 Box {
                     IconButton(
                         onClick = {
@@ -5100,6 +5174,178 @@ fun DetailScreen(
                             moreMenuExpanded = false
                         }
                     ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text =
+                                        if (postcard?.envelopeStyle == null) {
+                                            "봉투에 넣기"
+                                        } else {
+                                            "봉투"
+                                        }
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Email,
+                                    contentDescription = null,
+                                    tint = InkPrimary
+                                )
+                            },
+                            enabled = controlsEnabled,
+                            onClick = {
+                                moreMenuExpanded = false
+                                showEnvelopeSheet = true
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Text(text = "공유")
+                            },
+                            leadingIcon = {
+                                if (shareState is ShareState.Preparing) {
+                                    CircularProgressIndicator(
+                                        color = BrutalBlack,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Share,
+                                        contentDescription = null,
+                                        tint = BrutalBlack
+                                    )
+                                }
+                            },
+                            enabled = controlsEnabled,
+                            onClick = {
+                                moreMenuExpanded = false
+                                postcard?.let { pc ->
+                                    if (postcardPreviewSize == IntSize.Zero) {
+                                        Toast.makeText(
+                                            context,
+                                            "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        return@let
+                                    }
+
+                                    viewModel.sharePostcard(
+                                        stickerOverlays =
+                                            createStickerOverlaysForExport(
+                                                photoStickers =
+                                                    photoStickers,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                stickerSizes =
+                                                    stickerSizes,
+                                                baseStickerPx =
+                                                    baseStickerPx
+                                            ),
+                                        sealOverlays =
+                                            createSealOverlaysForExport(
+                                                photoSeals =
+                                                    photoSeals,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                sealSizes =
+                                                    sealSizes,
+                                                baseSealPx =
+                                                    baseSealPx,
+                                                minimumVisibleEdgePx =
+                                                    sealMinVisibleEdgePx,
+                                                capturedAtMillis =
+                                                    pc.capturedAt
+                                            )
+                                    )
+                                }
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Text(text = "파일 내보내기")
+                            },
+                            leadingIcon = {
+                                if (exportState is ExportState.Exporting) {
+                                    CircularProgressIndicator(
+                                        color = BrutalCoral,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = BrutalCoral
+                                    )
+                                }
+                            },
+                            enabled = controlsEnabled,
+                            onClick = {
+                                moreMenuExpanded = false
+                                postcard?.let { pc ->
+                                    if (postcardPreviewSize == IntSize.Zero) {
+                                        Toast.makeText(
+                                            context,
+                                            "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        return@let
+                                    }
+
+                                    viewModel.exportPostcardToGallery(
+                                        stickerOverlays =
+                                            createStickerOverlaysForExport(
+                                                photoStickers =
+                                                    photoStickers,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                stickerSizes =
+                                                    stickerSizes,
+                                                baseStickerPx =
+                                                    baseStickerPx
+                                            ),
+                                        sealOverlays =
+                                            createSealOverlaysForExport(
+                                                photoSeals =
+                                                    photoSeals,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                sealSizes =
+                                                    sealSizes,
+                                                baseSealPx =
+                                                    baseSealPx,
+                                                minimumVisibleEdgePx =
+                                                    sealMinVisibleEdgePx,
+                                                capturedAtMillis =
+                                                    pc.capturedAt
+                                            )
+                                    )
+                                }
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Text(text = "미리보기 크게 보기")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Fullscreen,
+                                    contentDescription = null,
+                                    tint = BrutalBlack
+                                )
+                            },
+                            enabled = controlsEnabled,
+                            onClick = {
+                                moreMenuExpanded = false
+                                showPhotoSourceMenu = false
+                                isFocusPreviewMode = true
+                            }
+                        )
+
                         DropdownMenuItem(
                             text = {
                                 Text(text = "💌 미래의 나에게 보내기")
@@ -5197,6 +5443,95 @@ fun DetailScreen(
                 postcardFilePicker.launch(
                     arrayOf("image/*")
                 )
+            }
+        )
+    }
+
+    if (showEnvelopeSheet) {
+        postcard?.let { pc ->
+            EnvelopeSheet(
+                currentStyle =
+                    EnvelopeStyle.fromStoredValue(pc.envelopeStyle),
+                postmarked = pc.envelopePostmarked,
+                enabled = controlsEnabled,
+                onDismiss = {
+                    showEnvelopeSheet = false
+                },
+                onStyleSelected = { style ->
+                    val isFirstEnvelope = pc.envelopeStyle == null
+                    showEnvelopeSheet = false
+                    viewModel.updateEnvelopeStyle(style)
+                    showEnvelopeView = true
+                    if (isFirstEnvelope) {
+                        showPostmarkPrompt = true
+                    }
+                },
+                onPostmark = {
+                    showEnvelopeSheet = false
+                    viewModel.updateEnvelopePostmarked(true)
+                },
+                onClearPostmark = {
+                    showEnvelopeSheet = false
+                    viewModel.updateEnvelopePostmarked(false)
+                },
+                onRemoveEnvelope = {
+                    showEnvelopeSheet = false
+                    viewModel.removeEnvelope()
+                }
+            )
+        }
+    }
+
+    if (showPostmarkPrompt) {
+        AlertDialog(
+            onDismissRequest = {
+                showPostmarkPrompt = false
+            },
+            containerColor = PaperSurface,
+            titleContentColor = InkPrimary,
+            textContentColor = InkPrimary,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = "봉투에 넣었어요",
+                    color = InkPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = "도장을 찍을까요?",
+                    color = InkSecondary,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.updateEnvelopePostmarked(true)
+                        showPostmarkPrompt = false
+                    }
+                ) {
+                    Text(
+                        text = "찍기",
+                        color = SunsetGold,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPostmarkPrompt = false
+                    }
+                ) {
+                    Text(
+                        text = "나중에",
+                        color = InkSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         )
     }

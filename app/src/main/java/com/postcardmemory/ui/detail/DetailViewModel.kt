@@ -15,6 +15,7 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenter
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
+import com.postcardmemory.ui.components.EnvelopeStyle
 import com.postcardmemory.utils.ConfirmedEditStateStorage
 import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.PhotoColorExtractor
@@ -2766,6 +2767,160 @@ class DetailViewModel @Inject constructor(
                         exception.message
                             ?: "날짜 형식을 저장하지 못했습니다."
                     )
+            }
+        }
+    }
+
+    /**
+     * 봉투에 넣기/바꾸기. 소인 상태(envelopePostmarked)는 건드리지 않는다 —
+     * 봉투를 바꿔도 이미 찍은 소인은 유지된다는 요구사항 때문이다. 첫 적용인지
+     * (이전 envelopeStyle이 null이었는지) 여부는 DetailScreen이 이 호출 전
+     * _postcard.value로 직접 판단해 "도장을 찍을까요?" 안내 여부를 정한다.
+     */
+    fun updateEnvelopeStyle(
+        envelopeStyle: EnvelopeStyle
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        val previousEnvelopeStyle =
+            currentPostcard.envelopeStyle
+
+        if (previousEnvelopeStyle == envelopeStyle.name) {
+            return
+        }
+
+        _postcard.value =
+            currentPostcard.copy(
+                envelopeStyle = envelopeStyle.name
+            )
+
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    styleWriteMutex.withLock {
+                        val latestEnvelopeStyle =
+                            _postcard.value?.envelopeStyle
+                                ?: return@withLock
+                        repository.updatePostcardEnvelopeStyle(
+                            id = currentPostcard.id,
+                            envelopeStyle = latestEnvelopeStyle
+                        )
+                    }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (_postcard.value?.envelopeStyle == envelopeStyle.name) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            envelopeStyle = previousEnvelopeStyle
+                        )
+                }
+                _textScaleSaveErrors.trySend(
+                    "봉투를 저장하지 못했어."
+                )
+            }
+        }
+    }
+
+    /** 찍기/다시 찍기(true)·지우기(false) 공용. 자동 배치라 좌표는 저장하지 않는다. */
+    fun updateEnvelopePostmarked(
+        postmarked: Boolean
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        if (currentPostcard.envelopeStyle == null) {
+            return
+        }
+
+        val previousPostmarked =
+            currentPostcard.envelopePostmarked
+
+        if (previousPostmarked == postmarked) {
+            return
+        }
+
+        _postcard.value =
+            currentPostcard.copy(
+                envelopePostmarked = postmarked
+            )
+
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    styleWriteMutex.withLock {
+                        val latestPostmarked =
+                            _postcard.value?.envelopePostmarked
+                                ?: return@withLock
+                        repository.updatePostcardEnvelopePostmarked(
+                            id = currentPostcard.id,
+                            postmarked = latestPostmarked
+                        )
+                    }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (_postcard.value?.envelopePostmarked == postmarked) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            envelopePostmarked = previousPostmarked
+                        )
+                }
+                _textScaleSaveErrors.trySend(
+                    "소인을 저장하지 못했어."
+                )
+            }
+        }
+    }
+
+    /** 봉투에서 꺼내기 — 봉투와 소인을 함께 지운다. 엽서 내용·앞면 도장·스티커·낙서는 영향받지 않는다. */
+    fun removeEnvelope() {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        if (currentPostcard.envelopeStyle == null) {
+            return
+        }
+
+        val previousEnvelopeStyle =
+            currentPostcard.envelopeStyle
+        val previousPostmarked =
+            currentPostcard.envelopePostmarked
+
+        _postcard.value =
+            currentPostcard.copy(
+                envelopeStyle = null,
+                envelopePostmarked = false
+            )
+
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    styleWriteMutex.withLock {
+                        repository.clearPostcardEnvelope(
+                            id = currentPostcard.id
+                        )
+                    }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (_postcard.value?.envelopeStyle == null) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            envelopeStyle = previousEnvelopeStyle,
+                            envelopePostmarked = previousPostmarked
+                        )
+                }
+                _textScaleSaveErrors.trySend(
+                    "봉투를 지우지 못했어."
+                )
             }
         }
     }

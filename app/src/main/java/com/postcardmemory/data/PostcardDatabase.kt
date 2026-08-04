@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -389,6 +389,36 @@ abstract class PostcardDatabase : RoomDatabase() {
                         """
                         ALTER TABLE postcards
                         ADD COLUMN futureMailDeliverAt INTEGER DEFAULT NULL
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        /**
+         * 봉투 기능. 기존 행은 전부 envelopeStyle=NULL, envelopePostmarked=0으로
+         * 채워져 지금까지와 동일하게 봉투 없는 엽서 보기로 열린다(DEFAULT +
+         * ADD COLUMN은 기존 행에도 소급 적용됨). 미니 도장·앞면 우편 소인(seal_states
+         * 파일)은 이 테이블과 무관해 전혀 영향받지 않는다.
+         */
+        val MIGRATION_16_17 =
+            object : Migration(
+                startVersion = 16,
+                endVersion = 17
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN envelopeStyle TEXT DEFAULT NULL
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN envelopePostmarked INTEGER NOT NULL DEFAULT 0
                         """.trimIndent()
                     )
                 }

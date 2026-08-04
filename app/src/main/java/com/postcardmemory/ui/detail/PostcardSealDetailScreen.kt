@@ -167,7 +167,11 @@ fun SealPickerPanel(
                     .padding(top = 4.dp)
             ) {
                 SealTypeTileRow(
-                    types = SealType.entries,
+                    // 우편 소인(원형 소인 등 isMiniStamp=false)은 봉투 흐름으로
+                    // 이동했다 — 여기서는 미니 도장만 새로 추가할 수 있다.
+                    // 이미 엽서 앞면에 저장된 기존 우편 소인은 아래
+                    // "추가한 도장" 목록에서 그대로 선택·삭제할 수 있다.
+                    types = SealType.entries.filter { it.isMiniStamp },
                     enabled = enabled,
                     onAddSeal = onAddSeal
                 )

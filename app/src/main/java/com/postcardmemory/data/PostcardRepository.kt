@@ -298,4 +298,30 @@ class PostcardRepository @Inject constructor(
             tapedFilmPhotoZoom = tapedFilmPhotoZoom
         )
     }
+
+    suspend fun updatePostcardEnvelopeStyle(
+        id: Long,
+        envelopeStyle: String?
+    ) {
+        dao.updatePostcardEnvelopeStyle(
+            id = id,
+            envelopeStyle = envelopeStyle
+        )
+    }
+
+    suspend fun updatePostcardEnvelopePostmarked(
+        id: Long,
+        postmarked: Boolean
+    ) {
+        dao.updatePostcardEnvelopePostmarked(
+            id = id,
+            postmarked = postmarked
+        )
+    }
+
+    suspend fun clearPostcardEnvelope(
+        id: Long
+    ) {
+        dao.clearPostcardEnvelope(id)
+    }
 }

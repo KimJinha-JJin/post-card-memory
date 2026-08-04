@@ -383,4 +383,42 @@ interface PostcardDao {
         tapedFilmPhotoOffsetY: Float,
         tapedFilmPhotoZoom: Float
     )
+
+    /** 봉투에 넣기/바꾸기 전용. 소인 상태는 건드리지 않는다 — 봉투를 바꿔도 이미 찍은 소인은 유지된다. */
+    @Query(
+        """
+        UPDATE postcards
+        SET envelopeStyle = :envelopeStyle
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardEnvelopeStyle(
+        id: Long,
+        envelopeStyle: String?
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET envelopePostmarked = :postmarked
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardEnvelopePostmarked(
+        id: Long,
+        postmarked: Boolean
+    )
+
+    /** 봉투에서 꺼내기 — 봉투와 소인을 함께 지운다. 엽서 내용·앞면 도장·스티커·낙서는 이 테이블과 무관해 영향받지 않는다. */
+    @Query(
+        """
+        UPDATE postcards
+        SET envelopeStyle = NULL,
+            envelopePostmarked = 0
+        WHERE id = :id
+        """
+    )
+    suspend fun clearPostcardEnvelope(
+        id: Long
+    )
 }

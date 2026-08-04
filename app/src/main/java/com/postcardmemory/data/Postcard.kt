@@ -56,7 +56,10 @@ data class Postcard(
     val tapedFilmPhotoZoom: Float = 1f,
     @ColumnInfo(defaultValue = "'NONE'")
     val futureMailState: String = FUTURE_MAIL_STATE_NONE,
-    val futureMailDeliverAt: Long? = null
+    val futureMailDeliverAt: Long? = null,
+    val envelopeStyle: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val envelopePostmarked: Boolean = false
 )
 
 /** 일반 엽서. 갤러리에 보인다. */
