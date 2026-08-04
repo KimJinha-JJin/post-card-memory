@@ -59,9 +59,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -536,13 +533,6 @@ fun StampCardContent(
     modifier: Modifier = Modifier,
     dateTextSizeSp: Int = 11
 ) {
-    val dateFormatter = remember {
-        SimpleDateFormat(
-            "yyyy-MM-dd",
-            Locale.getDefault()
-        )
-    }
-
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -585,9 +575,7 @@ fun StampCardContent(
         }
 
         Text(
-            text = dateFormatter.format(
-                Date(postcard.capturedAt)
-            ),
+            text = PostcardDateFormat.formatIso(postcard.capturedAt),
             fontSize = dateTextSizeSp.sp,
             fontWeight = FontWeight.Medium,
             color = GraphiteAccent,

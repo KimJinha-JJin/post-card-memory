@@ -4,55 +4,30 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class PostcardDateFormat(
-    val label: String,
-    val previewText: String,
-    private val pattern: String,
-    private val locale: Locale,
-    private val uppercase: Boolean = false
-) {
-    DOT(
-        label = "점 표기",
-        previewText = "2026.07.01",
-        pattern = "yyyy.MM.dd",
-        locale = Locale.KOREAN
-    ),
-    KOREAN(
-        label = "한글 표기",
-        previewText = "2026년 7월 1일",
-        pattern = "yyyy년 M월 d일",
-        locale = Locale.KOREAN
-    ),
-    ENGLISH_LONG(
-        label = "영문 긴 표기",
-        previewText = "JULY 1, 2026",
-        pattern = "MMMM d, yyyy",
-        locale = Locale.ENGLISH,
-        uppercase = true
-    ),
-    ENGLISH_SHORT(
-        label = "영문 짧은 표기",
-        previewText = "01 JUL 2026",
-        pattern = "dd MMM yyyy",
-        locale = Locale.ENGLISH,
-        uppercase = true
-    );
+/**
+ * 엽서에 표시되는 캡처 날짜의 서식. 값과 무관하게 항상 yyyy-MM-dd로
+ * 표시한다. enum 값 자체는 기존에 저장된 Postcard.dateFormat 문자열
+ * (예: "ENGLISH_SHORT")과의 파싱 호환을 위해 유지한다.
+ */
+enum class PostcardDateFormat {
+    DOT,
+    KOREAN,
+    ENGLISH_LONG,
+    ENGLISH_SHORT;
 
     fun format(
         capturedAt: Long
-    ): String {
-        val formatted =
+    ): String = formatIso(capturedAt)
+
+    companion object {
+        fun formatIso(
+            capturedAt: Long
+        ): String =
             SimpleDateFormat(
-                pattern,
-                locale
+                "yyyy-MM-dd",
+                Locale.US
             ).format(
                 Date(capturedAt)
             )
-
-        return if (uppercase) {
-            formatted.uppercase(locale)
-        } else {
-            formatted
-        }
     }
 }

@@ -22,12 +22,10 @@ import android.provider.MediaStore
 import androidx.exifinterface.media.ExifInterface
 import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
+import com.postcardmemory.ui.components.PostcardDateFormat
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.UUID
 import kotlin.math.PI
 import kotlin.math.cos
@@ -693,8 +691,7 @@ object PostcardImageExporter {
                 }
 
             val dateText =
-                SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
-                    .format(Date(capturedAtMillis))
+                PostcardDateFormat.formatIso(capturedAtMillis)
 
             val textY =
                 cy - (textPaint.descent() + textPaint.ascent()) / 2f

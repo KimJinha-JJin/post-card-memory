@@ -16,14 +16,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.data.Postcard
+import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.BrutalWhite
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-
-private val detailDateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
 
 @Composable
 fun PostcardDetailRow(
@@ -34,10 +30,7 @@ fun PostcardDetailRow(
     modifier: Modifier = Modifier
 ) {
     val dateText = remember(postcard.capturedAt) {
-        Instant.ofEpochMilli(postcard.capturedAt)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-            .format(detailDateFormatter)
+        PostcardDateFormat.formatIso(postcard.capturedAt)
     }
 
     val contentText =

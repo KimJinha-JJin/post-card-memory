@@ -20,9 +20,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.postcardmemory.R
 import com.postcardmemory.ui.detail.SealType
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -136,8 +133,7 @@ private fun DrawScope.drawCirclePostmark(
             }
 
             val dateText =
-                SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
-                    .format(Date(capturedAtMillis))
+                PostcardDateFormat.formatIso(capturedAtMillis)
 
             val textY =
                 center.y -
