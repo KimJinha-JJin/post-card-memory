@@ -146,7 +146,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlinx.coroutines.coroutineScope
@@ -409,6 +411,77 @@ internal fun normalizedDoodlePoint(
         x = offset.x / postcardSize.width.toFloat(),
         y = offset.y / postcardSize.height.toFloat()
     )
+}
+
+/** 낙서 직선이 화면상 수평·수직 중 어디에 붙어 있는지, 혹은 자유 각도인지. */
+internal enum class DoodleLineSnapDirection {
+    NONE,
+    HORIZONTAL,
+    VERTICAL
+}
+
+/** 진입 각도가 이 값(도) 이내면 수평·수직으로 붙는다. */
+private const val DOODLE_SNAP_ENTRY_DEGREES = 12f
+
+/** 이미 붙은 상태에서는 이 값(도)을 벗어나야 풀린다 — 경계에서 떨리지 않도록 진입보다 넓게 잡는다. */
+private const val DOODLE_SNAP_EXIT_DEGREES = 18f
+
+/**
+ * 화면 픽셀 기준 dx/dy(정규화 좌표가 아닌 raw 좌표)로 수평·수직 정렬
+ * 상태를 판정한다. 정규화 좌표는 가로/세로를 각각 postcardSize.width,
+ * height로 나눠서 만들어지므로, 만약 미리보기가 정사각형이 아니게 되면
+ * 그 각도가 화면에 실제로 보이는 각도와 달라진다 — raw 좌표로 판정해
+ * 그런 경우에도 시각적으로 정확한 수평·수직을 보장한다. 진입·해제
+ * 임계값을 분리해 경계에서 반복적으로 붙었다 풀리지 않게 하고, 현재
+ * 상태를 벗어났을 때는 곧바로 반대 방향 진입 여부를 다시 평가해
+ * 수평→수직 전환이 자연스럽게 이어지게 한다.
+ */
+internal fun resolveDoodleLineSnapDirection(
+    current: DoodleLineSnapDirection,
+    dx: Float,
+    dy: Float,
+    minDistancePx: Float
+): DoodleLineSnapDirection {
+    val distanceSq = dx * dx + dy * dy
+    if (distanceSq < minDistancePx * minDistancePx) {
+        // 아주 짧은 거리에서는 각도가 불안정하므로 판정을 보류하고 직전 상태를 유지한다.
+        return current
+    }
+
+    val angleDeg = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
+    val angleMod180 = ((angleDeg % 180f) + 180f) % 180f
+    val distanceToHorizontal = min(angleMod180, 180f - angleMod180)
+    val distanceToVertical = abs(angleMod180 - 90f)
+
+    val staysHorizontal =
+        current == DoodleLineSnapDirection.HORIZONTAL &&
+                distanceToHorizontal <= DOODLE_SNAP_EXIT_DEGREES
+    val staysVertical =
+        current == DoodleLineSnapDirection.VERTICAL &&
+                distanceToVertical <= DOODLE_SNAP_EXIT_DEGREES
+
+    return when {
+        staysHorizontal -> DoodleLineSnapDirection.HORIZONTAL
+        staysVertical -> DoodleLineSnapDirection.VERTICAL
+        distanceToHorizontal <= DOODLE_SNAP_ENTRY_DEGREES -> DoodleLineSnapDirection.HORIZONTAL
+        distanceToVertical <= DOODLE_SNAP_ENTRY_DEGREES -> DoodleLineSnapDirection.VERTICAL
+        else -> DoodleLineSnapDirection.NONE
+    }
+}
+
+/**
+ * [direction]에 따라 끝점을 보정한다. 시작점·현재 손가락 위치와 같은 좌표
+ * 공간(화면 raw px)을 그대로 받아 같은 공간의 보정된 끝점을 돌려주므로,
+ * 호출부에서 정규화하기 전에 적용해야 시각적으로 정확한 수평·수직이 된다.
+ */
+internal fun snappedDoodleLineEndpoint(
+    direction: DoodleLineSnapDirection,
+    start: Offset,
+    current: Offset
+): Offset = when (direction) {
+    DoodleLineSnapDirection.HORIZONTAL -> Offset(current.x, start.y)
+    DoodleLineSnapDirection.VERTICAL -> Offset(start.x, current.y)
+    DoodleLineSnapDirection.NONE -> current
 }
 
 /** 스티커 탭의 페이지 인덱스. 다른 탭에서는 스티커 선택 표시·조작 손잡이·제스처를 시작하지 않는다. */
@@ -3367,6 +3440,8 @@ fun DetailScreen(
 
                                                 val straightLineMode =
                                                     decidedBeforeHold == null
+                                                var doodleLineSnapDirection =
+                                                    DoodleLineSnapDirection.NONE
 
                                                 if (!allPointersUp) {
                                                     if (straightLineMode) {
@@ -3402,10 +3477,44 @@ fun DetailScreen(
                                                             if (straightLineMode) {
                                                                 // 시작점은 고정하고 끝점만 따라간다 —
                                                                 // 손가락이 굽은 경로로 지나가도
-                                                                // 중간 경로는 남기지 않는다.
+                                                                // 중간 경로는 남기지 않는다. 수평·수직
+                                                                // 근접 각도는 화면 raw 좌표 기준으로
+                                                                // 판정한 뒤 정규화 직전에 보정한다.
+                                                                val previousSnapDirection =
+                                                                    doodleLineSnapDirection
+                                                                doodleLineSnapDirection =
+                                                                    resolveDoodleLineSnapDirection(
+                                                                        current = doodleLineSnapDirection,
+                                                                        dx = change.position.x -
+                                                                                down.position.x,
+                                                                        dy = change.position.y -
+                                                                                down.position.y,
+                                                                        minDistancePx = slop
+                                                                    )
+
+                                                                if (
+                                                                    doodleLineSnapDirection !=
+                                                                    DoodleLineSnapDirection.NONE &&
+                                                                    doodleLineSnapDirection !=
+                                                                    previousSnapDirection
+                                                                ) {
+                                                                    // 수평·수직에 처음 붙는 순간에만 알린다 —
+                                                                    // 직선 모드 진입 진동과는 구분된다.
+                                                                    hapticFeedback.performHapticFeedback(
+                                                                        HapticFeedbackType.TextHandleMove
+                                                                    )
+                                                                }
+
+                                                                val snappedRawEndpoint =
+                                                                    snappedDoodleLineEndpoint(
+                                                                        direction = doodleLineSnapDirection,
+                                                                        start = down.position,
+                                                                        current = change.position
+                                                                    )
+
                                                                 val endPoint =
                                                                     normalizedDoodlePoint(
-                                                                        change.position,
+                                                                        snappedRawEndpoint,
                                                                         postcardPreviewSize
                                                                     )
                                                                 if (
