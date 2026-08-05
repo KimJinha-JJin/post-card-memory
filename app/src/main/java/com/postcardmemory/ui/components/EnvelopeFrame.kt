@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -28,17 +27,30 @@ import com.postcardmemory.ui.detail.SealType
 /** 플랩 삼각형의 밑변이 좌우에서 얼마나 안쪽에서 시작하는지. */
 const val ENVELOPE_FLAP_BASE_INSET_FRACTION = 0.10f
 
-/** 봉투 앞주머니(EnvelopeFrontPocket)가 시작되는 높이 — 플랩이 평상시 접히는 위치와 맞춘다. */
+/** 봉투 앞주머니(EnvelopeFrontPocket)가 시작되는 높이. */
 const val ENVELOPE_POCKET_TOP_FRACTION = 0.40f
 
-/** 플랩이 평상시(엽서가 들어와 정착한 뒤) 접혀 있는 꼭짓점 높이. 주머니 시작선과 맞춰 이어져 보이게 한다. */
-const val ENVELOPE_FLAP_RESTING_PEAK_FRACTION = ENVELOPE_POCKET_TOP_FRACTION
+/**
+ * 플랩이 완전히 닫혀 봉인된 것처럼 보일 때의 꼭짓점 높이. 실제 봉투에서 닫힌
+ * 플랩은 앞면 절반 가까이를 덮는 큰 삼각형이므로 세 상태 중 가장 큰 값이어야
+ * 한다 — 위로 젖혀 열수록(진행률 증가) 정면 투영이 작아지는 실제 접힘 방향을
+ * 따른다.
+ */
+const val ENVELOPE_FLAP_CLOSED_PEAK_FRACTION = 0.42f
 
-/** 삽입 애니메이션 1단계에서 플랩이 활짝 벌어질 때의 꼭짓점 높이. */
-const val ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION = 0.58f
+/**
+ * 삽입 애니메이션 1단계에서 플랩이 위로 활짝 젖혀졌을 때의 꼭짓점 높이. 실제
+ * 봉투는 플랩이 열릴수록 정면에서 보이는 부분이 작아지므로 세 상태 중 가장
+ * 작은 값이다 — 입구를 최대한 넓게 드러낸다.
+ */
+const val ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION = 0.10f
 
-/** 플랩이 완전히 닫혀 있을 때(애니메이션 시작 지점) 꼭짓점 높이. */
-const val ENVELOPE_FLAP_CLOSED_PEAK_FRACTION = 0.05f
+/**
+ * 엽서가 들어온 뒤 플랩이 살짝 내려와 정착하는 꼭짓점 높이. 완전히 닫히지
+ * 않고 열린 상태를 유지하도록 [ENVELOPE_POCKET_TOP_FRACTION]보다 뚜렷하게
+ * 작게 잡는다 — 정착 후에도 입구가 열려 있다는 인상을 남긴다.
+ */
+const val ENVELOPE_FLAP_RESTING_PEAK_FRACTION = 0.20f
 
 /** 엽서 박스의 높이 비율(봉투 높이 기준) — 정사각형 엽서를 봉투 안에 넣을 때 쓰는 기준값. */
 const val ENVELOPE_CARD_HEIGHT_FRACTION = 0.72f
@@ -63,8 +75,49 @@ const val ENVELOPE_CARD_ENTRY_TRAVEL_FRACTION = 0.62f
 private const val ENVELOPE_BORDER_BAND_FRACTION = 0.03f
 
 /**
+ * 봉투 하단 좌우 모서리를 대각선으로 접어 깎은 봉인선 깊이(짧은 변 기준 비율).
+ * 몸통([EnvelopeBack])과 앞주머니([EnvelopeFrontPocket])에 똑같이 적용해
+ * 두 레이어가 둥근 카드 패널이 아니라 하나로 이어진 종이 봉투 실루엣으로
+ * 보이게 한다.
+ */
+private const val ENVELOPE_BOTTOM_SEAM_CUT_FRACTION = 0.16f
+
+/** 봉투 몸통/앞주머니의 각진 하단 봉인선 실루엣을 그린다. 위쪽 두 모서리만 살짝 둥글다. */
+private fun envelopeBodyPath(
+    width: Float,
+    height: Float,
+    topStartY: Float = 0f
+): Path {
+    val topCorner = minOf(width, height) * 0.04f
+    val bottomCut = minOf(width, height) * ENVELOPE_BOTTOM_SEAM_CUT_FRACTION
+
+    return Path().apply {
+        if (topStartY <= 0f) {
+            moveTo(topCorner, 0f)
+            lineTo(width - topCorner, 0f)
+            quadraticTo(width, 0f, width, topCorner)
+            lineTo(width, height - bottomCut)
+            lineTo(width - bottomCut, height)
+            lineTo(bottomCut, height)
+            lineTo(0f, height - bottomCut)
+            lineTo(0f, topCorner)
+            quadraticTo(0f, 0f, topCorner, 0f)
+        } else {
+            moveTo(0f, topStartY)
+            lineTo(width, topStartY)
+            lineTo(width, height - bottomCut)
+            lineTo(width - bottomCut, height)
+            lineTo(bottomCut, height)
+            lineTo(0f, height - bottomCut)
+        }
+        close()
+    }
+}
+
+/**
  * 봉투 뒷면(몸통)을 그린다. 엽서보다 먼저(아래 레이어로) 그린다 — 엽서
- * 양옆·위쪽 여백에 보이는 봉투 색이 이 레이어다.
+ * 양옆·위쪽 여백에 보이는 봉투 색이 이 레이어다. 하단 모서리를 대각선으로
+ * 깎아 종이를 접어 봉인한 실제 봉투의 실루엣을 흉내 낸다.
  */
 @Composable
 fun EnvelopeBack(
@@ -81,16 +134,13 @@ fun EnvelopeBack(
     ) {
         val w = size.width
         val h = size.height
-        val corner = minOf(w, h) * 0.05f
-        val cornerRadius = CornerRadius(corner, corner)
+        val bodyPath = envelopeBodyPath(width = w, height = h)
 
-        drawRoundRect(
-            color = bodyColor,
-            cornerRadius = cornerRadius
-        )
+        drawPath(bodyPath, color = bodyColor)
 
         // 좌우 가장자리를 살짝 어둡게 해 안으로 오목한 주머니처럼 보이게 한다.
-        drawRoundRect(
+        drawPath(
+            bodyPath,
             brush = Brush.horizontalGradient(
                 colors = listOf(
                     Color.Black.copy(alpha = 0.08f),
@@ -98,21 +148,22 @@ fun EnvelopeBack(
                     Color.Transparent,
                     Color.Black.copy(alpha = 0.08f)
                 )
-            ),
-            cornerRadius = cornerRadius
+            )
         )
 
         if (style.hasAirmailBorder) {
-            drawAirmailBorder(
-                width = w,
-                height = h,
-                bandWidth = w * ENVELOPE_BORDER_BAND_FRACTION
-            )
+            clipPath(bodyPath) {
+                drawAirmailBorder(
+                    width = w,
+                    height = h,
+                    bandWidth = w * ENVELOPE_BORDER_BAND_FRACTION
+                )
+            }
         }
 
-        drawRoundRect(
+        drawPath(
+            bodyPath,
             color = accentColor.copy(alpha = 0.55f),
-            cornerRadius = cornerRadius,
             style = Stroke(width = 1.5.dp.toPx())
         )
     }
@@ -137,17 +188,7 @@ fun EnvelopeFrontPocket(
         val w = size.width
         val h = size.height
         val top = h * topFraction
-        val corner = minOf(w, h) * 0.05f
-
-        val pocketPath = Path().apply {
-            moveTo(0f, top)
-            lineTo(w, top)
-            lineTo(w, h - corner)
-            quadraticTo(w, h, w - corner, h)
-            lineTo(corner, h)
-            quadraticTo(0f, h, 0f, h - corner)
-            close()
-        }
+        val pocketPath = envelopeBodyPath(width = w, height = h, topStartY = top)
 
         drawPath(pocketPath, color = bodyColor)
 
