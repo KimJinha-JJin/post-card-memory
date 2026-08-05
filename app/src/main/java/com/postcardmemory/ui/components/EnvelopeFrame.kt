@@ -43,6 +43,22 @@ const val ENVELOPE_FLAP_CLOSED_PEAK_FRACTION = 0.05f
 /** 엽서 박스의 높이 비율(봉투 높이 기준) — 정사각형 엽서를 봉투 안에 넣을 때 쓰는 기준값. */
 const val ENVELOPE_CARD_HEIGHT_FRACTION = 0.72f
 
+/**
+ * 삽입 애니메이션이 끝난 뒤 카드 상단이 위치하는 높이 비율(봉투 높이 기준).
+ * [ENVELOPE_POCKET_TOP_FRACTION], [ENVELOPE_CARD_HEIGHT_FRACTION]과 함께 계산하면
+ * 카드 높이의 약 60%가 앞주머니 뒤로 들어가고, 위쪽 약 40%만 남아 어떤 엽서인지
+ * 알아볼 수 있다. 봉투/화면 크기와 무관하게 항상 같은 비율로 가려지도록 dp 고정값
+ * 대신 이 비율을 쓴다.
+ */
+const val ENVELOPE_CARD_REST_TOP_FRACTION = 0.12f
+
+/**
+ * 삽입 애니메이션 시작 시 카드가 이동하는 거리를 봉투 높이 비율로 표현한 값.
+ * 고정 dp 대신 이 비율을 쓰면 화면·봉투 크기가 달라져도 카드가 항상 비슷한
+ * 체감 거리만큼 움직인다.
+ */
+const val ENVELOPE_CARD_ENTRY_TRAVEL_FRACTION = 0.62f
+
 /** 에어메일 테두리 띠의 두께(가로폭 기준 비율). */
 private const val ENVELOPE_BORDER_BAND_FRACTION = 0.03f
 

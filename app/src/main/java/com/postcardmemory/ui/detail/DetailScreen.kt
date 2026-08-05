@@ -40,6 +40,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -164,7 +165,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.EditorSlider
+import com.postcardmemory.ui.components.ENVELOPE_CARD_ENTRY_TRAVEL_FRACTION
 import com.postcardmemory.ui.components.ENVELOPE_CARD_HEIGHT_FRACTION
+import com.postcardmemory.ui.components.ENVELOPE_CARD_REST_TOP_FRACTION
 import com.postcardmemory.ui.components.ENVELOPE_FLAP_CLOSED_PEAK_FRACTION
 import com.postcardmemory.ui.components.ENVELOPE_FLAP_RESTING_PEAK_FRACTION
 import com.postcardmemory.ui.components.ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION
@@ -2120,7 +2123,7 @@ fun DetailScreen(
                         cardProgress.animateTo(
                             targetValue = 1f,
                             animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                dampingRatio = Spring.DampingRatioNoBouncy,
                                 stiffness = Spring.StiffnessMediumLow
                             )
                         )
@@ -2167,14 +2170,6 @@ fun DetailScreen(
                         )
                     }
 
-                val cardRestOffsetPx =
-                    with(LocalDensity.current) { 6.dp.toPx() }
-                val cardTravelPx =
-                    with(LocalDensity.current) { 120.dp.toPx() }
-                val cardOffsetYPx =
-                    cardRestOffsetPx -
-                            cardTravelPx * (1f - cardProgress.value)
-
                 if (envelopeStyle != null && !isFocusPreviewMode) {
                     Row(
                         modifier = Modifier
@@ -2200,7 +2195,7 @@ fun DetailScreen(
                     }
                 }
 
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth(
                             postcardPreviewWidthFraction
@@ -2215,6 +2210,23 @@ fun DetailScreen(
                             }
                         )
                 ) {
+                    // 카드 정착·이동 거리는 봉투 실제 높이(maxHeight) 비율로 계산한다 —
+                    // 고정 dp를 쓰면 화면·봉투 크기에 따라 정착 깊이나 이동 체감이
+                    // 달라진다.
+                    val envelopeHeightPx =
+                        if (envelopeVisible) {
+                            with(LocalDensity.current) { maxHeight.toPx() }
+                        } else {
+                            0f
+                        }
+                    val cardRestOffsetPx =
+                        envelopeHeightPx * ENVELOPE_CARD_REST_TOP_FRACTION
+                    val cardTravelPx =
+                        envelopeHeightPx * ENVELOPE_CARD_ENTRY_TRAVEL_FRACTION
+                    val cardOffsetYPx =
+                        cardRestOffsetPx -
+                                cardTravelPx * (1f - cardProgress.value)
+
                     if (envelopeVisible) {
                         // 레이어 순서(뒤→앞): 몸통 → 엽서(다음 Box) → 앞주머니 →
                         // 플랩 → 소인. zIndex로 고정하므로 선언 순서와는 무관하다.
