@@ -174,8 +174,9 @@ import com.postcardmemory.ui.components.ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION
 import com.postcardmemory.ui.components.ENVELOPE_POCKET_TOP_FRACTION
 import com.postcardmemory.ui.components.EnvelopeBack
 import com.postcardmemory.ui.components.EnvelopeFlap
+import com.postcardmemory.ui.components.EnvelopeFoldLines
 import com.postcardmemory.ui.components.EnvelopeFrontPocket
-import com.postcardmemory.ui.components.EnvelopePostmark
+import com.postcardmemory.ui.components.EnvelopeInterior
 import com.postcardmemory.ui.components.EnvelopeSheet
 import com.postcardmemory.ui.components.EnvelopeStyle
 import com.postcardmemory.ui.components.PhotoSourceMenu
@@ -2098,7 +2099,10 @@ fun DetailScreen(
                 // (0~1과 1~2 두 구간을 하나의 값으로 표현). cardProgress: 0=봉투
                 // 바깥 위쪽(안 보임) → 1=봉투 속에 정착. 봉투 보기를 켜면 먼저
                 // 플랩이 활짝 벌어진 뒤(1단계) 엽서가 스윽 들어가며 플랩이 평상시
-                // 위치로 가라앉는다(2단계). 꺼질 때는 반대로 엽서가 먼저 빠져나간다.
+                // 위치로 가라앉는다(2단계). 꺼질 때는 반대로 플랩을 먼저 완전히
+                // 연 뒤 엽서가 빠져나오고, 엽서가 다 나온 뒤에야 플랩이 닫힌다 —
+                // 카드와 플랩이 동시에 움직이며 겹쳐 보이지 않도록 세 단계를
+                // 순차 실행한다(병렬 launch 사용 안 함).
                 val flapProgress = remember { Animatable(0f) }
                 val cardProgress = remember { Animatable(0f) }
 
@@ -2128,15 +2132,23 @@ fun DetailScreen(
                             )
                         )
                     } else {
-                        launch {
-                            cardProgress.animateTo(
-                                targetValue = 0f,
-                                animationSpec = tween(
-                                    durationMillis = 240,
-                                    easing = FastOutSlowInEasing
-                                )
+                        // 플랩을 먼저 완전히 연 뒤 카드를 빼내고, 카드가 다
+                        // 빠져나온 뒤에야 플랩을 닫는다 — 동시에 진행하면
+                        // 빠져나가는 카드와 닫히는 플랩이 겹쳐 보인다.
+                        flapProgress.animateTo(
+                            targetValue = 2f,
+                            animationSpec = tween(
+                                durationMillis = 180,
+                                easing = FastOutSlowInEasing
                             )
-                        }
+                        )
+                        cardProgress.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(
+                                durationMillis = 240,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
                         flapProgress.animateTo(
                             targetValue = 0f,
                             animationSpec = tween(
@@ -2154,6 +2166,14 @@ fun DetailScreen(
                                             cardProgress.value > 0.001f ||
                                             flapProgress.value > 0.001f
                                     )
+
+                // 봉투가 열리거나 닫히는 동안에는 큰 삼각 플랩이 보여도 되지만,
+                // 정착이 끝난 평상시 화면(봉투 보기를 켠 채 플랩 애니메이션이
+                // 모두 끝난 상태)에는 플랩을 그리지 않는다 — 상단은 단순한 면 +
+                // 입구선 1개로만 보여야 한다. showEnvelope는 이탈이 시작되는
+                // 즉시 false로 바뀌므로, 이탈 도중 플랩이 일시적으로 멈춰 있는
+                // 구간(카드가 빠지는 동안)에는 이 조건이 켜지지 않는다.
+                val flapSettledOpen = showEnvelope && !flapProgress.isRunning
 
                 val flapPeakFraction =
                     if (flapProgress.value <= 1f) {
@@ -2228,12 +2248,21 @@ fun DetailScreen(
                                 cardTravelPx * (1f - cardProgress.value)
 
                     if (envelopeVisible) {
-                        // 레이어 순서(뒤→앞): 몸통 → 엽서(다음 Box) → 앞주머니 →
-                        // 플랩 → 소인. zIndex로 고정하므로 선언 순서와는 무관하다.
-                        // 앞주머니가 엽서보다 위에 있어야 엽서가 주머니 시작선
-                        // 아래로 내려온 부분이 실제로 가려져 "속으로 들어갔다"는
-                        // 착시가 생긴다.
+                        // 레이어 순서(뒤→앞): 몸통 → 내부 안감 → 엽서(다음 Box) →
+                        // 앞주머니 → 접힘선 → 플랩. zIndex로 고정하므로 선언
+                        // 순서와는 무관하다. 앞주머니가 엽서보다 위에 있어야
+                        // 엽서가 주머니 시작선 아래로 내려온 부분이 실제로
+                        // 가려져 "속으로 들어갔다"는 착시가 생긴다. 이 장면은
+                        // 열린 봉투 뒷면 상태를 표현하므로, 앞면 요소인 소인은
+                        // 여기서 그리지 않는다 — 저장된 소인 상태(envelopePostmarked)
+                        // 자체는 그대로 보존되며, 닫힌 앞면 상태가 별도로
+                        // 생기면 그때 표시한다.
                         EnvelopeBack(
+                            style = envelopeStyle,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        EnvelopeInterior(
                             style = envelopeStyle,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -2246,21 +2275,20 @@ fun DetailScreen(
                                 .zIndex(2f)
                         )
 
-                        EnvelopeFlap(
+                        EnvelopeFoldLines(
                             style = envelopeStyle,
-                            peakHeightFraction = flapPeakFraction,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .zIndex(3f)
+                                .zIndex(2.5f)
                         )
 
-                        if (pc.envelopePostmarked) {
-                            EnvelopePostmark(
-                                postcardCapturedAt = pc.capturedAt,
+                        if (!flapSettledOpen) {
+                            EnvelopeFlap(
+                                style = envelopeStyle,
+                                peakHeightFraction = flapPeakFraction,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .alpha(cardProgress.value)
-                                    .zIndex(4f)
+                                    .zIndex(3f)
                             )
                         }
                     }
