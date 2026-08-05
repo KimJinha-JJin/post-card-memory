@@ -18,11 +18,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -40,12 +35,10 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -72,7 +65,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -152,8 +144,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.lerp
-import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import kotlin.math.abs
@@ -165,20 +155,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.EditorSlider
-import com.postcardmemory.ui.components.ENVELOPE_CARD_ENTRY_TRAVEL_FRACTION
-import com.postcardmemory.ui.components.ENVELOPE_CARD_HEIGHT_FRACTION
-import com.postcardmemory.ui.components.ENVELOPE_CARD_REST_TOP_FRACTION
-import com.postcardmemory.ui.components.ENVELOPE_FLAP_CLOSED_PEAK_FRACTION
-import com.postcardmemory.ui.components.ENVELOPE_FLAP_RESTING_PEAK_FRACTION
-import com.postcardmemory.ui.components.ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION
-import com.postcardmemory.ui.components.ENVELOPE_POCKET_TOP_FRACTION
-import com.postcardmemory.ui.components.EnvelopeBack
-import com.postcardmemory.ui.components.EnvelopeFlap
-import com.postcardmemory.ui.components.EnvelopeFoldLines
-import com.postcardmemory.ui.components.EnvelopeFrontPocket
-import com.postcardmemory.ui.components.EnvelopeInterior
-import com.postcardmemory.ui.components.EnvelopeSheet
-import com.postcardmemory.ui.components.EnvelopeStyle
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
@@ -1382,21 +1358,6 @@ fun DetailScreen(
         mutableStateOf(false)
     }
 
-    var showEnvelopeSheet by remember {
-        mutableStateOf(false)
-    }
-
-    // 봉투가 있는 엽서를 열면 기본으로 봉투 보기부터 보여준다(작업지시서
-    // 7.3). postcardId로만 키를 잡아서, 봉투 스타일만 바꿀 때는 사용자가
-    // 골라둔 엽서/봉투 보기 상태가 리셋되지 않는다.
-    var showEnvelopeView by rememberSaveable(postcardId) {
-        mutableStateOf(true)
-    }
-
-    var showPostmarkPrompt by remember {
-        mutableStateOf(false)
-    }
-
     var showMessageDialog by remember {
         mutableStateOf(false)
     }
@@ -2087,232 +2048,14 @@ fun DetailScreen(
                 val postcardPreviewWidthFraction =
                     if (isFocusPreviewMode) 0.96f else 0.8f
 
-                val envelopeStyle =
-                    remember(pc.envelopeStyle) {
-                        EnvelopeStyle.fromStoredValue(pc.envelopeStyle)
-                    }
-                val showEnvelope =
-                    showEnvelopeView && envelopeStyle != null
-
-                // 실제로 봉투 입구를 벌리고 엽서를 밀어넣는 순서를 그대로 재현한다.
-                // flapProgress: 0=닫힘 → 1=평상시 열림 → 2=입구를 활짝 벌린 상태
-                // (0~1과 1~2 두 구간을 하나의 값으로 표현). cardProgress: 0=봉투
-                // 바깥 위쪽(안 보임) → 1=봉투 속에 정착. 봉투 보기를 켜면 먼저
-                // 플랩이 활짝 벌어진 뒤(1단계) 엽서가 스윽 들어가며 플랩이 평상시
-                // 위치로 가라앉는다(2단계). 꺼질 때는 반대로 플랩을 먼저 완전히
-                // 연 뒤 엽서가 빠져나오고, 엽서가 다 나온 뒤에야 플랩이 닫힌다 —
-                // 카드와 플랩이 동시에 움직이며 겹쳐 보이지 않도록 세 단계를
-                // 순차 실행한다(병렬 launch 사용 안 함).
-                val flapProgress = remember { Animatable(0f) }
-                val cardProgress = remember { Animatable(0f) }
-
-                LaunchedEffect(showEnvelope) {
-                    if (showEnvelope) {
-                        flapProgress.animateTo(
-                            targetValue = 2f,
-                            animationSpec = tween(
-                                durationMillis = 220,
-                                easing = FastOutSlowInEasing
-                            )
-                        )
-                        launch {
-                            flapProgress.animateTo(
-                                targetValue = 1f,
-                                animationSpec = tween(
-                                    durationMillis = 420,
-                                    easing = FastOutSlowInEasing
-                                )
-                            )
-                        }
-                        cardProgress.animateTo(
-                            targetValue = 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        )
-                    } else {
-                        // 플랩을 먼저 완전히 연 뒤 카드를 빼내고, 카드가 다
-                        // 빠져나온 뒤에야 플랩을 닫는다 — 동시에 진행하면
-                        // 빠져나가는 카드와 닫히는 플랩이 겹쳐 보인다.
-                        flapProgress.animateTo(
-                            targetValue = 2f,
-                            animationSpec = tween(
-                                durationMillis = 180,
-                                easing = FastOutSlowInEasing
-                            )
-                        )
-                        cardProgress.animateTo(
-                            targetValue = 0f,
-                            animationSpec = tween(
-                                durationMillis = 240,
-                                easing = FastOutSlowInEasing
-                            )
-                        )
-                        flapProgress.animateTo(
-                            targetValue = 0f,
-                            animationSpec = tween(
-                                durationMillis = 240,
-                                easing = FastOutSlowInEasing
-                            )
-                        )
-                    }
-                }
-
-                val envelopeVisible =
-                    envelopeStyle != null &&
-                            (
-                                    showEnvelope ||
-                                            cardProgress.value > 0.001f ||
-                                            flapProgress.value > 0.001f
-                                    )
-
-                // 봉투가 열리거나 닫히는 동안에는 큰 삼각 플랩이 보여도 되지만,
-                // 정착이 끝난 평상시 화면(봉투 보기를 켠 채 플랩 애니메이션이
-                // 모두 끝난 상태)에는 플랩을 그리지 않는다 — 상단은 단순한 면 +
-                // 입구선 1개로만 보여야 한다. showEnvelope는 이탈이 시작되는
-                // 즉시 false로 바뀌므로, 이탈 도중 플랩이 일시적으로 멈춰 있는
-                // 구간(카드가 빠지는 동안)에는 이 조건이 켜지지 않는다.
-                val flapSettledOpen = showEnvelope && !flapProgress.isRunning
-
-                val flapPeakFraction =
-                    if (flapProgress.value <= 1f) {
-                        lerp(
-                            ENVELOPE_FLAP_CLOSED_PEAK_FRACTION,
-                            ENVELOPE_FLAP_RESTING_PEAK_FRACTION,
-                            flapProgress.value
-                        )
-                    } else {
-                        lerp(
-                            ENVELOPE_FLAP_RESTING_PEAK_FRACTION,
-                            ENVELOPE_FLAP_WIDE_OPEN_PEAK_FRACTION,
-                            flapProgress.value - 1f
-                        )
-                    }
-
-                if (envelopeStyle != null && !isFocusPreviewMode) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth(postcardPreviewWidthFraction)
-                            .padding(bottom = 10.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        StickerEditModeButton(
-                            label = "엽서 보기",
-                            selected = !showEnvelope,
-                            enabled = controlsEnabled,
-                            onClick = { showEnvelopeView = false }
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        StickerEditModeButton(
-                            label = "봉투 보기",
-                            selected = showEnvelope,
-                            enabled = controlsEnabled,
-                            onClick = { showEnvelopeView = true }
-                        )
-                    }
-                }
-
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxWidth(
-                            postcardPreviewWidthFraction
-                        )
-                        .then(
-                            if (envelopeVisible) {
-                                Modifier
-                                    .aspectRatio(1.3f)
-                                    .clip(RoundedCornerShape(10.dp))
-                            } else {
-                                Modifier
-                            }
-                        )
+                Box(
+                    modifier = Modifier.fillMaxWidth(
+                        postcardPreviewWidthFraction
+                    )
                 ) {
-                    // 카드 정착·이동 거리는 봉투 실제 높이(maxHeight) 비율로 계산한다 —
-                    // 고정 dp를 쓰면 화면·봉투 크기에 따라 정착 깊이나 이동 체감이
-                    // 달라진다.
-                    val envelopeHeightPx =
-                        if (envelopeVisible) {
-                            with(LocalDensity.current) { maxHeight.toPx() }
-                        } else {
-                            0f
-                        }
-                    val cardRestOffsetPx =
-                        envelopeHeightPx * ENVELOPE_CARD_REST_TOP_FRACTION
-                    val cardTravelPx =
-                        envelopeHeightPx * ENVELOPE_CARD_ENTRY_TRAVEL_FRACTION
-                    val cardOffsetYPx =
-                        cardRestOffsetPx -
-                                cardTravelPx * (1f - cardProgress.value)
-
-                    if (envelopeVisible) {
-                        // 레이어 순서(뒤→앞): 몸통 → 내부 안감 → 엽서(다음 Box) →
-                        // 앞주머니 → 접힘선 → 플랩. zIndex로 고정하므로 선언
-                        // 순서와는 무관하다. 앞주머니가 엽서보다 위에 있어야
-                        // 엽서가 주머니 시작선 아래로 내려온 부분이 실제로
-                        // 가려져 "속으로 들어갔다"는 착시가 생긴다. 이 장면은
-                        // 열린 봉투 뒷면 상태를 표현하므로, 앞면 요소인 소인은
-                        // 여기서 그리지 않는다 — 저장된 소인 상태(envelopePostmarked)
-                        // 자체는 그대로 보존되며, 닫힌 앞면 상태가 별도로
-                        // 생기면 그때 표시한다.
-                        EnvelopeBack(
-                            style = envelopeStyle,
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        EnvelopeInterior(
-                            style = envelopeStyle,
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        EnvelopeFrontPocket(
-                            style = envelopeStyle,
-                            topFraction = ENVELOPE_POCKET_TOP_FRACTION,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .zIndex(2f)
-                        )
-
-                        EnvelopeFoldLines(
-                            style = envelopeStyle,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .zIndex(2.5f)
-                        )
-
-                        if (!flapSettledOpen) {
-                            EnvelopeFlap(
-                                style = envelopeStyle,
-                                peakHeightFraction = flapPeakFraction,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .zIndex(3f)
-                            )
-                        }
-                    }
-
                     Box(
                         modifier = Modifier
-                            .then(
-                                if (envelopeVisible) {
-                                    Modifier
-                                        .align(Alignment.TopCenter)
-                                        .fillMaxHeight(
-                                            ENVELOPE_CARD_HEIGHT_FRACTION
-                                        )
-                                        .offset {
-                                            IntOffset(
-                                                0,
-                                                cardOffsetYPx.roundToInt()
-                                            )
-                                        }
-                                        .zIndex(1f)
-                                } else {
-                                    Modifier.fillMaxWidth()
-                                }
-                            )
+                            .fillMaxWidth()
                             .aspectRatio(1f)
                             .clip(RectangleShape)
                             .background(
@@ -5216,31 +4959,6 @@ fun DetailScreen(
                     ) {
                         DropdownMenuItem(
                             text = {
-                                Text(
-                                    text =
-                                        if (postcard?.envelopeStyle == null) {
-                                            "봉투에 넣기"
-                                        } else {
-                                            "봉투"
-                                        }
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Email,
-                                    contentDescription = null,
-                                    tint = InkPrimary
-                                )
-                            },
-                            enabled = controlsEnabled,
-                            onClick = {
-                                moreMenuExpanded = false
-                                showEnvelopeSheet = true
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = {
                                 Text(text = "공유")
                             },
                             leadingIcon = {
@@ -5483,95 +5201,6 @@ fun DetailScreen(
                 postcardFilePicker.launch(
                     arrayOf("image/*")
                 )
-            }
-        )
-    }
-
-    if (showEnvelopeSheet) {
-        postcard?.let { pc ->
-            EnvelopeSheet(
-                currentStyle =
-                    EnvelopeStyle.fromStoredValue(pc.envelopeStyle),
-                postmarked = pc.envelopePostmarked,
-                enabled = controlsEnabled,
-                onDismiss = {
-                    showEnvelopeSheet = false
-                },
-                onStyleSelected = { style ->
-                    val isFirstEnvelope = pc.envelopeStyle == null
-                    showEnvelopeSheet = false
-                    viewModel.updateEnvelopeStyle(style)
-                    showEnvelopeView = true
-                    if (isFirstEnvelope) {
-                        showPostmarkPrompt = true
-                    }
-                },
-                onPostmark = {
-                    showEnvelopeSheet = false
-                    viewModel.updateEnvelopePostmarked(true)
-                },
-                onClearPostmark = {
-                    showEnvelopeSheet = false
-                    viewModel.updateEnvelopePostmarked(false)
-                },
-                onRemoveEnvelope = {
-                    showEnvelopeSheet = false
-                    viewModel.removeEnvelope()
-                }
-            )
-        }
-    }
-
-    if (showPostmarkPrompt) {
-        AlertDialog(
-            onDismissRequest = {
-                showPostmarkPrompt = false
-            },
-            containerColor = PaperSurface,
-            titleContentColor = InkPrimary,
-            textContentColor = InkPrimary,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Text(
-                    text = "봉투에 넣었어요",
-                    color = InkPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Text(
-                    text = "도장을 찍을까요?",
-                    color = InkSecondary,
-                    fontSize = 14.sp
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.updateEnvelopePostmarked(true)
-                        showPostmarkPrompt = false
-                    }
-                ) {
-                    Text(
-                        text = "찍기",
-                        color = SunsetGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showPostmarkPrompt = false
-                    }
-                ) {
-                    Text(
-                        text = "나중에",
-                        color = InkSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
         )
     }
