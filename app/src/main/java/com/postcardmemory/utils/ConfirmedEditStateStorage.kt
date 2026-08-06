@@ -30,7 +30,7 @@ object ConfirmedEditStateStorage {
                 outputStream.flush()
             }
 
-            tempFile.renameTo(targetFile)
+            AtomicFileReplace.replace(tempFile, targetFile)
         } catch (exception: IOException) {
             tempFile.delete()
             false

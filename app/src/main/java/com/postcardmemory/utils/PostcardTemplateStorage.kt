@@ -67,7 +67,7 @@ object PostcardTemplateStorage {
                 outputStream.flush()
             }
 
-            tempFile.renameTo(target)
+            AtomicFileReplace.replace(tempFile, target)
         } catch (exception: IOException) {
             tempFile.delete()
             false
@@ -105,7 +105,7 @@ object PostcardTemplateStorage {
                 }
             }
 
-            tempFile.renameTo(target)
+            AtomicFileReplace.replace(tempFile, target)
         } catch (exception: IOException) {
             tempFile.delete()
             false

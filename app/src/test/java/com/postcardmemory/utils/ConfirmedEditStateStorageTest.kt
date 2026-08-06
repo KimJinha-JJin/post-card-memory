@@ -53,6 +53,9 @@ class ConfirmedEditStateStorageTest {
 
         assertTrue(saved)
         assertEquals("new-confirmed-content", stateFile.readText())
+
+        val leftoverTemp = File(stateFile.parentFile, "3.txt.tmp")
+        assertFalse(leftoverTemp.exists())
     }
 
     @Test

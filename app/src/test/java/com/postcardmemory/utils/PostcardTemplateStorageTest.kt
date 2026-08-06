@@ -90,6 +90,10 @@ class PostcardTemplateStorageTest {
         assertEquals(2, loaded.size)
         assertEquals("바뀐 이름", loaded.first { it.id == "fixed-id" }.name)
         assertEquals("다른 템플릿", loaded.first { it.id == "other-id" }.name)
+
+        val templatesDir = PostcardTemplateStorage.templateFile(filesDir, "fixed-id").parentFile!!
+        val tmpFiles = templatesDir.listFiles { file -> file.name.endsWith(".tmp") }
+        assertTrue(tmpFiles == null || tmpFiles.isEmpty())
     }
 
     @Test

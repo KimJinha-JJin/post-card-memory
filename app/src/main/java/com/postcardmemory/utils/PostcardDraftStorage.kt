@@ -77,7 +77,7 @@ object PostcardDraftStorage {
                 outputStream.flush()
             }
 
-            tempFile.renameTo(target)
+            AtomicFileReplace.replace(tempFile, target)
         } catch (exception: IOException) {
             tempFile.delete()
             false

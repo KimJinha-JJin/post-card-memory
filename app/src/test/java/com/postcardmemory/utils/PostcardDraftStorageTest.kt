@@ -99,6 +99,60 @@ class PostcardDraftStorageTest {
         assertFalse(leftoverTemp.exists())
     }
 
+    /**
+     * 자동저장은 같은 postcardId로 반복 실행되며 매번 기존 초안 파일을
+     * 덮어쓴다. renameTo() 기반 구현이 Windows에서 이 경로를 실패시켰던
+     * 것과 동일한 시나리오다(저장 덮어쓰기 테스트 원인 조사 보고서 참고).
+     */
+    @Test
+    fun saveDraftAtomically_sameIdSavedTwice_secondSaveOverwritesFirst() {
+        val filesDir = tempFolder.newFolder("files")
+
+        val firstSaved = PostcardDraftStorage.saveDraftAtomically(
+            filesDir,
+            draft(postcardId = 21L, revision = 1L)
+        )
+        assertTrue(firstSaved)
+
+        val secondSaved = PostcardDraftStorage.saveDraftAtomically(
+            filesDir,
+            draft(postcardId = 21L, revision = 2L)
+        )
+        assertTrue(secondSaved)
+
+        val loaded = PostcardDraftStorage.loadDraft(filesDir, 21L)
+        assertNotNull(loaded)
+        assertEquals(2L, loaded!!.revision)
+
+        val draftDir = File(filesDir, "drafts/edit_state")
+        val leftoverTemp = File(draftDir, "21.draft.tmp")
+        assertFalse(leftoverTemp.exists())
+    }
+
+    @Test
+    fun saveDraftAtomically_overwritingOnePostcard_otherPostcardDraftUntouched() {
+        val filesDir = tempFolder.newFolder("files")
+
+        PostcardDraftStorage.saveDraftAtomically(
+            filesDir,
+            draft(postcardId = 22L, revision = 1L)
+        )
+        PostcardDraftStorage.saveDraftAtomically(
+            filesDir,
+            draft(postcardId = 23L, revision = 1L)
+        )
+
+        val secondSaved = PostcardDraftStorage.saveDraftAtomically(
+            filesDir,
+            draft(postcardId = 22L, revision = 2L)
+        )
+        assertTrue(secondSaved)
+
+        val untouched = PostcardDraftStorage.loadDraft(filesDir, 23L)
+        assertNotNull(untouched)
+        assertEquals(1L, untouched!!.revision)
+    }
+
     @Test
     fun draftStoragePath_isSeparateFromConfirmedStickerAndSealStatePaths() {
         val filesDir = tempFolder.newFolder("files")
