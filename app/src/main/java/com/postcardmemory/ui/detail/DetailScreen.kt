@@ -5876,75 +5876,22 @@ fun DetailScreen(
     }
 
     if (exportState is ExportState.Success) {
-        AlertDialog(
-            onDismissRequest = {
-                viewModel.resetExportState()
-            },
-            title = {
-                Text(
-                    text = "저장 완료!",
-                    color = BrutalBlack,
-                    fontWeight =
-                        FontWeight.SemiBold
-                )
-            },
-            text = {
-                Text(
-                    text =
-                        "1:1 포스트카드 이미지를 휴대폰 갤러리에 저장했어.\n\nPictures/PostcardMemory 앨범에서 확인할 수 있어."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.resetExportState()
-                    }
-                ) {
-                    Text(
-                        text = "확인",
-                        color = BrutalBlack,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                }
-            }
+        SaveResultAlertDialog(
+            title = "저장 완료!",
+            titleColor = BrutalBlack,
+            body = "1:1 포스트카드 이미지를 휴대폰 갤러리에 저장했어.\n\nPictures/PostcardMemory 앨범에서 확인할 수 있어.",
+            onAcknowledge = { viewModel.resetExportState() }
         )
     }
 
     (exportState as? ExportState.Error)?.let {
             exportError ->
 
-        AlertDialog(
-            onDismissRequest = {
-                viewModel.resetExportState()
-            },
-            title = {
-                Text(
-                    text = "저장하지 못했어",
-                    color = BrutalCoral,
-                    fontWeight =
-                        FontWeight.SemiBold
-                )
-            },
-            text = {
-                Text(
-                    text = exportError.message
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.resetExportState()
-                    }
-                ) {
-                    Text(
-                        text = "확인",
-                        color = BrutalBlack,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                }
-            }
+        SaveResultAlertDialog(
+            title = "저장하지 못했어",
+            titleColor = BrutalCoral,
+            body = exportError.message,
+            onAcknowledge = { viewModel.resetExportState() }
         )
     }
 
@@ -5953,38 +5900,11 @@ fun DetailScreen(
                     as? BackgroundUpdateState.Error
             )?.let { backgroundError ->
 
-            AlertDialog(
-                onDismissRequest = {
-                    viewModel.resetBackgroundUpdateState()
-                },
-                title = {
-                    Text(
-                        text = "배경을 저장하지 못했어",
-                        color = BrutalCoral,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                },
-                text = {
-                    Text(
-                        text = backgroundError.message
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel
-                                .resetBackgroundUpdateState()
-                        }
-                    ) {
-                        Text(
-                            text = "확인",
-                            color = BrutalBlack,
-                            fontWeight =
-                                FontWeight.SemiBold
-                        )
-                    }
-                }
+            SaveResultAlertDialog(
+                title = "배경을 저장하지 못했어",
+                titleColor = BrutalCoral,
+                body = backgroundError.message,
+                onAcknowledge = { viewModel.resetBackgroundUpdateState() }
             )
         }
 
@@ -5993,40 +5913,12 @@ fun DetailScreen(
                     as? ImageUpdateState.Error
             )?.let { imageError ->
 
-            AlertDialog(
-                onDismissRequest = {
-                    viewModel.resetImageUpdateState()
-                },
-                title = {
-                    Text(
-                        text = "사진을 바꾸지 못했어",
-                        color = BrutalCoral,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                },
-                text = {
-                    Text(
-                        text =
-                            "사진을 바꾸지 못했어. 기존 사진은 그대로 유지했어.\n" +
-                                    imageError.message
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel
-                                .resetImageUpdateState()
-                        }
-                    ) {
-                        Text(
-                            text = "확인",
-                            color = BrutalBlack,
-                            fontWeight =
-                                FontWeight.SemiBold
-                        )
-                    }
-                }
+            SaveResultAlertDialog(
+                title = "사진을 바꾸지 못했어",
+                titleColor = BrutalCoral,
+                body = "사진을 바꾸지 못했어. 기존 사진은 그대로 유지했어.\n" +
+                        imageError.message,
+                onAcknowledge = { viewModel.resetImageUpdateState() }
             )
         }
 
@@ -6035,38 +5927,11 @@ fun DetailScreen(
                     as? FontUpdateState.Error
             )?.let { fontError ->
 
-            AlertDialog(
-                onDismissRequest = {
-                    viewModel.resetFontUpdateState()
-                },
-                title = {
-                    Text(
-                        text = "폰트를 저장하지 못했어",
-                        color = BrutalCoral,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                },
-                text = {
-                    Text(
-                        text = fontError.message
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel
-                                .resetFontUpdateState()
-                        }
-                    ) {
-                        Text(
-                            text = "확인",
-                            color = BrutalBlack,
-                            fontWeight =
-                                FontWeight.SemiBold
-                        )
-                    }
-                }
+            SaveResultAlertDialog(
+                title = "폰트를 저장하지 못했어",
+                titleColor = BrutalCoral,
+                body = fontError.message,
+                onAcknowledge = { viewModel.resetFontUpdateState() }
             )
         }
 
@@ -6075,38 +5940,11 @@ fun DetailScreen(
                     as? LayoutUpdateState.Error
             )?.let { layoutError ->
 
-            AlertDialog(
-                onDismissRequest = {
-                    viewModel.resetLayoutUpdateState()
-                },
-                title = {
-                    Text(
-                        text = "레이아웃을 저장하지 못했어",
-                        color = BrutalCoral,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                },
-                text = {
-                    Text(
-                        text = layoutError.message
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel
-                                .resetLayoutUpdateState()
-                        }
-                    ) {
-                        Text(
-                            text = "확인",
-                            color = BrutalBlack,
-                            fontWeight =
-                                FontWeight.SemiBold
-                        )
-                    }
-                }
+            SaveResultAlertDialog(
+                title = "레이아웃을 저장하지 못했어",
+                titleColor = BrutalCoral,
+                body = layoutError.message,
+                onAcknowledge = { viewModel.resetLayoutUpdateState() }
             )
         }
 
@@ -6115,38 +5953,11 @@ fun DetailScreen(
                     as? DateFormatUpdateState.Error
             )?.let { dateFormatError ->
 
-            AlertDialog(
-                onDismissRequest = {
-                    viewModel.resetDateFormatUpdateState()
-                },
-                title = {
-                    Text(
-                        text = "날짜 형식을 저장하지 못했어",
-                        color = BrutalCoral,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                },
-                text = {
-                    Text(
-                        text = dateFormatError.message
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel
-                                .resetDateFormatUpdateState()
-                        }
-                    ) {
-                        Text(
-                            text = "확인",
-                            color = BrutalBlack,
-                            fontWeight =
-                                FontWeight.SemiBold
-                        )
-                    }
-                }
+            SaveResultAlertDialog(
+                title = "날짜 형식을 저장하지 못했어",
+                titleColor = BrutalCoral,
+                body = dateFormatError.message,
+                onAcknowledge = { viewModel.resetDateFormatUpdateState() }
             )
         }
 
