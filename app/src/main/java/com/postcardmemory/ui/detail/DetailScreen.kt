@@ -42,7 +42,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
@@ -92,7 +91,6 @@ import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -5616,172 +5614,82 @@ fun DetailScreen(
 
     val readyShareState = shareState as? ShareState.Ready
     if (readyShareState != null) {
+        val shareSheetState = rememberModalBottomSheetState()
+        val shareScope = rememberCoroutineScope()
+        var isLaunchingShareChooser by remember { mutableStateOf(false) }
+
+        fun dismissShareSheet() {
+            shareScope.launch {
+                shareSheetState.hide()
+                viewModel.resetShareState()
+            }
+        }
+
+        fun launchShareChooser() {
+            if (isLaunchingShareChooser) return
+
+            val file = readyShareState.file
+
+            if (!file.exists() || file.length() == 0L) {
+                Toast.makeText(
+                    context,
+                    "공유 이미지를 준비하지 못했어요",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
+
+            isLaunchingShareChooser = true
+
+            val shareUri =
+                runCatching {
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                }.getOrNull()
+
+            if (shareUri == null) {
+                Toast.makeText(
+                    context,
+                    "엽서를 공유할 수 없어요",
+                    Toast.LENGTH_SHORT
+                ).show()
+                isLaunchingShareChooser = false
+                return
+            }
+
+            val shareIntent =
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, shareUri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+            runCatching {
+                context.startActivity(
+                    Intent.createChooser(shareIntent, "엽서 공유하기")
+                )
+            }.onFailure {
+                Toast.makeText(
+                    context,
+                    "이 이미지를 받을 수 있는 앱이 없어요",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            isLaunchingShareChooser = false
+            dismissShareSheet()
+        }
+
         SharePreviewBottomSheet(
             file = readyShareState.file,
-            onDismissed = { viewModel.resetShareState() }
+            enabled = !isLaunchingShareChooser,
+            sheetState = shareSheetState,
+            onDismissed = { viewModel.resetShareState() },
+            onShare = { launchShareChooser() }
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SharePreviewBottomSheet(
-    file: File,
-    onDismissed: () -> Unit
-) {
-    val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
-    var isLaunchingShareChooser by remember { mutableStateOf(false) }
-
-    fun dismissSheet() {
-        scope.launch {
-            sheetState.hide()
-            onDismissed()
-        }
-    }
-
-    fun launchShareChooser() {
-        if (isLaunchingShareChooser) return
-
-        if (!file.exists() || file.length() == 0L) {
-            Toast.makeText(
-                context,
-                "공유 이미지를 준비하지 못했어요",
-                Toast.LENGTH_SHORT
-            ).show()
-            return
-        }
-
-        isLaunchingShareChooser = true
-
-        val shareUri =
-            runCatching {
-                FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    file
-                )
-            }.getOrNull()
-
-        if (shareUri == null) {
-            Toast.makeText(
-                context,
-                "엽서를 공유할 수 없어요",
-                Toast.LENGTH_SHORT
-            ).show()
-            isLaunchingShareChooser = false
-            return
-        }
-
-        val shareIntent =
-            Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, shareUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-        runCatching {
-            context.startActivity(
-                Intent.createChooser(shareIntent, "엽서 공유하기")
-            )
-        }.onFailure {
-            Toast.makeText(
-                context,
-                "이 이미지를 받을 수 있는 앱이 없어요",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-
-        isLaunchingShareChooser = false
-        dismissSheet()
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismissed,
-        sheetState = sheetState,
-        containerColor = PaperSurface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "엽서 공유하기",
-                color = BrutalBlack,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "완성된 엽서를 이미지로 보낼 수 있어요",
-                color = InkSecondary,
-                fontSize = 13.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(PaperTray)
-                    .border(
-                        BorderStroke(1.dp, PaperDivider),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .padding(12.dp)
-                    .semantics {
-                        contentDescription = "공유할 완성 엽서 미리보기"
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = file,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = { launchShareChooser() },
-                enabled = !isLaunchingShareChooser,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SunsetGold,
-                    contentColor = PaperSurface,
-                    disabledContainerColor = SunsetGold.copy(alpha = 0.45f),
-                    disabledContentColor = PaperSurface.copy(alpha = 0.65f)
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = null,
-                    tint = PaperSurface
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Text(
-                    text = "공유하기",
-                    color = PaperSurface,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-    }
-}
