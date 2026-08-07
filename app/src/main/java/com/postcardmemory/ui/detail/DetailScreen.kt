@@ -234,17 +234,6 @@ internal fun clampStickerOffset(
     )
 }
 
-internal fun centeredStickerOffset(
-    postcardSize: IntSize,
-    stickerSize: IntSize
-): Offset =
-    Offset(
-        x = ((postcardSize.width - stickerSize.width) / 2f)
-            .coerceAtLeast(0f),
-        y = ((postcardSize.height - stickerSize.height) / 2f)
-            .coerceAtLeast(0f)
-    )
-
 private fun localStickerDeltaToParent(
     localDelta: Offset,
     rotationDegrees: Float,
