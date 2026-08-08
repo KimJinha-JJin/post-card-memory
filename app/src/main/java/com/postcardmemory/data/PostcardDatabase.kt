@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -419,6 +419,36 @@ abstract class PostcardDatabase : RoomDatabase() {
                         """
                         ALTER TABLE postcards
                         ADD COLUMN envelopePostmarked INTEGER NOT NULL DEFAULT 0
+                        """.trimIndent()
+                    )
+                }
+            }
+
+        /**
+         * 엽서 뒷면 편지 기능. 기존 행은 전부 backRecipientModifier='',
+         * backMessage=''로 채워져 뒤집었을 때 빈 편지 상태로 정상 진입한다
+         * (DEFAULT + ADD COLUMN은 기존 행에도 소급 적용됨). 앞면 데이터·
+         * 봉투 휴면 필드는 이 migration과 무관해 전혀 영향받지 않는다.
+         */
+        val MIGRATION_17_18 =
+            object : Migration(
+                startVersion = 17,
+                endVersion = 18
+            ) {
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN backRecipientModifier TEXT NOT NULL DEFAULT ''
+                        """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                        ALTER TABLE postcards
+                        ADD COLUMN backMessage TEXT NOT NULL DEFAULT ''
                         """.trimIndent()
                     )
                 }

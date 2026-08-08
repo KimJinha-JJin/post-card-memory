@@ -421,4 +421,28 @@ interface PostcardDao {
     suspend fun clearPostcardEnvelope(
         id: Long
     )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET backRecipientModifier = :backRecipientModifier
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardBackRecipientModifier(
+        id: Long,
+        backRecipientModifier: String
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET backMessage = :backMessage
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardBackMessage(
+        id: Long,
+        backMessage: String
+    )
 }

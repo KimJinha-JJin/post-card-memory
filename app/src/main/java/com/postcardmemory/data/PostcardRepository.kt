@@ -324,4 +324,24 @@ class PostcardRepository @Inject constructor(
     ) {
         dao.clearPostcardEnvelope(id)
     }
+
+    suspend fun updatePostcardBackRecipientModifier(
+        id: Long,
+        backRecipientModifier: String
+    ) {
+        dao.updatePostcardBackRecipientModifier(
+            id = id,
+            backRecipientModifier = backRecipientModifier
+        )
+    }
+
+    suspend fun updatePostcardBackMessage(
+        id: Long,
+        backMessage: String
+    ) {
+        dao.updatePostcardBackMessage(
+            id = id,
+            backMessage = backMessage
+        )
+    }
 }

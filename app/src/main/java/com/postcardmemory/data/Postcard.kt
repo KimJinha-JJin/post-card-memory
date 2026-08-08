@@ -59,7 +59,11 @@ data class Postcard(
     val futureMailDeliverAt: Long? = null,
     val envelopeStyle: String? = null,
     @ColumnInfo(defaultValue = "0")
-    val envelopePostmarked: Boolean = false
+    val envelopePostmarked: Boolean = false,
+    @ColumnInfo(defaultValue = "''")
+    val backRecipientModifier: String = "",
+    @ColumnInfo(defaultValue = "''")
+    val backMessage: String = ""
 )
 
 /** 일반 엽서. 갤러리에 보인다. */
