@@ -288,6 +288,30 @@ fun PostcardBackgroundPatternPicker(
     }
 }
 
+/**
+ * selectedColorArgb가 바뀔 때마다 색상판/색상계열 HSV 상태를 무조건
+ * 다시 만들면, 그 상태를 읽고 쓰는 pointerInput 제스처는 캔버스 크기가
+ * 바뀔 때만 재시작되므로 명도 조절과 색상 선택이 서로 다른 세대의
+ * HSV 상태를 가리키게 된다. 이 색이 이 컴포저블 자신이 방금 emit한
+ * 값과 같다면(자기 반향) 재동기화하지 말고, 프리셋 스와치처럼 외부에서
+ * 바뀐 값일 때만 재동기화해야 두 상태가 항상 같은 것을 가리킨다.
+ */
+internal fun shouldResyncCustomColorHsv(
+    externalColorArgb: Long,
+    lastEmittedColorArgb: Long
+): Boolean =
+    externalColorArgb != lastEmittedColorArgb
+
+private fun colorArgbToHsv(
+    colorArgb: Long
+): FloatArray =
+    FloatArray(3).also { hsv ->
+        AndroidColor.colorToHSV(
+            colorArgb.toInt(),
+            hsv
+        )
+    }
+
 @Composable
 fun PostcardCustomColorPicker(
     selectedColorArgb: Long,
@@ -296,25 +320,34 @@ fun PostcardCustomColorPicker(
     modifier: Modifier = Modifier
 ) {
     val initialHsv =
-        remember(selectedColorArgb) {
-            FloatArray(3).also { hsv ->
-                AndroidColor.colorToHSV(
-                    selectedColorArgb.toInt(),
-                    hsv
-                )
-            }
+        remember {
+            colorArgbToHsv(selectedColorArgb)
         }
 
-    var hue by remember(selectedColorArgb) {
+    var hue by remember {
         mutableStateOf(initialHsv[0])
     }
 
-    var saturation by remember(selectedColorArgb) {
+    var saturation by remember {
         mutableStateOf(initialHsv[1])
     }
 
-    var value by remember(selectedColorArgb) {
+    var value by remember {
         mutableStateOf(initialHsv[2])
+    }
+
+    var lastEmittedColorArgb by remember {
+        mutableStateOf(selectedColorArgb)
+    }
+
+    LaunchedEffect(selectedColorArgb) {
+        if (shouldResyncCustomColorHsv(selectedColorArgb, lastEmittedColorArgb)) {
+            val hsv = colorArgbToHsv(selectedColorArgb)
+            hue = hsv[0]
+            saturation = hsv[1]
+            value = hsv[2]
+            lastEmittedColorArgb = selectedColorArgb
+        }
     }
 
     var colorAreaWidth by remember {
@@ -361,7 +394,11 @@ fun PostcardCustomColorPicker(
                 floatArrayOf(hue, saturation, value)
             )
 
-        onColorSelected(colorInt.toLong() and 0xFFFFFFFFL)
+        val argb = colorInt.toLong() and 0xFFFFFFFFL
+
+        lastEmittedColorArgb = argb
+
+        onColorSelected(argb)
     }
 
     fun updateSaturationAndValue(
