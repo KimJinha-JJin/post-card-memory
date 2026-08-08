@@ -15,6 +15,8 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenter
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
+import com.postcardmemory.ui.components.BACK_MESSAGE_MAX_LENGTH
+import com.postcardmemory.ui.components.BACK_RECIPIENT_MODIFIER_MAX_LENGTH
 import com.postcardmemory.utils.ConfirmedEditStateStorage
 import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.PhotoColorExtractor
@@ -458,6 +460,10 @@ class DetailViewModel @Inject constructor(
     private var imageUpdateJob: Job? = null
 
     private var messageUpdateJob: Job? = null
+
+    private var backRecipientModifierSaveJob: Job? = null
+
+    private var backMessageSaveJob: Job? = null
 
     private var confirmSaveJob: Job? = null
 
@@ -2545,6 +2551,121 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 뒷면 편지는 타이핑 중 계속 저장을 트리거하므로 updateMessage(다이얼로그
+     * "저장" 클릭 시 1회만 호출)와 달리 짧은 시간에 여러 번 겹쳐 호출될 수
+     * 있다. Mutex 없이 매번 저장하면 완료 순서가 뒤바뀌어 나중에 입력한
+     * 내용이 먼저 입력한 내용에 덮여 사라질 수 있으므로, updateBackgroundColor와
+     * 동일하게 styleWriteMutex로 직렬화하고 획득 시점에 _postcard.value를
+     * 다시 읽어서 쓴다.
+     */
+    fun updateBackRecipientModifier(
+        backRecipientModifier: String
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        val normalized =
+            backRecipientModifier.take(
+                BACK_RECIPIENT_MODIFIER_MAX_LENGTH
+            )
+
+        val previous =
+            currentPostcard.backRecipientModifier
+
+        _postcard.value =
+            currentPostcard.copy(
+                backRecipientModifier = normalized
+            )
+
+        backRecipientModifierSaveJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    styleWriteMutex.withLock {
+                        val latest =
+                            _postcard.value
+                                ?: return@withLock
+                        repository.updatePostcardBackRecipientModifier(
+                            id = currentPostcard.id,
+                            backRecipientModifier =
+                                latest.backRecipientModifier
+                        )
+                    }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (
+                    _postcard.value?.backRecipientModifier ==
+                    normalized
+                ) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backRecipientModifier = previous
+                        )
+                }
+
+                Log.w(
+                    TAG,
+                    "받는 사람 수식언 저장 실패: ${exception.message}"
+                )
+            }
+        }
+    }
+
+    /** updateBackRecipientModifier와 동일한 이유로 styleWriteMutex를 재사용한다. */
+    fun updateBackMessage(
+        backMessage: String
+    ) {
+        val currentPostcard =
+            _postcard.value
+                ?: return
+
+        val normalized =
+            backMessage.take(
+                BACK_MESSAGE_MAX_LENGTH
+            )
+
+        val previous =
+            currentPostcard.backMessage
+
+        _postcard.value =
+            currentPostcard.copy(
+                backMessage = normalized
+            )
+
+        backMessageSaveJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    styleWriteMutex.withLock {
+                        val latest =
+                            _postcard.value
+                                ?: return@withLock
+                        repository.updatePostcardBackMessage(
+                            id = currentPostcard.id,
+                            backMessage = latest.backMessage
+                        )
+                    }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (_postcard.value?.backMessage == normalized) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            backMessage = previous
+                        )
+                }
+
+                Log.w(
+                    TAG,
+                    "뒷면 편지 저장 실패: ${exception.message}"
+                )
+            }
+        }
+    }
+
     fun updateMessageFont(
         messageFont: String
     ) {
@@ -3868,7 +3989,8 @@ class DetailViewModel @Inject constructor(
      * 슬라이더 계열 저장(saveStampPhotoScale 등), 배경색·배경 패턴·폰트·
      * 레이아웃·날짜 형식 저장(updateBackgroundColor 등), 템플릿 적용
      * (persistTemplateStyle), 사진 교체(updatePostcardImage), 글귀 저장
-     * (updateMessage), 스티커·도장 확정 저장(saveEditsAndClearDraft), 내
+     * (updateMessage), 뒷면 편지 저장(updateBackRecipientModifier,
+     * updateBackMessage), 스티커·도장 확정 저장(saveEditsAndClearDraft), 내
      * 템플릿 저장/이름변경/덮어쓰기는 모두
      * DetailScreen의 controlsEnabled가 확인하는 Saving 상태만으로는 뒤로
      * 가기를 막지 못한다 — 아이콘 뒤로 가기 버튼은 enabled=controlsEnabled로
@@ -3917,6 +4039,8 @@ class DetailViewModel @Inject constructor(
                 templateStyleSaveJob,
                 imageUpdateJob,
                 messageUpdateJob,
+                backRecipientModifierSaveJob,
+                backMessageSaveJob,
                 confirmSaveJob,
                 userTemplateSaveJob,
                 userTemplateRenameJob,

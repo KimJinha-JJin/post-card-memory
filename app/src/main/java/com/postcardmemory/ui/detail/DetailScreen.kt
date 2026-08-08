@@ -18,6 +18,9 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -65,6 +68,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
@@ -156,6 +160,7 @@ import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
+import com.postcardmemory.ui.components.PostcardBackFaceContent
 import com.postcardmemory.ui.components.PostcardBackgroundPatternPicker
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
@@ -925,6 +930,46 @@ fun DetailScreen(
         mutableStateOf(false)
     }
 
+    // 앞/뒤 어느 면을 보고 있는지는 일시적 UI 상태로만 취급한다 — DB에
+    // 저장하지 않으며, 화면에 새로 진입하면 항상 앞면부터 시작한다.
+    var isBackFace by remember {
+        mutableStateOf(false)
+    }
+
+    // 0f=앞면, 180f=뒷면. 90f를 넘는 순간 렌더 내용을 앞면→뒷면으로
+    // 교체한다(가운데 지점에서 자연스럽게 면이 바뀜). isFlipAnimating으로
+    // 애니메이션 도중 추가 플립 입력을 막아 연속 탭으로 상태가 꼬이지
+    // 않게 한다.
+    val flipRotation = remember {
+        Animatable(0f)
+    }
+
+    var isFlipAnimating by remember {
+        mutableStateOf(false)
+    }
+
+    val flipCoroutineScope = rememberCoroutineScope()
+
+    val triggerFlip: () -> Unit = {
+        if (!isFlipAnimating) {
+            isFlipAnimating = true
+            val targetRotation =
+                if (isBackFace) 0f else 180f
+            isBackFace = !isBackFace
+
+            flipCoroutineScope.launch {
+                flipRotation.animateTo(
+                    targetValue = targetRotation,
+                    animationSpec = tween(
+                        durationMillis = 320,
+                        easing = FastOutSlowInEasing
+                    )
+                )
+                isFlipAnimating = false
+            }
+        }
+    }
+
     var showMessageDialog by remember {
         mutableStateOf(false)
     }
@@ -1637,10 +1682,16 @@ fun DetailScreen(
                     if (isFocusPreviewMode) 0.96f else 0.8f
 
                 Box(
-                    modifier = Modifier.fillMaxWidth(
-                        postcardPreviewWidthFraction
-                    )
+                    modifier = Modifier
+                        .fillMaxWidth(
+                            postcardPreviewWidthFraction
+                        )
+                        .graphicsLayer {
+                            rotationY = flipRotation.value
+                            cameraDistance = 12f * density
+                        }
                 ) {
+                if (flipRotation.value <= 90f) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3207,6 +3258,38 @@ fun DetailScreen(
                             }
                         }
                     }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RectangleShape)
+                            .graphicsLayer {
+                                // 바깥 Box가 이미 flipRotation만큼 돌아가 있으므로,
+                                // 뒷면 내용을 다시 180도 돌려 텍스트가 거울상으로
+                                // 보이지 않고 정방향으로 읽히게 한다.
+                                rotationY = 180f
+                            }
+                    ) {
+                        PostcardBackFaceContent(
+                            recipientModifier =
+                                pc.backRecipientModifier,
+                            onRecipientModifierChanged = { newValue ->
+                                viewModel.updateBackRecipientModifier(
+                                    newValue
+                                )
+                            },
+                            message = pc.backMessage,
+                            onMessageChanged = { newValue ->
+                                viewModel.updateBackMessage(
+                                    newValue
+                                )
+                            },
+                            capturedAt = pc.capturedAt,
+                            enabled = controlsEnabled
+                        )
+                    }
+                }
                 }
             }
 
@@ -4509,6 +4592,22 @@ fun DetailScreen(
                         .weight(1f)
                         .padding(start = 8.dp)
                 )
+
+                IconButton(
+                    onClick = triggerFlip,
+                    enabled = controlsEnabled && !isFlipAnimating
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Flip,
+                        contentDescription =
+                            if (isBackFace) {
+                                "앞면으로 뒤집기"
+                            } else {
+                                "뒷면으로 뒤집기"
+                            },
+                        tint = BrutalBlack
+                    )
+                }
 
                 IconButton(
                     onClick = {
