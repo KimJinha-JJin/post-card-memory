@@ -302,6 +302,18 @@ internal fun shouldResyncCustomColorHsv(
 ): Boolean =
     externalColorArgb != lastEmittedColorArgb
 
+/**
+ * HSVToColor는 RGB를 0~255 정수로 반올림하므로, 드래그 중 인접한 여러
+ * 포인터 이동이 같은 ARGB로 수렴하는 경우가 흔하다. 실제로 색이 바뀌지
+ * 않았다면 ViewModel 저장·미리보기 재렌더로 이어지는 onColorSelected
+ * 호출을 생략해도 사용자가 보는 최종 색은 달라지지 않는다.
+ */
+internal fun shouldEmitCustomColor(
+    newColorArgb: Long,
+    lastEmittedColorArgb: Long
+): Boolean =
+    newColorArgb != lastEmittedColorArgb
+
 private fun colorArgbToHsv(
     colorArgb: Long
 ): FloatArray =
@@ -395,6 +407,10 @@ fun PostcardCustomColorPicker(
             )
 
         val argb = colorInt.toLong() and 0xFFFFFFFFL
+
+        if (!shouldEmitCustomColor(argb, lastEmittedColorArgb)) {
+            return
+        }
 
         lastEmittedColorArgb = argb
 

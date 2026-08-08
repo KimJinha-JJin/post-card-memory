@@ -62,4 +62,65 @@ class PostcardCustomColorPickerTest {
             )
         )
     }
+
+    // ==== shouldEmitCustomColor: 드래그 중 동일 ARGB 재계산 시 알림 생략 ====
+
+    // ---- 1. 현재색 A -> A: 알림 생략(no-op) ----
+
+    @Test
+    fun sameColorAsLastEmitted_doesNotEmit() {
+        assertFalse(
+            shouldEmitCustomColor(
+                newColorArgb = colorA,
+                lastEmittedColorArgb = colorA
+            )
+        )
+    }
+
+    // ---- 2. 현재색 A -> B: 정상 알림 ----
+
+    @Test
+    fun differentColorFromLastEmitted_emits() {
+        assertTrue(
+            shouldEmitCustomColor(
+                newColorArgb = colorB,
+                lastEmittedColorArgb = colorA
+            )
+        )
+    }
+
+    // ---- 3. A -> A -> A 반복: 매번 알림 생략 ----
+
+    @Test
+    fun repeatedSameColor_neverEmits() {
+        repeat(3) {
+            assertFalse(
+                shouldEmitCustomColor(
+                    newColorArgb = colorA,
+                    lastEmittedColorArgb = colorA
+                )
+            )
+        }
+    }
+
+    // ---- 4. B로 실제 변경 후에는 다시 정상 알림 ----
+
+    @Test
+    fun actualChangeAfterRepeatedSameColor_emits() {
+        // A가 반복되는 동안은 생략되다가
+        assertFalse(
+            shouldEmitCustomColor(
+                newColorArgb = colorA,
+                lastEmittedColorArgb = colorA
+            )
+        )
+
+        // 실제로 B로 바뀌면 다시 알림이 나가야 한다
+        assertTrue(
+            shouldEmitCustomColor(
+                newColorArgb = colorB,
+                lastEmittedColorArgb = colorA
+            )
+        )
+    }
 }
