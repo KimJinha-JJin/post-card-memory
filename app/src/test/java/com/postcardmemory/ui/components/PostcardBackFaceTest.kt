@@ -55,4 +55,46 @@ class PostcardBackFaceTest {
             formatBackFromLine(capturedAt)
         )
     }
+
+    // ---- 갤러리 "뒷면 편지 있음" 배지 판정 ----
+
+    @Test
+    fun postcardHasBackContent_bothEmpty_isFalse() {
+        assertEquals(
+            false,
+            postcardHasBackContent("", "")
+        )
+    }
+
+    @Test
+    fun postcardHasBackContent_onlyRecipientModifier_isTrue() {
+        assertEquals(
+            true,
+            postcardHasBackContent("귀여운", "")
+        )
+    }
+
+    @Test
+    fun postcardHasBackContent_onlyMessage_isTrue() {
+        assertEquals(
+            true,
+            postcardHasBackContent("", "오늘도 고생했어.")
+        )
+    }
+
+    @Test
+    fun postcardHasBackContent_bothPresent_isTrue() {
+        assertEquals(
+            true,
+            postcardHasBackContent("귀여운", "오늘도 고생했어.")
+        )
+    }
+
+    @Test
+    fun postcardHasBackContent_onlyWhitespace_isFalse() {
+        assertEquals(
+            false,
+            postcardHasBackContent("   ", "\n  ")
+        )
+    }
 }

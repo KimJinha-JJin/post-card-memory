@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MailOutline
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +58,7 @@ import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
+import com.postcardmemory.ui.theme.SunsetGold
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -571,6 +575,28 @@ fun StampCardContent(
                             shape = CircleShape
                         )
                 )
+            }
+
+            if (postcardHasBackContent(postcard.backRecipientModifier, postcard.backMessage)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(16.dp)
+                        .background(
+                            color = PaperSurface,
+                            shape = CircleShape
+                        )
+                        .border(1.dp, PaperDivider, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MailOutline,
+                        contentDescription = "뒷면 편지 있음",
+                        tint = SunsetGold,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
             }
         }
 

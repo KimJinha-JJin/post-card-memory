@@ -6,7 +6,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MailOutline
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -17,9 +21,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.PostcardDateFormat
+import com.postcardmemory.ui.components.postcardHasBackContent
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.SunsetGold
 
 @Composable
 fun PostcardDetailRow(
@@ -68,6 +74,17 @@ fun PostcardDetailRow(
             color = BrutalBlack,
             modifier = Modifier.width(96.dp)
         )
+
+        if (postcardHasBackContent(postcard.backRecipientModifier, postcard.backMessage)) {
+            Icon(
+                imageVector = Icons.Filled.MailOutline,
+                contentDescription = "뒷면 편지 있음",
+                tint = SunsetGold,
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(14.dp)
+            )
+        }
 
         Text(
             text = contentText,

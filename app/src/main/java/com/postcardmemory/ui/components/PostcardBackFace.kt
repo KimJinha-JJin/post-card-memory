@@ -65,6 +65,16 @@ internal fun formatBackFromLine(
             "의 나"
 
 /**
+ * 갤러리 등에서 "뒷면에 편지가 있다"고 표시할지 판단하는 단일 기준.
+ * 공백만 입력된 경우는 내용으로 보지 않는다.
+ */
+internal fun postcardHasBackContent(
+    recipientModifier: String,
+    message: String
+): Boolean =
+    recipientModifier.isNotBlank() || message.isNotBlank()
+
+/**
  * 엽서 뒷면 — 수신자(To.)·편지 본문·발신 날짜(From.)로 구성된 편지 영역.
  * 앞면과 달리 스티커·도장·낙서·배경 패턴 등 꾸미기 기능은 제공하지 않는다.
  *
