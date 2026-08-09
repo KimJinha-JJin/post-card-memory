@@ -47,6 +47,8 @@ object PostcardImageExporter {
     private const val SHARE_CACHE_MAX_FILES = 20
     private const val STICKER_CORNER_RADIUS_RATIO =
         16f / 120f
+    /** TextStickerContent와 같은 두 겹(흰 STROKE → 컬러 FILL) 그리기 기법에서 쓰는 외곽선 두께 비율. */
+    private const val TEXT_STICKER_OUTLINE_WIDTH_RATIO = 0.14f
     private const val STICKER_BORDER_WIDTH_RATIO =
         3f / 120f
 
@@ -72,12 +74,31 @@ object PostcardImageExporter {
         val capturedAtMillis: Long? = null
     )
 
+    /**
+     * fontSizeRatio는 다른 오버레이의 sizeRatio(박스 너비 비율)와 달리
+     * "글자 크기"의 postcard 너비 대비 비율이다 — 텍스트 스티커는 문자열
+     * 길이에 따라 박스 가로세로 비율이 제각각이라 박스 너비만으로는 export
+     * 해상도에서 같은 글자 크기를 재현할 수 없다. 대신 화면과 export가
+     * 동일한 fontSizePx로 각자 Paint.getTextBounds를 다시 측정해 그리므로
+     * (TextStickerContent와 drawTextStickerOverlay), 두 렌더 경로가 항상
+     * 같은 측정 결과를 얻는다.
+     */
+    data class TextStickerOverlay(
+        val text: String,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val fontSizeRatio: Float,
+        val rotationDegrees: Float = 0f,
+        val colorArgb: Long
+    )
+
     fun exportToGallery(
         context: Context,
         postcard: Postcard,
         stickerOverlays: List<StickerOverlay> = emptyList(),
         sealOverlays: List<SealOverlay> = emptyList(),
-        doodleStrokes: List<DoodleStroke> = emptyList()
+        doodleStrokes: List<DoodleStroke> = emptyList(),
+        textStickerOverlays: List<TextStickerOverlay> = emptyList()
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
@@ -86,7 +107,8 @@ object PostcardImageExporter {
                     postcard = postcard,
                     stickerOverlays = stickerOverlays,
                     sealOverlays = sealOverlays,
-                    doodleStrokes = doodleStrokes
+                    doodleStrokes = doodleStrokes,
+                    textStickerOverlays = textStickerOverlays
                 )
 
             try {
@@ -107,7 +129,8 @@ object PostcardImageExporter {
         postcard: Postcard,
         stickerOverlays: List<StickerOverlay> = emptyList(),
         sealOverlays: List<SealOverlay> = emptyList(),
-        doodleStrokes: List<DoodleStroke> = emptyList()
+        doodleStrokes: List<DoodleStroke> = emptyList(),
+        textStickerOverlays: List<TextStickerOverlay> = emptyList()
     ): Result<File> {
         return runCatching {
             val outputBitmap =
@@ -116,7 +139,8 @@ object PostcardImageExporter {
                     postcard = postcard,
                     stickerOverlays = stickerOverlays,
                     sealOverlays = sealOverlays,
-                    doodleStrokes = doodleStrokes
+                    doodleStrokes = doodleStrokes,
+                    textStickerOverlays = textStickerOverlays
                 )
 
             try {
@@ -253,7 +277,8 @@ object PostcardImageExporter {
         postcard: Postcard,
         stickerOverlays: List<StickerOverlay>,
         sealOverlays: List<SealOverlay> = emptyList(),
-        doodleStrokes: List<DoodleStroke> = emptyList()
+        doodleStrokes: List<DoodleStroke> = emptyList(),
+        textStickerOverlays: List<TextStickerOverlay> = emptyList()
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -323,6 +348,13 @@ object PostcardImageExporter {
                     context = context,
                     canvas = canvas,
                     sealOverlay = overlay
+                )
+            }
+
+            for (overlay in textStickerOverlays) {
+                drawTextStickerOverlay(
+                    canvas = canvas,
+                    textStickerOverlay = overlay
                 )
             }
 
@@ -637,6 +669,69 @@ object PostcardImageExporter {
                 bitmap.recycle()
             }
         }
+    }
+
+    /**
+     * 화면(TextStickerContent)과 동일하게 Paint.getTextBounds로 이 함수
+     * 안에서 직접 측정해 그린다 — 미리 계산된 폭을 받아 맞춰 그리지 않고
+     * 똑같은 절차를 다시 밟으므로, 화면과 export의 외곽선 두께·글자 위치가
+     * 항상 같은 방식으로 계산된다.
+     */
+    private fun drawTextStickerOverlay(
+        canvas: Canvas,
+        textStickerOverlay: TextStickerOverlay
+    ) {
+        val fontSizePx =
+            textStickerOverlay.fontSizeRatio * OUTPUT_SIZE
+
+        if (fontSizePx <= 0f) return
+
+        val fillPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = textStickerOverlay.colorArgb.toInt()
+                textSize = fontSizePx
+                typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            }
+
+        val strokeWidthPx = fontSizePx * TEXT_STICKER_OUTLINE_WIDTH_RATIO
+
+        val textBounds = Rect()
+        fillPaint.getTextBounds(
+            textStickerOverlay.text,
+            0,
+            textStickerOverlay.text.length,
+            textBounds
+        )
+
+        val left = textStickerOverlay.normalizedX * OUTPUT_SIZE
+        val top = textStickerOverlay.normalizedY * OUTPUT_SIZE
+        val boxWidth = textBounds.width() + strokeWidthPx
+        val boxHeight = textBounds.height() + strokeWidthPx
+
+        if (boxWidth <= 0f || boxHeight <= 0f) return
+
+        val strokePaint =
+            Paint(fillPaint).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = strokeWidthPx
+                strokeJoin = Paint.Join.ROUND
+                strokeMiter = 2f
+                color = Color.WHITE
+            }
+
+        val originX = left - textBounds.left + strokeWidthPx / 2f
+        val originY = top - textBounds.top + strokeWidthPx / 2f
+
+        canvas.save()
+        canvas.rotate(
+            textStickerOverlay.rotationDegrees,
+            left + boxWidth / 2f,
+            top + boxHeight / 2f
+        )
+        canvas.drawText(textStickerOverlay.text, originX, originY, strokePaint)
+        canvas.drawText(textStickerOverlay.text, originX, originY, fillPaint)
+        canvas.restore()
     }
 
     private fun drawCirclePostmarkOverlay(

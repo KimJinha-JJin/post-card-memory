@@ -78,3 +78,17 @@ val sealInkColors = listOf(
     SealInkGreen,
     SealInkWhite
 )
+
+/*
+ * 텍스트 스티커 글자색 — 흰색 외곽선과 항상 대비돼야 하므로 흰색은
+ * 제외한다. 콘텐츠 팔레트(pastelColors)와 잉크 톤을 섞어 "귀엽고
+ * 사랑스러운" 느낌에 맞춘다.
+ */
+val textStickerColors = listOf(
+    InkPrimary,
+    SunsetCoral,
+    SunsetGold,
+    BrutalBlue,
+    BrutalMint,
+    BrutalPink
+)

@@ -1,5 +1,6 @@
 package com.postcardmemory.ui.detail
 
+import androidx.compose.ui.geometry.Offset
 import com.postcardmemory.utils.DoodlePoint
 import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.DoodleStrokeWidth
@@ -172,6 +173,67 @@ class PostcardEditDraftTest {
 
         assertNotNull(parsed)
         assertEquals(listOf(goodStroke), parsed!!.doodleStrokes)
+    }
+
+    // ---- 텍스트 스티커도 Uri를 다루지 않으므로 낙서와 동일하게 전체 왕복을 검증할 수 있다 ----
+
+    private fun sampleTextSticker(id: String = "text-1") =
+        TextStickerItem(
+            id = id,
+            text = "( ˶ˆᗜˆ˵ )",
+            offset = Offset(0.1f, 0.2f),
+            scale = 1.2f,
+            rotationDegrees = -10f,
+            colorArgb = 0xFF334455L
+        )
+
+    @Test
+    fun serialize_thenParse_roundTripsTextStickers() {
+        val original = emptyDraft().copy(
+            textStickers = listOf(sampleTextSticker("a"), sampleTextSticker("b")),
+            selectedTextStickerId = "a"
+        )
+
+        val parsed = parsePostcardEditDraft(original.serialize())
+
+        assertNotNull(parsed)
+        assertEquals(original, parsed)
+    }
+
+    @Test
+    fun parsePostcardEditDraft_missingTextStickerFields_treatedAsNoTextStickers() {
+        // DRAFT_FORMAT_VERSION=2 시절(텍스트 스티커 도입 전)에 저장된 초안:
+        // meta에 낙서 개수(9)까지만 있고 10~11번(텍스트 스티커 개수/선택 id)이 없다.
+        val text = "POSTCARD_DRAFT_V1\n2\t1\t1\t1\t1\t~\t~\t0\t0\t0"
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertTrue(parsed!!.textStickers.isEmpty())
+        assertNull(parsed.selectedTextStickerId)
+    }
+
+    @Test
+    fun parsePostcardEditDraft_returnsNullWhenDeclaredTextStickerCountExceedsBodyLines() {
+        val text = "POSTCARD_DRAFT_V1\n3\t1\t1\t1\t1\t~\t~\t0\t0\t0\t3\t~"
+
+        assertNull(parsePostcardEditDraft(text))
+    }
+
+    @Test
+    fun parsePostcardEditDraft_skipsCorruptedTextStickerLineButKeepsRest() {
+        val goodSticker = sampleTextSticker("good")
+        val text = listOf(
+            "POSTCARD_DRAFT_V1",
+            "3\t1\t1\t1\t1\t~\t~\t0\t0\t0\t2\t~",
+            "corrupted\tline",
+            goodSticker.serialize()
+        ).joinToString("\n")
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertEquals(listOf(goodSticker), parsed!!.textStickers)
     }
 
     @Test

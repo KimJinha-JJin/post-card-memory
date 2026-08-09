@@ -59,6 +59,7 @@ private const val TAG = "DetailViewModel"
 private const val SEAL_HISTORY_LIMIT = 50
 private const val STICKER_HISTORY_LIMIT = 30
 private const val DOODLE_HISTORY_LIMIT = 50
+private const val TEXT_STICKER_HISTORY_LIMIT = 50
 private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
 private const val TEMPLATE_STYLE_HISTORY_LIMIT = 50
 private const val MAX_TEMPLATE_NAME_LENGTH = 20
@@ -119,8 +120,9 @@ sealed interface ConfirmSaveState {
 internal fun shouldConfirmSaveSucceed(
     stickersSaved: Boolean,
     sealsSaved: Boolean,
-    doodlesSaved: Boolean = true
-): Boolean = stickersSaved && sealsSaved && doodlesSaved
+    doodlesSaved: Boolean = true,
+    textStickersSaved: Boolean = true
+): Boolean = stickersSaved && sealsSaved && doodlesSaved && textStickersSaved
 
 /** 이미 확정 저장이 진행 중이면 완료 버튼 연타로 새 저장을 또 시작하지 않는다. */
 internal fun canStartConfirmSave(
@@ -533,6 +535,7 @@ class DetailViewModel @Inject constructor(
     private var confirmedStickersBaseline: List<PhotoStickerItem> = emptyList()
     private var confirmedSealsBaseline: List<PostcardSealItem> = emptyList()
     private var confirmedDoodlesBaseline: List<DoodleStroke> = emptyList()
+    private var confirmedTextStickersBaseline: List<TextStickerItem> = emptyList()
 
     /**
      * 새 postcardId로 상세 화면에 진입할 때 한 번만 호출한다.
@@ -557,15 +560,18 @@ class DetailViewModel @Inject constructor(
         confirmedStickersBaseline = emptyList()
         confirmedSealsBaseline = emptyList()
         confirmedDoodlesBaseline = emptyList()
+        confirmedTextStickersBaseline = emptyList()
 
         clearStickerHistory()
         clearSealHistory()
         clearDoodleHistory()
+        clearTextStickerHistory()
 
         viewModelScope.launch(Dispatchers.IO) {
             val confirmedStickers = readConfirmedStickerState(postcardId)
             val confirmedSeals = readConfirmedSealState(postcardId)
             val confirmedDoodles = readConfirmedDoodleState(postcardId)
+            val confirmedTextStickers = readConfirmedTextStickerState(postcardId)
 
             withContext(Dispatchers.Main) {
                 _photoStickers.value = confirmedStickers
@@ -573,11 +579,14 @@ class DetailViewModel @Inject constructor(
                 _photoSeals.value = confirmedSeals
                 _selectedSealId.value = null
                 _doodleStrokes.value = confirmedDoodles
+                _textStickers.value = confirmedTextStickers
+                _selectedTextStickerId.value = null
             }
 
             confirmedStickersBaseline = confirmedStickers
             confirmedSealsBaseline = confirmedSeals
             confirmedDoodlesBaseline = confirmedDoodles
+            confirmedTextStickersBaseline = confirmedTextStickers
 
             val existingDraft =
                 PostcardDraftStorage.loadDraft(context, postcardId)
@@ -596,6 +605,8 @@ class DetailViewModel @Inject constructor(
                     _photoSeals.value = existingDraft.seals
                     _selectedSealId.value = existingDraft.selectedSealId
                     _doodleStrokes.value = existingDraft.doodleStrokes
+                    _textStickers.value = existingDraft.textStickers
+                    _selectedTextStickerId.value = existingDraft.selectedTextStickerId
                 }
 
                 _draftAutoRestoredEvents.trySend(Unit)
@@ -680,10 +691,13 @@ class DetailViewModel @Inject constructor(
         _photoSeals.value = confirmedSealsBaseline
         _selectedSealId.value = null
         _doodleStrokes.value = confirmedDoodlesBaseline
+        _textStickers.value = confirmedTextStickersBaseline
+        _selectedTextStickerId.value = null
 
         clearStickerHistory()
         clearSealHistory()
         clearDoodleHistory()
+        clearTextStickerHistory()
 
         viewModelScope.launch(Dispatchers.IO) {
             draftSaveMutex.withLock {
@@ -777,6 +791,8 @@ class DetailViewModel @Inject constructor(
         val snapshotSeals = _photoSeals.value
         val snapshotSelectedSealId = _selectedSealId.value
         val snapshotDoodleStrokes = _doodleStrokes.value
+        val snapshotTextStickers = _textStickers.value
+        val snapshotSelectedTextStickerId = _selectedTextStickerId.value
 
         _draftSaveStatus.value = DraftSaveStatus.Saving
 
@@ -808,7 +824,9 @@ class DetailViewModel @Inject constructor(
                     selectedStickerId = snapshotSelectedStickerId,
                     seals = snapshotSeals,
                     selectedSealId = snapshotSelectedSealId,
-                    doodleStrokes = snapshotDoodleStrokes
+                    doodleStrokes = snapshotDoodleStrokes,
+                    textStickers = snapshotTextStickers,
+                    selectedTextStickerId = snapshotSelectedTextStickerId
                 )
 
                 val saved =
@@ -863,8 +881,14 @@ class DetailViewModel @Inject constructor(
             val stickersSaved = persistStickerEditState(postcardId)
             val sealsSaved = persistSealEditState(postcardId)
             val doodlesSaved = persistDoodleEditState(postcardId)
+            val textStickersSaved = persistTextStickerEditState(postcardId)
             val allSaved =
-                shouldConfirmSaveSucceed(stickersSaved, sealsSaved, doodlesSaved)
+                shouldConfirmSaveSucceed(
+                    stickersSaved,
+                    sealsSaved,
+                    doodlesSaved,
+                    textStickersSaved
+                )
 
             if (allSaved) {
                 draftSaveMutex.withLock {
@@ -883,6 +907,7 @@ class DetailViewModel @Inject constructor(
                 if (allSaved) {
                     clearStickerHistory()
                     clearDoodleHistory()
+                    clearTextStickerHistory()
                     _draftSaveStatus.value = DraftSaveStatus.Idle
                 }
                 _confirmSaveState.value =
@@ -1084,6 +1109,74 @@ class DetailViewModel @Inject constructor(
             }
     }
 
+    // ---- 텍스트 스티커 상태 ----
+
+    private val _textStickers =
+        MutableStateFlow(listOf<TextStickerItem>())
+
+    val textStickers: StateFlow<List<TextStickerItem>> =
+        _textStickers
+
+    private val _selectedTextStickerId =
+        MutableStateFlow<String?>(null)
+
+    val selectedTextStickerId: StateFlow<String?> =
+        _selectedTextStickerId
+
+    fun setTextStickers(
+        textStickers: List<TextStickerItem>
+    ) {
+        _textStickers.value = textStickers
+        scheduleDraftAutosave()
+    }
+
+    fun setSelectedTextStickerId(
+        id: String?
+    ) {
+        _selectedTextStickerId.value = id
+    }
+
+    fun saveTextStickersState(
+        postcardId: Long
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            persistTextStickerEditState(postcardId)
+        }
+    }
+
+    /** 텍스트 스티커 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
+    private suspend fun persistTextStickerEditState(
+        postcardId: Long
+    ): Boolean {
+        val stateFile =
+            File(context.filesDir, "text_sticker_states/$postcardId.txt")
+
+        return ConfirmedEditStateStorage.writeTextAtomically(
+            targetFile = stateFile,
+            content = _textStickers.value.joinToString("\n") {
+                it.serialize()
+            }
+        )
+    }
+
+    /** 확정 저장된 텍스트 스티커 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
+    private suspend fun readConfirmedTextStickerState(
+        postcardId: Long
+    ): List<TextStickerItem> {
+        val file =
+            File(
+                context.filesDir,
+                "text_sticker_states/$postcardId.txt"
+            )
+        if (!file.exists()) return emptyList()
+
+        return file.readLines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                deserializeTextStickerItem(line)
+            }
+    }
+
     // ---- 낙서 상태 ----
 
     private val _doodleStrokes =
@@ -1209,6 +1302,86 @@ class DetailViewModel @Inject constructor(
         _photoSeals.value = next.seals
         _selectedSealId.value = next.selectedSealId
         updateSealHistoryAvailability()
+        scheduleDraftAutosave()
+    }
+
+    private data class TextStickerSnapshot(
+        val textStickers: List<TextStickerItem>,
+        val selectedTextStickerId: String?
+    )
+
+    private val textStickerUndoStack =
+        ArrayDeque<TextStickerSnapshot>()
+
+    private val textStickerRedoStack =
+        ArrayDeque<TextStickerSnapshot>()
+
+    private val _canUndoTextSticker =
+        MutableStateFlow(false)
+
+    val canUndoTextSticker: StateFlow<Boolean> =
+        _canUndoTextSticker
+
+    private val _canRedoTextSticker =
+        MutableStateFlow(false)
+
+    val canRedoTextSticker: StateFlow<Boolean> =
+        _canRedoTextSticker
+
+    private fun updateTextStickerHistoryAvailability() {
+        _canUndoTextSticker.value = textStickerUndoStack.isNotEmpty()
+        _canRedoTextSticker.value = textStickerRedoStack.isNotEmpty()
+    }
+
+    private fun clearTextStickerHistory() {
+        textStickerUndoStack.clear()
+        textStickerRedoStack.clear()
+        updateTextStickerHistoryAvailability()
+    }
+
+    fun recordTextStickerSnapshotForUndo() {
+        textStickerUndoStack.addLast(
+            TextStickerSnapshot(
+                textStickers = _textStickers.value,
+                selectedTextStickerId = _selectedTextStickerId.value
+            )
+        )
+        if (textStickerUndoStack.size > TEXT_STICKER_HISTORY_LIMIT) {
+            textStickerUndoStack.removeFirst()
+        }
+        textStickerRedoStack.clear()
+        updateTextStickerHistoryAvailability()
+    }
+
+    fun undoTextStickerChange() {
+        val previous =
+            textStickerUndoStack.removeLastOrNull() ?: return
+
+        textStickerRedoStack.addLast(
+            TextStickerSnapshot(
+                textStickers = _textStickers.value,
+                selectedTextStickerId = _selectedTextStickerId.value
+            )
+        )
+        _textStickers.value = previous.textStickers
+        _selectedTextStickerId.value = previous.selectedTextStickerId
+        updateTextStickerHistoryAvailability()
+        scheduleDraftAutosave()
+    }
+
+    fun redoTextStickerChange() {
+        val next =
+            textStickerRedoStack.removeLastOrNull() ?: return
+
+        textStickerUndoStack.addLast(
+            TextStickerSnapshot(
+                textStickers = _textStickers.value,
+                selectedTextStickerId = _selectedTextStickerId.value
+            )
+        )
+        _textStickers.value = next.textStickers
+        _selectedTextStickerId.value = next.selectedTextStickerId
+        updateTextStickerHistoryAvailability()
         scheduleDraftAutosave()
     }
 
@@ -4573,7 +4746,8 @@ class DetailViewModel @Inject constructor(
 
     fun exportPostcardToGallery(
         stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList(),
-        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList()
+        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList(),
+        textStickerOverlays: List<PostcardImageExporter.TextStickerOverlay> = emptyList()
     ) {
         val currentPostcard =
             _postcard.value
@@ -4598,7 +4772,8 @@ class DetailViewModel @Inject constructor(
                             postcard = currentPostcard,
                             stickerOverlays = stickerOverlays,
                             sealOverlays = sealOverlays,
-                            doodleStrokes = _doodleStrokes.value
+                            doodleStrokes = _doodleStrokes.value,
+                            textStickerOverlays = textStickerOverlays
                         )
                 }
 
@@ -4625,7 +4800,8 @@ class DetailViewModel @Inject constructor(
 
     fun sharePostcard(
         stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList(),
-        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList()
+        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList(),
+        textStickerOverlays: List<PostcardImageExporter.TextStickerOverlay> = emptyList()
     ) {
         val currentPostcard =
             _postcard.value
@@ -4650,7 +4826,8 @@ class DetailViewModel @Inject constructor(
                             postcard = currentPostcard,
                             stickerOverlays = stickerOverlays,
                             sealOverlays = sealOverlays,
-                            doodleStrokes = _doodleStrokes.value
+                            doodleStrokes = _doodleStrokes.value,
+                            textStickerOverlays = textStickerOverlays
                         )
                 }
 

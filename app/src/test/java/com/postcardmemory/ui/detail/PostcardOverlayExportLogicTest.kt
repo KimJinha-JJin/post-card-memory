@@ -526,4 +526,120 @@ class PostcardOverlayExportLogicTest {
             )
         )
     }
+
+    // ---- createTextStickerOverlayForExport/createTextStickerOverlaysForExport ----
+    // TextStickerItem은 Uri를 다루지 않아 도장과 마찬가지로 순수 JUnit에서 검증 가능하다.
+
+    private val textSticker100 = IntSize(100, 100)
+
+    private fun textSticker(
+        text: String = "SUMMER",
+        offset: Offset? = Offset(450f, 450f),
+        scale: Float = 1f,
+        rotationDegrees: Float = 0f,
+        colorArgb: Long = 0xFF112233L
+    ) = TextStickerItem(
+        text = text,
+        offset = offset,
+        scale = scale,
+        rotationDegrees = rotationDegrees,
+        colorArgb = colorArgb
+    )
+
+    @Test
+    fun createTextStickerOverlay_computesNormalizedPositionFromOffset() {
+        val overlay = createTextStickerOverlayForExport(
+            text = "SUMMER",
+            colorArgb = 0xFF112233L,
+            rotationDegrees = 0f,
+            textStickerOffset = Offset(250f, 500f),
+            postcardSize = postcard,
+            textStickerSize = textSticker100,
+            fontSizePx = 64f
+        )
+
+        requireNotNull(overlay)
+        assertEquals(0.25f, overlay.normalizedX, 0.001f)
+        assertEquals(0.5f, overlay.normalizedY, 0.001f)
+    }
+
+    @Test
+    fun createTextStickerOverlay_fontSizeRatioIsFontSizeDividedByPostcardWidth() {
+        val overlay = createTextStickerOverlayForExport(
+            text = "SUMMER",
+            colorArgb = 0xFF112233L,
+            rotationDegrees = 0f,
+            textStickerOffset = Offset(0f, 0f),
+            postcardSize = postcard, // width = 1000
+            textStickerSize = textSticker100,
+            fontSizePx = 40f
+        )
+
+        requireNotNull(overlay)
+        assertEquals(0.04f, overlay.fontSizeRatio, 0.0001f)
+    }
+
+    @Test
+    fun createTextStickerOverlay_zeroFontSize_returnsNull() {
+        val overlay = createTextStickerOverlayForExport(
+            text = "SUMMER",
+            colorArgb = 0xFF112233L,
+            rotationDegrees = 0f,
+            textStickerOffset = Offset(0f, 0f),
+            postcardSize = postcard,
+            textStickerSize = textSticker100,
+            fontSizePx = 0f
+        )
+
+        assertEquals(null, overlay)
+    }
+
+    @Test
+    fun createTextStickerOverlaysForExport_missingSizeEntry_isDropped() {
+        // 사진/도장은 fallback 크기로 대체하지만, 텍스트 스티커는 문자열마다 폭이
+        // 전혀 달라 고정 fallback을 쓸 수 없으므로 측정값이 없으면 건너뛴다.
+        val stickers = listOf(
+            textSticker().copy(id = "missing-size")
+        )
+
+        val overlays = createTextStickerOverlaysForExport(
+            textStickers = stickers,
+            postcardSize = postcard,
+            textStickerSizes = emptyMap(),
+            baseFontSizePx = 64f
+        )
+
+        assertTrue(overlays.isEmpty())
+    }
+
+    @Test
+    fun createTextStickerOverlaysForExport_allMeasurementsPresent_allIncluded() {
+        val a = textSticker().copy(id = "a")
+        val b = textSticker(offset = Offset(50f, 50f)).copy(id = "b")
+
+        val overlays = createTextStickerOverlaysForExport(
+            textStickers = listOf(a, b),
+            postcardSize = postcard,
+            textStickerSizes = mapOf("a" to textSticker100, "b" to textSticker100),
+            baseFontSizePx = 64f
+        )
+
+        assertEquals(2, overlays.size)
+    }
+
+    @Test
+    fun createTextStickerOverlaysForExport_oneMissingOneMeasured_onlyMeasuredIncluded() {
+        val measured = textSticker().copy(id = "measured")
+        val missing = textSticker(offset = Offset(50f, 50f)).copy(id = "missing")
+
+        val overlays = createTextStickerOverlaysForExport(
+            textStickers = listOf(measured, missing),
+            postcardSize = postcard,
+            textStickerSizes = mapOf("measured" to textSticker100),
+            baseFontSizePx = 64f
+        )
+
+        assertEquals(1, overlays.size)
+        assertEquals("SUMMER", overlays.first().text)
+    }
 }

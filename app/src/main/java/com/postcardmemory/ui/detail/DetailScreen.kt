@@ -168,6 +168,8 @@ import com.postcardmemory.ui.components.PostcardLayoutPicker
 import com.postcardmemory.ui.components.PostcardLayoutStyle
 import com.postcardmemory.ui.components.PostcardTextFont
 import com.postcardmemory.ui.components.SealPreviewContent
+import com.postcardmemory.ui.components.TEXT_STICKER_BASE_FONT_SIZE_SP
+import com.postcardmemory.ui.components.TextStickerContent
 import com.postcardmemory.data.FUTURE_MAIL_STATE_SENT
 import com.postcardmemory.ui.futuremail.daysUntilFutureMail
 import com.postcardmemory.ui.futuremail.isFutureMailArrived
@@ -736,6 +738,97 @@ internal fun createSealOverlaysForExport(
 }
 
 /**
+ * fontSizeRatio는 다른 오버레이의 sizeRatio(박스 너비 비율)와 다르게
+ * "글자 크기 자체"의 postcard 너비 대비 비율이다 — 문자열 길이마다 박스
+ * 가로세로 비율이 제각각이라, 화면과 export 양쪽에서 동일한 fontSizePx로
+ * 각자 다시 측정해 그려야(PostcardImageExporter.drawTextStickerOverlay와
+ * TextStickerContent가 같은 절차) 두 렌더 결과가 어긋나지 않는다.
+ */
+internal fun createTextStickerOverlayForExport(
+    text: String,
+    colorArgb: Long,
+    rotationDegrees: Float,
+    textStickerOffset: Offset?,
+    postcardSize: IntSize,
+    textStickerSize: IntSize,
+    fontSizePx: Float
+): PostcardImageExporter.TextStickerOverlay? {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0 ||
+        textStickerSize.width <= 0 ||
+        textStickerSize.height <= 0 ||
+        fontSizePx <= 0f
+    ) {
+        return null
+    }
+
+    val resolvedOffset =
+        clampStickerOffset(
+            offset =
+                textStickerOffset
+                    ?: centeredStickerOffset(
+                        postcardSize = postcardSize,
+                        stickerSize = textStickerSize
+                    ),
+            postcardSize = postcardSize,
+            stickerSize = textStickerSize
+        )
+
+    return PostcardImageExporter.TextStickerOverlay(
+        text = text,
+        colorArgb = colorArgb,
+        rotationDegrees = rotationDegrees,
+        normalizedX =
+            (resolvedOffset.x /
+                    postcardSize.width.toFloat())
+                .coerceIn(0f, 1f),
+        normalizedY =
+            (resolvedOffset.y /
+                    postcardSize.height.toFloat())
+                .coerceIn(0f, 1f),
+        fontSizeRatio =
+            fontSizePx / postcardSize.width.toFloat()
+    )
+}
+
+/**
+ * 아직 크기가 측정되지 않은 텍스트 스티커(방금 추가한 직후 등)는 이번
+ * export에서 건너뛴다 — 사진/도장과 달리 문자열마다 폭이 전혀 달라 하나의
+ * 고정 fallback 크기로 대체할 수 없고, export는 항상 사용자가 이미 화면에서
+ * 한 번 이상 본 뒤에 실행하는 동작이라 이 경로에 도달할 일이 실질적으로 없다.
+ */
+internal fun createTextStickerOverlaysForExport(
+    textStickers: List<TextStickerItem>,
+    postcardSize: IntSize,
+    textStickerSizes: Map<String, IntSize>,
+    baseFontSizePx: Float
+): List<PostcardImageExporter.TextStickerOverlay> {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0
+    ) {
+        return emptyList()
+    }
+
+    return textStickers.mapNotNull { textSticker ->
+        val size =
+            textStickerSizes[textSticker.id]
+                ?: return@mapNotNull null
+
+        createTextStickerOverlayForExport(
+            text = textSticker.text,
+            colorArgb = textSticker.colorArgb,
+            rotationDegrees = textSticker.rotationDegrees,
+            textStickerOffset = textSticker.offset,
+            postcardSize = postcardSize,
+            textStickerSize = size,
+            fontSizePx = baseFontSizePx * textSticker.scale
+        )
+    }
+}
+
+/**
  * 세 패널의 보조 행동(사진 바꾸기·색 가져오기·직접 고르기·문구 편집)에
  * 쓰는 가벼운 외곽선 버튼. 주요 선택지와 달리 검은 풀폭 버튼으로 강조하지
  * 않고, 아이콘+라벨만 얇은 테두리로 보여 준다.
@@ -989,6 +1082,13 @@ fun DetailScreen(
     val latestPhotoSeals by rememberUpdatedState(photoSeals)
     val canUndoSeal by viewModel.canUndoSeal.collectAsState()
     val canRedoSeal by viewModel.canRedoSeal.collectAsState()
+
+    val textStickers by viewModel.textStickers.collectAsState()
+    val selectedTextStickerId by viewModel.selectedTextStickerId.collectAsState()
+    val latestTextStickers by rememberUpdatedState(textStickers)
+    val canUndoTextSticker by viewModel.canUndoTextSticker.collectAsState()
+    val canRedoTextSticker by viewModel.canRedoTextSticker.collectAsState()
+
     val doodleStrokes by viewModel.doodleStrokes.collectAsState()
     val latestDoodleStrokes by rememberUpdatedState(doodleStrokes)
     val canUndoDoodle by viewModel.canUndoDoodle.collectAsState()
@@ -1046,6 +1146,10 @@ fun DetailScreen(
         mutableStateOf(mapOf<String, IntSize>())
     }
 
+    var textStickerSizes by remember {
+        mutableStateOf(mapOf<String, IntSize>())
+    }
+
     var doodleTool by remember {
         mutableStateOf(DoodleTool.PEN)
     }
@@ -1082,6 +1186,10 @@ fun DetailScreen(
 
     val baseSealPx = with(LocalDensity.current) {
         SEAL_BASE_SIZE.toPx()
+    }
+
+    val baseTextStickerFontPx = with(LocalDensity.current) {
+        TEXT_STICKER_BASE_FONT_SIZE_SP.sp.toPx()
     }
 
     val sealMinVisibleEdgePx = with(LocalDensity.current) {
@@ -2939,6 +3047,179 @@ fun DetailScreen(
                             }
                         }
 
+                        textStickers.forEach { textSticker ->
+                            val isTextStickerSelected =
+                                textSticker.id == selectedTextStickerId
+                            val isTextStickerVisuallySelected =
+                                isTextStickerSelected &&
+                                        !isFocusPreviewMode &&
+                                        latestCustomizationPage ==
+                                        STICKER_TAB_PAGE_INDEX
+                            val currentTextStickerOffset =
+                                textSticker.offset
+
+                            val textStickerPositionModifier =
+                                if (currentTextStickerOffset == null) {
+                                    Modifier.align(
+                                        Alignment.Center
+                                    )
+                                } else {
+                                    Modifier
+                                        .align(
+                                            Alignment.TopStart
+                                        )
+                                        .offset {
+                                            IntOffset(
+                                                x = currentTextStickerOffset.x
+                                                    .roundToInt(),
+                                                y = currentTextStickerOffset.y
+                                                    .roundToInt()
+                                            )
+                                        }
+                                }
+
+                            Box(
+                                modifier = textStickerPositionModifier
+                                    .graphicsLayer {
+                                        rotationZ =
+                                            textSticker.rotationDegrees
+                                    }
+                                    .onSizeChanged { size ->
+                                        textStickerSizes =
+                                            textStickerSizes +
+                                                    (textSticker.id to size)
+                                    }
+                                    .then(
+                                        if (
+                                            latestCustomizationPage ==
+                                            STICKER_TAB_PAGE_INDEX
+                                        ) {
+                                            Modifier.pointerInput(
+                                        textSticker.id,
+                                        postcardPreviewSize,
+                                        isFocusPreviewMode
+                                    ) {
+                                        if (isFocusPreviewMode) {
+                                            return@pointerInput
+                                        }
+
+                                        var textStickerGestureSnapshotPending = true
+
+                                        coroutineScope {
+                                            launch {
+                                                awaitEachGesture {
+                                                    awaitFirstDown(
+                                                        requireUnconsumed = false
+                                                    )
+                                                    textStickerGestureSnapshotPending = true
+                                                }
+                                            }
+                                            launch {
+                                                detectTapGestures(
+                                                    onTap = {
+                                                        viewModel.setSelectedTextStickerId(
+                                                            if (selectedTextStickerId == textSticker.id) {
+                                                                null
+                                                            } else {
+                                                                textSticker.id
+                                                            }
+                                                        )
+                                                    }
+                                                )
+                                            }
+                                            launch {
+                                                detectTransformGestures { _, pan, zoom, rotationChange ->
+                                                    val currentTextSticker =
+                                                        latestTextStickers.find {
+                                                            it.id == textSticker.id
+                                                        } ?: return@detectTransformGestures
+
+                                                    if (textStickerGestureSnapshotPending) {
+                                                        viewModel.recordTextStickerSnapshotForUndo()
+                                                        textStickerGestureSnapshotPending = false
+                                                    }
+
+                                                    val currentSize =
+                                                        textStickerSizes[textSticker.id]
+                                                            ?: IntSize.Zero
+
+                                                    val oldOffset =
+                                                        currentTextSticker.offset
+                                                            ?: centeredStickerOffset(
+                                                                postcardSize = postcardPreviewSize,
+                                                                stickerSize = currentSize
+                                                            )
+
+                                                    val parentDelta =
+                                                        localStickerDeltaToParent(
+                                                            localDelta = pan,
+                                                            rotationDegrees = currentTextSticker.rotationDegrees,
+                                                            flipHorizontal = false,
+                                                            flipVertical = false
+                                                        )
+
+                                                    val newScale =
+                                                        (currentTextSticker.scale * zoom)
+                                                            .coerceIn(0.5f, 3f)
+
+                                                    val newRotation =
+                                                        normalizeStickerRotation(
+                                                            currentTextSticker.rotationDegrees +
+                                                                    rotationChange
+                                                        )
+
+                                                    val newOffset =
+                                                        clampStickerOffset(
+                                                            offset = oldOffset + parentDelta,
+                                                            postcardSize = postcardPreviewSize,
+                                                            stickerSize = currentSize
+                                                        )
+
+                                                    viewModel.setSelectedTextStickerId(textSticker.id)
+                                                    viewModel.setTextStickers(
+                                                        latestTextStickers.map {
+                                                            if (it.id == textSticker.id) {
+                                                                it.copy(
+                                                                    offset = newOffset,
+                                                                    scale = newScale,
+                                                                    rotationDegrees = newRotation
+                                                                )
+                                                            } else {
+                                                                it
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    .then(
+                                        if (isTextStickerVisuallySelected) {
+                                            Modifier.border(
+                                                width = 2.dp,
+                                                color = GraphiteAccent,
+                                                shape = RoundedCornerShape(6.dp)
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                TextStickerContent(
+                                    text = textSticker.text,
+                                    colorArgb = textSticker.colorArgb,
+                                    fontSizeSp =
+                                        TEXT_STICKER_BASE_FONT_SIZE_SP *
+                                                textSticker.scale
+                                )
+                            }
+                        }
+
                         // 낙서는 사진·스티커·도장보다 항상 위에 그린다 — 이 Box의
                         // 마지막 자식이라 z-order상 최상단이다. pointerInput 블록
                         // 안에서 return하는 것만으로는 이 Canvas가 다른 탭에서도
@@ -4153,6 +4434,9 @@ fun DetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter
                             ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(0.92f)
+                                ) {
                                 PhotoStickerPickerPanel(
                                     photoStickers = photoStickers,
                                     selectedStickerId = selectedStickerId,
@@ -4227,8 +4511,65 @@ fun DetailScreen(
                                     canUndoSticker = canUndoSticker,
                                     canRedoSticker = canRedoSticker,
                                     enabled = controlsEnabled,
-                                    modifier = Modifier.fillMaxWidth(0.92f)
+                                    modifier = Modifier.fillMaxWidth()
                                 )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                TextStickerPickerPanel(
+                                    textStickers = textStickers,
+                                    selectedTextStickerId = selectedTextStickerId,
+                                    onSelectTextSticker = { id ->
+                                        viewModel.setSelectedTextStickerId(
+                                            if (selectedTextStickerId == id) {
+                                                null
+                                            } else {
+                                                id
+                                            }
+                                        )
+                                    },
+                                    onAddTextSticker = { text, colorArgb ->
+                                        viewModel.recordTextStickerSnapshotForUndo()
+                                        val newTextSticker = TextStickerItem(
+                                            text = text,
+                                            colorArgb = colorArgb
+                                        )
+                                        viewModel.setTextStickers(textStickers + newTextSticker)
+                                        viewModel.setSelectedTextStickerId(newTextSticker.id)
+                                    },
+                                    onColorSelected = { id, colorArgb ->
+                                        viewModel.recordTextStickerSnapshotForUndo()
+                                        viewModel.setTextStickers(
+                                            textStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(colorArgb = colorArgb)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onDeleteTextSticker = { id ->
+                                        viewModel.recordTextStickerSnapshotForUndo()
+                                        val remaining = textStickers.filter { it.id != id }
+                                        viewModel.setTextStickers(remaining)
+                                        textStickerSizes = textStickerSizes - id
+                                        if (selectedTextStickerId == id) {
+                                            viewModel.setSelectedTextStickerId(null)
+                                        }
+                                    },
+                                    onUndoTextSticker = {
+                                        viewModel.undoTextStickerChange()
+                                    },
+                                    onRedoTextSticker = {
+                                        viewModel.redoTextStickerChange()
+                                    },
+                                    canUndoTextSticker = canUndoTextSticker,
+                                    canRedoTextSticker = canRedoTextSticker,
+                                    enabled = controlsEnabled,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                }
                             }
                         }
 
@@ -4702,6 +5043,17 @@ fun DetailScreen(
                                                     sealMinVisibleEdgePx,
                                                 capturedAtMillis =
                                                     pc.capturedAt
+                                            ),
+                                        textStickerOverlays =
+                                            createTextStickerOverlaysForExport(
+                                                textStickers =
+                                                    textStickers,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                textStickerSizes =
+                                                    textStickerSizes,
+                                                baseFontSizePx =
+                                                    baseTextStickerFontPx
                                             )
                                     )
                                 }
@@ -4766,6 +5118,17 @@ fun DetailScreen(
                                                     sealMinVisibleEdgePx,
                                                 capturedAtMillis =
                                                     pc.capturedAt
+                                            ),
+                                        textStickerOverlays =
+                                            createTextStickerOverlaysForExport(
+                                                textStickers =
+                                                    textStickers,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                textStickerSizes =
+                                                    textStickerSizes,
+                                                baseFontSizePx =
+                                                    baseTextStickerFontPx
                                             )
                                     )
                                 }
