@@ -236,6 +236,66 @@ class PostcardEditDraftTest {
         assertEquals(listOf(goodSticker), parsed!!.textStickers)
     }
 
+    // ---- 마스킹테이프도 Uri를 다루지 않으므로 낙서·텍스트 스티커와 동일하게 전체 왕복을 검증할 수 있다 ----
+
+    private fun sampleMaskingTape(id: String = "tape-1") =
+        MaskingTapeItem(
+            id = id,
+            style = MaskingTapeStyle.LAVENDER_DOT,
+            offset = Offset(0.3f, -0.1f),
+            scale = 0.9f,
+            rotationDegrees = 8f
+        )
+
+    @Test
+    fun serialize_thenParse_roundTripsMaskingTapes() {
+        val original = emptyDraft().copy(
+            maskingTapes = listOf(sampleMaskingTape("a"), sampleMaskingTape("b")),
+            selectedMaskingTapeId = "a"
+        )
+
+        val parsed = parsePostcardEditDraft(original.serialize())
+
+        assertNotNull(parsed)
+        assertEquals(original, parsed)
+    }
+
+    @Test
+    fun parsePostcardEditDraft_missingMaskingTapeFields_treatedAsNoMaskingTapes() {
+        // DRAFT_FORMAT_VERSION=3 시절(마스킹테이프 도입 전)에 저장된 초안: meta에
+        // 텍스트 스티커 필드(11)까지만 있고 12~13번(마스킹테이프 개수/선택 id)이 없다.
+        val text = "POSTCARD_DRAFT_V1\n3\t1\t1\t1\t1\t~\t~\t0\t0\t0\t0\t~"
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertTrue(parsed!!.maskingTapes.isEmpty())
+        assertNull(parsed.selectedMaskingTapeId)
+    }
+
+    @Test
+    fun parsePostcardEditDraft_returnsNullWhenDeclaredMaskingTapeCountExceedsBodyLines() {
+        val text = "POSTCARD_DRAFT_V1\n4\t1\t1\t1\t1\t~\t~\t0\t0\t0\t0\t~\t3\t~"
+
+        assertNull(parsePostcardEditDraft(text))
+    }
+
+    @Test
+    fun parsePostcardEditDraft_skipsCorruptedMaskingTapeLineButKeepsRest() {
+        val goodTape = sampleMaskingTape("good")
+        val text = listOf(
+            "POSTCARD_DRAFT_V1",
+            "4\t1\t1\t1\t1\t~\t~\t0\t0\t0\t0\t~\t2\t~",
+            "corrupted\tline",
+            goodTape.serialize()
+        ).joinToString("\n")
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertEquals(listOf(goodTape), parsed!!.maskingTapes)
+    }
+
     @Test
     fun shouldPersistDraftRevision_allowsNewerOrEqualRevision() {
         assertTrue(shouldPersistDraftRevision(candidateRevision = 5L, latestPersistedRevision = 4L))

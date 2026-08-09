@@ -20,3 +20,20 @@ internal fun computeFallbackOverlaySize(
             .coerceAtLeast(1)
     return IntSize(side, side)
 }
+
+/** 마스킹테이프처럼 가로·세로 기준 크기가 다른(정사각형이 아닌) 오버레이용 오버로드. */
+internal fun computeFallbackOverlaySize(
+    basePxWidth: Float,
+    basePxHeight: Float,
+    scale: Float
+): IntSize {
+    val width =
+        (basePxWidth * scale)
+            .roundToInt()
+            .coerceAtLeast(1)
+    val height =
+        (basePxHeight * scale)
+            .roundToInt()
+            .coerceAtLeast(1)
+    return IntSize(width, height)
+}

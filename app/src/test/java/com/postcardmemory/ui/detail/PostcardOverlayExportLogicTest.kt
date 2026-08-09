@@ -642,4 +642,182 @@ class PostcardOverlayExportLogicTest {
         assertEquals(1, overlays.size)
         assertEquals("SUMMER", overlays.first().text)
     }
+
+    // ---- createMaskingTapeOverlayForExport/createMaskingTapeOverlaysForExport ----
+    // MaskingTapeItem도 Uri를 다루지 않아 도장·텍스트 스티커와 마찬가지로 순수 JUnit에서 검증 가능하다.
+
+    private val maskingTape80x30 = IntSize(80, 30)
+
+    private fun maskingTape(
+        style: MaskingTapeStyle = MaskingTapeStyle.MINT_CHECK,
+        offset: Offset? = Offset(450f, 450f),
+        scale: Float = 1f,
+        rotationDegrees: Float = 0f
+    ) = MaskingTapeItem(
+        style = style,
+        offset = offset,
+        scale = scale,
+        rotationDegrees = rotationDegrees
+    )
+
+    @Test
+    fun createMaskingTapeOverlay_computesNormalizedPositionFromOffset() {
+        val overlay = createMaskingTapeOverlayForExport(
+            tape = maskingTape(offset = Offset(250f, 500f)),
+            postcardSize = postcard,
+            tapeSize = maskingTape80x30
+        )
+
+        requireNotNull(overlay)
+        assertEquals(0.25f, overlay.normalizedX, 0.001f)
+        assertEquals(0.5f, overlay.normalizedY, 0.001f)
+    }
+
+    @Test
+    fun createMaskingTapeOverlay_widthAndHeightRatiosBothRelativeToPostcardWidth() {
+        // 마스킹테이프는 가로로 긴 형태라 도장·스티커와 달리 폭·높이 비율을
+        // 따로 갖는다 — 둘 다 postcard 너비 기준으로 계산돼야 화면(정사각형
+        // 미리보기)과 Export(정사각형 OUTPUT_SIZE)에서 같은 모양이 재현된다.
+        val overlay = createMaskingTapeOverlayForExport(
+            tape = maskingTape(offset = Offset(0f, 0f)),
+            postcardSize = postcard, // width = height = 1000
+            tapeSize = maskingTape80x30
+        )
+
+        requireNotNull(overlay)
+        assertEquals(0.08f, overlay.widthRatio, 0.0001f)
+        assertEquals(0.03f, overlay.heightRatio, 0.0001f)
+    }
+
+    @Test
+    fun createMaskingTapeOverlay_offEdgeOffset_isClampedFullyInside() {
+        // 도장과 달리 마스킹테이프는 가장자리 걸침을 허용하지 않는다
+        // (clampStickerOffset 재사용) — 완전히 안쪽으로 들어와야 한다.
+        val overlay = createMaskingTapeOverlayForExport(
+            tape = maskingTape(offset = Offset(1000f, 1000f)),
+            postcardSize = postcard,
+            tapeSize = maskingTape80x30
+        )
+
+        requireNotNull(overlay)
+        assertEquals(0.92f, overlay.normalizedX, 0.001f) // (1000-80)/1000
+        assertEquals(0.97f, overlay.normalizedY, 0.001f) // (1000-30)/1000
+    }
+
+    @Test
+    fun createMaskingTapeOverlay_resolvesEffectiveColorsFromCustomStyle() {
+        val customTape = maskingTape(style = MaskingTapeStyle.CUSTOM).copy(
+            customBaseColorArgb = 0xFF112233L,
+            customPatternColorArgb = 0xFF445566L,
+            customPatternKind = MaskingTapePatternKind.STAR
+        )
+
+        val overlay = createMaskingTapeOverlayForExport(
+            tape = customTape,
+            postcardSize = postcard,
+            tapeSize = maskingTape80x30
+        )
+
+        requireNotNull(overlay)
+        assertEquals(0xFF112233L, overlay.baseColorArgb)
+        assertEquals(0xFF445566L, overlay.patternColorArgb)
+        assertEquals(MaskingTapePatternKind.STAR, overlay.patternKind)
+        assertFalse(overlay.isPhoto)
+    }
+
+    @Test
+    fun createMaskingTapeOverlay_photoStyle_marksIsPhotoTrue() {
+        // photoUri는 android.net.Uri를 다뤄 이 프로젝트의 순수 JUnit 환경에서
+        // 인스턴스를 만들 수 없다(PostcardEditDraftTest.kt 상단 주석 참고) —
+        // null photoUri로도 style==PHOTO -> isPhoto=true 매핑은 검증할 수 있다.
+        val photoTape = maskingTape(style = MaskingTapeStyle.PHOTO)
+
+        val overlay = createMaskingTapeOverlayForExport(
+            tape = photoTape,
+            postcardSize = postcard,
+            tapeSize = maskingTape80x30
+        )
+
+        requireNotNull(overlay)
+        assertTrue(overlay.isPhoto)
+    }
+
+    @Test
+    fun createMaskingTapeOverlaysForExport_missingSizeEntry_accountsForLengthScaleInFallback() {
+        // lengthScale=2면 fallback 크기의 폭도 2배가 돼야 한다(미리보기 .size()
+        // 공식과 동일: MASKING_TAPE_BASE_WIDTH * scale * lengthScale).
+        val stretchedTape =
+            maskingTape().copy(id = "stretched-tape", lengthScale = 2f)
+
+        val overlays = createMaskingTapeOverlaysForExport(
+            maskingTapes = listOf(stretchedTape),
+            postcardSize = postcard,
+            maskingTapeSizes = emptyMap(),
+            baseMaskingTapeWidthPx = 132f,
+            baseMaskingTapeHeightPx = 40f
+        )
+
+        assertEquals(1, overlays.size)
+        // widthRatio = (132*1*2) / 1000
+        assertEquals(0.264f, overlays.first().widthRatio, 0.001f)
+    }
+
+    @Test
+    fun createMaskingTapeOverlaysForExport_missingSizeEntry_includedViaFallback_notDropped() {
+        val tapes = listOf(
+            maskingTape().copy(id = "missing-size-tape")
+        )
+
+        val overlays = createMaskingTapeOverlaysForExport(
+            maskingTapes = tapes,
+            postcardSize = postcard,
+            maskingTapeSizes = emptyMap(),
+            baseMaskingTapeWidthPx = 132f,
+            baseMaskingTapeHeightPx = 40f
+        )
+
+        assertEquals(1, overlays.size)
+    }
+
+    @Test
+    fun createMaskingTapeOverlaysForExport_oneMissingOneMeasured_bothIncluded_noPartialDrop() {
+        val measured = maskingTape().copy(id = "measured")
+        val missing = maskingTape(offset = Offset(50f, 50f)).copy(id = "missing")
+
+        val overlays = createMaskingTapeOverlaysForExport(
+            maskingTapes = listOf(measured, missing),
+            postcardSize = postcard,
+            maskingTapeSizes = mapOf("measured" to maskingTape80x30),
+            baseMaskingTapeWidthPx = 132f,
+            baseMaskingTapeHeightPx = 40f
+        )
+
+        assertEquals(2, overlays.size)
+    }
+
+    // ---- computeFallbackOverlaySize (가로·세로가 다른 오버로드) ----
+
+    @Test
+    fun fallbackSize_widthHeight_matchesBasePxTimesScaleForEachAxis() {
+        val size = computeFallbackOverlaySize(
+            basePxWidth = 132f,
+            basePxHeight = 40f,
+            scale = 0.5f
+        )
+
+        assertEquals(66, size.width)
+        assertEquals(20, size.height)
+    }
+
+    @Test
+    fun fallbackSize_widthHeight_neverZeroOrNegative() {
+        val size = computeFallbackOverlaySize(
+            basePxWidth = 132f,
+            basePxHeight = 40f,
+            scale = 0f
+        )
+
+        assertTrue(size.width >= 1)
+        assertTrue(size.height >= 1)
+    }
 }

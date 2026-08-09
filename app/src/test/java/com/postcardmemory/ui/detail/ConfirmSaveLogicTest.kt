@@ -88,6 +88,32 @@ class ConfirmSaveLogicTest {
     }
 
     @Test
+    fun shouldConfirmSaveSucceed_whenStickersSealsDoodlesTextStickersAndMaskingTapesAllSaved() {
+        assertTrue(
+            shouldConfirmSaveSucceed(
+                stickersSaved = true,
+                sealsSaved = true,
+                doodlesSaved = true,
+                textStickersSaved = true,
+                maskingTapesSaved = true
+            )
+        )
+    }
+
+    @Test
+    fun shouldConfirmSaveSucceed_failsWhenMaskingTapesSaveFailsEvenIfRestSucceed() {
+        assertFalse(
+            shouldConfirmSaveSucceed(
+                stickersSaved = true,
+                sealsSaved = true,
+                doodlesSaved = true,
+                textStickersSaved = true,
+                maskingTapesSaved = false
+            )
+        )
+    }
+
+    @Test
     fun canStartConfirmSave_blocksWhileSaving() {
         assertFalse(canStartConfirmSave(ConfirmSaveState.Saving))
     }

@@ -53,10 +53,12 @@ class OverlayFallbackSizeStructureTest {
     }
 
     @Test
-    fun componentFile_declaresComputeFallbackOverlaySizeExactlyOnce() {
+    fun componentFile_declaresComputeFallbackOverlaySizeExactlyTwice() {
+        // 43일차(마스킹테이프)에서 정사각형이 아닌 오버레이(가로·세로 기준
+        // 크기가 다른 마스킹테이프)를 위한 오버로드를 추가해 1개 → 2개가 됐다.
         assertEquals(
-            "OverlayFallbackSize.kt에 함수 선언이 정확히 1개 있어야 함",
-            1,
+            "OverlayFallbackSize.kt에 computeFallbackOverlaySize 선언이 정확히 2개(정사각형용 + 가로세로용) 있어야 함",
+            2,
             Regex("""(?m)^internal fun computeFallbackOverlaySize\(""")
                 .findAll(componentText)
                 .count()
@@ -113,10 +115,10 @@ class OverlayFallbackSizeStructureTest {
     }
 
     @Test
-    fun detailScreen_hasExactlyTwoCallSitesUnchanged() {
+    fun detailScreen_hasExactlyThreeCallSitesUnchanged() {
         assertEquals(
-            "DetailScreen.kt의 computeFallbackOverlaySize 호출은 정확히 2곳(스티커·도장 export)이어야 함",
-            2,
+            "DetailScreen.kt의 computeFallbackOverlaySize 호출은 정확히 3곳(스티커·도장·마스킹테이프 export)이어야 함",
+            3,
             Regex("""computeFallbackOverlaySize\(""")
                 .findAll(detailScreenText)
                 .count()

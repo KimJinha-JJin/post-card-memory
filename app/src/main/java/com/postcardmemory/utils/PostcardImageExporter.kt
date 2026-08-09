@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
@@ -14,6 +15,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -23,6 +25,18 @@ import androidx.exifinterface.media.ExifInterface
 import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.PostcardDateFormat
+import com.postcardmemory.ui.detail.MASKING_TAPE_DOT_RADIUS_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_GRID_LINE_WIDTH_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_HEART_SIZE_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_PATTERN_ALPHA
+import com.postcardmemory.ui.detail.MASKING_TAPE_PATTERN_PITCH_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_PLAIN_FIBER_ALPHA
+import com.postcardmemory.ui.detail.MASKING_TAPE_STAR_SIZE_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_PITCH_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_WIDTH_RATIO
+import com.postcardmemory.ui.detail.MaskingTapeEdgeStyle
+import com.postcardmemory.ui.detail.MaskingTapePatternKind
+import com.postcardmemory.ui.detail.maskingTapeOutlinePoints
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -92,13 +106,34 @@ object PostcardImageExporter {
         val colorArgb: Long
     )
 
+    /**
+     * widthRatio/heightRatio는 다른 오버레이의 sizeRatio와 달리 가로·세로를
+     * 따로 갖는다 — 마스킹테이프는 도장·스티커와 달리 정사각형이 아닌
+     * 가로로 긴 형태라 하나의 비율만으로는 원래 모양을 재현할 수 없다.
+     */
+    data class MaskingTapeOverlay(
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val widthRatio: Float,
+        val heightRatio: Float,
+        val rotationDegrees: Float = 0f,
+        val edgeStyle: MaskingTapeEdgeStyle,
+        val baseColorArgb: Long,
+        val patternColorArgb: Long,
+        val patternKind: MaskingTapePatternKind,
+        val alpha: Float,
+        val isPhoto: Boolean = false,
+        val photoUri: Uri? = null
+    )
+
     fun exportToGallery(
         context: Context,
         postcard: Postcard,
         stickerOverlays: List<StickerOverlay> = emptyList(),
         sealOverlays: List<SealOverlay> = emptyList(),
         doodleStrokes: List<DoodleStroke> = emptyList(),
-        textStickerOverlays: List<TextStickerOverlay> = emptyList()
+        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList()
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
@@ -108,7 +143,8 @@ object PostcardImageExporter {
                     stickerOverlays = stickerOverlays,
                     sealOverlays = sealOverlays,
                     doodleStrokes = doodleStrokes,
-                    textStickerOverlays = textStickerOverlays
+                    textStickerOverlays = textStickerOverlays,
+                    maskingTapeOverlays = maskingTapeOverlays
                 )
 
             try {
@@ -130,7 +166,8 @@ object PostcardImageExporter {
         stickerOverlays: List<StickerOverlay> = emptyList(),
         sealOverlays: List<SealOverlay> = emptyList(),
         doodleStrokes: List<DoodleStroke> = emptyList(),
-        textStickerOverlays: List<TextStickerOverlay> = emptyList()
+        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList()
     ): Result<File> {
         return runCatching {
             val outputBitmap =
@@ -140,7 +177,8 @@ object PostcardImageExporter {
                     stickerOverlays = stickerOverlays,
                     sealOverlays = sealOverlays,
                     doodleStrokes = doodleStrokes,
-                    textStickerOverlays = textStickerOverlays
+                    textStickerOverlays = textStickerOverlays,
+                    maskingTapeOverlays = maskingTapeOverlays
                 )
 
             try {
@@ -278,7 +316,8 @@ object PostcardImageExporter {
         stickerOverlays: List<StickerOverlay>,
         sealOverlays: List<SealOverlay> = emptyList(),
         doodleStrokes: List<DoodleStroke> = emptyList(),
-        textStickerOverlays: List<TextStickerOverlay> = emptyList()
+        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList()
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -334,6 +373,18 @@ object PostcardImageExporter {
                 polaroidPhotoZoom = postcard.polaroidPhotoZoom,
                 tapedFilmPhotoZoom = postcard.tapedFilmPhotoZoom
             )
+
+            // 마스킹테이프는 "사진 위에 붙이는 얇은 다꾸 재료"라는 제품
+            // 의미상 사진 바로 위, 스티커·도장·텍스트 스티커보다는 아래에
+            // 그린다 — 미리보기(DetailScreen)도 photoMaskingTapes.forEach를
+            // photoStickers.forEach보다 먼저 호출해 같은 순서를 유지한다.
+            for (overlay in maskingTapeOverlays) {
+                drawMaskingTapeOverlay(
+                    context = context,
+                    canvas = canvas,
+                    tapeOverlay = overlay
+                )
+            }
 
             for (overlay in stickerOverlays) {
                 drawStickerOverlay(
@@ -541,6 +592,315 @@ object PostcardImageExporter {
                 stickerBitmap.recycle()
             }
         }
+    }
+
+    /**
+     * 화면(MaskingTapeContent, ui/components/MaskingTapeShapes.kt)과 같은
+     * 비율 상수(MASKING_TAPE_* in ui/detail/MaskingTapeItem.kt)로 모양·패턴을
+     * 다시 계산해 그린다 — 두 렌더 경로가 같은 값을 참조하므로 화면과 저장
+     * 이미지에서 테이프 모양·패턴이 어긋나지 않는다.
+     */
+    private fun drawMaskingTapeOverlay(
+        context: Context,
+        canvas: Canvas,
+        tapeOverlay: MaskingTapeOverlay
+    ) {
+        val widthPx =
+            (tapeOverlay.widthRatio * OUTPUT_SIZE).coerceAtLeast(1f)
+        val heightPx =
+            (tapeOverlay.heightRatio * OUTPUT_SIZE).coerceAtLeast(1f)
+        val left = tapeOverlay.normalizedX * OUTPUT_SIZE
+        val top = tapeOverlay.normalizedY * OUTPUT_SIZE
+        val bounds = RectF(left, top, left + widthPx, top + heightPx)
+
+        if (bounds.width() <= 0f || bounds.height() <= 0f) return
+
+        canvas.save()
+        try {
+            canvas.rotate(
+                tapeOverlay.rotationDegrees,
+                bounds.centerX(),
+                bounds.centerY()
+            )
+            canvas.clipPath(maskingTapeCutPath(bounds, tapeOverlay.edgeStyle))
+
+            if (tapeOverlay.isPhoto) {
+                val photoBitmap =
+                    tapeOverlay.photoUri?.let {
+                        runCatching {
+                            MaskingTapePhotoDecoder.decodeSampledBitmap(context, it)
+                        }.getOrNull()
+                    }
+
+                if (photoBitmap != null) {
+                    try {
+                        drawTiledPhotoOverlay(canvas, bounds, photoBitmap, tapeOverlay.alpha)
+                    } finally {
+                        if (!photoBitmap.isRecycled) {
+                            photoBitmap.recycle()
+                        }
+                    }
+                } else {
+                    val fallbackPaint =
+                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            style = Paint.Style.FILL
+                            color = colorWithAlpha(tapeOverlay.baseColorArgb, tapeOverlay.alpha)
+                        }
+                    canvas.drawRect(bounds, fallbackPaint)
+                }
+            } else {
+                val basePaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        style = Paint.Style.FILL
+                        color = colorWithAlpha(tapeOverlay.baseColorArgb, tapeOverlay.alpha)
+                    }
+                canvas.drawRect(bounds, basePaint)
+                drawMaskingTapePatternOverlay(canvas, bounds, tapeOverlay.patternColorArgb, tapeOverlay.patternKind)
+            }
+        } finally {
+            canvas.restore()
+        }
+    }
+
+    /**
+     * Compose(MaskingTapeShapes.kt의 maskingTapeClipPath)와 같은 좌표 함수
+     * (maskingTapeOutlinePoints)를 그대로 옮겨 그린다 — 두 렌더 경로가 항상
+     * 같은 외곽선을 얻는다.
+     */
+    private fun maskingTapeCutPath(bounds: RectF, edgeStyle: MaskingTapeEdgeStyle): Path {
+        val points =
+            maskingTapeOutlinePoints(bounds.width(), bounds.height(), edgeStyle)
+
+        if (points.isEmpty()) {
+            return Path().apply { addRect(bounds, Path.Direction.CW) }
+        }
+
+        return Path().apply {
+            moveTo(bounds.left + points[0].first, bounds.top + points[0].second)
+            for (i in 1 until points.size) {
+                lineTo(bounds.left + points[i].first, bounds.top + points[i].second)
+            }
+            close()
+        }
+    }
+
+    private fun drawTiledPhotoOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        bitmap: Bitmap,
+        alpha: Float
+    ) {
+        val tileSize = bounds.height()
+
+        if (tileSize <= 0f || bitmap.width <= 0 || bitmap.height <= 0) return
+
+        val matrix =
+            Matrix().apply {
+                setScale(tileSize / bitmap.width, tileSize / bitmap.height)
+                postTranslate(bounds.left, bounds.top)
+            }
+
+        val shader =
+            BitmapShader(
+                bitmap,
+                Shader.TileMode.REPEAT,
+                Shader.TileMode.REPEAT
+            ).apply { setLocalMatrix(matrix) }
+
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.shader = shader
+                this.alpha = (alpha.coerceIn(0f, 1f) * 255f).toInt()
+            }
+
+        canvas.drawRect(bounds, paint)
+    }
+
+    private fun drawMaskingTapePatternOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        patternColorArgb: Long,
+        patternKind: MaskingTapePatternKind
+    ) {
+        when (patternKind) {
+            MaskingTapePatternKind.GRID -> drawTapeGridOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.DOT -> drawTapeDotsOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.STAR -> drawTapeStarsOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.HEART -> drawTapeHeartsOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.STRIPE -> drawTapeStripesOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.PLAIN -> drawTapeFiberOverlay(canvas, bounds, patternColorArgb)
+        }
+    }
+
+    private fun drawTapeGridOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                strokeWidth = height * MASKING_TAPE_GRID_LINE_WIDTH_RATIO
+            }
+
+        var x = bounds.left + pitch / 2f
+        while (x < bounds.right) {
+            canvas.drawLine(x, bounds.top, x, bounds.bottom, paint)
+            x += pitch
+        }
+
+        var y = bounds.top + pitch / 2f
+        while (y < bounds.bottom) {
+            canvas.drawLine(bounds.left, y, bounds.right, y, paint)
+            y += pitch
+        }
+    }
+
+    private fun drawTapeDotsOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val radius = height * MASKING_TAPE_DOT_RADIUS_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                style = Paint.Style.FILL
+            }
+
+        forEachTapeGridPointOverlay(bounds, pitch) { x, y ->
+            canvas.drawCircle(x, y, radius, paint)
+        }
+    }
+
+    private fun drawTapeStarsOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val starSize = height * MASKING_TAPE_STAR_SIZE_RATIO
+        val half = starSize / 2f
+        val diag = half * 0.6f
+        val strokeWidth = starSize * 0.16f
+        val thickPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                this.strokeWidth = strokeWidth
+                strokeCap = Paint.Cap.ROUND
+            }
+        val thinPaint =
+            Paint(thickPaint).apply {
+                this.strokeWidth = strokeWidth * 0.7f
+            }
+
+        forEachTapeGridPointOverlay(bounds, pitch) { x, y ->
+            canvas.drawLine(x - half, y, x + half, y, thickPaint)
+            canvas.drawLine(x, y - half, x, y + half, thickPaint)
+            canvas.drawLine(x - diag, y - diag, x + diag, y + diag, thinPaint)
+            canvas.drawLine(x - diag, y + diag, x + diag, y - diag, thinPaint)
+        }
+    }
+
+    private fun drawTapeHeartsOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val heartSize = height * MASKING_TAPE_HEART_SIZE_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                style = Paint.Style.FILL
+            }
+
+        forEachTapeGridPointOverlay(bounds, pitch) { x, y ->
+            canvas.drawPath(tapeHeartPathOverlay(x, y, heartSize), paint)
+        }
+    }
+
+    private fun tapeHeartPathOverlay(
+        centerX: Float,
+        centerY: Float,
+        heartSize: Float
+    ): Path {
+        val half = heartSize / 2f
+        val top = centerY - half * 0.5f
+
+        return Path().apply {
+            moveTo(centerX, centerY + half)
+            cubicTo(
+                centerX - half * 1.3f, centerY,
+                centerX - half * 0.6f, top - half * 0.6f,
+                centerX, top
+            )
+            cubicTo(
+                centerX + half * 0.6f, top - half * 0.6f,
+                centerX + half * 1.3f, centerY,
+                centerX, centerY + half
+            )
+            close()
+        }
+    }
+
+    private fun drawTapeStripesOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_STRIPE_PITCH_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                strokeWidth = height * MASKING_TAPE_STRIPE_WIDTH_RATIO
+            }
+        val diagonalSpan = bounds.width() + height
+
+        var offset = -height
+        while (offset < diagonalSpan) {
+            canvas.drawLine(
+                bounds.left + offset,
+                bounds.top,
+                bounds.left + offset + height,
+                bounds.bottom,
+                paint
+            )
+            offset += pitch
+        }
+    }
+
+    /** 반투명 아이보리처럼 도안 없이 은은한 종이 결만 살짝 비치게 한다. */
+    private fun drawTapeFiberOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PLAIN_FIBER_ALPHA)
+                strokeWidth = bounds.height() * 0.03f
+            }
+
+        listOf(0.32f, 0.68f).forEach { yRatio ->
+            val y = bounds.top + bounds.height() * yRatio
+            canvas.drawLine(
+                bounds.left + bounds.width() * 0.08f,
+                y,
+                bounds.left + bounds.width() * 0.92f,
+                y,
+                paint
+            )
+        }
+    }
+
+    /** 테이프 영역 안에서 격자 형태로 촘촘히 엇갈린 도안 반복 위치를 순회한다(체크무늬 배치). */
+    private inline fun forEachTapeGridPointOverlay(
+        bounds: RectF,
+        pitch: Float,
+        action: (x: Float, y: Float) -> Unit
+    ) {
+        var row = 0
+        var y = bounds.top + pitch / 2f
+        while (y < bounds.bottom) {
+            val rowOffset = if (row % 2 == 0) 0f else pitch / 2f
+            var x = bounds.left + pitch / 2f + rowOffset
+            while (x < bounds.right) {
+                action(x, y)
+                x += pitch
+            }
+            y += pitch
+            row++
+        }
+    }
+
+    private fun colorWithAlpha(argb: Long, alphaFraction: Float): Int {
+        val rgb = argb.toInt() and 0x00FFFFFF
+        val alphaByte = (alphaFraction.coerceIn(0f, 1f) * 255f).toInt()
+        return (alphaByte shl 24) or rgb
     }
 
     private fun drawSealOverlay(

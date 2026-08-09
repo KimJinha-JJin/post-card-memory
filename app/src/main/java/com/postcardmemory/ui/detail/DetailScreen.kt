@@ -79,6 +79,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Texture
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
@@ -165,6 +166,7 @@ import com.postcardmemory.ui.components.PostcardBackgroundPatternPicker
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.components.PostcardLayoutPicker
+import com.postcardmemory.ui.components.MaskingTapeContent
 import com.postcardmemory.ui.components.PostcardLayoutStyle
 import com.postcardmemory.ui.components.PostcardTextFont
 import com.postcardmemory.ui.components.SealPreviewContent
@@ -279,6 +281,14 @@ private const val SEAL_MIN_VISIBLE_FRACTION = 0.30f
  */
 private val STICKER_BASE_SIZE = 120.dp
 private val SEAL_BASE_SIZE = 90.dp
+
+/**
+ * 마스킹테이프 기준(scale=1) 렌더 크기. 가로로 긴 다꾸 테이프 형태를
+ * 유지하기 위해 스티커·도장과 달리 가로·세로를 따로 둔다(작업지시서 19절:
+ * 길이·폭을 따로 조절하는 기능은 만들지 않되, 기본 형태 자체는 직사각형).
+ */
+private val MASKING_TAPE_BASE_WIDTH = 132.dp
+private val MASKING_TAPE_BASE_HEIGHT = 40.dp
 
 /**
  * 회전·확대가 반영된 도장의 최종 시각 경계(AABB)를 기준으로, 도장이 최소 가시 영역
@@ -463,11 +473,14 @@ internal fun snappedDoodleLineEndpoint(
 /** 스티커 탭의 페이지 인덱스. 다른 탭에서는 스티커 선택 표시·조작 손잡이·제스처를 시작하지 않는다. */
 internal const val STICKER_TAB_PAGE_INDEX = 3
 
+/** 마스킹테이프 탭의 페이지 인덱스. 다른 탭에서는 마스킹테이프 선택 표시·제스처를 시작하지 않는다. */
+internal const val MASKING_TAPE_TAB_PAGE_INDEX = 4
+
 /** 도장 탭의 페이지 인덱스. 다른 탭에서는 도장 선택 표시·제스처를 시작하지 않는다. */
-internal const val SEAL_TAB_PAGE_INDEX = 4
+internal const val SEAL_TAB_PAGE_INDEX = 5
 
 /** 낙서 탭의 페이지 인덱스. 다른 탭에서는 낙서 입력·지우개 판정을 시작하지 않는다. */
-internal const val DOODLE_TAB_PAGE_INDEX = 5
+internal const val DOODLE_TAB_PAGE_INDEX = 6
 
 /** 이 거리(정규화 좌표 기준 화면 px)보다 가까운 점은 새로 추가하지 않아 획 데이터가 과도하게 촘촘해지지 않게 한다. */
 private const val MIN_DOODLE_POINT_SPACING_PX = 3f
@@ -829,6 +842,100 @@ internal fun createTextStickerOverlaysForExport(
 }
 
 /**
+ * 마스킹테이프는 사진 스티커·텍스트 스티커와 같이 가장자리 걸침을 허용하지
+ * 않는다(clampStickerOffset) — 도장과 달리 우편 소인처럼 걸쳐 보일 이유가
+ * 없는 장식 재료라 항상 엽서 안쪽에 완전히 들어오게 한다.
+ */
+internal fun createMaskingTapeOverlayForExport(
+    tape: MaskingTapeItem,
+    postcardSize: IntSize,
+    tapeSize: IntSize
+): PostcardImageExporter.MaskingTapeOverlay? {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0 ||
+        tapeSize.width <= 0 ||
+        tapeSize.height <= 0
+    ) {
+        return null
+    }
+
+    val resolvedOffset =
+        clampStickerOffset(
+            offset =
+                tape.offset
+                    ?: centeredStickerOffset(
+                        postcardSize = postcardSize,
+                        stickerSize = tapeSize
+                    ),
+            postcardSize = postcardSize,
+            stickerSize = tapeSize
+        )
+
+    return PostcardImageExporter.MaskingTapeOverlay(
+        normalizedX =
+            (resolvedOffset.x /
+                    postcardSize.width.toFloat())
+                .coerceIn(0f, 1f),
+        normalizedY =
+            (resolvedOffset.y /
+                    postcardSize.height.toFloat())
+                .coerceIn(0f, 1f),
+        widthRatio =
+            tapeSize.width.toFloat() /
+                    postcardSize.width.toFloat(),
+        heightRatio =
+            tapeSize.height.toFloat() /
+                    postcardSize.width.toFloat(),
+        rotationDegrees = tape.rotationDegrees,
+        edgeStyle = tape.edgeStyle,
+        baseColorArgb = tape.effectiveBaseColorArgb(),
+        patternColorArgb = tape.effectivePatternColorArgb(),
+        patternKind = tape.effectivePatternKind(),
+        alpha = tape.style.alpha,
+        isPhoto = tape.style == MaskingTapeStyle.PHOTO,
+        photoUri = tape.photoUri
+    )
+}
+
+/**
+ * maskingTapeSizes[id] 측정값이 아직 없어도(방금 추가한 테이프 등) 조용히
+ * 건너뛰지 않고 computeFallbackOverlaySize로 계산한 크기를 사용한다 —
+ * 미리보기와 같은 공식(MASKING_TAPE_BASE_WIDTH * tape.scale * tape.lengthScale,
+ * MASKING_TAPE_BASE_HEIGHT * tape.scale)이라 실질적으로 동일한 결과다.
+ */
+internal fun createMaskingTapeOverlaysForExport(
+    maskingTapes: List<MaskingTapeItem>,
+    postcardSize: IntSize,
+    maskingTapeSizes: Map<String, IntSize>,
+    baseMaskingTapeWidthPx: Float,
+    baseMaskingTapeHeightPx: Float
+): List<PostcardImageExporter.MaskingTapeOverlay> {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0
+    ) {
+        return emptyList()
+    }
+
+    return maskingTapes.mapNotNull { tape ->
+        val tapeSize =
+            maskingTapeSizes[tape.id]
+                ?: computeFallbackOverlaySize(
+                    basePxWidth = baseMaskingTapeWidthPx * tape.lengthScale,
+                    basePxHeight = baseMaskingTapeHeightPx,
+                    scale = tape.scale
+                )
+
+        createMaskingTapeOverlayForExport(
+            tape = tape,
+            postcardSize = postcardSize,
+            tapeSize = tapeSize
+        )
+    }
+}
+
+/**
  * 세 패널의 보조 행동(사진 바꾸기·색 가져오기·직접 고르기·문구 편집)에
  * 쓰는 가벼운 외곽선 버튼. 주요 선택지와 달리 검은 풀폭 버튼으로 강조하지
  * 않고, 아이콘+라벨만 얇은 테두리로 보여 준다.
@@ -1089,6 +1196,12 @@ fun DetailScreen(
     val canUndoTextSticker by viewModel.canUndoTextSticker.collectAsState()
     val canRedoTextSticker by viewModel.canRedoTextSticker.collectAsState()
 
+    val photoMaskingTapes by viewModel.photoMaskingTapes.collectAsState()
+    val selectedMaskingTapeId by viewModel.selectedMaskingTapeId.collectAsState()
+    val latestPhotoMaskingTapes by rememberUpdatedState(photoMaskingTapes)
+    val canUndoMaskingTape by viewModel.canUndoMaskingTape.collectAsState()
+    val canRedoMaskingTape by viewModel.canRedoMaskingTape.collectAsState()
+
     val doodleStrokes by viewModel.doodleStrokes.collectAsState()
     val latestDoodleStrokes by rememberUpdatedState(doodleStrokes)
     val canUndoDoodle by viewModel.canUndoDoodle.collectAsState()
@@ -1150,6 +1263,10 @@ fun DetailScreen(
         mutableStateOf(mapOf<String, IntSize>())
     }
 
+    var maskingTapeSizes by remember {
+        mutableStateOf(mapOf<String, IntSize>())
+    }
+
     var doodleTool by remember {
         mutableStateOf(DoodleTool.PEN)
     }
@@ -1192,6 +1309,14 @@ fun DetailScreen(
         TEXT_STICKER_BASE_FONT_SIZE_SP.sp.toPx()
     }
 
+    val baseMaskingTapeWidthPx = with(LocalDensity.current) {
+        MASKING_TAPE_BASE_WIDTH.toPx()
+    }
+
+    val baseMaskingTapeHeightPx = with(LocalDensity.current) {
+        MASKING_TAPE_BASE_HEIGHT.toPx()
+    }
+
     val sealMinVisibleEdgePx = with(LocalDensity.current) {
         SEAL_MIN_VISIBLE_EDGE.toPx()
     }
@@ -1200,6 +1325,8 @@ fun DetailScreen(
     val stickerScaleHandleTouchPx = with(LocalDensity.current) {
         stickerScaleHandleTouchSize.toPx()
     }
+    val maskingTapeLengthHandleTouchSize = 40.dp
+    val maskingTapeLengthHandleVisibleSize = 16.dp
 
     val context = LocalContext.current
 
@@ -1335,14 +1462,14 @@ fun DetailScreen(
     }
 
     val customizationPagerState = rememberPagerState(
-        pageCount = { 6 }
+        pageCount = { 7 }
     )
     val latestCustomizationPage by rememberUpdatedState(
         customizationPagerState.currentPage
     )
     val customizationPagerScope = rememberCoroutineScope()
     val customizationPageLabels = remember {
-        listOf("사진", "배경", "텍스트", "스티커", "도장", "낙서")
+        listOf("사진", "배경", "텍스트", "스티커", "마스킹테이프", "도장", "낙서")
     }
     val customizationPageIcons = remember {
         listOf(
@@ -1350,6 +1477,7 @@ fun DetailScreen(
             Icons.Default.Wallpaper,
             Icons.Default.TextFields,
             Icons.Default.EmojiEmotions,
+            Icons.Default.Texture,
             Icons.Default.Verified,
             Icons.Default.Draw
         )
@@ -2019,6 +2147,297 @@ fun DetailScreen(
                             tapedFilmPhotoZoom =
                                 pc.tapedFilmPhotoZoom
                         )
+
+                        // 마스킹테이프는 "사진 위에 붙이는 얇은 다꾸 재료"라는 제품
+                        // 의미상 사진 바로 위, 스티커·도장·텍스트 스티커보다는 아래에
+                        // 그린다 — Export(PostcardImageExporter.createPostcardBitmap)도
+                        // 같은 순서로 그려 화면과 저장 결과의 z-order를 맞춘다.
+                        photoMaskingTapes.forEach { tape ->
+                            val isMaskingTapeSelected =
+                                tape.id == selectedMaskingTapeId
+                            val isMaskingTapeVisuallySelected =
+                                isMaskingTapeSelected &&
+                                        !isFocusPreviewMode &&
+                                        latestCustomizationPage ==
+                                        MASKING_TAPE_TAB_PAGE_INDEX
+                            val currentMaskingTapeOffset =
+                                tape.offset
+
+                            val maskingTapePositionModifier =
+                                if (currentMaskingTapeOffset == null) {
+                                    Modifier.align(
+                                        Alignment.Center
+                                    )
+                                } else {
+                                    Modifier
+                                        .align(
+                                            Alignment.TopStart
+                                        )
+                                        .offset {
+                                            IntOffset(
+                                                x = currentMaskingTapeOffset.x
+                                                    .roundToInt(),
+                                                y = currentMaskingTapeOffset.y
+                                                    .roundToInt()
+                                            )
+                                        }
+                                }
+
+                            Box(
+                                modifier = maskingTapePositionModifier
+                                    .size(
+                                        width = MASKING_TAPE_BASE_WIDTH * tape.scale * tape.lengthScale,
+                                        height = MASKING_TAPE_BASE_HEIGHT * tape.scale
+                                    )
+                                    .graphicsLayer {
+                                        rotationZ = tape.rotationDegrees
+                                    }
+                                    .onSizeChanged { size ->
+                                        maskingTapeSizes =
+                                            maskingTapeSizes +
+                                                    (tape.id to size)
+                                    }
+                                    .then(
+                                        if (
+                                            latestCustomizationPage ==
+                                            MASKING_TAPE_TAB_PAGE_INDEX
+                                        ) {
+                                            Modifier.pointerInput(
+                                        tape.id,
+                                        postcardPreviewSize,
+                                        isFocusPreviewMode
+                                    ) {
+                                        if (isFocusPreviewMode) {
+                                            return@pointerInput
+                                        }
+
+                                        var maskingTapeGestureSnapshotPending = true
+
+                                        coroutineScope {
+                                            launch {
+                                                awaitEachGesture {
+                                                    awaitFirstDown(
+                                                        requireUnconsumed = false
+                                                    )
+                                                    maskingTapeGestureSnapshotPending = true
+                                                }
+                                            }
+                                            launch {
+                                                detectTapGestures(
+                                                    onTap = {
+                                                        viewModel.setSelectedMaskingTapeId(
+                                                            if (selectedMaskingTapeId == tape.id) {
+                                                                null
+                                                            } else {
+                                                                tape.id
+                                                            }
+                                                        )
+                                                    }
+                                                )
+                                            }
+                                            launch {
+                                                detectTransformGestures { _, pan, zoom, rotationChange ->
+                                                    val currentTape =
+                                                        latestPhotoMaskingTapes.find {
+                                                            it.id == tape.id
+                                                        } ?: return@detectTransformGestures
+
+                                                    if (maskingTapeGestureSnapshotPending) {
+                                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                                        maskingTapeGestureSnapshotPending = false
+                                                    }
+
+                                                    val currentSize =
+                                                        maskingTapeSizes[tape.id]
+                                                            ?: IntSize.Zero
+
+                                                    val oldOffset =
+                                                        currentTape.offset
+                                                            ?: centeredStickerOffset(
+                                                                postcardSize = postcardPreviewSize,
+                                                                stickerSize = currentSize
+                                                            )
+
+                                                    val parentDelta =
+                                                        localStickerDeltaToParent(
+                                                            localDelta = pan,
+                                                            rotationDegrees = currentTape.rotationDegrees,
+                                                            flipHorizontal = false,
+                                                            flipVertical = false
+                                                        )
+
+                                                    val newScale =
+                                                        (currentTape.scale * zoom)
+                                                            .coerceIn(0.5f, 3f)
+
+                                                    val newRotation =
+                                                        normalizeStickerRotation(
+                                                            currentTape.rotationDegrees +
+                                                                    rotationChange
+                                                        )
+
+                                                    val newOffset =
+                                                        clampStickerOffset(
+                                                            offset = oldOffset + parentDelta,
+                                                            postcardSize = postcardPreviewSize,
+                                                            stickerSize = currentSize
+                                                        )
+
+                                                    viewModel.setSelectedMaskingTapeId(tape.id)
+                                                    viewModel.setPhotoMaskingTapes(
+                                                        latestPhotoMaskingTapes.map {
+                                                            if (it.id == tape.id) {
+                                                                it.copy(
+                                                                    offset = newOffset,
+                                                                    scale = newScale,
+                                                                    rotationDegrees = newRotation
+                                                                )
+                                                            } else {
+                                                                it
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    .then(
+                                        if (isMaskingTapeVisuallySelected) {
+                                            Modifier.border(
+                                                width = 2.dp,
+                                                color = GraphiteAccent,
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                MaskingTapeContent(
+                                    tape = tape,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                if (isMaskingTapeVisuallySelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterEnd)
+                                            .size(maskingTapeLengthHandleTouchSize)
+                                            .then(
+                                                if (
+                                                    latestCustomizationPage ==
+                                                    MASKING_TAPE_TAB_PAGE_INDEX
+                                                ) {
+                                                    Modifier.pointerInput(
+                                                tape.id,
+                                                isFocusPreviewMode
+                                            ) {
+                                                if (isFocusPreviewMode) {
+                                                    return@pointerInput
+                                                }
+
+                                                var lengthGestureActive = false
+                                                var gestureStartWidthPx = 0f
+                                                var gestureStartScale = 1f
+                                                var accumulatedDragX = 0f
+
+                                                detectDragGestures(
+                                                    onDragStart = {
+                                                        lengthGestureActive =
+                                                            latestControlsEnabled
+                                                        val currentTape =
+                                                            if (lengthGestureActive) {
+                                                                latestPhotoMaskingTapes.find {
+                                                                    it.id == tape.id
+                                                                }
+                                                            } else {
+                                                                null
+                                                            }
+
+                                                        if (currentTape == null) {
+                                                            lengthGestureActive = false
+                                                        } else {
+                                                            viewModel.setSelectedMaskingTapeId(
+                                                                tape.id
+                                                            )
+                                                            viewModel.recordMaskingTapeSnapshotForUndo()
+                                                            gestureStartScale =
+                                                                currentTape.scale
+                                                            gestureStartWidthPx =
+                                                                baseMaskingTapeWidthPx *
+                                                                        gestureStartScale *
+                                                                        currentTape.lengthScale
+                                                            accumulatedDragX = 0f
+                                                        }
+                                                    },
+                                                    onDrag = { change, dragAmount ->
+                                                        if (!lengthGestureActive) {
+                                                            return@detectDragGestures
+                                                        }
+                                                        change.consume()
+                                                        accumulatedDragX += dragAmount.x
+
+                                                        val minWidthPx =
+                                                            baseMaskingTapeWidthPx *
+                                                                    gestureStartScale *
+                                                                    MASKING_TAPE_MIN_LENGTH_SCALE
+                                                        val maxWidthPx =
+                                                            baseMaskingTapeWidthPx *
+                                                                    gestureStartScale *
+                                                                    MASKING_TAPE_MAX_LENGTH_SCALE
+                                                        val newWidthPx =
+                                                            (gestureStartWidthPx + accumulatedDragX)
+                                                                .coerceIn(minWidthPx, maxWidthPx)
+                                                        val newLengthScale =
+                                                            newWidthPx /
+                                                                    (baseMaskingTapeWidthPx * gestureStartScale)
+
+                                                        viewModel.setPhotoMaskingTapes(
+                                                            latestPhotoMaskingTapes.map {
+                                                                if (it.id == tape.id) {
+                                                                    it.copy(lengthScale = newLengthScale)
+                                                                } else {
+                                                                    it
+                                                                }
+                                                            }
+                                                        )
+                                                    },
+                                                    onDragEnd = {
+                                                        lengthGestureActive = false
+                                                    },
+                                                    onDragCancel = {
+                                                        lengthGestureActive = false
+                                                    }
+                                                )
+                                            }
+                                                } else {
+                                                    Modifier
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(maskingTapeLengthHandleVisibleSize)
+                                                .background(
+                                                    color = BrutalWhite,
+                                                    shape = CircleShape
+                                                )
+                                                .border(
+                                                    width = 2.dp,
+                                                    color = GraphiteAccent,
+                                                    shape = CircleShape
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         photoStickers.forEach { sticker ->
                             val isSelected =
@@ -4574,6 +4993,107 @@ fun DetailScreen(
                         }
 
                         4 -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                MaskingTapePickerPanel(
+                                    photoMaskingTapes = photoMaskingTapes,
+                                    selectedMaskingTapeId = selectedMaskingTapeId,
+                                    onSelectMaskingTape = { id ->
+                                        viewModel.setSelectedMaskingTapeId(
+                                            if (selectedMaskingTapeId == id) {
+                                                null
+                                            } else {
+                                                id
+                                            }
+                                        )
+                                    },
+                                    onAddMaskingTape = { style ->
+                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                        val newTape =
+                                            MaskingTapeItem(style = style)
+                                        viewModel.setPhotoMaskingTapes(
+                                            photoMaskingTapes + newTape
+                                        )
+                                        viewModel.setSelectedMaskingTapeId(
+                                            newTape.id
+                                        )
+                                    },
+                                    onAddCustomMaskingTape = { baseColorArgb, patternColorArgb, patternKind ->
+                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                        val newTape =
+                                            MaskingTapeItem(
+                                                style = MaskingTapeStyle.CUSTOM,
+                                                customBaseColorArgb = baseColorArgb,
+                                                customPatternColorArgb = patternColorArgb,
+                                                customPatternKind = patternKind
+                                            )
+                                        viewModel.setPhotoMaskingTapes(
+                                            photoMaskingTapes + newTape
+                                        )
+                                        viewModel.setSelectedMaskingTapeId(
+                                            newTape.id
+                                        )
+                                    },
+                                    onAddPhotoMaskingTape = { uri ->
+                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                        val newTape =
+                                            MaskingTapeItem(
+                                                style = MaskingTapeStyle.PHOTO,
+                                                photoUri = uri
+                                            )
+                                        viewModel.setPhotoMaskingTapes(
+                                            photoMaskingTapes + newTape
+                                        )
+                                        viewModel.setSelectedMaskingTapeId(
+                                            newTape.id
+                                        )
+                                    },
+                                    onDeleteMaskingTape = { id ->
+                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                        val remaining =
+                                            photoMaskingTapes.filter {
+                                                it.id != id
+                                            }
+                                        viewModel.setPhotoMaskingTapes(remaining)
+                                        maskingTapeSizes = maskingTapeSizes - id
+                                        if (selectedMaskingTapeId == id) {
+                                            viewModel.setSelectedMaskingTapeId(
+                                                remaining.lastOrNull()?.id
+                                            )
+                                        }
+                                    },
+                                    onDuplicateMaskingTape = { id ->
+                                        viewModel.duplicateMaskingTape(id)
+                                    },
+                                    onEdgeStyleSelected = { id, edgeStyle ->
+                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                        viewModel.setPhotoMaskingTapes(
+                                            photoMaskingTapes.map {
+                                                if (it.id == id) {
+                                                    it.copy(edgeStyle = edgeStyle)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onUndoMaskingTape = {
+                                        viewModel.undoMaskingTapeChange()
+                                    },
+                                    onRedoMaskingTape = {
+                                        viewModel.redoMaskingTapeChange()
+                                    },
+                                    canUndoMaskingTape = canUndoMaskingTape,
+                                    canRedoMaskingTape = canRedoMaskingTape,
+                                    enabled = controlsEnabled,
+                                    modifier = Modifier.fillMaxWidth(0.92f)
+                                )
+                            }
+                        }
+
+                        5 -> {
                             val selectedSealForBoundsCheck =
                                 photoSeals.find { it.id == selectedSealId }
                             val selectedSealOutOfBounds =
@@ -4691,7 +5211,7 @@ fun DetailScreen(
                             }
                         }
 
-                        5 -> {
+                        6 -> {
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter
@@ -5054,6 +5574,19 @@ fun DetailScreen(
                                                     textStickerSizes,
                                                 baseFontSizePx =
                                                     baseTextStickerFontPx
+                                            ),
+                                        maskingTapeOverlays =
+                                            createMaskingTapeOverlaysForExport(
+                                                maskingTapes =
+                                                    photoMaskingTapes,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                maskingTapeSizes =
+                                                    maskingTapeSizes,
+                                                baseMaskingTapeWidthPx =
+                                                    baseMaskingTapeWidthPx,
+                                                baseMaskingTapeHeightPx =
+                                                    baseMaskingTapeHeightPx
                                             )
                                     )
                                 }
@@ -5129,6 +5662,19 @@ fun DetailScreen(
                                                     textStickerSizes,
                                                 baseFontSizePx =
                                                     baseTextStickerFontPx
+                                            ),
+                                        maskingTapeOverlays =
+                                            createMaskingTapeOverlaysForExport(
+                                                maskingTapes =
+                                                    photoMaskingTapes,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                maskingTapeSizes =
+                                                    maskingTapeSizes,
+                                                baseMaskingTapeWidthPx =
+                                                    baseMaskingTapeWidthPx,
+                                                baseMaskingTapeHeightPx =
+                                                    baseMaskingTapeHeightPx
                                             )
                                     )
                                 }

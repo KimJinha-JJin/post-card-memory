@@ -120,11 +120,14 @@ class StickerPositionCalculationsStructureTest {
     }
 
     @Test
-    fun detailScreen_hasExactlyNineCallSitesUnchanged() {
+    fun detailScreen_hasExactlyThirteenCallSitesUnchanged() {
+        // 43일차(마스킹테이프) 도입 전 baseline은 이미 11곳이었다(제10차 기준
+        // 문서화된 9곳에서 텍스트 스티커 등 이후 작업이 늘려놓은 채 이 상수가
+        // 갱신되지 않은 상태) — 이번에 마스킹테이프 제스처 1곳 +
+        // createMaskingTapeOverlayForExport 1곳이 추가돼 13곳이 됐다.
         assertEquals(
-            "DetailScreen.kt의 centeredStickerOffset 호출은 정확히 9곳이어야 함" +
-                "(export 2 + LaunchedEffect 1 + 스티커/도장 제스처 5 + 복원 버튼 콜백 1)",
-            9,
+            "DetailScreen.kt의 centeredStickerOffset 호출 개수가 바뀌었다면 의도한 변경인지 확인",
+            13,
             Regex("""centeredStickerOffset\(""")
                 .findAll(detailScreenText)
                 .count()

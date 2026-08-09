@@ -4,7 +4,7 @@ import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.deserializeDoodleStroke
 import com.postcardmemory.utils.serialize as serializeDoodleStroke
 
-const val DRAFT_FORMAT_VERSION = 3
+const val DRAFT_FORMAT_VERSION = 4
 
 private const val DRAFT_HEADER = "POSTCARD_DRAFT_V1"
 
@@ -24,7 +24,9 @@ data class PostcardEditDraft(
     val selectedSealId: String?,
     val doodleStrokes: List<DoodleStroke> = emptyList(),
     val textStickers: List<TextStickerItem> = emptyList(),
-    val selectedTextStickerId: String? = null
+    val selectedTextStickerId: String? = null,
+    val maskingTapes: List<MaskingTapeItem> = emptyList(),
+    val selectedMaskingTapeId: String? = null
 )
 
 /** 오래된 저장 요청이 최신 상태를 덮어쓰지 않도록 하는 순수 판정 함수. */
@@ -46,7 +48,9 @@ fun PostcardEditDraft.serialize(): String {
         seals.size.toString(),
         doodleStrokes.size.toString(),
         textStickers.size.toString(),
-        selectedTextStickerId ?: "~"
+        selectedTextStickerId ?: "~",
+        maskingTapes.size.toString(),
+        selectedMaskingTapeId ?: "~"
     ).joinToString("\t")
 
     val lines = mutableListOf(DRAFT_HEADER, metaLine)
@@ -54,6 +58,7 @@ fun PostcardEditDraft.serialize(): String {
     seals.forEach { lines += it.serialize() }
     doodleStrokes.forEach { lines += it.serializeDoodleStroke() }
     textStickers.forEach { lines += it.serialize() }
+    maskingTapes.forEach { lines += it.serialize() }
 
     return lines.joinToString("\n")
 }
@@ -65,8 +70,9 @@ fun PostcardEditDraft.serialize(): String {
  *
  * meta 필드가 9개뿐인 구버전(DRAFT_FORMAT_VERSION=1) 초안은 낙서 개수 필드가
  * 없으므로 낙서 없는 초안으로 해석한다. 마찬가지로 10~11번 필드(텍스트 스티커
- * 개수/선택 id)가 없는 v1·v2 초안은 텍스트 스티커 없는 초안으로 해석해 그대로
- * 복원된다.
+ * 개수/선택 id)가 없는 v1·v2 초안은 텍스트 스티커 없는 초안으로, 12~13번
+ * 필드(마스킹테이프 개수/선택 id)가 없는 v1~v3 초안은 마스킹테이프 없는
+ * 초안으로 해석해 그대로 복원된다.
  */
 fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
     val lines = text.split("\n")
@@ -89,13 +95,24 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
         val doodleCount = meta.getOrNull(9)?.toIntOrNull() ?: 0
         val textStickerCount = meta.getOrNull(10)?.toIntOrNull() ?: 0
         val selectedTextStickerId = meta.getOrNull(11)?.takeIf { it != "~" }
+        val maskingTapeCount = meta.getOrNull(12)?.toIntOrNull() ?: 0
+        val selectedMaskingTapeId = meta.getOrNull(13)?.takeIf { it != "~" }
 
-        if (stickerCount < 0 || sealCount < 0 || doodleCount < 0 || textStickerCount < 0) {
+        if (
+            stickerCount < 0 ||
+            sealCount < 0 ||
+            doodleCount < 0 ||
+            textStickerCount < 0 ||
+            maskingTapeCount < 0
+        ) {
             return null
         }
 
         val bodyLines = lines.drop(2)
-        if (bodyLines.size < stickerCount + sealCount + doodleCount + textStickerCount) {
+        if (
+            bodyLines.size <
+            stickerCount + sealCount + doodleCount + textStickerCount + maskingTapeCount
+        ) {
             return null
         }
 
@@ -121,6 +138,13 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
             )
             .mapNotNull { deserializeTextStickerItem(it) }
 
+        val maskingTapes = bodyLines
+            .subList(
+                stickerCount + sealCount + doodleCount + textStickerCount,
+                stickerCount + sealCount + doodleCount + textStickerCount + maskingTapeCount
+            )
+            .mapNotNull { deserializeMaskingTapeItem(it) }
+
         PostcardEditDraft(
             draftFormatVersion = formatVersion,
             postcardId = postcardId,
@@ -133,7 +157,9 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
             selectedSealId = selectedSealId,
             doodleStrokes = doodleStrokes,
             textStickers = textStickers,
-            selectedTextStickerId = selectedTextStickerId
+            selectedTextStickerId = selectedTextStickerId,
+            maskingTapes = maskingTapes,
+            selectedMaskingTapeId = selectedMaskingTapeId
         )
     }.getOrNull()
 }
