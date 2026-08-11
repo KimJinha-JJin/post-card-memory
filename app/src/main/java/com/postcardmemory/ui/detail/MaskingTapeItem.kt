@@ -32,6 +32,18 @@ const val MASKING_TAPE_PHOTO_ALPHA = 0.85f
 const val MASKING_TAPE_MIN_LENGTH_SCALE = 0.5f
 const val MASKING_TAPE_MAX_LENGTH_SCALE = 3f
 
+/** 굵기(세로) 배율의 허용 범위. scale과 별개로 세로 두께만 늘이거나 줄인다. */
+const val MASKING_TAPE_MIN_THICKNESS_SCALE = 0.5f
+const val MASKING_TAPE_MAX_THICKNESS_SCALE = 3f
+
+/** 길이 고정값 단계. 자유 드래그 대신 확정된 값 중에서만 고른다. */
+val MASKING_TAPE_LENGTH_SCALE_STEPS: List<Float> =
+    listOf(MASKING_TAPE_MIN_LENGTH_SCALE, 1f, 2f, MASKING_TAPE_MAX_LENGTH_SCALE)
+
+/** 굵기 고정값 단계. 자유 드래그 대신 확정된 값 중에서만 고른다. */
+val MASKING_TAPE_THICKNESS_SCALE_STEPS: List<Float> =
+    listOf(MASKING_TAPE_MIN_THICKNESS_SCALE, 1f, 2f, MASKING_TAPE_MAX_THICKNESS_SCALE)
+
 /**
  * 찢긴/삐뚤빼뚤한 가장자리를 표현할 때 쓰는 고정 좌표. 매 프레임 또는
  * 인스턴스마다 달라지는 무작위 값이 아니라, 모든 마스킹테이프가 같은
@@ -168,6 +180,8 @@ data class MaskingTapeItem(
     val rotationDegrees: Float = 0f,
     /** 폭(scale)과 별개로 가로 길이만 늘이거나 줄이는 배율. */
     val lengthScale: Float = 1f,
+    /** 폭(scale)과 별개로 세로 굵기만 늘이거나 줄이는 배율. */
+    val thicknessScale: Float = 1f,
     val edgeStyle: MaskingTapeEdgeStyle = MaskingTapeEdgeStyle.NOTCHED_BOTH,
     val customBaseColorArgb: Long? = null,
     val customPatternColorArgb: Long? = null,
@@ -274,15 +288,16 @@ fun MaskingTapeItem.serialize(): String =
         customBaseColorArgb?.toString() ?: "~",
         customPatternColorArgb?.toString() ?: "~",
         customPatternKind?.name ?: "~",
-        photoUri?.toString() ?: "~"
+        photoUri?.toString() ?: "~",
+        thicknessScale.toString()
     ).joinToString("\t")
 
 /**
  * 7번째(lengthScale)부터는 43일차(길이 조절·복제·커스텀·사진) 이전에
- * 저장된 라인에는 없던 필드다. PhotoStickerItem의 rotationDegrees/flip
- * 필드 추가 때와 동일하게 getOrNull + 기본값으로 구버전 라인도 그대로
- * 복원되게 한다 — draft/확정 저장 파일 포맷(버전 표시) 자체는 건드리지
- * 않는다.
+ * 저장된 라인에는 없던 필드고, 13번째(thicknessScale)는 이번(굵기 조절)에
+ * 새로 추가됐다. PhotoStickerItem의 rotationDegrees/flip 필드 추가 때와
+ * 동일하게 getOrNull + 기본값으로 구버전 라인도 그대로 복원되게 한다 —
+ * draft/확정 저장 파일 포맷(버전 표시) 자체는 건드리지 않는다.
  */
 fun deserializeMaskingTapeItem(
     line: String
@@ -315,6 +330,7 @@ fun deserializeMaskingTapeItem(
                 ?.let { name -> MaskingTapePatternKind.entries.firstOrNull { it.name == name } }
         val photoUri =
             p.getOrNull(11)?.takeIf { it != "~" }?.let { Uri.parse(it) }
+        val thicknessScale = p.getOrNull(12)?.toFloatOrNull() ?: 1f
 
         MaskingTapeItem(
             id = p[0],
@@ -327,6 +343,7 @@ fun deserializeMaskingTapeItem(
             scale = p[4].toFloat(),
             rotationDegrees = p[5].toFloat(),
             lengthScale = lengthScale,
+            thicknessScale = thicknessScale,
             edgeStyle = edgeStyle,
             customBaseColorArgb = customBaseColorArgb,
             customPatternColorArgb = customPatternColorArgb,

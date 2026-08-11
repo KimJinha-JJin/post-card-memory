@@ -68,7 +68,7 @@ import com.postcardmemory.ui.theme.SunsetGold
 private val MASKING_TAPE_CUSTOM_EDITOR_CONTROLS_MAX_HEIGHT = 280.dp
 
 @Composable
-fun MaskingTapePickerPanel(
+internal fun MaskingTapePickerPanel(
     photoMaskingTapes: List<MaskingTapeItem>,
     selectedMaskingTapeId: String?,
     onSelectMaskingTape: (String) -> Unit,
@@ -82,6 +82,10 @@ fun MaskingTapePickerPanel(
     onDeleteMaskingTape: (String) -> Unit,
     onDuplicateMaskingTape: (String) -> Unit,
     onEdgeStyleSelected: (String, MaskingTapeEdgeStyle) -> Unit,
+    editMode: StickerEditMode,
+    onEditModeSelected: (StickerEditMode) -> Unit,
+    onLengthScaleSelected: (String, Float) -> Unit,
+    onThicknessScaleSelected: (String, Float) -> Unit,
     onUndoMaskingTape: () -> Unit,
     onRedoMaskingTape: () -> Unit,
     canUndoMaskingTape: Boolean,
@@ -354,6 +358,136 @@ fun MaskingTapePickerPanel(
                         color = BrutalBlack,
                         fontSize = 12.sp,
                         fontWeight = if (isEdgeSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "손가락 조작",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "이동은 언제나 가능해. 두 손가락 제스처가 크기/회전 중 뭘 바꿀지만 골라줘.",
+            color = BrutalBlack,
+            fontSize = 11.sp
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                StickerEditMode.Move to "이동만",
+                StickerEditMode.Scale to "크기",
+                StickerEditMode.Rotate to "회전"
+            ).forEach { (mode, label) ->
+                val isModeSelected = editMode == mode
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            color = if (isModeSelected) SunsetGold else Color(0xFFF4ECDE)
+                        )
+                        .clickable(enabled = enabled) {
+                            onEditModeSelected(mode)
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = label,
+                        color = BrutalBlack,
+                        fontSize = 12.sp,
+                        fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "길이",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            MASKING_TAPE_LENGTH_SCALE_STEPS.zip(
+                listOf("짧게", "보통", "길게", "아주 길게")
+            ).forEach { (step, label) ->
+                val isStepSelected = selectedTape.lengthScale == step
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            color = if (isStepSelected) SunsetGold else Color(0xFFF4ECDE)
+                        )
+                        .clickable(enabled = enabled) {
+                            onLengthScaleSelected(selectedTape.id, step)
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = label,
+                        color = BrutalBlack,
+                        fontSize = 12.sp,
+                        fontWeight = if (isStepSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "굵기",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            MASKING_TAPE_THICKNESS_SCALE_STEPS.zip(
+                listOf("얇게", "보통", "굵게", "아주 굵게")
+            ).forEach { (step, label) ->
+                val isStepSelected = selectedTape.thicknessScale == step
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            color = if (isStepSelected) SunsetGold else Color(0xFFF4ECDE)
+                        )
+                        .clickable(enabled = enabled) {
+                            onThicknessScaleSelected(selectedTape.id, step)
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = label,
+                        color = BrutalBlack,
+                        fontSize = 12.sp,
+                        fontWeight = if (isStepSelected) FontWeight.Bold else FontWeight.Medium
                     )
                 }
             }

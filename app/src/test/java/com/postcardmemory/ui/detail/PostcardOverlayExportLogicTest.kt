@@ -763,6 +763,26 @@ class PostcardOverlayExportLogicTest {
     }
 
     @Test
+    fun createMaskingTapeOverlaysForExport_missingSizeEntry_accountsForThicknessScaleInFallback() {
+        // thicknessScale=2면 fallback 크기의 높이도 2배가 돼야 한다(미리보기
+        // .size() 공식과 동일: MASKING_TAPE_BASE_HEIGHT * scale * thicknessScale).
+        val thickenedTape =
+            maskingTape().copy(id = "thickened-tape", thicknessScale = 2f)
+
+        val overlays = createMaskingTapeOverlaysForExport(
+            maskingTapes = listOf(thickenedTape),
+            postcardSize = postcard,
+            maskingTapeSizes = emptyMap(),
+            baseMaskingTapeWidthPx = 132f,
+            baseMaskingTapeHeightPx = 40f
+        )
+
+        assertEquals(1, overlays.size)
+        // heightRatio = (40*1*2) / 1000 (widthRatio과 동일하게 postcard 너비 기준)
+        assertEquals(0.08f, overlays.first().heightRatio, 0.001f)
+    }
+
+    @Test
     fun createMaskingTapeOverlaysForExport_missingSizeEntry_includedViaFallback_notDropped() {
         val tapes = listOf(
             maskingTape().copy(id = "missing-size-tape")

@@ -119,6 +119,32 @@ class MaskingTapeItemTest {
         assertNull(parsed?.customPatternColorArgb)
         assertNull(parsed?.customPatternKind)
         assertNull(parsed?.photoUri)
+        assertEquals(1f, parsed?.thicknessScale)
+    }
+
+    // ---- 굵기(thicknessScale) 필드: 44일차 후속(핀치 정상화) 작업에서 추가 ----
+
+    @Test
+    fun serialize_thenParse_roundTripsThicknessScale() {
+        val tape = sampleMaskingTape().copy(thicknessScale = 2.4f)
+
+        val parsed = deserializeMaskingTapeItem(tape.serialize())
+
+        assertEquals(tape, parsed)
+    }
+
+    @Test
+    fun deserialize_lineWithoutThicknessScale_defaultsToOne() {
+        // thicknessScale 추가 이전, 12개 필드(photoUri까지)만 있던 라인.
+        val lineWithoutThickness =
+            listOf(
+                "masking-tape-1", "MINT_CHECK", "~", "~", "1.0", "0",
+                "1.0", "NOTCHED_BOTH", "~", "~", "~", "~"
+            ).joinToString("\t")
+
+        val parsed = deserializeMaskingTapeItem(lineWithoutThickness)
+
+        assertEquals(1f, parsed?.thicknessScale)
     }
 
     @Test
