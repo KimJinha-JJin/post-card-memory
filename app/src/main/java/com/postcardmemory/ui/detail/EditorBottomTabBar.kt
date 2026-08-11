@@ -44,7 +44,7 @@ internal fun EditorBottomTabBar(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(0.86f)
+        modifier = modifier.fillMaxWidth(0.92f)
     ) {
         labels.forEachIndexed { pageIndex, pageLabel ->
             val pageSelected = selectedPage == pageIndex

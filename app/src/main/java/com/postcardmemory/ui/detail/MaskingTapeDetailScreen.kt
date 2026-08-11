@@ -20,10 +20,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -44,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +60,12 @@ import com.postcardmemory.ui.components.postcardBackgroundPalette
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.SunsetGold
+
+/** 커스텀 편집기에서 무늬·색상 컨트롤 영역이 차지할 수 있는 최대 높이. 이 값으로
+ *  묶어 자체 스크롤시키면, 팔레트를 아무리 펼쳐도 위의 미리보기와 아래의 추가
+ *  버튼은 항상 화면에 남는다.
+ */
+private val MASKING_TAPE_CUSTOM_EDITOR_CONTROLS_MAX_HEIGHT = 280.dp
 
 @Composable
 fun MaskingTapePickerPanel(
@@ -153,6 +162,53 @@ fun MaskingTapePickerPanel(
             exit = shrinkVertically() + fadeOut()
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "직접 만들기",
+                    color = BrutalBlack,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    MaskingTapeCreateTile(
+                        enabled = enabled,
+                        label = "커스텀",
+                        icon = Icons.Default.Palette,
+                        onClick = { isCustomEditorExpanded = !isCustomEditorExpanded },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    MaskingTapeCreateTile(
+                        enabled = enabled,
+                        label = "사진",
+                        icon = Icons.Default.Photo,
+                        onClick = {
+                            photoPicker.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "기본 디자인",
+                    color = BrutalBlack,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -170,34 +226,6 @@ fun MaskingTapePickerPanel(
                                 modifier = Modifier.size(width = 64.dp, height = 26.dp)
                             )
                         }
-                    }
-
-                    MaskingTapeDesignTile(
-                        enabled = enabled,
-                        label = "커스텀",
-                        onClick = { isCustomEditorExpanded = !isCustomEditorExpanded }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = null
-                        )
-                    }
-
-                    MaskingTapeDesignTile(
-                        enabled = enabled,
-                        label = "사진",
-                        onClick = {
-                            photoPicker.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly
-                                )
-                            )
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Photo,
-                            contentDescription = null
-                        )
                     }
                 }
 
@@ -358,6 +386,41 @@ fun MaskingTapePickerPanel(
 }
 
 @Composable
+private fun MaskingTapeCreateTile(
+    enabled: Boolean,
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(color = SunsetGold.copy(alpha = 0.16f))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = BrutalBlack,
+            modifier = Modifier.size(18.dp)
+        )
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        Text(
+            text = label,
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 private fun MaskingTapeDesignTile(
     enabled: Boolean,
     label: String,
@@ -450,107 +513,117 @@ private fun MaskingTapeCustomEditor(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "무늬",
-            color = BrutalBlack,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Row(
+        // 무늬 선택부터 색상판까지는 세로로 길어질 수 있어 자체 스크롤
+        // 영역으로 묶는다. 위의 미리보기와 아래의 "추가" 버튼은 이
+        // 영역 밖에 있어 색을 고르는 동안에도 계속 보인다.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .heightIn(max = MASKING_TAPE_CUSTOM_EDITOR_CONTROLS_MAX_HEIGHT)
+                .verticalScroll(rememberScrollState())
         ) {
-            MaskingTapePatternKind.entries.forEach { kind ->
-                val isKindSelected = patternKind == kind
+            Text(
+                text = "무늬",
+                color = BrutalBlack,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            color = if (isKindSelected) SunsetGold else Color(0xFFF4ECDE)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                MaskingTapePatternKind.entries.forEach { kind ->
+                    val isKindSelected = patternKind == kind
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                color = if (isKindSelected) SunsetGold else Color(0xFFF4ECDE)
+                            )
+                            .clickable(enabled = enabled) { patternKind = kind }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = maskingTapePatternKindLabel(kind),
+                            color = BrutalBlack,
+                            fontSize = 11.sp,
+                            fontWeight = if (isKindSelected) FontWeight.Bold else FontWeight.Medium
                         )
-                        .clickable(enabled = enabled) { patternKind = kind }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = maskingTapePatternKindLabel(kind),
-                        color = BrutalBlack,
-                        fontSize = 11.sp,
-                        fontWeight = if (isKindSelected) FontWeight.Bold else FontWeight.Medium
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                MaskingTapeColorTargetToggle(
+                    label = "베이스 색상",
+                    selected = colorTarget == MaskingTapeCustomColorTarget.BASE,
+                    swatchColorArgb = baseColorArgb,
+                    enabled = enabled,
+                    onClick = { colorTarget = MaskingTapeCustomColorTarget.BASE },
+                    modifier = Modifier.weight(1f)
+                )
+                MaskingTapeColorTargetToggle(
+                    label = "패턴 색상",
+                    selected = colorTarget == MaskingTapeCustomColorTarget.PATTERN,
+                    swatchColorArgb = patternColorArgb,
+                    enabled = enabled,
+                    onClick = { colorTarget = MaskingTapeCustomColorTarget.PATTERN },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                postcardBackgroundPalette.forEach { swatchArgb ->
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(color = Color(swatchArgb))
+                            .clickable(enabled = enabled) {
+                                when (colorTarget) {
+                                    MaskingTapeCustomColorTarget.BASE ->
+                                        baseColorArgb = swatchArgb
+                                    MaskingTapeCustomColorTarget.PATTERN ->
+                                        patternColorArgb = swatchArgb
+                                }
+                            }
                     )
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            MaskingTapeColorTargetToggle(
-                label = "베이스 색상",
-                selected = colorTarget == MaskingTapeCustomColorTarget.BASE,
-                swatchColorArgb = baseColorArgb,
+            PostcardCustomColorPicker(
+                selectedColorArgb = when (colorTarget) {
+                    MaskingTapeCustomColorTarget.BASE -> baseColorArgb
+                    MaskingTapeCustomColorTarget.PATTERN -> patternColorArgb
+                },
                 enabled = enabled,
-                onClick = { colorTarget = MaskingTapeCustomColorTarget.BASE },
-                modifier = Modifier.weight(1f)
-            )
-            MaskingTapeColorTargetToggle(
-                label = "패턴 색상",
-                selected = colorTarget == MaskingTapeCustomColorTarget.PATTERN,
-                swatchColorArgb = patternColorArgb,
-                enabled = enabled,
-                onClick = { colorTarget = MaskingTapeCustomColorTarget.PATTERN },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            postcardBackgroundPalette.forEach { swatchArgb ->
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(color = Color(swatchArgb))
-                        .clickable(enabled = enabled) {
-                            when (colorTarget) {
-                                MaskingTapeCustomColorTarget.BASE ->
-                                    baseColorArgb = swatchArgb
-                                MaskingTapeCustomColorTarget.PATTERN ->
-                                    patternColorArgb = swatchArgb
-                            }
-                        }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        PostcardCustomColorPicker(
-            selectedColorArgb = when (colorTarget) {
-                MaskingTapeCustomColorTarget.BASE -> baseColorArgb
-                MaskingTapeCustomColorTarget.PATTERN -> patternColorArgb
-            },
-            enabled = enabled,
-            onColorSelected = { colorArgb ->
-                when (colorTarget) {
-                    MaskingTapeCustomColorTarget.BASE -> baseColorArgb = colorArgb
-                    MaskingTapeCustomColorTarget.PATTERN -> patternColorArgb = colorArgb
+                onColorSelected = { colorArgb ->
+                    when (colorTarget) {
+                        MaskingTapeCustomColorTarget.BASE -> baseColorArgb = colorArgb
+                        MaskingTapeCustomColorTarget.PATTERN -> patternColorArgb = colorArgb
+                    }
                 }
-            }
-        )
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 

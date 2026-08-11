@@ -1469,7 +1469,7 @@ fun DetailScreen(
     )
     val customizationPagerScope = rememberCoroutineScope()
     val customizationPageLabels = remember {
-        listOf("사진", "배경", "텍스트", "스티커", "마스킹테이프", "도장", "낙서")
+        listOf("사진", "배경", "텍스트", "스티커", "테이프", "도장", "낙서")
     }
     val customizationPageIcons = remember {
         listOf(
@@ -2342,9 +2342,6 @@ fun DetailScreen(
                                                 }
 
                                                 var lengthGestureActive = false
-                                                var gestureStartWidthPx = 0f
-                                                var gestureStartScale = 1f
-                                                var accumulatedDragX = 0f
 
                                                 detectDragGestures(
                                                     onDragStart = {
@@ -2366,13 +2363,6 @@ fun DetailScreen(
                                                                 tape.id
                                                             )
                                                             viewModel.recordMaskingTapeSnapshotForUndo()
-                                                            gestureStartScale =
-                                                                currentTape.scale
-                                                            gestureStartWidthPx =
-                                                                baseMaskingTapeWidthPx *
-                                                                        gestureStartScale *
-                                                                        currentTape.lengthScale
-                                                            accumulatedDragX = 0f
                                                         }
                                                     },
                                                     onDrag = { change, dragAmount ->
@@ -2380,27 +2370,94 @@ fun DetailScreen(
                                                             return@detectDragGestures
                                                         }
                                                         change.consume()
-                                                        accumulatedDragX += dragAmount.x
 
+                                                        val currentTape =
+                                                            latestPhotoMaskingTapes.find {
+                                                                it.id == tape.id
+                                                            } ?: return@detectDragGestures
+
+                                                        // 길이 조절 핸들은 CenterEnd로 배치되어
+                                                        // 폭이 늘어날 때마다 자기 위치도 함께
+                                                        // 이동한다. 매 프레임 시작점을 새로 잡지
+                                                        // 않고 항상 "현재 적용된" 값에 이번 프레임의
+                                                        // delta만 더해 clamp하므로(이동/회전
+                                                        // 제스처와 동일한 패턴), 누적값이 clamp
+                                                        // 경계를 넘어선 채 남아 방향 전환 시
+                                                        // 반응이 늦어지는 문제가 없다.
+                                                        val currentWidthPx =
+                                                            baseMaskingTapeWidthPx *
+                                                                    currentTape.scale *
+                                                                    currentTape.lengthScale
                                                         val minWidthPx =
                                                             baseMaskingTapeWidthPx *
-                                                                    gestureStartScale *
+                                                                    currentTape.scale *
                                                                     MASKING_TAPE_MIN_LENGTH_SCALE
                                                         val maxWidthPx =
                                                             baseMaskingTapeWidthPx *
-                                                                    gestureStartScale *
+                                                                    currentTape.scale *
                                                                     MASKING_TAPE_MAX_LENGTH_SCALE
                                                         val newWidthPx =
-                                                            (gestureStartWidthPx + accumulatedDragX)
+                                                            (currentWidthPx + dragAmount.x)
                                                                 .coerceIn(minWidthPx, maxWidthPx)
                                                         val newLengthScale =
                                                             newWidthPx /
-                                                                    (baseMaskingTapeWidthPx * gestureStartScale)
+                                                                    (baseMaskingTapeWidthPx * currentTape.scale)
+
+                                                        // 아직 한 번도 옮기지 않은 테이프는
+                                                        // offset이 null이라 Alignment.Center로
+                                                        // 항상 중심이 맞춰져 있고, 길이만 바뀌어도
+                                                        // 저절로 중심 기준 확장이라 손댈 필요가
+                                                        // 없다. offset이 이미 존재하는(한 번이라도
+                                                        // 옮긴) 테이프만 보정 대상이다 — 폭은
+                                                        // 오른쪽 핸들 쪽으로만 늘어나지만 화면에는
+                                                        // (offset=TopStart, size 커짐) 위에
+                                                        // rotationZ가 중심 기준으로 얹히므로,
+                                                        // 회전된 상태에서는 반대쪽(왼쪽) 끝도
+                                                        // 함께 밀려 보인다. 그 밀림만큼 offset을
+                                                        // 반대로 보정해 반대쪽 끝을 고정한다.
+                                                        val existingOffset =
+                                                            currentTape.offset
+                                                        val newOffset =
+                                                            if (existingOffset == null) {
+                                                                null
+                                                            } else {
+                                                                val widthDeltaPx =
+                                                                    newWidthPx - currentWidthPx
+                                                                val rotationRadians =
+                                                                    Math.toRadians(
+                                                                        currentTape.rotationDegrees
+                                                                            .toDouble()
+                                                                    )
+                                                                val cosRotation =
+                                                                    kotlin.math.cos(rotationRadians)
+                                                                        .toFloat()
+                                                                val sinRotation =
+                                                                    kotlin.math.sin(rotationRadians)
+                                                                        .toFloat()
+                                                                val currentSize =
+                                                                    maskingTapeSizes[tape.id]
+                                                                        ?: IntSize.Zero
+                                                                clampStickerOffset(
+                                                                    offset = Offset(
+                                                                        x = existingOffset.x +
+                                                                                (widthDeltaPx / 2f) *
+                                                                                (cosRotation - 1f),
+                                                                        y = existingOffset.y +
+                                                                                (widthDeltaPx / 2f) *
+                                                                                sinRotation
+                                                                    ),
+                                                                    postcardSize = postcardPreviewSize,
+                                                                    stickerSize = currentSize
+                                                                )
+                                                            }
 
                                                         viewModel.setPhotoMaskingTapes(
                                                             latestPhotoMaskingTapes.map {
                                                                 if (it.id == tape.id) {
-                                                                    it.copy(lengthScale = newLengthScale)
+                                                                    it.copy(
+                                                                        lengthScale = newLengthScale,
+                                                                        offset = newOffset
+                                                                    )
                                                                 } else {
                                                                     it
                                                                 }
