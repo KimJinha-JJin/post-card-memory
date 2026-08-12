@@ -1252,21 +1252,15 @@ fun DetailScreen(
             StickerEditMode.Move
         }
 
-    var maskingTapeEditMode by remember {
-        mutableStateOf(StickerEditMode.Move)
+    var maskingTapeLengthDragSnapshotTaken by remember {
+        mutableStateOf(false)
     }
-    var maskingTapeEditModeOwnerId by remember {
-        mutableStateOf<String?>(null)
+    var maskingTapeThicknessDragSnapshotTaken by remember {
+        mutableStateOf(false)
     }
-    val resolvedMaskingTapeEditMode =
-        if (
-            selectedMaskingTapeId != null &&
-            selectedMaskingTapeId == maskingTapeEditModeOwnerId
-        ) {
-            maskingTapeEditMode
-        } else {
-            StickerEditMode.Move
-        }
+    var maskingTapeRotationDragSnapshotTaken by remember {
+        mutableStateOf(false)
+    }
 
     var stickerSizes by remember {
         mutableStateOf(mapOf<String, IntSize>())
@@ -2182,12 +2176,6 @@ fun DetailScreen(
                                         !isFocusPreviewMode &&
                                         latestCustomizationPage ==
                                         MASKING_TAPE_TAB_PAGE_INDEX
-                            val perTapeEditMode =
-                                if (isMaskingTapeSelected) {
-                                    resolvedMaskingTapeEditMode
-                                } else {
-                                    StickerEditMode.Move
-                                }
                             val currentMaskingTapeOffset =
                                 tape.offset
 
@@ -2233,7 +2221,6 @@ fun DetailScreen(
                                             Modifier.pointerInput(
                                         tape.id,
                                         postcardPreviewSize,
-                                        perTapeEditMode,
                                         isFocusPreviewMode
                                     ) {
                                         if (isFocusPreviewMode) {
@@ -2265,7 +2252,11 @@ fun DetailScreen(
                                                 )
                                             }
                                             launch {
-                                                detectTransformGestures { _, pan, zoom, rotationChange ->
+                                                // 마스킹테이프는 캔버스에서 한 손가락 이동만
+                                                // 담당한다 — 크기(scale)/회전은 편집 패널
+                                                // slider로 옮겨졌다(45일차). zoom/rotationChange는
+                                                // 더 이상 반영하지 않는다.
+                                                detectTransformGestures { _, pan, _, _ ->
                                                     val currentTape =
                                                         latestPhotoMaskingTapes.find {
                                                             it.id == tape.id
@@ -2295,30 +2286,6 @@ fun DetailScreen(
                                                             flipVertical = false
                                                         )
 
-                                                    // 이동(pan)은 모드와 무관하게 항상
-                                                    // 적용한다 — "크기"/"회전" 모드는 두
-                                                    // 손가락 제스처 중 어떤 값을 반영할지만
-                                                    // 가른다(둘을 동시에 해석하려다 어느
-                                                    // 쪽도 자연스럽지 않던 문제를 명시적
-                                                    // 선택으로 해결).
-                                                    val newScale =
-                                                        if (perTapeEditMode == StickerEditMode.Scale) {
-                                                            (currentTape.scale * zoom)
-                                                                .coerceIn(0.5f, 3f)
-                                                        } else {
-                                                            currentTape.scale
-                                                        }
-
-                                                    val newRotation =
-                                                        if (perTapeEditMode == StickerEditMode.Rotate) {
-                                                            normalizeStickerRotation(
-                                                                currentTape.rotationDegrees +
-                                                                        rotationChange
-                                                            )
-                                                        } else {
-                                                            currentTape.rotationDegrees
-                                                        }
-
                                                     val newOffset =
                                                         clampStickerOffset(
                                                             offset = oldOffset + parentDelta,
@@ -2330,11 +2297,7 @@ fun DetailScreen(
                                                     viewModel.setPhotoMaskingTapes(
                                                         latestPhotoMaskingTapes.map {
                                                             if (it.id == tape.id) {
-                                                                it.copy(
-                                                                    offset = newOffset,
-                                                                    scale = newScale,
-                                                                    rotationDegrees = newRotation
-                                                                )
+                                                                it.copy(offset = newOffset)
                                                             } else {
                                                                 it
                                                             }
@@ -5008,13 +4971,11 @@ fun DetailScreen(
                                             }
                                         )
                                     },
-                                    editMode = resolvedMaskingTapeEditMode,
-                                    onEditModeSelected = { mode ->
-                                        maskingTapeEditMode = mode
-                                        maskingTapeEditModeOwnerId = selectedMaskingTapeId
-                                    },
-                                    onLengthScaleSelected = { id, lengthScale ->
-                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                    onLengthScaleChanged = { id, lengthScale ->
+                                        if (!maskingTapeLengthDragSnapshotTaken) {
+                                            viewModel.recordMaskingTapeSnapshotForUndo()
+                                            maskingTapeLengthDragSnapshotTaken = true
+                                        }
                                         viewModel.setPhotoMaskingTapes(
                                             photoMaskingTapes.map {
                                                 if (it.id == id) {
@@ -5025,8 +4986,14 @@ fun DetailScreen(
                                             }
                                         )
                                     },
-                                    onThicknessScaleSelected = { id, thicknessScale ->
-                                        viewModel.recordMaskingTapeSnapshotForUndo()
+                                    onLengthScaleChangeFinished = {
+                                        maskingTapeLengthDragSnapshotTaken = false
+                                    },
+                                    onThicknessScaleChanged = { id, thicknessScale ->
+                                        if (!maskingTapeThicknessDragSnapshotTaken) {
+                                            viewModel.recordMaskingTapeSnapshotForUndo()
+                                            maskingTapeThicknessDragSnapshotTaken = true
+                                        }
                                         viewModel.setPhotoMaskingTapes(
                                             photoMaskingTapes.map {
                                                 if (it.id == id) {
@@ -5036,6 +5003,27 @@ fun DetailScreen(
                                                 }
                                             }
                                         )
+                                    },
+                                    onThicknessScaleChangeFinished = {
+                                        maskingTapeThicknessDragSnapshotTaken = false
+                                    },
+                                    onRotationChanged = { id, rotationDegrees ->
+                                        if (!maskingTapeRotationDragSnapshotTaken) {
+                                            viewModel.recordMaskingTapeSnapshotForUndo()
+                                            maskingTapeRotationDragSnapshotTaken = true
+                                        }
+                                        viewModel.setPhotoMaskingTapes(
+                                            photoMaskingTapes.map {
+                                                if (it.id == id) {
+                                                    it.copy(rotationDegrees = rotationDegrees)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onRotationChangeFinished = {
+                                        maskingTapeRotationDragSnapshotTaken = false
                                     },
                                     onUndoMaskingTape = {
                                         viewModel.undoMaskingTapeChange()

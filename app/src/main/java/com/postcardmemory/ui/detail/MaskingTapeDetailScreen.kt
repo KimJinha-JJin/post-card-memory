@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.MaskingTapeContent
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
@@ -60,6 +61,7 @@ import com.postcardmemory.ui.components.postcardBackgroundPalette
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.SunsetGold
+import kotlin.math.roundToInt
 
 /** 커스텀 편집기에서 무늬·색상 컨트롤 영역이 차지할 수 있는 최대 높이. 이 값으로
  *  묶어 자체 스크롤시키면, 팔레트를 아무리 펼쳐도 위의 미리보기와 아래의 추가
@@ -82,10 +84,12 @@ internal fun MaskingTapePickerPanel(
     onDeleteMaskingTape: (String) -> Unit,
     onDuplicateMaskingTape: (String) -> Unit,
     onEdgeStyleSelected: (String, MaskingTapeEdgeStyle) -> Unit,
-    editMode: StickerEditMode,
-    onEditModeSelected: (StickerEditMode) -> Unit,
-    onLengthScaleSelected: (String, Float) -> Unit,
-    onThicknessScaleSelected: (String, Float) -> Unit,
+    onLengthScaleChanged: (String, Float) -> Unit,
+    onLengthScaleChangeFinished: () -> Unit,
+    onThicknessScaleChanged: (String, Float) -> Unit,
+    onThicknessScaleChangeFinished: () -> Unit,
+    onRotationChanged: (String, Float) -> Unit,
+    onRotationChangeFinished: () -> Unit,
     onUndoMaskingTape: () -> Unit,
     onRedoMaskingTape: () -> Unit,
     canUndoMaskingTape: Boolean,
@@ -365,133 +369,40 @@ internal fun MaskingTapePickerPanel(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "손가락 조작",
-            color = BrutalBlack,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+        MaskingTapeAdjustSlider(
+            label = "길이",
+            value = selectedTape.lengthScale,
+            valueRange = MASKING_TAPE_MIN_LENGTH_SCALE..MASKING_TAPE_MAX_LENGTH_SCALE,
+            enabled = enabled,
+            onValueChange = { onLengthScaleChanged(selectedTape.id, it) },
+            onValueChangeFinished = onLengthScaleChangeFinished,
+            modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "이동은 언제나 가능해. 두 손가락 제스처가 크기/회전 중 뭘 바꿀지만 골라줘.",
-            color = BrutalBlack,
-            fontSize = 11.sp
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf(
-                StickerEditMode.Move to "이동만",
-                StickerEditMode.Scale to "크기",
-                StickerEditMode.Rotate to "회전"
-            ).forEach { (mode, label) ->
-                val isModeSelected = editMode == mode
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            color = if (isModeSelected) SunsetGold else Color(0xFFF4ECDE)
-                        )
-                        .clickable(enabled = enabled) {
-                            onEditModeSelected(mode)
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = label,
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "길이",
-            color = BrutalBlack,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+        MaskingTapeAdjustSlider(
+            label = "굵기",
+            value = selectedTape.thicknessScale,
+            valueRange = MASKING_TAPE_MIN_THICKNESS_SCALE..MASKING_TAPE_MAX_THICKNESS_SCALE,
+            enabled = enabled,
+            onValueChange = { onThicknessScaleChanged(selectedTape.id, it) },
+            onValueChangeFinished = onThicknessScaleChangeFinished,
+            modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            MASKING_TAPE_LENGTH_SCALE_STEPS.zip(
-                listOf("짧게", "보통", "길게", "아주 길게")
-            ).forEach { (step, label) ->
-                val isStepSelected = selectedTape.lengthScale == step
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            color = if (isStepSelected) SunsetGold else Color(0xFFF4ECDE)
-                        )
-                        .clickable(enabled = enabled) {
-                            onLengthScaleSelected(selectedTape.id, step)
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = label,
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight = if (isStepSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "굵기",
-            color = BrutalBlack,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+        MaskingTapeAdjustSlider(
+            label = "회전",
+            value = selectedTape.rotationDegrees,
+            valueRange = MASKING_TAPE_MIN_ROTATION_DEGREES..MASKING_TAPE_MAX_ROTATION_DEGREES,
+            valueLabel = "${selectedTape.rotationDegrees.roundToInt()}°",
+            enabled = enabled,
+            onValueChange = { onRotationChanged(selectedTape.id, it) },
+            onValueChangeFinished = onRotationChangeFinished,
+            modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            MASKING_TAPE_THICKNESS_SCALE_STEPS.zip(
-                listOf("얇게", "보통", "굵게", "아주 굵게")
-            ).forEach { (step, label) ->
-                val isStepSelected = selectedTape.thicknessScale == step
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            color = if (isStepSelected) SunsetGold else Color(0xFFF4ECDE)
-                        )
-                        .clickable(enabled = enabled) {
-                            onThicknessScaleSelected(selectedTape.id, step)
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = label,
-                        color = BrutalBlack,
-                        fontSize = 12.sp,
-                        fontWeight = if (isStepSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -516,6 +427,55 @@ internal fun MaskingTapePickerPanel(
                 modifier = Modifier.weight(1f)
             )
         }
+    }
+}
+
+/**
+ * 길이·굵기·회전이 공유하는 편집 패널 slider 한 줄. 라벨과(있다면) 보조
+ * 값 표시를 위에 두고 그 아래 공용 EditorSlider를 그린다. 숫자 입력창은
+ * 만들지 않는다 — 사용자는 결과를 보고 조절한다(작업지시서 14/19절).
+ */
+@Composable
+private fun MaskingTapeAdjustSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    enabled: Boolean,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+    valueLabel: String? = null
+) {
+    Column(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                color = BrutalBlack,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            if (valueLabel != null) {
+                Text(
+                    text = valueLabel,
+                    color = BrutalBlack,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        EditorSlider(
+            value = value,
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            valueRange = valueRange,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 

@@ -36,13 +36,13 @@ const val MASKING_TAPE_MAX_LENGTH_SCALE = 3f
 const val MASKING_TAPE_MIN_THICKNESS_SCALE = 0.5f
 const val MASKING_TAPE_MAX_THICKNESS_SCALE = 3f
 
-/** 길이 고정값 단계. 자유 드래그 대신 확정된 값 중에서만 고른다. */
-val MASKING_TAPE_LENGTH_SCALE_STEPS: List<Float> =
-    listOf(MASKING_TAPE_MIN_LENGTH_SCALE, 1f, 2f, MASKING_TAPE_MAX_LENGTH_SCALE)
-
-/** 굵기 고정값 단계. 자유 드래그 대신 확정된 값 중에서만 고른다. */
-val MASKING_TAPE_THICKNESS_SCALE_STEPS: List<Float> =
-    listOf(MASKING_TAPE_MIN_THICKNESS_SCALE, 1f, 2f, MASKING_TAPE_MAX_THICKNESS_SCALE)
+/**
+ * 회전 slider의 허용 범위. 기존 두 손가락 회전 제스처가 정규화하던 범위
+ * (normalizeStickerRotation의 (-180, 180])와 동일해, 패널로 옮긴 뒤에도
+ * 저장값의 의미가 달라지지 않는다.
+ */
+const val MASKING_TAPE_MIN_ROTATION_DEGREES = -180f
+const val MASKING_TAPE_MAX_ROTATION_DEGREES = 180f
 
 /**
  * 찢긴/삐뚤빼뚤한 가장자리를 표현할 때 쓰는 고정 좌표. 매 프레임 또는

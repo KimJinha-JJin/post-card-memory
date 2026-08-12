@@ -133,6 +133,66 @@ class MaskingTapeItemTest {
         assertEquals(tape, parsed)
     }
 
+    // ---- 45일차: scale UI 제거 후에도 기존 scale/lengthScale/thicknessScale
+    // 값이 그대로 라운드트립되는지(작업지시서 28절) ----
+
+    @Test
+    fun serialize_thenParse_preservesExistingScaleAlongsideLengthAndThickness() {
+        // 44일차 이전에 pinch로 scale을 조절해 저장한 엽서를 시뮬레이션한다.
+        // scale UI가 사라져도 이 값은 렌더링·저장 양쪽에서 그대로 유지되어야 한다.
+        val tape = sampleMaskingTape().copy(
+            scale = 1.5f,
+            lengthScale = 2f,
+            thicknessScale = 0.8f
+        )
+
+        val parsed = deserializeMaskingTapeItem(tape.serialize())
+
+        assertEquals(tape, parsed)
+    }
+
+    @Test
+    fun serialize_thenParse_roundTripsArbitraryLengthScale() {
+        val tape = sampleMaskingTape().copy(lengthScale = 1.37f)
+
+        val parsed = deserializeMaskingTapeItem(tape.serialize())
+
+        assertEquals(tape, parsed)
+    }
+
+    @Test
+    fun serialize_thenParse_roundTripsArbitraryThicknessScale() {
+        val tape = sampleMaskingTape().copy(thicknessScale = 2.42f)
+
+        val parsed = deserializeMaskingTapeItem(tape.serialize())
+
+        assertEquals(tape, parsed)
+    }
+
+    @Test
+    fun serialize_thenParse_roundTripsAllLegacyLengthScaleSteps() {
+        // slider 도입 전 4단계 버튼이 저장하던 값들 — slider로 바뀌어도
+        // 이미 저장된 이 값들은 반올림되거나 재조정되지 않아야 한다.
+        listOf(0.5f, 1f, 2f, 3f).forEach { step ->
+            val tape = sampleMaskingTape().copy(lengthScale = step)
+
+            val parsed = deserializeMaskingTapeItem(tape.serialize())
+
+            assertEquals(step, parsed?.lengthScale)
+        }
+    }
+
+    @Test
+    fun serialize_thenParse_roundTripsAllLegacyThicknessScaleSteps() {
+        listOf(0.5f, 1f, 2f, 3f).forEach { step ->
+            val tape = sampleMaskingTape().copy(thicknessScale = step)
+
+            val parsed = deserializeMaskingTapeItem(tape.serialize())
+
+            assertEquals(step, parsed?.thicknessScale)
+        }
+    }
+
     @Test
     fun deserialize_lineWithoutThicknessScale_defaultsToOne() {
         // thicknessScale 추가 이전, 12개 필드(photoUri까지)만 있던 라인.
