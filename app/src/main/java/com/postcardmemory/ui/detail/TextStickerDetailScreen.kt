@@ -1,5 +1,10 @@
 package com.postcardmemory.ui.detail
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -44,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
+import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
@@ -74,6 +81,10 @@ fun TextStickerPickerPanel(
     onAddTextSticker: (text: String, colorArgb: Long) -> Unit,
     onColorSelected: (id: String, colorArgb: Long) -> Unit,
     onOutlineColorSelected: (id: String, outlineColorArgb: Long) -> Unit,
+    onEnterCustomColor: () -> Unit,
+    onCustomColorSelected: (id: String, colorArgb: Long) -> Unit,
+    onEnterCustomOutlineColor: () -> Unit,
+    onCustomOutlineColorSelected: (id: String, outlineColorArgb: Long) -> Unit,
     onDeleteTextSticker: (String) -> Unit,
     onUndoTextSticker: () -> Unit,
     onRedoTextSticker: () -> Unit,
@@ -83,6 +94,8 @@ fun TextStickerPickerPanel(
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var fillColorCustomExpanded by remember { mutableStateOf(false) }
+    var outlineColorCustomExpanded by remember { mutableStateOf(false) }
 
     val selectedTextSticker =
         textStickers.find { it.id == selectedTextStickerId }
@@ -220,108 +233,47 @@ fun TextStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = "글자색",
-                color = BrutalBlack,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                textStickerColors.forEach { color ->
-                    val colorArgb = color.toArgb().toLong() and 0xFFFFFFFFL
-                    val isColorSelected = selectedTextSticker.colorArgb == colorArgb
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable(enabled = enabled) {
-                            onColorSelected(selectedTextSticker.id, colorArgb)
-                        }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .background(
-                                    color = color,
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = BrutalBlack.copy(alpha = 0.35f),
-                                    shape = CircleShape
-                                )
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .background(
-                                    color = if (isColorSelected) SunsetGold else Color.Transparent,
-                                    shape = CircleShape
-                                )
-                        )
+            TextStickerColorPickerSection(
+                title = "글자색",
+                presetColors = textStickerColors,
+                selectedColorArgb = selectedTextSticker.colorArgb,
+                enabled = enabled,
+                customPickerExpanded = fillColorCustomExpanded,
+                onPresetSelected = { colorArgb ->
+                    onColorSelected(selectedTextSticker.id, colorArgb)
+                },
+                onToggleCustomPicker = {
+                    if (!fillColorCustomExpanded) {
+                        onEnterCustomColor()
                     }
+                    fillColorCustomExpanded = !fillColorCustomExpanded
+                },
+                onCustomColorSelected = { colorArgb ->
+                    onCustomColorSelected(selectedTextSticker.id, colorArgb)
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text(
-                text = "테두리색",
-                color = BrutalBlack,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                textStickerOutlineColors.forEach { color ->
-                    val outlineColorArgb = color.toArgb().toLong() and 0xFFFFFFFFL
-                    val isOutlineColorSelected =
-                        selectedTextSticker.outlineColorArgb == outlineColorArgb
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable(enabled = enabled) {
-                            onOutlineColorSelected(selectedTextSticker.id, outlineColorArgb)
-                        }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .background(
-                                    color = color,
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = BrutalBlack.copy(alpha = 0.35f),
-                                    shape = CircleShape
-                                )
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .background(
-                                    color = if (isOutlineColorSelected) SunsetGold else Color.Transparent,
-                                    shape = CircleShape
-                                )
-                        )
+            TextStickerColorPickerSection(
+                title = "테두리색",
+                presetColors = textStickerOutlineColors,
+                selectedColorArgb = selectedTextSticker.outlineColorArgb,
+                enabled = enabled,
+                customPickerExpanded = outlineColorCustomExpanded,
+                onPresetSelected = { outlineColorArgb ->
+                    onOutlineColorSelected(selectedTextSticker.id, outlineColorArgb)
+                },
+                onToggleCustomPicker = {
+                    if (!outlineColorCustomExpanded) {
+                        onEnterCustomOutlineColor()
                     }
+                    outlineColorCustomExpanded = !outlineColorCustomExpanded
+                },
+                onCustomColorSelected = { outlineColorArgb ->
+                    onCustomOutlineColorSelected(selectedTextSticker.id, outlineColorArgb)
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -358,6 +310,145 @@ fun TextStickerPickerPanel(
                 showAddDialog = false
             }
         )
+    }
+}
+
+/**
+ * 프리셋 스와치 옆에 "기타 색상" 진입점을 붙이고, 눌렀을 때 기존 배경색
+ * 편집에서 쓰던 PostcardCustomColorPicker(hue/채도-명도)를 그대로 펼쳐서
+ * 보여준다. 글자색·테두리색 두 곳에서 동일한 구조를 쓰므로 하나로 묶는다.
+ *
+ * 프리셋에 없는 색이 선택된 상태라면 진입점 스와치 자체가 그 색을 보여줘서
+ * 사용자가 "지금 기타 색상이 적용 중"임을 알 수 있게 한다.
+ */
+@Composable
+private fun TextStickerColorPickerSection(
+    title: String,
+    presetColors: List<Color>,
+    selectedColorArgb: Long,
+    enabled: Boolean,
+    customPickerExpanded: Boolean,
+    onPresetSelected: (Long) -> Unit,
+    onToggleCustomPicker: () -> Unit,
+    onCustomColorSelected: (Long) -> Unit
+) {
+    val isCustomColorActive =
+        presetColors.none { preset ->
+            (preset.toArgb().toLong() and 0xFFFFFFFFL) == selectedColorArgb
+        }
+
+    Text(
+        text = title,
+        color = BrutalBlack,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        presetColors.forEach { color ->
+            val colorArgb = color.toArgb().toLong() and 0xFFFFFFFFL
+            val isColorSelected = selectedColorArgb == colorArgb
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.clickable(enabled = enabled) {
+                    onPresetSelected(colorArgb)
+                }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(
+                            color = color,
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = BrutalBlack.copy(alpha = 0.35f),
+                            shape = CircleShape
+                        )
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .background(
+                            color = if (isColorSelected) SunsetGold else Color.Transparent,
+                            shape = CircleShape
+                        )
+                )
+            }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable(enabled = enabled) {
+                onToggleCustomPicker()
+            }
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .background(
+                        color = if (isCustomColorActive) Color(selectedColorArgb) else PaperField,
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = BrutalBlack.copy(alpha = 0.35f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!isCustomColorActive) {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = "기타 색상",
+                        tint = GraphiteAccent,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .background(
+                        color = if (isCustomColorActive) SunsetGold else Color.Transparent,
+                        shape = CircleShape
+                    )
+            )
+        }
+    }
+
+    AnimatedVisibility(
+        visible = customPickerExpanded,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            PostcardCustomColorPicker(
+                selectedColorArgb = selectedColorArgb,
+                enabled = enabled,
+                onColorSelected = onCustomColorSelected,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 

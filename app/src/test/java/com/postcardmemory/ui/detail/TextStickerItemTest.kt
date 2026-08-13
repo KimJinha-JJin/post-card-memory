@@ -106,4 +106,21 @@ class TextStickerItemTest {
 
         assertEquals(DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB, parsed?.outlineColorArgb)
     }
+
+    // ---- "기타 색상"으로 자유롭게 고른, 프리셋에 없는 임의 ARGB 값 ----
+
+    @Test
+    fun serialize_thenParse_roundTripsArbitraryFreePickedColors() {
+        val sticker = sampleTextSticker()
+            .copy(
+                colorArgb = 0xFF8A3F64L,
+                outlineColorArgb = 0xFF247C74L
+            )
+
+        val parsed = deserializeTextStickerItem(sticker.serialize())
+
+        assertEquals(sticker, parsed)
+        assertEquals(0xFF8A3F64L, parsed?.colorArgb)
+        assertEquals(0xFF247C74L, parsed?.outlineColorArgb)
+    }
 }

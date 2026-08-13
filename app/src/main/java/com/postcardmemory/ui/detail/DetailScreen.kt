@@ -4876,6 +4876,34 @@ fun DetailScreen(
                                             }
                                         )
                                     },
+                                    onEnterCustomColor = {
+                                        viewModel.recordTextStickerSnapshotForUndo()
+                                    },
+                                    onCustomColorSelected = { id, colorArgb ->
+                                        viewModel.setTextStickers(
+                                            textStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(colorArgb = colorArgb)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onEnterCustomOutlineColor = {
+                                        viewModel.recordTextStickerSnapshotForUndo()
+                                    },
+                                    onCustomOutlineColorSelected = { id, outlineColorArgb ->
+                                        viewModel.setTextStickers(
+                                            textStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(outlineColorArgb = outlineColorArgb)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
                                     onDeleteTextSticker = { id ->
                                         viewModel.recordTextStickerSnapshotForUndo()
                                         val remaining = textStickers.filter { it.id != id }

@@ -467,7 +467,7 @@ fun PostcardCustomColorPicker(
         )
 
         Text(
-            text = "색상판을 눌러서 원하는 배경색을 골라봐.",
+            text = "색상판을 눌러서 원하는 색을 골라봐.",
             color = BrutalBlack,
             fontSize = 13.sp
         )
