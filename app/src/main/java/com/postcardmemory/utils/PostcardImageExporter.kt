@@ -25,6 +25,7 @@ import androidx.exifinterface.media.ExifInterface
 import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.PostcardDateFormat
+import com.postcardmemory.ui.detail.DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB
 import com.postcardmemory.ui.detail.MASKING_TAPE_DOT_RADIUS_RATIO
 import com.postcardmemory.ui.detail.MASKING_TAPE_GRID_LINE_WIDTH_RATIO
 import com.postcardmemory.ui.detail.MASKING_TAPE_HEART_SIZE_RATIO
@@ -103,7 +104,8 @@ object PostcardImageExporter {
         val normalizedY: Float,
         val fontSizeRatio: Float,
         val rotationDegrees: Float = 0f,
-        val colorArgb: Long
+        val colorArgb: Long,
+        val outlineColorArgb: Long = DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB
     )
 
     /**
@@ -1077,7 +1079,7 @@ object PostcardImageExporter {
                 strokeWidth = strokeWidthPx
                 strokeJoin = Paint.Join.ROUND
                 strokeMiter = 2f
-                color = Color.WHITE
+                color = textStickerOverlay.outlineColorArgb.toInt()
             }
 
         val originX = left - textBounds.left + strokeWidthPx / 2f

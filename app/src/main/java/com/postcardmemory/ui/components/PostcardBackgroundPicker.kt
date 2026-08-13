@@ -76,7 +76,8 @@ enum class PostcardBackgroundPattern(
     WAVES("물결무늬", "〜"),
     GRID("격자무늬", "#"),
     CROSSHATCH("교차무늬", "▨"),
-    SPECKLE("은은한 입자", "░")
+    SPECKLE("은은한 입자", "░"),
+    HEISEI("잔꽃무늬", "❀")
 }
 
 @Composable

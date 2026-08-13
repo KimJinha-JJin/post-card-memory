@@ -643,6 +643,39 @@ class PostcardOverlayExportLogicTest {
         assertEquals("SUMMER", overlays.first().text)
     }
 
+    @Test
+    fun createTextStickerOverlaysForExport_carriesOutlineColorFromItem() {
+        val sticker =
+            textSticker()
+                .copy(id = "outlined", outlineColorArgb = 0xFFD9C7F5L)
+
+        val overlays = createTextStickerOverlaysForExport(
+            textStickers = listOf(sticker),
+            postcardSize = postcard,
+            textStickerSizes = mapOf("outlined" to textSticker100),
+            baseFontSizePx = 64f
+        )
+
+        assertEquals(1, overlays.size)
+        assertEquals(0xFFD9C7F5L, overlays.first().outlineColorArgb)
+    }
+
+    @Test
+    fun createTextStickerOverlay_defaultOutlineColorIsWhite() {
+        val overlay = createTextStickerOverlayForExport(
+            text = "SUMMER",
+            colorArgb = 0xFF112233L,
+            rotationDegrees = 0f,
+            textStickerOffset = Offset(0f, 0f),
+            postcardSize = postcard,
+            textStickerSize = textSticker100,
+            fontSizePx = 40f
+        )
+
+        requireNotNull(overlay)
+        assertEquals(DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB, overlay.outlineColorArgb)
+    }
+
     // ---- createMaskingTapeOverlayForExport/createMaskingTapeOverlaysForExport ----
     // MaskingTapeItem도 Uri를 다루지 않아 도장·텍스트 스티커와 마찬가지로 순수 JUnit에서 검증 가능하다.
 

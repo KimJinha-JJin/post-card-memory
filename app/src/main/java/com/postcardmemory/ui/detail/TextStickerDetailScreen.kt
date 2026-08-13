@@ -55,6 +55,7 @@ import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.textStickerColors
+import com.postcardmemory.ui.theme.textStickerOutlineColors
 
 /** 텍스트 스티커 문구의 최대 길이. surrogate pair를 자르지 않도록 잘라내지 않고, 초과분은 아예 반영하지 않는다. */
 const val TEXT_STICKER_MAX_LENGTH = 50
@@ -72,6 +73,7 @@ fun TextStickerPickerPanel(
     onSelectTextSticker: (String) -> Unit,
     onAddTextSticker: (text: String, colorArgb: Long) -> Unit,
     onColorSelected: (id: String, colorArgb: Long) -> Unit,
+    onOutlineColorSelected: (id: String, outlineColorArgb: Long) -> Unit,
     onDeleteTextSticker: (String) -> Unit,
     onUndoTextSticker: () -> Unit,
     onRedoTextSticker: () -> Unit,
@@ -261,6 +263,59 @@ fun TextStickerPickerPanel(
                                 .size(5.dp)
                                 .background(
                                     color = if (isColorSelected) SunsetGold else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "테두리색",
+                color = BrutalBlack,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                textStickerOutlineColors.forEach { color ->
+                    val outlineColorArgb = color.toArgb().toLong() and 0xFFFFFFFFL
+                    val isOutlineColorSelected =
+                        selectedTextSticker.outlineColorArgb == outlineColorArgb
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable(enabled = enabled) {
+                            onOutlineColorSelected(selectedTextSticker.id, outlineColorArgb)
+                        }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .background(
+                                    color = color,
+                                    shape = CircleShape
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = BrutalBlack.copy(alpha = 0.35f),
+                                    shape = CircleShape
+                                )
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .background(
+                                    color = if (isOutlineColorSelected) SunsetGold else Color.Transparent,
                                     shape = CircleShape
                                 )
                         )

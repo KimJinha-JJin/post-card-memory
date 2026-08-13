@@ -5151,7 +5151,8 @@ class DetailViewModel @Inject constructor(
             "WAVES",
             "GRID",
             "CROSSHATCH",
-            "SPECKLE" -> backgroundPattern
+            "SPECKLE",
+            "HEISEI" -> backgroundPattern
 
             else -> "NONE"
         }

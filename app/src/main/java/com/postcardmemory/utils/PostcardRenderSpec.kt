@@ -24,9 +24,11 @@ import androidx.exifinterface.media.ExifInterface
 import com.postcardmemory.ui.components.PostcardDateFormat
 import java.io.File
 import java.io.IOException
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.random.Random
 
 object PostcardRenderSpec {
@@ -41,6 +43,7 @@ object PostcardRenderSpec {
 
     private const val SPECKLE_PATTERN_SEED = 20240704L
     private const val SPECKLE_COUNT = 900
+    private const val HEISEI_PATTERN_SEED = 19990615L
     private const val STAMP_BASE_PHOTO_SIZE = 1000f
     private const val STAMP_PHOTO_ZONE_CENTER_Y = 802.5f
     private const val POLAROID_ANCHOR_X = 1024f
@@ -883,6 +886,7 @@ object PostcardRenderSpec {
             "GRID" -> drawGridPattern(canvas, patternColor, density)
             "CROSSHATCH" -> drawCrosshatchPattern(canvas, patternColor, density)
             "SPECKLE" -> drawSpecklePattern(canvas, patternColor, density)
+            "HEISEI" -> drawHeiseiPattern(canvas, patternColor, density)
         }
     }
 
@@ -1068,6 +1072,54 @@ object PostcardRenderSpec {
                 paint
             )
         }
+    }
+
+    /** 헤이세이풍 편지지처럼, 살짝 흩뿌린 잔꽃 실루엣을 흐리게 반복한다. */
+    private fun drawHeiseiPattern(
+        canvas: Canvas,
+        color: Int,
+        density: Float = 1f
+    ) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.FILL
+            }
+        val cellSize = 300f / density
+        val horizontalCount = (LOGICAL_SIZE / cellSize).toInt() + 3
+        val verticalCount = (LOGICAL_SIZE / cellSize).toInt() + 3
+        val random = Random(HEISEI_PATTERN_SEED)
+
+        for (row in -1..verticalCount) {
+            for (column in -1..horizontalCount) {
+                val jitterX = (random.nextFloat() - 0.5f) * cellSize * 0.5f
+                val jitterY = (random.nextFloat() - 0.5f) * cellSize * 0.5f
+                val centerX = column * cellSize + cellSize / 2f + jitterX
+                val centerY = row * cellSize + cellSize / 2f + jitterY
+
+                drawTinyFlower(canvas, centerX, centerY, paint)
+            }
+        }
+    }
+
+    private fun drawTinyFlower(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        paint: Paint
+    ) {
+        val petalRadius = 7f
+        val petalDistance = 9f
+
+        for (petalIndex in 0 until 5) {
+            val angle = Math.toRadians((petalIndex * 72f).toDouble())
+            val petalX = centerX + (petalDistance * cos(angle)).toFloat()
+            val petalY = centerY + (petalDistance * sin(angle)).toFloat()
+
+            canvas.drawCircle(petalX, petalY, petalRadius, paint)
+        }
+
+        canvas.drawCircle(centerX, centerY, petalRadius * 0.7f, paint)
     }
 
     private fun drawStampPhoto(

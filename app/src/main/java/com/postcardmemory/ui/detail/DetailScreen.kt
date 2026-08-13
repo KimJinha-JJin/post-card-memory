@@ -764,7 +764,8 @@ internal fun createTextStickerOverlayForExport(
     textStickerOffset: Offset?,
     postcardSize: IntSize,
     textStickerSize: IntSize,
-    fontSizePx: Float
+    fontSizePx: Float,
+    outlineColorArgb: Long = DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB
 ): PostcardImageExporter.TextStickerOverlay? {
     if (
         postcardSize.width <= 0 ||
@@ -801,7 +802,8 @@ internal fun createTextStickerOverlayForExport(
                     postcardSize.height.toFloat())
                 .coerceIn(0f, 1f),
         fontSizeRatio =
-            fontSizePx / postcardSize.width.toFloat()
+            fontSizePx / postcardSize.width.toFloat(),
+        outlineColorArgb = outlineColorArgb
     )
 }
 
@@ -836,7 +838,8 @@ internal fun createTextStickerOverlaysForExport(
             textStickerOffset = textSticker.offset,
             postcardSize = postcardSize,
             textStickerSize = size,
-            fontSizePx = baseFontSizePx * textSticker.scale
+            fontSizePx = baseFontSizePx * textSticker.scale,
+            outlineColorArgb = textSticker.outlineColorArgb
         )
     }
 }
@@ -3526,7 +3529,8 @@ fun DetailScreen(
                                     colorArgb = textSticker.colorArgb,
                                     fontSizeSp =
                                         TEXT_STICKER_BASE_FONT_SIZE_SP *
-                                                textSticker.scale
+                                                textSticker.scale,
+                                    outlineColorArgb = textSticker.outlineColorArgb
                                 )
                             }
                         }
@@ -4854,6 +4858,18 @@ fun DetailScreen(
                                             textStickers.map {
                                                 if (it.id == id) {
                                                     it.copy(colorArgb = colorArgb)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onOutlineColorSelected = { id, outlineColorArgb ->
+                                        viewModel.recordTextStickerSnapshotForUndo()
+                                        viewModel.setTextStickers(
+                                            textStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(outlineColorArgb = outlineColorArgb)
                                                 } else {
                                                     it
                                                 }

@@ -82,4 +82,28 @@ class TextStickerItemTest {
 
         assertNull(deserializeTextStickerItem(corrupted))
     }
+
+    // ---- 테두리색(outlineColorArgb) ----
+
+    @Test
+    fun serialize_thenParse_roundTripsOutlineColor() {
+        val sticker = sampleTextSticker().copy(outlineColorArgb = 0xFFD9C7F5L)
+
+        val parsed = deserializeTextStickerItem(sticker.serialize())
+
+        assertEquals(0xFFD9C7F5L, parsed?.outlineColorArgb)
+        assertEquals(sticker, parsed)
+    }
+
+    @Test
+    fun parse_legacyLineWithoutOutlineColor_fallsBackToWhite() {
+        // outlineColorArgb 필드가 없던 구버전 저장 라인(7개 필드)을 흉내낸다.
+        val legacyLine =
+            listOf("text-sticker-1", "SUMMER!", "~", "~", "1.0", "0.0", "4283782485")
+                .joinToString("\t")
+
+        val parsed = deserializeTextStickerItem(legacyLine)
+
+        assertEquals(DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB, parsed?.outlineColorArgb)
+    }
 }

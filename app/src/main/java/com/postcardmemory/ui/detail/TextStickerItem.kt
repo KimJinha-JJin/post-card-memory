@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import java.util.UUID
 
 private const val DEFAULT_TEXT_STICKER_COLOR_ARGB = 0xFF252525L
+const val DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB = 0xFFFFFFFFL
 
 /**
  * 사용자가 입력한 문자열을 그대로 붙이는 텍스트 스티커. PostcardSealItem과
@@ -17,7 +18,8 @@ data class TextStickerItem(
     val offset: Offset? = null,
     val scale: Float = 1f,
     val rotationDegrees: Float = 0f,
-    val colorArgb: Long = DEFAULT_TEXT_STICKER_COLOR_ARGB
+    val colorArgb: Long = DEFAULT_TEXT_STICKER_COLOR_ARGB,
+    val outlineColorArgb: Long = DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB
 )
 
 /**
@@ -34,7 +36,8 @@ fun TextStickerItem.serialize(): String =
         offset?.y?.toString() ?: "~",
         scale.toString(),
         rotationDegrees.toString(),
-        colorArgb.toString()
+        colorArgb.toString(),
+        outlineColorArgb.toString()
     ).joinToString("\t")
 
 fun deserializeTextStickerItem(
@@ -56,7 +59,9 @@ fun deserializeTextStickerItem(
             },
             scale = p[4].toFloat(),
             rotationDegrees = p[5].toFloat(),
-            colorArgb = p[6].toLong()
+            colorArgb = p[6].toLong(),
+            outlineColorArgb = p.getOrNull(7)?.toLongOrNull()
+                ?: DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB
         )
     }.getOrNull()
 }

@@ -92,3 +92,19 @@ val textStickerColors = listOf(
     BrutalMint,
     BrutalPink
 )
+
+/*
+ * 텍스트 스티커 테두리색 — 젤리롤펜/데코펜으로 한 번 더 두른 느낌의
+ * 소수 팔레트. 기본값(흰색)을 항상 첫 번째로 둔다.
+ */
+val TextStickerOutlineWhite = Color(0xFFFFFFFF)
+val TextStickerOutlineLavender = Color(0xFFD9C7F5)
+
+val textStickerOutlineColors = listOf(
+    TextStickerOutlineWhite,
+    BrutalPink,
+    TextStickerOutlineLavender,
+    BrutalMint,
+    BrutalBlue,
+    BrutalYellow
+)
