@@ -32,8 +32,8 @@ data class PostcardDeletionResult(
 }
 
 /**
- * 엽서 한 장이 소유하는 자산(기본 이미지, 배경 이미지, 스티커·도장 확정
- * 상태, 편집 초안 및 초안 전용 누끼 디렉터리(2일차), 확정 누끼 디렉터리,
+ * 엽서 한 장이 소유하는 자산(기본 이미지, 배경 이미지, 꾸미기 요소별 확정
+ * 상태 파일, 편집 초안 및 초안 전용 누끼 디렉터리(2일차), 확정 누끼 디렉터리,
  * 카메라 스티커 원본 디렉터리)을 filesDir 기준으로 정리한다. Context 없이
  * java.io.File만으로 동작해 PostcardDraftStorage/ConfirmedEditStateStorage와
  * 같은 방식으로 순수 JUnit에서 TemporaryFolder로 검증할 수 있다.
@@ -120,7 +120,10 @@ internal fun cleanupPostcardOwnedAssets(
         }
     }
 
-    // 3~4. 스티커·도장 확정 상태 파일.
+    // 3. 꾸미기 요소별 확정 상태 파일. DetailViewModel의 persist*EditState가
+    // 요소마다 <디렉터리>/<postcardId>.txt 하나씩 쓰므로, 여기서도 삭제되는
+    // 엽서의 id에 해당하는 파일만 지운다(다른 엽서 파일은 건드리지 않음).
+    // 요소를 새로 추가할 때 이 목록에 함께 넣지 않으면 고아 파일이 남는다.
     deleteFile(
         "stickerState",
         File(filesDir, "sticker_states/${postcard.id}.txt")
@@ -132,6 +135,18 @@ internal fun cleanupPostcardOwnedAssets(
     deleteFile(
         "doodleState",
         File(filesDir, "doodle_states/${postcard.id}.txt")
+    )
+    deleteFile(
+        "textStickerState",
+        File(filesDir, "text_sticker_states/${postcard.id}.txt")
+    )
+    deleteFile(
+        "maskingTapeState",
+        File(filesDir, "masking_tape_states/${postcard.id}.txt")
+    )
+    deleteFile(
+        "labelStickerState",
+        File(filesDir, "label_sticker_states/${postcard.id}.txt")
     )
 
     // 5. 편집 초안 — PostcardDraftStorage.deleteDraft가 초안 텍스트와

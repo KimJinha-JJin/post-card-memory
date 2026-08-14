@@ -29,10 +29,13 @@ import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.SunsetGold
 
 /**
- * 상세 편집 화면 하단에 고정되는 다섯 카테고리(사진·배경·텍스트·스티커·도장)
- * 전환용 도크. 스크롤 콘텐츠 밖 루트 Box에 얹혀 편집 내용을 위아래로
- * 움직여도 위치가 바뀌지 않는다. Pager 상태·선택 표현·탭 이동 콜백은
- * 기존 인라인 탭 바와 동일하게 유지한다.
+ * 상세 편집 화면 하단에 고정되는 편집 카테고리 전환용 도크. 스크롤 콘텐츠
+ * 밖 루트 Box에 얹혀 편집 내용을 위아래로 움직여도 위치가 바뀌지 않는다.
+ * Pager 상태·선택 표현·탭 이동 콜백은 기존 인라인 탭 바와 동일하게 유지한다.
+ *
+ * 카테고리 목록 자체는 이 컴포저블이 갖지 않고 labels/icons로 받는다 —
+ * 실제 목록과 개수는 호출부(DetailScreen의 customizationPageLabels)가
+ * 정하므로 여기에 개수를 적어두지 않는다.
  */
 @Composable
 internal fun EditorBottomTabBar(

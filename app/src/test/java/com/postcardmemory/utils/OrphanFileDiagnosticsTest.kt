@@ -147,6 +147,52 @@ class OrphanFileDiagnosticsTest {
         )
     }
 
+    /**
+     * 텍스트 스티커·마스킹테이프·라벨 스티커 상태 파일도 스티커/도장과 같은
+     * <디렉터리>/<postcardId>.txt 규칙을 쓴다. 이 세 디렉터리는 한동안
+     * 진단에서 빠져 있어 고아 파일이 있어도 보고되지 않았다.
+     */
+    @Test
+    fun textStickerState_maskingTapeState_labelStickerState_followPostcardIdFileRule() {
+        val filesDir = tempFolder.newFolder("files")
+        val keptTextSticker = fileIn(filesDir, "text_sticker_states/1.txt")
+        val orphanTextSticker = fileIn(filesDir, "text_sticker_states/2.txt")
+        val keptMaskingTape = fileIn(filesDir, "masking_tape_states/1.txt")
+        val orphanMaskingTape = fileIn(filesDir, "masking_tape_states/2.txt")
+        val keptLabelSticker = fileIn(filesDir, "label_sticker_states/1.txt")
+        val orphanLabelSticker = fileIn(filesDir, "label_sticker_states/2.txt")
+
+        val result = OrphanFileDiagnostics.scan(
+            rootDirectory = filesDir,
+            existingPostcardIds = setOf(1L),
+            referencedImagePaths = emptySet(),
+            referencedBackgroundPaths = emptySet()
+        )
+
+        assertEquals(
+            listOf(orphanTextSticker.path),
+            result.categories.first { it.type == "textStickerState" }.orphans.map { it.path }
+        )
+        assertEquals(
+            listOf(orphanMaskingTape.path),
+            result.categories.first { it.type == "maskingTapeState" }.orphans.map { it.path }
+        )
+        assertEquals(
+            listOf(orphanLabelSticker.path),
+            result.categories.first { it.type == "labelStickerState" }.orphans.map { it.path }
+        )
+
+        // 진단은 삭제하지 않는다 — 살아 있는 엽서의 파일도, 고아로 찍힌 파일도 그대로 남는다.
+        listOf(
+            keptTextSticker,
+            orphanTextSticker,
+            keptMaskingTape,
+            orphanMaskingTape,
+            keptLabelSticker,
+            orphanLabelSticker
+        ).forEach { file -> assertTrue(file.exists()) }
+    }
+
     @Test
     fun malformedNames_areUnclassified_notTreatedAsOrphan() {
         val filesDir = tempFolder.newFolder("files")

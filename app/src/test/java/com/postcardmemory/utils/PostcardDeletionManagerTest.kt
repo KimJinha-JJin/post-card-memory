@@ -92,6 +92,67 @@ class PostcardDeletionManagerTest {
         assertTrue("sealState" in result.deletedAssets)
     }
 
+    /**
+     * 텍스트 스티커·마스킹테이프·라벨 스티커 상태 파일도 스티커/도장과 같은
+     * <디렉터리>/<postcardId>.txt 규칙이라 함께 정리돼야 한다. 이 세 개는
+     * 한동안 정리 대상에서 빠져 있어 엽서를 지워도 파일이 남았다.
+     */
+    @Test
+    fun cleanup_textStickerMaskingTapeAndLabelStickerStates_allDeleted() {
+        val filesDir = tempFolder.newFolder("files")
+        val imageFile = fileIn(filesDir, "postcards/postcard_10.jpg")
+        val textStickerState = fileIn(filesDir, "text_sticker_states/10.txt")
+        val maskingTapeState = fileIn(filesDir, "masking_tape_states/10.txt")
+        val labelStickerState = fileIn(filesDir, "label_sticker_states/10.txt")
+
+        val result = cleanupPostcardOwnedAssets(filesDir, postcard(10L, imageFile.path))
+
+        assertFalse(textStickerState.exists())
+        assertFalse(maskingTapeState.exists())
+        assertFalse(labelStickerState.exists())
+        assertTrue("textStickerState" in result.deletedAssets)
+        assertTrue("maskingTapeState" in result.deletedAssets)
+        assertTrue("labelStickerState" in result.deletedAssets)
+        assertTrue(result.isFullSuccess)
+    }
+
+    @Test
+    fun cleanup_decorationStateFilesOfOtherPostcards_areUntouched() {
+        val filesDir = tempFolder.newFolder("files")
+        val imageFile = fileIn(filesDir, "postcards/postcard_11.jpg")
+        fileIn(filesDir, "text_sticker_states/11.txt")
+        fileIn(filesDir, "masking_tape_states/11.txt")
+        fileIn(filesDir, "label_sticker_states/11.txt")
+
+        val otherTextSticker = fileIn(filesDir, "text_sticker_states/12.txt")
+        val otherMaskingTape = fileIn(filesDir, "masking_tape_states/12.txt")
+        val otherLabelSticker = fileIn(filesDir, "label_sticker_states/12.txt")
+
+        cleanupPostcardOwnedAssets(filesDir, postcard(11L, imageFile.path))
+
+        // 삭제 대상은 정확히 지워지는 엽서의 id에 해당하는 파일뿐이다.
+        assertTrue(otherTextSticker.exists())
+        assertTrue(otherMaskingTape.exists())
+        assertTrue(otherLabelSticker.exists())
+        // 공용 디렉터리 자체도 남아 있어야 한다.
+        assertTrue(File(filesDir, "text_sticker_states").exists())
+        assertTrue(File(filesDir, "masking_tape_states").exists())
+        assertTrue(File(filesDir, "label_sticker_states").exists())
+    }
+
+    @Test
+    fun cleanup_noDecorationStateFiles_reportedAsMissingNotFailed() {
+        val filesDir = tempFolder.newFolder("files")
+        val imageFile = fileIn(filesDir, "postcards/postcard_13.jpg")
+
+        val result = cleanupPostcardOwnedAssets(filesDir, postcard(13L, imageFile.path))
+
+        assertTrue("textStickerState" in result.missingAssets)
+        assertTrue("maskingTapeState" in result.missingAssets)
+        assertTrue("labelStickerState" in result.missingAssets)
+        assertTrue(result.isFullSuccess)
+    }
+
     @Test
     fun cleanup_confirmedStickerBackgroundDir_deletedRecursively_otherPostcardDirUntouched() {
         val filesDir = tempFolder.newFolder("files")

@@ -40,10 +40,13 @@ data class OrphanScanResult(
  * Room에 더 이상 연결되지 않은 파일을 찾아 보고만 하는 순수 진단 도구.
  * 파일을 지우거나 옮기지 않는다 — 삭제는 이 도구가 하지 않는 별도 작업이다.
  *
- * PostcardDeletionManager와 같은 filesDir 하위 경로 규칙(sticker_states/,
- * seal_states/, doodle_states/, sticker_bgs/<id>/, sticker_originals/<id>/,
- * draft_sticker_bgs/<id>/, drafts/edit_state/<id>.draft.txt)을 그대로
- * 따르되, 그 파일들을 지우는 대신 목록만 만든다.
+ * PostcardDeletionManager와 같은 filesDir 하위 경로 규칙(꾸미기 요소별
+ * <디렉터리>/<id>.txt — sticker_states/, seal_states/, doodle_states/,
+ * text_sticker_states/, masking_tape_states/, label_sticker_states/ —
+ * 그리고 sticker_bgs/<id>/, sticker_originals/<id>/, draft_sticker_bgs/<id>/,
+ * drafts/edit_state/<id>.draft.txt)을 그대로 따르되, 그 파일들을 지우는
+ * 대신 목록만 만든다. 삭제 쪽에 새 디렉터리가 추가되면 여기에도 함께
+ * 넣어야 그 요소의 고아 파일을 찾을 수 있다.
  */
 object OrphanFileDiagnostics {
 
@@ -133,6 +136,30 @@ object OrphanFileDiagnostics {
                 existingPostcardIds = existingPostcardIds,
                 unclassified = unclassified,
                 reason = "Room에 존재하지 않는 postcardId의 낙서 상태 파일"
+            ),
+            scanPostcardIdFiles(
+                type = "textStickerState",
+                directory = File(rootDirectory, "text_sticker_states"),
+                suffix = ".txt",
+                existingPostcardIds = existingPostcardIds,
+                unclassified = unclassified,
+                reason = "Room에 존재하지 않는 postcardId의 텍스트 스티커 상태 파일"
+            ),
+            scanPostcardIdFiles(
+                type = "maskingTapeState",
+                directory = File(rootDirectory, "masking_tape_states"),
+                suffix = ".txt",
+                existingPostcardIds = existingPostcardIds,
+                unclassified = unclassified,
+                reason = "Room에 존재하지 않는 postcardId의 마스킹테이프 상태 파일"
+            ),
+            scanPostcardIdFiles(
+                type = "labelStickerState",
+                directory = File(rootDirectory, "label_sticker_states"),
+                suffix = ".txt",
+                existingPostcardIds = existingPostcardIds,
+                unclassified = unclassified,
+                reason = "Room에 존재하지 않는 postcardId의 라벨 스티커 상태 파일"
             ),
             scanPostcardIdFiles(
                 type = "editDraft",

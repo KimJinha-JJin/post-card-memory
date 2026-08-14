@@ -950,8 +950,14 @@ class DetailViewModel @Inject constructor(
                 // 이력을 지운다. persistStickerEditState 안에서 자신의 성공만
                 // 보고 바로 지우면, 도장·낙서 저장 실패로 사용자가 재시도해야 하는
                 // 상황에서 스티커 되돌리기 능력만 먼저 사라지는 비대칭이 생긴다.
+                //
+                // 여기서 지우는 목록은 초기 로드(loadStickerSealStateAndAutoRestoreDraft)
+                // 및 "원래대로"(revertToConfirmedState)와 같은 여섯 개여야 한다 —
+                // 하나라도 빠지면 그 요소만 확정 저장 후에도 이전 상태로 undo돼
+                // 저장된 결과와 화면이 어긋난다.
                 if (allSaved) {
                     clearStickerHistory()
+                    clearSealHistory()
                     clearDoodleHistory()
                     clearTextStickerHistory()
                     clearMaskingTapeHistory()
