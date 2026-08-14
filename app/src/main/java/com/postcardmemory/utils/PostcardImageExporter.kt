@@ -37,6 +37,8 @@ import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_PITCH_RATIO
 import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_WIDTH_RATIO
 import com.postcardmemory.ui.detail.MaskingTapeEdgeStyle
 import com.postcardmemory.ui.detail.MaskingTapePatternKind
+import com.postcardmemory.ui.detail.LabelTapeStyle
+import com.postcardmemory.ui.detail.labelTapePalette
 import com.postcardmemory.ui.detail.maskingTapeOutlinePoints
 import java.io.File
 import java.io.FileOutputStream
@@ -128,6 +130,24 @@ object PostcardImageExporter {
         val photoUri: Uri? = null
     )
 
+    /**
+     * fontSizeRatio는 TextStickerOverlay와 같은 뜻(글자 크기의 postcard 너비
+     * 대비 비율)이다. 라벨은 폭·높이를 여기서 넘기지 않는다 — text와
+     * fontSizePx만 있으면 LabelStickerRenderer가 화면에서와 똑같이 폭을
+     * 다시 계산하므로, 미리 계산한 크기를 실어 보내면 오히려 두 값이
+     * 어긋날 여지만 생긴다.
+     */
+    data class LabelStickerOverlay(
+        val text: String,
+        val style: LabelTapeStyle,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val fontSizeRatio: Float,
+        val rotationDegrees: Float = 0f,
+        /** style == CUSTOM일 때만 쓰는 바탕색. 문자색은 여기서 자동으로 파생된다. */
+        val customTapeColorArgb: Long? = null
+    )
+
     fun exportToGallery(
         context: Context,
         postcard: Postcard,
@@ -135,7 +155,8 @@ object PostcardImageExporter {
         sealOverlays: List<SealOverlay> = emptyList(),
         doodleStrokes: List<DoodleStroke> = emptyList(),
         textStickerOverlays: List<TextStickerOverlay> = emptyList(),
-        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList()
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
+        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
@@ -146,7 +167,8 @@ object PostcardImageExporter {
                     sealOverlays = sealOverlays,
                     doodleStrokes = doodleStrokes,
                     textStickerOverlays = textStickerOverlays,
-                    maskingTapeOverlays = maskingTapeOverlays
+                    maskingTapeOverlays = maskingTapeOverlays,
+                    labelStickerOverlays = labelStickerOverlays
                 )
 
             try {
@@ -169,7 +191,8 @@ object PostcardImageExporter {
         sealOverlays: List<SealOverlay> = emptyList(),
         doodleStrokes: List<DoodleStroke> = emptyList(),
         textStickerOverlays: List<TextStickerOverlay> = emptyList(),
-        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList()
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
+        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
     ): Result<File> {
         return runCatching {
             val outputBitmap =
@@ -180,7 +203,8 @@ object PostcardImageExporter {
                     sealOverlays = sealOverlays,
                     doodleStrokes = doodleStrokes,
                     textStickerOverlays = textStickerOverlays,
-                    maskingTapeOverlays = maskingTapeOverlays
+                    maskingTapeOverlays = maskingTapeOverlays,
+                    labelStickerOverlays = labelStickerOverlays
                 )
 
             try {
@@ -319,7 +343,8 @@ object PostcardImageExporter {
         sealOverlays: List<SealOverlay> = emptyList(),
         doodleStrokes: List<DoodleStroke> = emptyList(),
         textStickerOverlays: List<TextStickerOverlay> = emptyList(),
-        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList()
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
+        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -419,6 +444,16 @@ object PostcardImageExporter {
                 strokes = doodleStrokes,
                 targetSize = OUTPUT_SIZE.toFloat()
             )
+
+            // 라벨은 "이미 꾸며놓은 종이 위에 나중에 붙이는 물리적인 스티커"라
+            // 낙서까지 전부 그린 뒤 맨 위에 올린다 — 미리보기(DetailScreen)도
+            // 낙서 Canvas 다음에 labelStickers.forEach를 두어 같은 순서를 지킨다.
+            for (overlay in labelStickerOverlays) {
+                drawLabelStickerOverlay(
+                    canvas = canvas,
+                    labelStickerOverlay = overlay
+                )
+            }
 
             return outputBitmap
         } finally {
@@ -1093,6 +1128,59 @@ object PostcardImageExporter {
         )
         canvas.drawText(textStickerOverlay.text, originX, originY, strokePaint)
         canvas.drawText(textStickerOverlay.text, originX, originY, fillPaint)
+        canvas.restore()
+    }
+
+    /**
+     * 라벨은 화면 미리보기(LabelStickerContent)와 완전히 같은
+     * LabelStickerRenderer를 호출한다 — 폭 계산·물성 표현·엠보싱이 두 렌더
+     * 경로에 각각 적혀 있지 않고 한 곳에만 있으므로 drift가 생길 수 없다.
+     * 여기서 하는 일은 회전 중심을 잡아 canvas를 돌려주는 것뿐이다.
+     */
+    private fun drawLabelStickerOverlay(
+        canvas: Canvas,
+        labelStickerOverlay: LabelStickerOverlay
+    ) {
+        val fontSizePx =
+            labelStickerOverlay.fontSizeRatio * OUTPUT_SIZE
+
+        if (fontSizePx <= 0f) return
+
+        val textPaint = LabelStickerRenderer.createTextPaint(fontSizePx)
+        val labelWidth =
+            LabelStickerRenderer.labelWidthPx(
+                text = labelStickerOverlay.text,
+                fontSizePx = fontSizePx,
+                textPaint = textPaint
+            )
+        val labelHeight = LabelStickerRenderer.labelHeightPx(fontSizePx)
+
+        val left = labelStickerOverlay.normalizedX * OUTPUT_SIZE
+        val top = labelStickerOverlay.normalizedY * OUTPUT_SIZE
+
+        // 화면(LabelStickerContent)과 같은 labelTapePalette를 부른다 — 커스텀
+        // 테이프의 바탕색·단면색·문자색 결정이 export 전용으로 갈라지지 않는다.
+        val palette =
+            labelTapePalette(
+                style = labelStickerOverlay.style,
+                customTapeColorArgb = labelStickerOverlay.customTapeColorArgb
+            )
+
+        canvas.save()
+        canvas.rotate(
+            labelStickerOverlay.rotationDegrees,
+            left + labelWidth / 2f,
+            top + labelHeight / 2f
+        )
+        LabelStickerRenderer.draw(
+            canvas = canvas,
+            text = labelStickerOverlay.text,
+            palette = palette,
+            fontSizePx = fontSizePx,
+            left = left,
+            top = top,
+            textPaint = textPaint
+        )
         canvas.restore()
     }
 

@@ -4,12 +4,13 @@ import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.deserializeDoodleStroke
 import com.postcardmemory.utils.serialize as serializeDoodleStroke
 
-const val DRAFT_FORMAT_VERSION = 4
+const val DRAFT_FORMAT_VERSION = 5
 
 private const val DRAFT_HEADER = "POSTCARD_DRAFT_V1"
 
 /**
- * 완성 저장본과 분리된, 진행 중인 스티커·도장·낙서·텍스트 스티커 편집 상태의 스냅샷.
+ * 완성 저장본과 분리된, 진행 중인 스티커·도장·낙서·텍스트 스티커·마스킹테이프·
+ * 라벨 스티커 편집 상태의 스냅샷.
  * 사진·배경·문구·날짜·폰트·레이아웃은 Room에 이미 실시간 저장되므로 여기 포함하지 않는다.
  */
 data class PostcardEditDraft(
@@ -26,7 +27,9 @@ data class PostcardEditDraft(
     val textStickers: List<TextStickerItem> = emptyList(),
     val selectedTextStickerId: String? = null,
     val maskingTapes: List<MaskingTapeItem> = emptyList(),
-    val selectedMaskingTapeId: String? = null
+    val selectedMaskingTapeId: String? = null,
+    val labelStickers: List<LabelStickerItem> = emptyList(),
+    val selectedLabelStickerId: String? = null
 )
 
 /** 오래된 저장 요청이 최신 상태를 덮어쓰지 않도록 하는 순수 판정 함수. */
@@ -50,7 +53,9 @@ fun PostcardEditDraft.serialize(): String {
         textStickers.size.toString(),
         selectedTextStickerId ?: "~",
         maskingTapes.size.toString(),
-        selectedMaskingTapeId ?: "~"
+        selectedMaskingTapeId ?: "~",
+        labelStickers.size.toString(),
+        selectedLabelStickerId ?: "~"
     ).joinToString("\t")
 
     val lines = mutableListOf(DRAFT_HEADER, metaLine)
@@ -59,6 +64,7 @@ fun PostcardEditDraft.serialize(): String {
     doodleStrokes.forEach { lines += it.serializeDoodleStroke() }
     textStickers.forEach { lines += it.serialize() }
     maskingTapes.forEach { lines += it.serialize() }
+    labelStickers.forEach { lines += it.serialize() }
 
     return lines.joinToString("\n")
 }
@@ -72,7 +78,8 @@ fun PostcardEditDraft.serialize(): String {
  * 없으므로 낙서 없는 초안으로 해석한다. 마찬가지로 10~11번 필드(텍스트 스티커
  * 개수/선택 id)가 없는 v1·v2 초안은 텍스트 스티커 없는 초안으로, 12~13번
  * 필드(마스킹테이프 개수/선택 id)가 없는 v1~v3 초안은 마스킹테이프 없는
- * 초안으로 해석해 그대로 복원된다.
+ * 초안으로, 14~15번 필드(라벨 스티커 개수/선택 id)가 없는 v1~v4 초안은
+ * 라벨 스티커 없는 초안으로 해석해 그대로 복원된다.
  */
 fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
     val lines = text.split("\n")
@@ -97,13 +104,16 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
         val selectedTextStickerId = meta.getOrNull(11)?.takeIf { it != "~" }
         val maskingTapeCount = meta.getOrNull(12)?.toIntOrNull() ?: 0
         val selectedMaskingTapeId = meta.getOrNull(13)?.takeIf { it != "~" }
+        val labelStickerCount = meta.getOrNull(14)?.toIntOrNull() ?: 0
+        val selectedLabelStickerId = meta.getOrNull(15)?.takeIf { it != "~" }
 
         if (
             stickerCount < 0 ||
             sealCount < 0 ||
             doodleCount < 0 ||
             textStickerCount < 0 ||
-            maskingTapeCount < 0
+            maskingTapeCount < 0 ||
+            labelStickerCount < 0
         ) {
             return null
         }
@@ -111,7 +121,8 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
         val bodyLines = lines.drop(2)
         if (
             bodyLines.size <
-            stickerCount + sealCount + doodleCount + textStickerCount + maskingTapeCount
+            stickerCount + sealCount + doodleCount + textStickerCount +
+            maskingTapeCount + labelStickerCount
         ) {
             return null
         }
@@ -145,6 +156,16 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
             )
             .mapNotNull { deserializeMaskingTapeItem(it) }
 
+        val labelStickerOffset =
+            stickerCount + sealCount + doodleCount + textStickerCount + maskingTapeCount
+
+        val labelStickers = bodyLines
+            .subList(
+                labelStickerOffset,
+                labelStickerOffset + labelStickerCount
+            )
+            .mapNotNull { deserializeLabelStickerItem(it) }
+
         PostcardEditDraft(
             draftFormatVersion = formatVersion,
             postcardId = postcardId,
@@ -159,7 +180,9 @@ fun parsePostcardEditDraft(text: String): PostcardEditDraft? {
             textStickers = textStickers,
             selectedTextStickerId = selectedTextStickerId,
             maskingTapes = maskingTapes,
-            selectedMaskingTapeId = selectedMaskingTapeId
+            selectedMaskingTapeId = selectedMaskingTapeId,
+            labelStickers = labelStickers,
+            selectedLabelStickerId = selectedLabelStickerId
         )
     }.getOrNull()
 }

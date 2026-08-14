@@ -158,6 +158,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.EditorSlider
+import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
+import com.postcardmemory.ui.components.LabelStickerContent
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
@@ -845,6 +847,97 @@ internal fun createTextStickerOverlaysForExport(
 }
 
 /**
+ * 라벨은 텍스트 스티커와 같은 이유로 폭이 아니라 fontSizeRatio를 넘긴다 —
+ * 화면과 export가 같은 LabelStickerRenderer로 폭을 각자 계산하므로, 미리
+ * 잰 값을 실어 보내는 것보다 규칙 하나를 공유하는 편이 어긋날 여지가 없다.
+ */
+internal fun createLabelStickerOverlayForExport(
+    text: String,
+    style: LabelTapeStyle,
+    rotationDegrees: Float,
+    labelStickerOffset: Offset?,
+    postcardSize: IntSize,
+    labelStickerSize: IntSize,
+    fontSizePx: Float,
+    customTapeColorArgb: Long? = null
+): PostcardImageExporter.LabelStickerOverlay? {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0 ||
+        labelStickerSize.width <= 0 ||
+        labelStickerSize.height <= 0 ||
+        fontSizePx <= 0f
+    ) {
+        return null
+    }
+
+    val resolvedOffset =
+        clampStickerOffset(
+            offset =
+                labelStickerOffset
+                    ?: centeredStickerOffset(
+                        postcardSize = postcardSize,
+                        stickerSize = labelStickerSize
+                    ),
+            postcardSize = postcardSize,
+            stickerSize = labelStickerSize
+        )
+
+    return PostcardImageExporter.LabelStickerOverlay(
+        text = text,
+        style = style,
+        rotationDegrees = rotationDegrees,
+        normalizedX =
+            (resolvedOffset.x /
+                    postcardSize.width.toFloat())
+                .coerceIn(0f, 1f),
+        normalizedY =
+            (resolvedOffset.y /
+                    postcardSize.height.toFloat())
+                .coerceIn(0f, 1f),
+        fontSizeRatio =
+            fontSizePx / postcardSize.width.toFloat(),
+        customTapeColorArgb = customTapeColorArgb
+    )
+}
+
+/**
+ * 아직 크기가 측정되지 않은 라벨(방금 뽑은 직후 등)은 이번 export에서
+ * 건너뛴다 — 텍스트 스티커와 같은 이유이며, export는 항상 사용자가 화면에서
+ * 한 번 이상 본 뒤에 실행하는 동작이라 이 경로에 도달할 일이 실질적으로 없다.
+ */
+internal fun createLabelStickerOverlaysForExport(
+    labelStickers: List<LabelStickerItem>,
+    postcardSize: IntSize,
+    labelStickerSizes: Map<String, IntSize>,
+    baseFontSizePx: Float
+): List<PostcardImageExporter.LabelStickerOverlay> {
+    if (
+        postcardSize.width <= 0 ||
+        postcardSize.height <= 0
+    ) {
+        return emptyList()
+    }
+
+    return labelStickers.mapNotNull { labelSticker ->
+        val size =
+            labelStickerSizes[labelSticker.id]
+                ?: return@mapNotNull null
+
+        createLabelStickerOverlayForExport(
+            text = labelSticker.text,
+            style = labelSticker.style,
+            rotationDegrees = labelSticker.rotationDegrees,
+            labelStickerOffset = labelSticker.offset,
+            postcardSize = postcardSize,
+            labelStickerSize = size,
+            fontSizePx = baseFontSizePx * labelSticker.scale,
+            customTapeColorArgb = labelSticker.customTapeColorArgb
+        )
+    }
+}
+
+/**
  * 마스킹테이프는 사진 스티커·텍스트 스티커와 같이 가장자리 걸침을 허용하지
  * 않는다(clampStickerOffset) — 도장과 달리 우편 소인처럼 걸쳐 보일 이유가
  * 없는 장식 재료라 항상 엽서 안쪽에 완전히 들어오게 한다.
@@ -1199,6 +1292,11 @@ fun DetailScreen(
     val latestTextStickers by rememberUpdatedState(textStickers)
     val canUndoTextSticker by viewModel.canUndoTextSticker.collectAsState()
     val canRedoTextSticker by viewModel.canRedoTextSticker.collectAsState()
+    val labelStickers by viewModel.labelStickers.collectAsState()
+    val selectedLabelStickerId by viewModel.selectedLabelStickerId.collectAsState()
+    val latestLabelStickers by rememberUpdatedState(labelStickers)
+    val canUndoLabelSticker by viewModel.canUndoLabelSticker.collectAsState()
+    val canRedoLabelSticker by viewModel.canRedoLabelSticker.collectAsState()
 
     val photoMaskingTapes by viewModel.photoMaskingTapes.collectAsState()
     val selectedMaskingTapeId by viewModel.selectedMaskingTapeId.collectAsState()
@@ -1281,6 +1379,10 @@ fun DetailScreen(
         mutableStateOf(mapOf<String, IntSize>())
     }
 
+    var labelStickerSizes by remember {
+        mutableStateOf(mapOf<String, IntSize>())
+    }
+
     var doodleTool by remember {
         mutableStateOf(DoodleTool.PEN)
     }
@@ -1321,6 +1423,10 @@ fun DetailScreen(
 
     val baseTextStickerFontPx = with(LocalDensity.current) {
         TEXT_STICKER_BASE_FONT_SIZE_SP.sp.toPx()
+    }
+
+    val baseLabelStickerFontPx = with(LocalDensity.current) {
+        LABEL_STICKER_BASE_FONT_SIZE_SP.sp.toPx()
     }
 
     val baseMaskingTapeWidthPx = with(LocalDensity.current) {
@@ -3535,8 +3641,9 @@ fun DetailScreen(
                             }
                         }
 
-                        // 낙서는 사진·스티커·도장보다 항상 위에 그린다 — 이 Box의
-                        // 마지막 자식이라 z-order상 최상단이다. pointerInput 블록
+                        // 낙서는 사진·스티커·도장·텍스트 스티커보다 위에 그린다 —
+                        // 이 Box에서 라벨 바로 앞 자식이라 라벨만 낙서 위로
+                        // 올라오고 나머지 요소와의 관계는 그대로다. pointerInput 블록
                         // 안에서 return하는 것만으로는 이 Canvas가 다른 탭에서도
                         // 터치를 가로채는 걸 막지 못했다(스티커·도장 드래그·삭제
                         // 버튼이 전부 막히는 회귀가 실기기에서 확인됨) — 그래서
@@ -3850,6 +3957,186 @@ fun DetailScreen(
                                     canvas = canvas.nativeCanvas,
                                     strokes = visibleStrokes,
                                     targetSize = size.width
+                                )
+                            }
+                        }
+
+                        // 라벨은 "이미 꾸며놓은 종이 위에 나중에 붙이는 물리적인
+                        // 스티커"라, 낙서 Canvas까지 전부 그린 뒤 이 Box의 마지막
+                        // 자식으로 맨 위에 올린다 — exporter도 drawDoodleStrokes
+                        // 다음에 labelStickerOverlays를 돌려 같은 순서를 지킨다.
+                        // 낙서 Canvas가 앞에 있어도 제스처는 겹치지 않는다: 그
+                        // Canvas는 낙서 탭에서만 pointerInput을 붙이고, 라벨은
+                        // 스티커 탭에서만 붙는다.
+                        labelStickers.forEach { labelSticker ->
+                            val isLabelStickerSelected =
+                                labelSticker.id == selectedLabelStickerId
+                            val isLabelStickerVisuallySelected =
+                                isLabelStickerSelected &&
+                                        !isFocusPreviewMode &&
+                                        latestCustomizationPage ==
+                                        STICKER_TAB_PAGE_INDEX
+                            val currentLabelStickerOffset =
+                                labelSticker.offset
+
+                            val labelStickerPositionModifier =
+                                if (currentLabelStickerOffset == null) {
+                                    Modifier.align(
+                                        Alignment.Center
+                                    )
+                                } else {
+                                    Modifier
+                                        .align(
+                                            Alignment.TopStart
+                                        )
+                                        .offset {
+                                            IntOffset(
+                                                x = currentLabelStickerOffset.x
+                                                    .roundToInt(),
+                                                y = currentLabelStickerOffset.y
+                                                    .roundToInt()
+                                            )
+                                        }
+                                }
+
+                            Box(
+                                modifier = labelStickerPositionModifier
+                                    .graphicsLayer {
+                                        rotationZ =
+                                            labelSticker.rotationDegrees
+                                    }
+                                    .onSizeChanged { size ->
+                                        labelStickerSizes =
+                                            labelStickerSizes +
+                                                    (labelSticker.id to size)
+                                    }
+                                    .then(
+                                        if (
+                                            latestCustomizationPage ==
+                                            STICKER_TAB_PAGE_INDEX
+                                        ) {
+                                            Modifier.pointerInput(
+                                        labelSticker.id,
+                                        postcardPreviewSize,
+                                        isFocusPreviewMode
+                                    ) {
+                                        if (isFocusPreviewMode) {
+                                            return@pointerInput
+                                        }
+
+                                        var labelStickerGestureSnapshotPending = true
+
+                                        coroutineScope {
+                                            launch {
+                                                awaitEachGesture {
+                                                    awaitFirstDown(
+                                                        requireUnconsumed = false
+                                                    )
+                                                    labelStickerGestureSnapshotPending = true
+                                                }
+                                            }
+                                            launch {
+                                                detectTapGestures(
+                                                    onTap = {
+                                                        viewModel.setSelectedLabelStickerId(
+                                                            if (selectedLabelStickerId == labelSticker.id) {
+                                                                null
+                                                            } else {
+                                                                labelSticker.id
+                                                            }
+                                                        )
+                                                    }
+                                                )
+                                            }
+                                            launch {
+                                                // zoom은 의도적으로 무시한다 — 라벨은 문구에
+                                                // 맞춰 기계가 뽑아 주는 고정 크기의 물건이라
+                                                // 사용자가 크기를 바꾸는 조작 자체를 두지 않는다.
+                                                detectTransformGestures { _, pan, _, rotationChange ->
+                                                    val currentLabelSticker =
+                                                        latestLabelStickers.find {
+                                                            it.id == labelSticker.id
+                                                        } ?: return@detectTransformGestures
+
+                                                    if (labelStickerGestureSnapshotPending) {
+                                                        viewModel.recordLabelStickerSnapshotForUndo()
+                                                        labelStickerGestureSnapshotPending = false
+                                                    }
+
+                                                    val currentSize =
+                                                        labelStickerSizes[labelSticker.id]
+                                                            ?: IntSize.Zero
+
+                                                    val oldOffset =
+                                                        currentLabelSticker.offset
+                                                            ?: centeredStickerOffset(
+                                                                postcardSize = postcardPreviewSize,
+                                                                stickerSize = currentSize
+                                                            )
+
+                                                    val parentDelta =
+                                                        localStickerDeltaToParent(
+                                                            localDelta = pan,
+                                                            rotationDegrees = currentLabelSticker.rotationDegrees,
+                                                            flipHorizontal = false,
+                                                            flipVertical = false
+                                                        )
+
+                                                    val newRotation =
+                                                        normalizeStickerRotation(
+                                                            currentLabelSticker.rotationDegrees +
+                                                                    rotationChange
+                                                        )
+
+                                                    val newOffset =
+                                                        clampStickerOffset(
+                                                            offset = oldOffset + parentDelta,
+                                                            postcardSize = postcardPreviewSize,
+                                                            stickerSize = currentSize
+                                                        )
+
+                                                    viewModel.setSelectedLabelStickerId(labelSticker.id)
+                                                    viewModel.setLabelStickers(
+                                                        latestLabelStickers.map {
+                                                            if (it.id == labelSticker.id) {
+                                                                it.copy(
+                                                                    offset = newOffset,
+                                                                    rotationDegrees = newRotation
+                                                                )
+                                                            } else {
+                                                                it
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    .then(
+                                        if (isLabelStickerVisuallySelected) {
+                                            Modifier.border(
+                                                width = 2.dp,
+                                                color = GraphiteAccent,
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LabelStickerContent(
+                                    text = labelSticker.text,
+                                    style = labelSticker.style,
+                                    fontSizeSp =
+                                        LABEL_STICKER_BASE_FONT_SIZE_SP *
+                                                labelSticker.scale,
+                                    customTapeColorArgb =
+                                        labelSticker.customTapeColorArgb
                                 )
                             }
                         }
@@ -4924,6 +5211,86 @@ fun DetailScreen(
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth()
                                 )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                LabelStickerPickerPanel(
+                                    labelStickers = labelStickers,
+                                    selectedLabelStickerId = selectedLabelStickerId,
+                                    onSelectLabelSticker = { id ->
+                                        viewModel.setSelectedLabelStickerId(
+                                            if (selectedLabelStickerId == id) {
+                                                null
+                                            } else {
+                                                id
+                                            }
+                                        )
+                                    },
+                                    onAddLabelSticker = { text, style ->
+                                        viewModel.recordLabelStickerSnapshotForUndo()
+                                        val newLabelSticker = LabelStickerItem(
+                                            text = text,
+                                            style = style
+                                        )
+                                        viewModel.setLabelStickers(
+                                            labelStickers + newLabelSticker
+                                        )
+                                        viewModel.setSelectedLabelStickerId(
+                                            newLabelSticker.id
+                                        )
+                                    },
+                                    onTapeStyleSelected = { id, style ->
+                                        viewModel.recordLabelStickerSnapshotForUndo()
+                                        viewModel.setLabelStickers(
+                                            labelStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(style = style)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    // 피커를 여는 순간 한 번만 snapshot을 남긴다 —
+                                    // 드래그 한 틱마다 쌓이면 Undo 한 번에 색이
+                                    // 조금씩만 되돌아간다(텍스트 스티커 자유색과 동일).
+                                    onEnterCustomTapeColor = {
+                                        viewModel.recordLabelStickerSnapshotForUndo()
+                                    },
+                                    onCustomTapeColorSelected = { id, colorArgb ->
+                                        viewModel.setLabelStickers(
+                                            labelStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(
+                                                        style = LabelTapeStyle.CUSTOM,
+                                                        customTapeColorArgb = colorArgb
+                                                    )
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
+                                    onDeleteLabelSticker = { id ->
+                                        viewModel.recordLabelStickerSnapshotForUndo()
+                                        val remaining = labelStickers.filter { it.id != id }
+                                        viewModel.setLabelStickers(remaining)
+                                        labelStickerSizes = labelStickerSizes - id
+                                        if (selectedLabelStickerId == id) {
+                                            viewModel.setSelectedLabelStickerId(null)
+                                        }
+                                    },
+                                    onUndoLabelSticker = {
+                                        viewModel.undoLabelStickerChange()
+                                    },
+                                    onRedoLabelSticker = {
+                                        viewModel.redoLabelStickerChange()
+                                    },
+                                    canUndoLabelSticker = canUndoLabelSticker,
+                                    canRedoLabelSticker = canRedoLabelSticker,
+                                    enabled = controlsEnabled,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                                 }
                             }
                         }
@@ -5528,6 +5895,17 @@ fun DetailScreen(
                                     }
 
                                     viewModel.sharePostcard(
+                                        labelStickerOverlays =
+                                            createLabelStickerOverlaysForExport(
+                                                labelStickers =
+                                                    labelStickers,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                labelStickerSizes =
+                                                    labelStickerSizes,
+                                                baseFontSizePx =
+                                                    baseLabelStickerFontPx
+                                            ),
                                         stickerOverlays =
                                             createStickerOverlaysForExport(
                                                 photoStickers =
@@ -5616,6 +5994,17 @@ fun DetailScreen(
                                     }
 
                                     viewModel.exportPostcardToGallery(
+                                        labelStickerOverlays =
+                                            createLabelStickerOverlaysForExport(
+                                                labelStickers =
+                                                    labelStickers,
+                                                postcardSize =
+                                                    postcardPreviewSize,
+                                                labelStickerSizes =
+                                                    labelStickerSizes,
+                                                baseFontSizePx =
+                                                    baseLabelStickerFontPx
+                                            ),
                                         stickerOverlays =
                                             createStickerOverlaysForExport(
                                                 photoStickers =

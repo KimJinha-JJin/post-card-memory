@@ -296,6 +296,101 @@ class PostcardEditDraftTest {
         assertEquals(listOf(goodTape), parsed!!.maskingTapes)
     }
 
+    // ---- 라벨 스티커도 Uri를 다루지 않으므로 전체 왕복을 검증할 수 있다 ----
+
+    private fun sampleLabelSticker(id: String = "label-1") =
+        LabelStickerItem(
+            id = id,
+            text = "SUMMER 2026",
+            style = LabelTapeStyle.RED,
+            offset = Offset(0.4f, -0.2f),
+            scale = 1f,
+            rotationDegrees = -6f
+        )
+
+    private fun sampleCustomLabelSticker(id: String = "label-custom") =
+        LabelStickerItem(
+            id = id,
+            text = "민트 라벨",
+            style = LabelTapeStyle.CUSTOM,
+            offset = Offset(-3.5f, 44f),
+            scale = 1f,
+            rotationDegrees = 12f,
+            customTapeColorArgb = 0xFF7FD4C1L
+        )
+
+    @Test
+    fun serialize_thenParse_roundTripsLabelStickers() {
+        val original = emptyDraft().copy(
+            labelStickers = listOf(
+                sampleLabelSticker("a"),
+                sampleCustomLabelSticker("b")
+            ),
+            selectedLabelStickerId = "a"
+        )
+
+        val parsed = parsePostcardEditDraft(original.serialize())
+
+        assertNotNull(parsed)
+        assertEquals(original, parsed)
+    }
+
+    @Test
+    fun parsePostcardEditDraft_missingLabelStickerFields_treatedAsNoLabelStickers() {
+        // DRAFT_FORMAT_VERSION=4 시절(라벨 스티커 도입 전)에 저장된 초안: meta에
+        // 마스킹테이프 필드(13)까지만 있고 14~15번(라벨 개수/선택 id)이 없다.
+        val text = "POSTCARD_DRAFT_V1\n4\t1\t1\t1\t1\t~\t~\t0\t0\t0\t0\t~\t0\t~"
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertTrue(parsed!!.labelStickers.isEmpty())
+        assertNull(parsed.selectedLabelStickerId)
+    }
+
+    @Test
+    fun parsePostcardEditDraft_returnsNullWhenDeclaredLabelStickerCountExceedsBodyLines() {
+        val text = "POSTCARD_DRAFT_V1\n5\t1\t1\t1\t1\t~\t~\t0\t0\t0\t0\t~\t0\t~\t3\t~"
+
+        assertNull(parsePostcardEditDraft(text))
+    }
+
+    @Test
+    fun parsePostcardEditDraft_skipsCorruptedLabelStickerLineButKeepsRest() {
+        val goodLabel = sampleLabelSticker("good")
+        val text = listOf(
+            "POSTCARD_DRAFT_V1",
+            "5\t1\t1\t1\t1\t~\t~\t0\t0\t0\t0\t~\t0\t~\t2\t~",
+            "corrupted\tline",
+            goodLabel.serialize()
+        ).joinToString("\n")
+
+        val parsed = parsePostcardEditDraft(text)
+
+        assertNotNull(parsed)
+        assertEquals(listOf(goodLabel), parsed!!.labelStickers)
+    }
+
+    /**
+     * 마스킹테이프와 라벨이 함께 들어 있을 때, 라벨 라인이 마스킹테이프
+     * 라인 뒤에서부터 잘려 나오는지 확인한다 — 두 목록의 offset 계산이
+     * 어긋나면 서로의 라인을 잘못 파싱해 조용히 유실된다.
+     */
+    @Test
+    fun serialize_thenParse_roundTripsMaskingTapesAndLabelStickersTogether() {
+        val original = emptyDraft().copy(
+            maskingTapes = listOf(sampleMaskingTape("tape-a"), sampleMaskingTape("tape-b")),
+            selectedMaskingTapeId = "tape-b",
+            labelStickers = listOf(sampleLabelSticker("label-a")),
+            selectedLabelStickerId = "label-a"
+        )
+
+        val parsed = parsePostcardEditDraft(original.serialize())
+
+        assertNotNull(parsed)
+        assertEquals(original, parsed)
+    }
+
     @Test
     fun shouldPersistDraftRevision_allowsNewerOrEqualRevision() {
         assertTrue(shouldPersistDraftRevision(candidateRevision = 5L, latestPersistedRevision = 4L))
