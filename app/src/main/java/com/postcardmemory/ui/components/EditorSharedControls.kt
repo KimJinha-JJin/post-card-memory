@@ -2,8 +2,11 @@ package com.postcardmemory.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,17 +28,20 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
+import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.SurfaceGray
 
 @Composable
@@ -216,5 +223,72 @@ fun EditorOutlineButton(
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+/**
+ * 꾸미기 프리셋(스티커·도장·마스킹테이프·배경 패턴 등) 미리보기 타일의 공통 틀.
+ *
+ * 미리보기 박스(기본 모서리 10dp, 기본 배경 BrutalWhite) 아래에 필요하면 이름
+ * 라벨(10sp SemiBold)을, 그 아래 필요하면 선택 상태 밑줄(2dp 높이 24dp 너비,
+ * 선택 시 SunsetGold)을 붙인다. 미리보기 자체의 크기·모양·내용은 호출부가
+ * `previewModifier`와 `preview`로 그대로 결정하므로, 스티커의 정사각형·
+ * 마스킹테이프의 가로형 같은 콘텐츠 고유 비율은 그대로 유지된다. 이 컴포저블이
+ * 통일하는 것은 이름·선택 표시의 위치·크기·색뿐이다.
+ */
+@Composable
+fun DecorationPresetTile(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    previewModifier: Modifier = Modifier,
+    cornerRadius: Dp = 10.dp,
+    backgroundColor: Color = BrutalWhite,
+    contentPadding: PaddingValues = PaddingValues(6.dp),
+    label: String? = null,
+    selected: Boolean = false,
+    showSelectionIndicator: Boolean = true,
+    preview: @Composable BoxScope.() -> Unit
+) {
+    val shape = RoundedCornerShape(cornerRadius)
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Box(
+            modifier = previewModifier
+                .background(color = backgroundColor, shape = shape)
+                .clip(shape)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(contentPadding),
+            contentAlignment = Alignment.Center,
+            content = preview
+        )
+
+        if (label != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = label,
+                color = BrutalBlack,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        if (showSelectionIndicator) {
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Box(
+                modifier = Modifier
+                    .height(2.dp)
+                    .width(24.dp)
+                    .background(
+                        color = if (selected) SunsetGold else Color.Transparent,
+                        shape = RoundedCornerShape(1.dp)
+                    )
+            )
+        }
     }
 }

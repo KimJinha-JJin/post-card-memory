@@ -165,7 +165,7 @@ fun LabelStickerPickerPanel(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Box(
                         modifier = Modifier
@@ -411,17 +411,17 @@ private fun LabelTapeSwatch(
 
         Text(
             text = label,
-            color = if (isSelected) BrutalBlack else GraphiteAccent,
+            color = BrutalBlack,
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Box(
             modifier = Modifier
                 .height(2.dp)
-                .width(20.dp)
+                .width(24.dp)
                 .background(
                     color = if (isSelected) SunsetGold else Color.Transparent,
                     shape = RoundedCornerShape(1.dp)

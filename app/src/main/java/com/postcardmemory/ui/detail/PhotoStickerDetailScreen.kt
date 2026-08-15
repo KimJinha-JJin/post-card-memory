@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -242,48 +241,24 @@ fun PhotoStickerPickerPanel(
             photoStickers.forEach { sticker ->
                 val isSelected = sticker.id == selectedStickerId
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                DecorationPresetTile(
+                    onClick = { onSelectSticker(sticker.id) },
+                    enabled = enabled,
+                    previewModifier = Modifier.size(56.dp),
+                    selected = isSelected
                 ) {
-                    Box(
+                    AsyncImage(
+                        model = sticker.displayedUri,
+                        contentDescription = null,
+                        contentScale =
+                            if (sticker.isBackgroundRemoved) {
+                                ContentScale.Fit
+                            } else {
+                                ContentScale.Crop
+                            },
                         modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                color = BrutalWhite,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(enabled = enabled) {
-                                onSelectSticker(sticker.id)
-                            }
-                            .padding(6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AsyncImage(
-                            model = sticker.displayedUri,
-                            contentDescription = null,
-                            contentScale =
-                                if (sticker.isBackgroundRemoved) {
-                                    ContentScale.Fit
-                                } else {
-                                    ContentScale.Crop
-                                },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .height(2.dp)
-                            .width(24.dp)
-                            .background(
-                                color = if (isSelected) SunsetGold else Color.Transparent,
-                                shape = RoundedCornerShape(1.dp)
-                            )
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(8.dp))
                     )
                 }
             }

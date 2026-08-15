@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +43,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -207,39 +207,17 @@ fun SealPickerPanel(
                 val isWhiteInk =
                     (seal.colorArgb == (SealInkWhite.toArgb().toLong() and 0xFFFFFFFFL))
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                DecorationPresetTile(
+                    onClick = { onSelectSeal(seal.id) },
+                    enabled = enabled,
+                    previewModifier = Modifier.size(56.dp),
+                    backgroundColor = if (isWhiteInk) NeutralLight else BrutalWhite,
+                    selected = isSelected
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                color = if (isWhiteInk) NeutralLight else BrutalWhite,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(enabled = enabled) {
-                                onSelectSeal(seal.id)
-                            }
-                            .padding(6.dp)
-                    ) {
-                        SealPreviewContent(
-                            type = seal.type,
-                            color = Color(seal.colorArgb),
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .height(2.dp)
-                            .width(24.dp)
-                            .background(
-                                color = if (isSelected) SunsetGold else Color.Transparent,
-                                shape = RoundedCornerShape(1.dp)
-                            )
+                    SealPreviewContent(
+                        type = seal.type,
+                        color = Color(seal.colorArgb),
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }

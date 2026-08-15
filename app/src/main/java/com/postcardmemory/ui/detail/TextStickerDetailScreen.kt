@@ -12,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -148,44 +150,22 @@ fun TextStickerPickerPanel(
             textStickers.forEach { sticker ->
                 val isSelected = sticker.id == selectedTextStickerId
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                DecorationPresetTile(
+                    onClick = { onSelectTextSticker(sticker.id) },
+                    enabled = enabled,
+                    previewModifier = Modifier
+                        .heightIn(min = 56.dp)
+                        .widthIn(min = 56.dp, max = 96.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    selected = isSelected
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .heightIn(min = 56.dp)
-                            .widthIn(min = 56.dp, max = 96.dp)
-                            .background(
-                                color = BrutalWhite,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(enabled = enabled) {
-                                onSelectTextSticker(sticker.id)
-                            }
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = sticker.text,
-                            color = Color(sticker.colorArgb),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .height(2.dp)
-                            .widthIn(min = 24.dp)
-                            .background(
-                                color = if (isSelected) SunsetGold else Color.Transparent,
-                                shape = RoundedCornerShape(1.dp)
-                            )
+                    Text(
+                        text = sticker.text,
+                        color = Color(sticker.colorArgb),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

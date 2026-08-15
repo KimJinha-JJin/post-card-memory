@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +43,6 @@ import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GraphiteAccent
-import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.sealInkColors
 import com.postcardmemory.utils.DoodleStrokeWidth
@@ -305,12 +305,7 @@ private fun DoodleToolTile(
             modifier = Modifier
                 .size(52.dp)
                 .background(
-                    color = if (selected) SunsetGold.copy(alpha = 0.18f) else BrutalWhite,
-                    shape = RoundedCornerShape(10.dp)
-                )
-                .border(
-                    width = if (selected) 1.5.dp else 1.dp,
-                    color = if (selected) SunsetGold else NeutralLight,
+                    color = BrutalWhite,
                     shape = RoundedCornerShape(10.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -328,8 +323,20 @@ private fun DoodleToolTile(
         Text(
             text = label,
             color = BrutalBlack,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Box(
+            modifier = Modifier
+                .height(2.dp)
+                .width(24.dp)
+                .background(
+                    color = if (selected) SunsetGold else Color.Transparent,
+                    shape = RoundedCornerShape(1.dp)
+                )
         )
     }
 }
@@ -353,12 +360,7 @@ private fun DoodleWidthTile(
             modifier = Modifier
                 .size(52.dp)
                 .background(
-                    color = if (selected) SunsetGold.copy(alpha = 0.18f) else BrutalWhite,
-                    shape = RoundedCornerShape(10.dp)
-                )
-                .border(
-                    width = if (selected) 1.5.dp else 1.dp,
-                    color = if (selected) SunsetGold else NeutralLight,
+                    color = BrutalWhite,
                     shape = RoundedCornerShape(10.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -378,8 +380,20 @@ private fun DoodleWidthTile(
         Text(
             text = label,
             color = BrutalBlack,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Box(
+            modifier = Modifier
+                .height(2.dp)
+                .width(24.dp)
+                .background(
+                    color = if (selected) SunsetGold else Color.Transparent,
+                    shape = RoundedCornerShape(1.dp)
+                )
         )
     }
 }

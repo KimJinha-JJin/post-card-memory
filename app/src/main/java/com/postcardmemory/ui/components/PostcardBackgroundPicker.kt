@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.SunsetGold
 
@@ -123,23 +121,22 @@ fun PostcardBackgroundColorPicker(
                     }
                 ) {
                     Box(
-                        modifier = Modifier.size(44.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(
-                                    color = Color(colorArgb),
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = PaperDivider,
-                                    shape = CircleShape
-                                )
-                        )
-                    }
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(
+                                color = Color(colorArgb),
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = BrutalBlack.copy(alpha = 0.35f),
+                                shape = CircleShape
+                            )
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
 
                     Box(
                         modifier = Modifier
@@ -208,80 +205,32 @@ fun PostcardBackgroundPatternPicker(
                 val selected =
                     visibleSelectedPattern == pattern
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                DecorationPresetTile(
+                    onClick = {
+                        localSelectedPatternName = pattern.name
+                        onPatternSelected(pattern)
+                    },
+                    enabled = enabled,
+                    previewModifier = Modifier.size(52.dp),
+                    backgroundColor = if (selected) Color(selectedColorArgb) else PaperField,
+                    label = pattern.label,
+                    selected = selected
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .background(
-                                color =
-                                    if (selected) {
-                                        Color(selectedColorArgb)
-                                    } else {
-                                        PaperField
-                                    },
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .clickable(
-                                enabled = enabled
-                            ) {
-                                localSelectedPatternName = pattern.name
-                                onPatternSelected(pattern)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = pattern.symbol,
-                            color =
-                                if (selected) {
-                                    BrutalWhite
-                                } else {
-                                    BrutalBlack
-                                },
-                            fontSize =
-                                if (pattern == PostcardBackgroundPattern.NONE) {
-                                    25.sp
-                                } else {
-                                    22.sp
-                                },
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(
-                        modifier = Modifier.height(5.dp)
-                    )
-
                     Text(
-                        text = pattern.label,
-                        color = BrutalBlack,
-                        fontSize = 11.sp,
-                        fontWeight =
+                        text = pattern.symbol,
+                        color =
                             if (selected) {
-                                FontWeight.SemiBold
+                                BrutalWhite
                             } else {
-                                FontWeight.Medium
-                            }
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .height(2.dp)
-                            .width(24.dp)
-                            .background(
-                                color =
-                                    if (selected) {
-                                        SunsetGold
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                shape = RoundedCornerShape(1.dp)
-                            )
+                                BrutalBlack
+                            },
+                        fontSize =
+                            if (pattern == PostcardBackgroundPattern.NONE) {
+                                25.sp
+                            } else {
+                                22.sp
+                            },
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

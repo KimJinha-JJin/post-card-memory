@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorSlider
@@ -287,30 +288,15 @@ internal fun MaskingTapePickerPanel(
             photoMaskingTapes.forEach { tape ->
                 val isSelected = tape.id == selectedMaskingTapeId
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = enabled) {
-                            onSelectMaskingTape(tape.id)
-                        }
-                        .padding(6.dp)
+                DecorationPresetTile(
+                    onClick = { onSelectMaskingTape(tape.id) },
+                    enabled = enabled,
+                    backgroundColor = Color.Transparent,
+                    selected = isSelected
                 ) {
                     MaskingTapeContent(
                         tape = tape,
                         modifier = Modifier.size(width = 56.dp, height = 24.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .height(2.dp)
-                            .width(24.dp)
-                            .background(
-                                color = if (isSelected) SunsetGold else Color.Transparent,
-                                shape = RoundedCornerShape(1.dp)
-                            )
                     )
                 }
             }
