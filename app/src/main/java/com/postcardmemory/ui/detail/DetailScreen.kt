@@ -157,6 +157,7 @@ import kotlin.math.sqrt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.postcardmemory.ui.components.EditorSegmentedTabRow
 import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
 import com.postcardmemory.ui.components.LabelStickerContent
@@ -1599,6 +1600,17 @@ fun DetailScreen(
             Icons.Default.Draw
         )
     }
+
+    /**
+     * "스티커" 탭 안에 사진·텍스트·라벨 세 패널이 한 번에 세로로 쌓여 있던 것을
+     * 하위 선택 칩으로 나눈다. 엽서 데이터가 아니라 지금 어떤 패널을 보여줄지
+     * 만 나타내는 값이라 Room·ViewModel로 확장하지 않고 화면 로컬 상태로 둔다.
+     * 기본값은 기존 최상단이던 사진 스티커(0)를 유지한다.
+     */
+    var stickerSubTabIndex by rememberSaveable {
+        mutableStateOf(0)
+    }
+
     val selectedLayout =
         remember(postcard?.layoutStyle) {
             PostcardLayoutStyle.entries
@@ -5039,6 +5051,16 @@ fun DetailScreen(
                                 Column(
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 ) {
+                                EditorSegmentedTabRow(
+                                    options = listOf("사진", "텍스트", "라벨"),
+                                    selectedIndex = stickerSubTabIndex,
+                                    onOptionSelected = { stickerSubTabIndex = it },
+                                    enabled = controlsEnabled
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                if (stickerSubTabIndex == 0) {
                                 PhotoStickerPickerPanel(
                                     photoStickers = photoStickers,
                                     selectedStickerId = selectedStickerId,
@@ -5115,9 +5137,7 @@ fun DetailScreen(
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth()
                                 )
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
+                                } else if (stickerSubTabIndex == 1) {
                                 TextStickerPickerPanel(
                                     textStickers = textStickers,
                                     selectedTextStickerId = selectedTextStickerId,
@@ -5211,9 +5231,7 @@ fun DetailScreen(
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth()
                                 )
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
+                                } else {
                                 LabelStickerPickerPanel(
                                     labelStickers = labelStickers,
                                     selectedLabelStickerId = selectedLabelStickerId,
@@ -5291,6 +5309,7 @@ fun DetailScreen(
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth()
                                 )
+                                }
                                 }
                             }
                         }

@@ -2,6 +2,7 @@ package com.postcardmemory.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +44,8 @@ import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
+import com.postcardmemory.ui.theme.PaperDivider
+import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.SurfaceGray
 
@@ -289,6 +294,61 @@ fun DecorationPresetTile(
                         shape = RoundedCornerShape(1.dp)
                     )
             )
+        }
+    }
+}
+
+/**
+ * 한 편집 영역 안에서 서로 다른 하위 패널 중 하나만 보여줄 때 쓰는 텍스트
+ * 칩 선택줄(예: 스티커 탭의 사진/텍스트/라벨). 엽서 레이아웃 선택
+ * (`PostcardLayoutPicker`)과 같은 시각 언어 — 균등폭 칩, 선택 시 SunsetGold
+ * 옅은 채움 + 굵은 글씨, 그 외엔 PaperField 배경 + PaperDivider 테두리 —
+ * 를 재사용한다. 어떤 패널을 보여줄지만 나타내는 화면 로컬 선택 상태이므로
+ * 저장값이나 Room과는 무관하다.
+ */
+@Composable
+fun EditorSegmentedTabRow(
+    options: List<String>,
+    selectedIndex: Int,
+    onOptionSelected: (Int) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEachIndexed { index, option ->
+            val selected = index == selectedIndex
+            val shape = RoundedCornerShape(12.dp)
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp)
+                    .background(
+                        color = if (selected) SunsetGold.copy(alpha = 0.16f) else PaperField,
+                        shape = shape
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = PaperDivider,
+                        shape = shape
+                    )
+                    .clickable(enabled = enabled) {
+                        onOptionSelected(index)
+                    }
+                    .padding(horizontal = 6.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = option,
+                    color = BrutalBlack,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

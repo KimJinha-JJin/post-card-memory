@@ -122,6 +122,7 @@ internal fun MaskingTapePickerPanel(
                         )
                 }
                 onAddPhotoMaskingTape(uri)
+                isAddPanelExpanded = false
             }
         }
 
@@ -228,7 +229,10 @@ internal fun MaskingTapePickerPanel(
                         MaskingTapeDesignTile(
                             enabled = enabled,
                             label = style.label,
-                            onClick = { onAddMaskingTape(style) }
+                            onClick = {
+                                onAddMaskingTape(style)
+                                isAddPanelExpanded = false
+                            }
                         ) {
                             MaskingTapeContent(
                                 style = style,
@@ -248,6 +252,7 @@ internal fun MaskingTapePickerPanel(
                         onConfirm = { base, pattern, kind ->
                             onAddCustomMaskingTape(base, pattern, kind)
                             isCustomEditorExpanded = false
+                            isAddPanelExpanded = false
                         },
                         modifier = Modifier
                             .fillMaxWidth()
