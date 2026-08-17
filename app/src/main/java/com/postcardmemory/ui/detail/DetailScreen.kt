@@ -1927,7 +1927,7 @@ fun DetailScreen(
             is ConfirmSaveState.Saved -> {
                 Toast.makeText(
                     context,
-                    "스티커·도장 꾸미기를 저장했어!",
+                    "꾸미기를 저장했어!",
                     Toast.LENGTH_SHORT
                 ).show()
                 viewModel.acknowledgeConfirmSaveResult()
@@ -5762,7 +5762,7 @@ fun DetailScreen(
                         DraftSaveStatus.PendingChanges,
                         DraftSaveStatus.Saving -> "꾸미기 저장 중…"
                         DraftSaveStatus.Saved ->
-                            "✓ 꾸미기 저장됨".takeIf { showSavedBriefly }
+                            "✓ 편집 내용 임시 저장됨".takeIf { showSavedBriefly }
                         DraftSaveStatus.Failed -> "꾸미기를 저장하지 못했어요"
                         DraftSaveStatus.Idle -> null
                     }
