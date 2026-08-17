@@ -2459,7 +2459,8 @@ fun DetailScreen(
                                 isSelected &&
                                         !isFocusPreviewMode &&
                                         latestCustomizationPage ==
-                                        STICKER_TAB_PAGE_INDEX
+                                        STICKER_TAB_PAGE_INDEX &&
+                                        stickerSubTabIndex == 0
                             val perStickerEditMode =
                                 if (isSelected) {
                                     resolvedStickerEditMode
@@ -2547,7 +2548,8 @@ fun DetailScreen(
                                         .then(
                                             if (
                                                 latestCustomizationPage ==
-                                                STICKER_TAB_PAGE_INDEX
+                                                STICKER_TAB_PAGE_INDEX &&
+                                                stickerSubTabIndex == 0
                                             ) {
                                                 Modifier.pointerInput(
                                             sticker.id,
@@ -3486,7 +3488,8 @@ fun DetailScreen(
                                 isTextStickerSelected &&
                                         !isFocusPreviewMode &&
                                         latestCustomizationPage ==
-                                        STICKER_TAB_PAGE_INDEX
+                                        STICKER_TAB_PAGE_INDEX &&
+                                        stickerSubTabIndex == 1
                             val currentTextStickerOffset =
                                 textSticker.offset
 
@@ -3524,7 +3527,8 @@ fun DetailScreen(
                                     .then(
                                         if (
                                             latestCustomizationPage ==
-                                            STICKER_TAB_PAGE_INDEX
+                                            STICKER_TAB_PAGE_INDEX &&
+                                            stickerSubTabIndex == 1
                                         ) {
                                             Modifier.pointerInput(
                                         textSticker.id,
@@ -3987,7 +3991,8 @@ fun DetailScreen(
                                 isLabelStickerSelected &&
                                         !isFocusPreviewMode &&
                                         latestCustomizationPage ==
-                                        STICKER_TAB_PAGE_INDEX
+                                        STICKER_TAB_PAGE_INDEX &&
+                                        stickerSubTabIndex == 2
                             val currentLabelStickerOffset =
                                 labelSticker.offset
 
@@ -4025,7 +4030,8 @@ fun DetailScreen(
                                     .then(
                                         if (
                                             latestCustomizationPage ==
-                                            STICKER_TAB_PAGE_INDEX
+                                            STICKER_TAB_PAGE_INDEX &&
+                                            stickerSubTabIndex == 2
                                         ) {
                                             Modifier.pointerInput(
                                         labelSticker.id,
@@ -4218,7 +4224,8 @@ fun DetailScreen(
                 if (
                     selectedSticker != null &&
                     customizationPagerState.currentPage ==
-                    STICKER_TAB_PAGE_INDEX
+                    STICKER_TAB_PAGE_INDEX &&
+                    stickerSubTabIndex == 0
                 ) {
                     Spacer(
                         modifier = Modifier.height(12.dp)
