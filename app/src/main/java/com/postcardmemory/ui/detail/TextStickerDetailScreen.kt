@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
@@ -81,6 +82,7 @@ fun TextStickerPickerPanel(
     selectedTextStickerId: String?,
     onSelectTextSticker: (String) -> Unit,
     onAddTextSticker: (text: String, colorArgb: Long) -> Unit,
+    onEditTextSticker: (id: String, text: String) -> Unit,
     onColorSelected: (id: String, colorArgb: Long) -> Unit,
     onOutlineColorSelected: (id: String, outlineColorArgb: Long) -> Unit,
     onEnterCustomColor: () -> Unit,
@@ -96,6 +98,7 @@ fun TextStickerPickerPanel(
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
     var fillColorCustomExpanded by remember { mutableStateOf(false) }
     var outlineColorCustomExpanded by remember { mutableStateOf(false) }
 
@@ -213,6 +216,15 @@ fun TextStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            EditorOutlineButton(
+                text = "문구 수정",
+                icon = Icons.Default.Edit,
+                onClick = { showEditDialog = true },
+                enabled = enabled
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             TextStickerColorPickerSection(
                 title = "글자색",
                 presetColors = textStickerColors,
@@ -288,6 +300,17 @@ fun TextStickerPickerPanel(
             onConfirm = { text, colorArgb ->
                 onAddTextSticker(text, colorArgb)
                 showAddDialog = false
+            }
+        )
+    }
+
+    if (showEditDialog && selectedTextSticker != null) {
+        TextStickerEditDialog(
+            initialText = selectedTextSticker.text,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { text ->
+                onEditTextSticker(selectedTextSticker.id, text)
+                showEditDialog = false
             }
         )
     }
@@ -566,6 +589,98 @@ private fun TextStickerAddDialog(
             ) {
                 Text(
                     text = "추가",
+                    color = if (textDraft.isNotBlank()) SunsetGold else InkSecondary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "취소",
+                    color = InkSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    )
+}
+
+/**
+ * 이미 붙여놓은 텍스트 스티커의 문구만 고쳐 쓰는 Dialog. 위치·크기·회전·
+ * 색상은 여기서 건드리지 않고 호출부에서 동일 id의 text 필드만 갱신한다.
+ * 색상 선택 UI는 이미 편집 패널에 있으므로 여기서는 다시 만들지 않는다.
+ */
+@Composable
+private fun TextStickerEditDialog(
+    initialText: String,
+    onDismiss: () -> Unit,
+    onConfirm: (text: String) -> Unit
+) {
+    var textDraft by remember { mutableStateOf(initialText) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = PaperSurface,
+        titleContentColor = InkPrimary,
+        textContentColor = InkPrimary,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = "문구 수정",
+                color = InkPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "문구를 다시 적어봐.",
+                    color = InkSecondary,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                OutlinedTextField(
+                    value = textDraft,
+                    onValueChange = { newValue ->
+                        if (
+                            newValue.length <= TEXT_STICKER_MAX_LENGTH &&
+                            !newValue.contains('\n')
+                        ) {
+                            textDraft = newValue
+                        }
+                    },
+                    placeholder = {
+                        Text("( ˶ˆᗜˆ˵ )")
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = PaperField,
+                        unfocusedContainerColor = PaperField,
+                        focusedBorderColor = SunsetGold,
+                        unfocusedBorderColor = PaperDivider,
+                        focusedLabelColor = SunsetGold,
+                        unfocusedLabelColor = InkSecondary,
+                        focusedTextColor = InkPrimary,
+                        unfocusedTextColor = InkPrimary,
+                        focusedPlaceholderColor = InkSecondary,
+                        unfocusedPlaceholderColor = InkSecondary,
+                        cursorColor = SunsetGold
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = textDraft.isNotBlank(),
+                onClick = { onConfirm(textDraft) }
+            ) {
+                Text(
+                    text = "저장",
                     color = if (textDraft.isNotBlank()) SunsetGold else InkSecondary,
                     fontWeight = FontWeight.Bold
                 )

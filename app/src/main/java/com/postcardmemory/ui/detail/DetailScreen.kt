@@ -5166,6 +5166,18 @@ fun DetailScreen(
                                         viewModel.setTextStickers(textStickers + newTextSticker)
                                         viewModel.setSelectedTextStickerId(newTextSticker.id)
                                     },
+                                    onEditTextSticker = { id, text ->
+                                        viewModel.recordTextStickerSnapshotForUndo()
+                                        viewModel.setTextStickers(
+                                            textStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(text = text)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
                                     onColorSelected = { id, colorArgb ->
                                         viewModel.recordTextStickerSnapshotForUndo()
                                         viewModel.setTextStickers(

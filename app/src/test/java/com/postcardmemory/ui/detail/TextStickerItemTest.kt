@@ -109,6 +109,23 @@ class TextStickerItemTest {
 
     // ---- "기타 색상"으로 자유롭게 고른, 프리셋에 없는 임의 ARGB 값 ----
 
+    // ---- 문구 재편집 시 다른 속성이 유지된다 ----
+
+    @Test
+    fun copyText_preservesIdPositionScaleRotationAndColors() {
+        val original = sampleTextSticker(text = "안녕")
+
+        val edited = original.copy(text = "안녕하세요")
+
+        assertEquals("안녕하세요", edited.text)
+        assertEquals(original.id, edited.id)
+        assertEquals(original.offset, edited.offset)
+        assertEquals(original.scale, edited.scale)
+        assertEquals(original.rotationDegrees, edited.rotationDegrees)
+        assertEquals(original.colorArgb, edited.colorArgb)
+        assertEquals(original.outlineColorArgb, edited.outlineColorArgb)
+    }
+
     @Test
     fun serialize_thenParse_roundTripsArbitraryFreePickedColors() {
         val sticker = sampleTextSticker()
