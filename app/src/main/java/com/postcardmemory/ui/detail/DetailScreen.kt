@@ -1587,7 +1587,7 @@ fun DetailScreen(
     )
     val customizationPagerScope = rememberCoroutineScope()
     val customizationPageLabels = remember {
-        listOf("사진", "배경", "텍스트", "스티커", "테이프", "도장", "낙서")
+        listOf("사진", "배경", "글귀", "스티커", "테이프", "도장", "낙서")
     }
     val customizationPageIcons = remember {
         listOf(
