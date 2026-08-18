@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -80,6 +81,7 @@ fun LabelStickerPickerPanel(
     selectedLabelStickerId: String?,
     onSelectLabelSticker: (String) -> Unit,
     onAddLabelSticker: (text: String, style: LabelTapeStyle) -> Unit,
+    onEditLabelSticker: (id: String, text: String) -> Unit,
     onTapeStyleSelected: (id: String, style: LabelTapeStyle) -> Unit,
     onEnterCustomTapeColor: () -> Unit,
     onCustomTapeColorSelected: (id: String, colorArgb: Long) -> Unit,
@@ -92,6 +94,7 @@ fun LabelStickerPickerPanel(
     modifier: Modifier = Modifier
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
     var customTapeColorExpanded by remember { mutableStateOf(false) }
 
     val selectedLabelSticker =
@@ -214,6 +217,15 @@ fun LabelStickerPickerPanel(
         if (selectedLabelSticker != null) {
             Spacer(modifier = Modifier.height(16.dp))
 
+            EditorOutlineButton(
+                text = "문구 수정",
+                icon = Icons.Default.Edit,
+                onClick = { showEditDialog = true },
+                enabled = enabled
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             Text(
                 text = "테이프 색",
                 color = BrutalBlack,
@@ -276,6 +288,19 @@ fun LabelStickerPickerPanel(
             onConfirm = { text, style ->
                 onAddLabelSticker(text, style)
                 showCreateDialog = false
+            }
+        )
+    }
+
+    if (showEditDialog && selectedLabelSticker != null) {
+        LabelStickerEditDialog(
+            initialText = selectedLabelSticker.text,
+            style = selectedLabelSticker.style,
+            customTapeColorArgb = selectedLabelSticker.customTapeColorArgb,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { text ->
+                onEditLabelSticker(selectedLabelSticker.id, text)
+                showEditDialog = false
             }
         )
     }
@@ -552,6 +577,125 @@ private fun LabelStickerCreateDialog(
             ) {
                 Text(
                     text = "뽑기",
+                    color = if (textDraft.isNotBlank()) SunsetGold else InkSecondary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "취소",
+                    color = InkSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    )
+}
+
+/**
+ * 이미 뽑은 라벨의 문구만 고쳐 쓰는 Dialog. 테이프 색은 편집 패널에 이미
+ * 있으므로 여기서 다시 고르게 하지 않고, 현재 스타일 그대로 실물 크기
+ * 미리보기를 보여준다 — LabelStickerCreateDialog와 같은 LabelStickerContent를
+ * 재사용해 문구가 바뀌는 대로 폭이 어떻게 달라지는지 그 자리에서 보여준다.
+ * 위치·회전은 여기서 건드리지 않고 호출부에서 동일 id의 text 필드만 갱신한다.
+ */
+@Composable
+private fun LabelStickerEditDialog(
+    initialText: String,
+    style: LabelTapeStyle,
+    customTapeColorArgb: Long?,
+    onDismiss: () -> Unit,
+    onConfirm: (text: String) -> Unit
+) {
+    var textDraft by remember { mutableStateOf(initialText) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = PaperSurface,
+        titleContentColor = InkPrimary,
+        textContentColor = InkPrimary,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = "문구 수정",
+                color = InkPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        text = {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = PaperField,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 18.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LabelStickerContent(
+                        text = textDraft.ifBlank { LABEL_STICKER_PREVIEW_PLACEHOLDER },
+                        style = style,
+                        fontSizeSp = LABEL_STICKER_BASE_FONT_SIZE_SP,
+                        customTapeColorArgb = customTapeColorArgb
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = textDraft,
+                    onValueChange = { newValue ->
+                        if (
+                            newValue.length <= LABEL_STICKER_MAX_LENGTH &&
+                            !newValue.contains('\n') &&
+                            !newValue.contains('\t')
+                        ) {
+                            textDraft = newValue
+                        }
+                    },
+                    placeholder = {
+                        Text("SUMMER")
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = PaperField,
+                        unfocusedContainerColor = PaperField,
+                        focusedBorderColor = SunsetGold,
+                        unfocusedBorderColor = PaperDivider,
+                        focusedLabelColor = SunsetGold,
+                        unfocusedLabelColor = InkSecondary,
+                        focusedTextColor = InkPrimary,
+                        unfocusedTextColor = InkPrimary,
+                        focusedPlaceholderColor = InkSecondary,
+                        unfocusedPlaceholderColor = InkSecondary,
+                        cursorColor = SunsetGold
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "${textDraft.length} / $LABEL_STICKER_MAX_LENGTH · 짧은 한 줄만 들어가.",
+                    color = InkSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = textDraft.isNotBlank(),
+                onClick = { onConfirm(textDraft) }
+            ) {
+                Text(
+                    text = "저장",
                     color = if (textDraft.isNotBlank()) SunsetGold else InkSecondary,
                     fontWeight = FontWeight.Bold
                 )

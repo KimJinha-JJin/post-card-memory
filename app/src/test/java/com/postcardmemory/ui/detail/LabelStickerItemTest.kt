@@ -86,6 +86,26 @@ class LabelStickerItemTest {
         assertNull(deserializeLabelStickerItem(line))
     }
 
+    // ---- 문구 재편집 시 다른 속성이 유지된다 ----
+
+    @Test
+    fun copyText_preservesIdPositionRotationStyleAndCustomColor() {
+        val original = sampleLabelSticker(text = "SEOUL").copy(
+            style = LabelTapeStyle.CUSTOM,
+            customTapeColorArgb = 0xFF4488CCL
+        )
+
+        val edited = original.copy(text = "BUSAN")
+
+        assertEquals("BUSAN", edited.text)
+        assertEquals(original.id, edited.id)
+        assertEquals(original.offset, edited.offset)
+        assertEquals(original.scale, edited.scale)
+        assertEquals(original.rotationDegrees, edited.rotationDegrees)
+        assertEquals(original.style, edited.style)
+        assertEquals(original.customTapeColorArgb, edited.customTapeColorArgb)
+    }
+
     // ---- 자동 폭 계산 ----
 
     @Test

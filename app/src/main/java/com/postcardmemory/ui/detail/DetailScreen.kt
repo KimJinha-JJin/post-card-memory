@@ -5276,6 +5276,18 @@ fun DetailScreen(
                                             newLabelSticker.id
                                         )
                                     },
+                                    onEditLabelSticker = { id, text ->
+                                        viewModel.recordLabelStickerSnapshotForUndo()
+                                        viewModel.setLabelStickers(
+                                            labelStickers.map {
+                                                if (it.id == id) {
+                                                    it.copy(text = text)
+                                                } else {
+                                                    it
+                                                }
+                                            }
+                                        )
+                                    },
                                     onTapeStyleSelected = { id, style ->
                                         viewModel.recordLabelStickerSnapshotForUndo()
                                         viewModel.setLabelStickers(
