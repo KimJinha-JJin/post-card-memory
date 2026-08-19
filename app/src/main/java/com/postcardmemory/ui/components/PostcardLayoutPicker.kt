@@ -57,28 +57,12 @@ fun PostcardLayoutPicker(
                 }
             )
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "엽서 레이아웃",
-                color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            EditorUndoRedoButtons(
-                canUndo = canUndoPhotoTransform,
-                canRedo = canRedoPhotoTransform,
-                onUndo = onUndoPhotoTransform,
-                onRedo = onRedoPhotoTransform,
-                enabled = enabled,
-                undoContentDescription = "실행 취소",
-                redoContentDescription = "다시 실행"
-            )
-        }
+        Text(
+            text = "엽서 레이아웃",
+            color = BrutalBlack,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
+        )
 
         Spacer(
             modifier = Modifier.height(12.dp)
@@ -99,6 +83,33 @@ fun PostcardLayoutPicker(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "사진 위치·크기",
+                color = BrutalBlack,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            EditorUndoRedoButtons(
+                canUndo = canUndoPhotoTransform,
+                canRedo = canRedoPhotoTransform,
+                onUndo = onUndoPhotoTransform,
+                onRedo = onRedoPhotoTransform,
+                enabled = enabled,
+                undoContentDescription = "실행 취소",
+                redoContentDescription = "다시 실행"
+            )
         }
     }
 }
