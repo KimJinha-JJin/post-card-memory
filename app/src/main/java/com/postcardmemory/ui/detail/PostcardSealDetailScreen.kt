@@ -77,6 +77,8 @@ fun SealPickerPanel(
     val selectedSeal =
         photoSeals.find { it.id == selectedSealId }
 
+    val canAddSeal = photoSeals.size < MAX_SEAL_COUNT
+
     var isAddListExpanded by remember {
         mutableStateOf(photoSeals.size < MAX_SEAL_COUNT)
     }
@@ -131,7 +133,7 @@ fun SealPickerPanel(
             onClick = {
                 isAddListExpanded = !isAddListExpanded
             },
-            enabled = enabled,
+            enabled = enabled && canAddSeal,
             colors = ButtonDefaults.textButtonColors(
                 contentColor = BrutalBlack
             )
@@ -156,8 +158,16 @@ fun SealPickerPanel(
             )
         }
 
+        if (!canAddSeal) {
+            Spacer(modifier = Modifier.height(6.dp))
+
+            EditorEmptyHint(
+                text = "도장은 최대 ${MAX_SEAL_COUNT}개까지 추가할 수 있어."
+            )
+        }
+
         AnimatedVisibility(
-            visible = isAddListExpanded,
+            visible = isAddListExpanded && canAddSeal,
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
