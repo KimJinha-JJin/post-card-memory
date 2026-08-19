@@ -320,6 +320,15 @@ internal fun MaskingTapePickerPanel(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
+            text = "선택한 마스킹테이프",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
             text = "가장자리 모양",
             color = BrutalBlack,
             fontSize = 13.sp,
