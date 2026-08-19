@@ -2562,6 +2562,7 @@ fun DetailScreen(
                                             }
 
                                             var stickerGestureSnapshotPending = true
+                                            var activeStickerPointerCount = 0
 
                                             coroutineScope {
                                             launch {
@@ -2570,6 +2571,20 @@ fun DetailScreen(
                                                         requireUnconsumed = false
                                                     )
                                                     stickerGestureSnapshotPending = true
+                                                }
+                                            }
+                                            launch {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        val event =
+                                                            awaitPointerEvent(
+                                                                PointerEventPass.Initial
+                                                            )
+                                                        activeStickerPointerCount =
+                                                            event.changes.count {
+                                                                it.pressed
+                                                            }
+                                                    }
                                                 }
                                             }
                                             launch {
@@ -2589,64 +2604,90 @@ fun DetailScreen(
                                             launch {
                                             when (perStickerEditMode) {
                                                 StickerEditMode.Move -> {
-                                                    detectDragGestures(
-                                                        onDragStart = {
-                                                            viewModel.setSelectedStickerId(
-                                                                sticker.id
-                                                            )
+                                                    detectTransformGestures {
+                                                        _, pan, zoom, rotationChange ->
+
+                                                        if (postcardPreviewSize == IntSize.Zero) {
+                                                            return@detectTransformGestures
+                                                        }
+
+                                                        val currentSticker =
+                                                            latestPhotoStickers.find {
+                                                                it.id == sticker.id
+                                                            } ?: return@detectTransformGestures
+
+                                                        viewModel.setSelectedStickerId(
+                                                            sticker.id
+                                                        )
+
+                                                        if (stickerGestureSnapshotPending) {
                                                             viewModel.recordStickerSnapshotForUndo()
-                                                        },
-                                                        onDrag = { change, dragAmount ->
-                                                            change.consume()
+                                                            stickerGestureSnapshotPending = false
+                                                        }
 
-                                                            if (postcardPreviewSize == IntSize.Zero) {
-                                                                return@detectDragGestures
-                                                            }
+                                                        val currentStickerSize =
+                                                            stickerSizes[sticker.id]
+                                                                ?: IntSize.Zero
 
-                                                            val currentSticker =
-                                                                latestPhotoStickers.find {
-                                                                    it.id == sticker.id
-                                                                } ?: return@detectDragGestures
+                                                        // 두 손가락 이상일 때는 pan(위치 이동)을
+                                                        // 적용하지 않는다 — 확대·축소·회전만 적용한다
+                                                        // (도장 gesture와 동일 패턴).
+                                                        val isMultiTouch =
+                                                            activeStickerPointerCount >= 2
 
-                                                            val currentStickerSize =
-                                                                stickerSizes[sticker.id]
-                                                                    ?: IntSize.Zero
-
-                                                            val oldOffset =
+                                                        val newOffset =
+                                                            if (isMultiTouch) {
                                                                 currentSticker.offset
-                                                                    ?: centeredStickerOffset(
-                                                                        postcardSize = postcardPreviewSize,
-                                                                        stickerSize = currentStickerSize
+                                                            } else {
+                                                                val oldOffset =
+                                                                    currentSticker.offset
+                                                                        ?: centeredStickerOffset(
+                                                                            postcardSize = postcardPreviewSize,
+                                                                            stickerSize = currentStickerSize
+                                                                        )
+
+                                                                val parentSpaceDrag =
+                                                                    localStickerDeltaToParent(
+                                                                        localDelta = pan,
+                                                                        rotationDegrees =
+                                                                            currentSticker.rotationDegrees,
+                                                                        flipHorizontal =
+                                                                            currentSticker.flipHorizontal,
+                                                                        flipVertical =
+                                                                            currentSticker.flipVertical
                                                                     )
 
-                                                            val parentSpaceDrag =
-                                                                localStickerDeltaToParent(
-                                                                    localDelta = dragAmount,
-                                                                    rotationDegrees =
-                                                                        currentSticker.rotationDegrees,
-                                                                    flipHorizontal =
-                                                                        currentSticker.flipHorizontal,
-                                                                    flipVertical =
-                                                                        currentSticker.flipVertical
+                                                                clampStickerOffset(
+                                                                    offset = oldOffset + parentSpaceDrag,
+                                                                    postcardSize = postcardPreviewSize,
+                                                                    stickerSize = currentStickerSize
                                                                 )
+                                                            }
 
-                                                            viewModel.setPhotoStickers(
-                                                                latestPhotoStickers.map {
-                                                                    if (it.id == sticker.id) {
-                                                                        it.copy(
-                                                                            offset = clampStickerOffset(
-                                                                                offset = oldOffset + parentSpaceDrag,
-                                                                                postcardSize = postcardPreviewSize,
-                                                                                stickerSize = currentStickerSize
-                                                                            )
-                                                                        )
-                                                                    } else {
-                                                                        it
-                                                                    }
-                                                                }
+                                                        val newScale =
+                                                            (currentSticker.scale * zoom)
+                                                                .coerceIn(0.5f, 2.5f)
+
+                                                        val newRotation =
+                                                            normalizeStickerRotation(
+                                                                currentSticker.rotationDegrees +
+                                                                        rotationChange
                                                             )
-                                                        }
-                                                    )
+
+                                                        viewModel.setPhotoStickers(
+                                                            latestPhotoStickers.map {
+                                                                if (it.id == sticker.id) {
+                                                                    it.copy(
+                                                                        offset = newOffset,
+                                                                        scale = newScale,
+                                                                        rotationDegrees = newRotation
+                                                                    )
+                                                                } else {
+                                                                    it
+                                                                }
+                                                            }
+                                                        )
+                                                    }
                                                 }
 
                                                 StickerEditMode.Scale -> {
