@@ -196,37 +196,25 @@ fun PhotoStickerPickerPanel(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy((-4).dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "스티커",
-                color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+            EditorUndoRedoButtons(
+                canUndo = canUndoSticker,
+                canRedo = canRedoSticker,
+                onUndo = onUndoSticker,
+                onRedo = onRedoSticker,
+                enabled = enabled,
+                undoContentDescription = "실행 취소",
+                redoContentDescription = "다시 실행"
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy((-4).dp)
-            ) {
-                EditorUndoRedoButtons(
-                    canUndo = canUndoSticker,
-                    canRedo = canRedoSticker,
-                    onUndo = onUndoSticker,
-                    onRedo = onRedoSticker,
-                    enabled = enabled,
-                    undoContentDescription = "실행 취소",
-                    redoContentDescription = "다시 실행"
-                )
-
-                Text(
-                    text = "${photoStickers.size}장",
-                    color = GraphiteAccent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "${photoStickers.size}장",
+                color = GraphiteAccent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))

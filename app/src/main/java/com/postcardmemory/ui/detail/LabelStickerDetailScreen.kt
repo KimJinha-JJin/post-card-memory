@@ -104,37 +104,25 @@ fun LabelStickerPickerPanel(
     Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy((-4).dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "라벨 스티커",
-                color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+            EditorUndoRedoButtons(
+                canUndo = canUndoLabelSticker,
+                canRedo = canRedoLabelSticker,
+                onUndo = onUndoLabelSticker,
+                onRedo = onRedoLabelSticker,
+                enabled = enabled,
+                undoContentDescription = "실행 취소",
+                redoContentDescription = "다시 실행"
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy((-4).dp)
-            ) {
-                EditorUndoRedoButtons(
-                    canUndo = canUndoLabelSticker,
-                    canRedo = canRedoLabelSticker,
-                    onUndo = onUndoLabelSticker,
-                    onRedo = onRedoLabelSticker,
-                    enabled = enabled,
-                    undoContentDescription = "실행 취소",
-                    redoContentDescription = "다시 실행"
-                )
-
-                Text(
-                    text = "${labelStickers.size}개",
-                    color = GraphiteAccent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "${labelStickers.size}개",
+                color = GraphiteAccent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))

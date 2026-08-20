@@ -136,16 +136,9 @@ internal fun MaskingTapePickerPanel(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "마스킹테이프",
-                color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
             EditorUndoRedoButtons(
                 canUndo = canUndoMaskingTape,
                 canRedo = canRedoMaskingTape,
@@ -337,7 +330,7 @@ internal fun MaskingTapePickerPanel(
             text = "가장자리 모양",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Medium
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -459,7 +452,7 @@ private fun MaskingTapeAdjustSlider(
                 text = label,
                 color = BrutalBlack,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f)
             )
 

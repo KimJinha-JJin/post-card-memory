@@ -68,37 +68,25 @@ fun DoodlePanel(
     Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy((-4).dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "낙서",
-                color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+            EditorUndoRedoButtons(
+                canUndo = canUndo,
+                canRedo = canRedo,
+                onUndo = onUndo,
+                onRedo = onRedo,
+                enabled = enabled,
+                undoContentDescription = "실행 취소",
+                redoContentDescription = "다시 실행"
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy((-4).dp)
-            ) {
-                EditorUndoRedoButtons(
-                    canUndo = canUndo,
-                    canRedo = canRedo,
-                    onUndo = onUndo,
-                    onRedo = onRedo,
-                    enabled = enabled,
-                    undoContentDescription = "실행 취소",
-                    redoContentDescription = "다시 실행"
-                )
-
-                Text(
-                    text = "${strokeCount}개",
-                    color = GraphiteAccent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "${strokeCount}개",
+                color = GraphiteAccent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -107,7 +95,7 @@ fun DoodlePanel(
             text = "도구",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Medium
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -170,7 +158,7 @@ fun DoodlePanel(
             text = "색상",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Medium
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -229,7 +217,7 @@ fun DoodlePanel(
             text = "굵기",
             color = BrutalBlack,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Medium
         )
 
         Spacer(modifier = Modifier.height(8.dp))

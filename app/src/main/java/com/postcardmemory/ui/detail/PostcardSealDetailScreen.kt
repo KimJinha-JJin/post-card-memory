@@ -95,37 +95,25 @@ fun SealPickerPanel(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy((-4).dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "도장",
-                color = BrutalBlack,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+            EditorUndoRedoButtons(
+                canUndo = canUndoSeal,
+                canRedo = canRedoSeal,
+                onUndo = onUndoSeal,
+                onRedo = onRedoSeal,
+                enabled = enabled,
+                undoContentDescription = "실행 취소",
+                redoContentDescription = "다시 실행"
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy((-4).dp)
-            ) {
-                EditorUndoRedoButtons(
-                    canUndo = canUndoSeal,
-                    canRedo = canRedoSeal,
-                    onUndo = onUndoSeal,
-                    onRedo = onRedoSeal,
-                    enabled = enabled,
-                    undoContentDescription = "실행 취소",
-                    redoContentDescription = "다시 실행"
-                )
-
-                Text(
-                    text = "${photoSeals.size} / ${MAX_SEAL_COUNT}개",
-                    color = GraphiteAccent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "${photoSeals.size} / ${MAX_SEAL_COUNT}개",
+                color = GraphiteAccent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
