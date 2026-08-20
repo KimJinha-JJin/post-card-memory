@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -114,11 +115,12 @@ fun PostcardBackgroundColorPicker(
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable(
-                        enabled = enabled
-                    ) {
-                        onColorSelected(colorArgb)
-                    }
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                        .clickable(enabled = enabled) {
+                            onColorSelected(colorArgb)
+                        }
                 ) {
                     Box(
                         modifier = Modifier

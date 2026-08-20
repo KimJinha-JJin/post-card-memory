@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -350,9 +351,12 @@ private fun TextStickerColorPickerSection(
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable(enabled = enabled) {
-                    onPresetSelected(colorArgb)
-                }
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                    .clickable(enabled = enabled) {
+                        onPresetSelected(colorArgb)
+                    }
             ) {
                 Box(
                     modifier = Modifier
@@ -383,9 +387,12 @@ private fun TextStickerColorPickerSection(
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable(enabled = enabled) {
-                onToggleCustomPicker()
-            }
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                .clickable(enabled = enabled) {
+                    onToggleCustomPicker()
+                }
         ) {
             Box(
                 modifier = Modifier
@@ -526,6 +533,9 @@ private fun TextStickerAddDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     textStickerColors.forEach { color ->
@@ -533,9 +543,12 @@ private fun TextStickerAddDialog(
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.clickable {
-                                selectedColor = color
-                            }
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                                .clickable {
+                                    selectedColor = color
+                                }
                         ) {
                             Box(
                                 modifier = Modifier

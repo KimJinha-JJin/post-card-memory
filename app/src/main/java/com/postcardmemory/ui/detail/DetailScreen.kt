@@ -5918,7 +5918,9 @@ fun DetailScreen(
                         expanded = moreMenuExpanded,
                         onDismissRequest = {
                             moreMenuExpanded = false
-                        }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = PaperSurface
                     ) {
                         DropdownMenuItem(
                             text = {

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -689,14 +690,7 @@ private fun MaskingTapeCustomEditor(
                 postcardBackgroundPalette.forEach { swatchArgb ->
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(color = Color(swatchArgb))
-                            .border(
-                                width = 1.dp,
-                                color = BrutalBlack.copy(alpha = 0.35f),
-                                shape = RoundedCornerShape(8.dp)
-                            )
+                            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
                             .clickable(enabled = enabled) {
                                 when (colorTarget) {
                                     MaskingTapeCustomColorTarget.BASE ->
@@ -704,8 +698,21 @@ private fun MaskingTapeCustomEditor(
                                     MaskingTapeCustomColorTarget.PATTERN ->
                                         patternColorArgb = swatchArgb
                                 }
-                            }
-                    )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(color = Color(swatchArgb))
+                                .border(
+                                    width = 1.dp,
+                                    color = BrutalBlack.copy(alpha = 0.35f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        )
+                    }
                 }
             }
 

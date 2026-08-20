@@ -584,7 +584,9 @@ fun GalleryScreen(
                                 expanded = viewMenuExpanded,
                                 onDismissRequest = {
                                     viewMenuExpanded = false
-                                }
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                containerColor = PaperSurface
                             ) {
                                 DropdownMenuItem(
                                     text = {
@@ -652,7 +654,9 @@ fun GalleryScreen(
                                 expanded = sortMenuExpanded,
                                 onDismissRequest = {
                                     sortMenuExpanded = false
-                                }
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                containerColor = PaperSurface
                             ) {
                                 DropdownMenuItem(
                                     text = {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -164,6 +165,9 @@ fun DoodlePanel(
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top
         ) {
@@ -174,9 +178,12 @@ fun DoodlePanel(
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable(enabled = enabled) {
-                        onColorSelected(swatchArgb)
-                    }
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                        .clickable(enabled = enabled) {
+                            onColorSelected(swatchArgb)
+                        }
                 ) {
                     Box(
                         modifier = Modifier

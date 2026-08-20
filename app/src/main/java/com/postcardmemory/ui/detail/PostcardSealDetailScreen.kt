@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -253,6 +254,9 @@ fun SealPickerPanel(
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top
         ) {
@@ -264,9 +268,12 @@ fun SealPickerPanel(
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable(enabled = enabled) {
-                        onColorSelected(selectedSeal.id, inkArgb)
-                    }
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                        .clickable(enabled = enabled) {
+                            onColorSelected(selectedSeal.id, inkArgb)
+                        }
                 ) {
                     Box(
                         modifier = Modifier

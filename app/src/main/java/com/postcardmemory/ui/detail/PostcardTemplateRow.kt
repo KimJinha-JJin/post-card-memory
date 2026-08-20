@@ -50,6 +50,7 @@ import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperField
+import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.utils.PostcardRenderSpec
 import java.io.File
@@ -241,7 +242,9 @@ private fun TemplateManageMenuButton(
 
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = PaperSurface
         ) {
             DropdownMenuItem(
                 text = { Text("이름 변경") },
