@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -297,32 +298,37 @@ fun PhotoStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorOutlineButton(
-                text = "복제",
-                onClick = { onDuplicateSticker(selectedSticker.id) },
-                enabled = enabled
-            )
-
             backgroundRemovalError?.let { errorMessage ->
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = errorMessage,
                     color = GalleryDangerRed,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                EditorOutlineButton(
+                    text = "복제",
+                    icon = Icons.Default.ContentCopy,
+                    onClick = { onDuplicateSticker(selectedSticker.id) },
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f)
+                )
 
-            EditorOutlineButton(
-                text = "삭제",
-                icon = Icons.Default.Delete,
-                onClick = { onDeleteSticker(selectedSticker.id) },
-                enabled = enabled,
-                contentColor = GalleryDangerRed,
-                borderColor = GalleryDangerRed
-            )
+                EditorOutlineButton(
+                    text = "삭제",
+                    icon = Icons.Default.Delete,
+                    onClick = { onDeleteSticker(selectedSticker.id) },
+                    enabled = enabled,
+                    contentColor = GalleryDangerRed,
+                    borderColor = GalleryDangerRed,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         } else if (photoStickers.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
 

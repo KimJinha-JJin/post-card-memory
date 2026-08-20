@@ -4274,11 +4274,6 @@ fun DetailScreen(
 
                     StickerEditModeToolbar(
                         sticker = selectedSticker,
-                        editMode = resolvedStickerEditMode,
-                        onModeSelected = { mode ->
-                            stickerEditMode = mode
-                            stickerEditModeOwnerId = selectedStickerId
-                        },
                         isRemovingBackground = isRemovingBackground,
                         onToggleBackgroundRemoval = {
                             if (selectedSticker.isBackgroundRemoved) {
@@ -4321,34 +4316,6 @@ fun DetailScreen(
                                     )
                                 }
                             }
-                        },
-                        onToggleFlipHorizontal = {
-                            viewModel.recordStickerSnapshotForUndo()
-                            viewModel.setPhotoStickers(
-                                photoStickers.map {
-                                    if (it.id == selectedSticker.id) {
-                                        it.copy(
-                                            flipHorizontal = !it.flipHorizontal
-                                        )
-                                    } else {
-                                        it
-                                    }
-                                }
-                            )
-                        },
-                        onToggleFlipVertical = {
-                            viewModel.recordStickerSnapshotForUndo()
-                            viewModel.setPhotoStickers(
-                                photoStickers.map {
-                                    if (it.id == selectedSticker.id) {
-                                        it.copy(
-                                            flipVertical = !it.flipVertical
-                                        )
-                                    } else {
-                                        it
-                                    }
-                                }
-                            )
                         },
                         canMoveForward = canMoveSelectedStickerForward,
                         canMoveBackward = canMoveSelectedStickerBackward,
@@ -5929,7 +5896,7 @@ fun DetailScreen(
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = "스티커·도장 꾸미기 완료 저장",
-                        tint = BrutalBlack
+                        tint = SunsetGold
                     )
                 }
 

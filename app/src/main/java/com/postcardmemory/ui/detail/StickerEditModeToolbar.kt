@@ -6,7 +6,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -21,16 +23,13 @@ import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
+import com.postcardmemory.ui.theme.PaperDivider
 
 @Composable
 internal fun StickerEditModeToolbar(
     sticker: PhotoStickerItem,
-    editMode: StickerEditMode,
-    onModeSelected: (StickerEditMode) -> Unit,
     isRemovingBackground: Boolean,
     onToggleBackgroundRemoval: () -> Unit,
-    onToggleFlipHorizontal: () -> Unit,
-    onToggleFlipVertical: () -> Unit,
     canMoveForward: Boolean,
     canMoveBackward: Boolean,
     onMoveForward: () -> Unit,
@@ -46,61 +45,9 @@ internal fun StickerEditModeToolbar(
                 shape = RoundedCornerShape(14.dp)
             )
             .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        StickerEditModeButton(
-            label = "이동",
-            selected = editMode == StickerEditMode.Move,
-            enabled = enabled,
-            onClick = {
-                onModeSelected(StickerEditMode.Move)
-            }
-        )
-
-        StickerEditModeButton(
-            label = "크기",
-            selected = editMode == StickerEditMode.Scale,
-            enabled = enabled,
-            onClick = {
-                onModeSelected(
-                    if (editMode == StickerEditMode.Scale) {
-                        StickerEditMode.Move
-                    } else {
-                        StickerEditMode.Scale
-                    }
-                )
-            }
-        )
-
-        StickerEditModeButton(
-            label = "회전",
-            selected = editMode == StickerEditMode.Rotate,
-            enabled = enabled,
-            onClick = {
-                onModeSelected(
-                    if (editMode == StickerEditMode.Rotate) {
-                        StickerEditMode.Move
-                    } else {
-                        StickerEditMode.Rotate
-                    }
-                )
-            }
-        )
-
-        StickerEditModeButton(
-            label = "좌우대칭",
-            selected = sticker.flipHorizontal,
-            enabled = enabled,
-            onClick = onToggleFlipHorizontal
-        )
-
-        StickerEditModeButton(
-            label = "상하대칭",
-            selected = sticker.flipVertical,
-            enabled = enabled,
-            onClick = onToggleFlipVertical
-        )
-
         StickerEditModeButton(
             label =
                 when {
@@ -112,6 +59,8 @@ internal fun StickerEditModeToolbar(
             enabled = enabled && !isRemovingBackground,
             onClick = onToggleBackgroundRemoval
         )
+
+        StickerToolbarGroupDivider()
 
         StickerEditModeButton(
             label = "뒤로",
@@ -127,6 +76,22 @@ internal fun StickerEditModeToolbar(
             onClick = onMoveForward
         )
     }
+}
+
+/**
+ * 이미지처리(배경제거·원본복원)와 쌓임순서(뒤로·앞으로)가 성격이 다른
+ * action이라는 걸 보여주는 얇은 구분선. gesture 로직과는 무관한 순수
+ * 시각 구분이다. 이동/크기/회전/좌우·상하대칭은 pinch·twist 제스처가
+ * 이미 처리하므로 툴바에서 뺐다.
+ */
+@Composable
+private fun StickerToolbarGroupDivider() {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(24.dp)
+            .background(color = PaperDivider)
+    )
 }
 
 @Composable

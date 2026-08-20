@@ -24,6 +24,12 @@ import org.junit.Test
  * 걸려 개수를 잘못 세었던 오탐을 반복하지 않기 위해 함수 선언 검사는 줄 시작
  * 앵커로 제한하고, 호출부 경계는 들여쓰기 공백 수 대신 괄호 깊이를 직접
  * 스캔해 잘라낸다.
+ *
+ * 이후 디자인 폴리시 작업(2026-08-20)에서 pinch/twist 제스처가 이동·크기·
+ * 회전을 이미 전부 처리하게 되면서 Move/Scale/Rotate 모드 전환 버튼과
+ * 좌우·상하대칭 버튼을 툴바에서 제거했다. `editMode`/`onModeSelected`/
+ * `onToggleFlipHorizontal`/`onToggleFlipVertical` 파라미터가 그래서 빠졌다.
+ * `StickerEditMode` enum 자체와 기존 flip 데이터·렌더링은 그대로다.
  */
 class StickerEditModeToolbarStructureTest {
 
@@ -120,12 +126,8 @@ class StickerEditModeToolbarStructureTest {
     fun componentFile_takesExpectedCoreParameters() {
         val expectedParams = listOf(
             "sticker: PhotoStickerItem",
-            "editMode: StickerEditMode",
-            "onModeSelected: (StickerEditMode) -> Unit",
             "isRemovingBackground: Boolean",
             "onToggleBackgroundRemoval: () -> Unit",
-            "onToggleFlipHorizontal: () -> Unit",
-            "onToggleFlipVertical: () -> Unit",
             "canMoveForward: Boolean",
             "canMoveBackward: Boolean",
             "onMoveForward: () -> Unit",
@@ -199,11 +201,6 @@ class StickerEditModeToolbarStructureTest {
         val block = extractBalancedCall(detailScreenText, callStarts.single())
 
         assertTrue("sticker = 전달", block.contains("sticker = selectedSticker"))
-        assertTrue("editMode = 전달", block.contains("editMode = resolvedStickerEditMode"))
-        assertTrue(
-            "onModeSelected 콜백 전달",
-            block.contains("onModeSelected = { mode ->")
-        )
         assertTrue(
             "isRemovingBackground = 전달",
             block.contains("isRemovingBackground = isRemovingBackground")
@@ -211,14 +208,6 @@ class StickerEditModeToolbarStructureTest {
         assertTrue(
             "onToggleBackgroundRemoval 콜백 전달",
             block.contains("onToggleBackgroundRemoval = {")
-        )
-        assertTrue(
-            "onToggleFlipHorizontal 콜백 전달",
-            block.contains("onToggleFlipHorizontal = {")
-        )
-        assertTrue(
-            "onToggleFlipVertical 콜백 전달",
-            block.contains("onToggleFlipVertical = {")
         )
         assertTrue(
             "canMoveForward = 전달",

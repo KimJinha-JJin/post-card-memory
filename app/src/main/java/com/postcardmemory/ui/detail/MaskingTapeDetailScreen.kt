@@ -692,6 +692,11 @@ private fun MaskingTapeCustomEditor(
                             .size(28.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(color = Color(swatchArgb))
+                            .border(
+                                width = 1.dp,
+                                color = BrutalBlack.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
                             .clickable(enabled = enabled) {
                                 when (colorTarget) {
                                     MaskingTapeCustomColorTarget.BASE ->
