@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +62,8 @@ import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.components.postcardBackgroundPalette
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
+import com.postcardmemory.ui.theme.PaperDivider
+import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.SunsetGold
 import kotlin.math.roundToInt
 
@@ -345,13 +348,15 @@ internal fun MaskingTapePickerPanel(
         ) {
             MaskingTapeEdgeStyle.entries.forEach { edgeStyle ->
                 val isEdgeSelected = selectedTape.edgeStyle == edgeStyle
+                val edgeChipShape = RoundedCornerShape(10.dp)
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(edgeChipShape)
                         .background(
-                            color = if (isEdgeSelected) SunsetGold else Color(0xFFF4ECDE)
+                            color = if (isEdgeSelected) SunsetGold.copy(alpha = 0.16f) else PaperField
                         )
+                        .border(width = 1.dp, color = PaperDivider, shape = edgeChipShape)
                         .clickable(enabled = enabled) {
                             onEdgeStyleSelected(selectedTape.id, edgeStyle)
                         }
@@ -633,13 +638,15 @@ private fun MaskingTapeCustomEditor(
             ) {
                 MaskingTapePatternKind.entries.forEach { kind ->
                     val isKindSelected = patternKind == kind
+                    val patternChipShape = RoundedCornerShape(8.dp)
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(patternChipShape)
                             .background(
-                                color = if (isKindSelected) SunsetGold else Color(0xFFF4ECDE)
+                                color = if (isKindSelected) SunsetGold.copy(alpha = 0.16f) else PaperField
                             )
+                            .border(width = 1.dp, color = PaperDivider, shape = patternChipShape)
                             .clickable(enabled = enabled) { patternKind = kind }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
