@@ -42,6 +42,7 @@ import com.postcardmemory.ui.components.StampCardContent
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
+import com.postcardmemory.ui.theme.SunsetGold
 import kotlinx.coroutines.isActive
 import kotlin.math.PI
 import kotlin.math.pow
@@ -50,7 +51,6 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 private val CrownGold = Color(0xFFE8B94A)
-private val CrownGoldOutline = Color(0xFF8C5F00)
 
 /** 레이스카 차체 색 풀 — 차선이 아니라 엽서 id로 골라서, 카드마다 자기만의 색을 갖는다. */
 private val RaceCarColors = listOf(
@@ -494,7 +494,7 @@ private fun PixelCrown(
             size = Size(size.width, bandHeight * 0.55f)
         )
         drawRect(
-            color = CrownGoldOutline,
+            color = SunsetGold,
             topLeft = Offset(0f, spikeHeight + bandHeight * 0.55f),
             size = Size(size.width, bandHeight * 0.45f)
         )
