@@ -45,6 +45,7 @@ import coil.compose.AsyncImage
 import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.theme.BrutalBlack
@@ -337,7 +338,7 @@ fun PhotoStickerPickerPanel(
         } else if (photoStickers.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorEmptyHint(
+            EditorQuietHint(
                 text = "편집할 스티커를 선택해."
             )
         }

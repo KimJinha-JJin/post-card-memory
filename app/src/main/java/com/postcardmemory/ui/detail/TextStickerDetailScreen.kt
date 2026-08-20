@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.theme.BrutalBlack
@@ -280,7 +281,7 @@ fun TextStickerPickerPanel(
         } else if (textStickers.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorEmptyHint(
+            EditorQuietHint(
                 text = "편집할 텍스트 스티커를 선택해."
             )
         }

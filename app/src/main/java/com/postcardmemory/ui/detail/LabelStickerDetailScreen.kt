@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
 import com.postcardmemory.ui.components.LabelStickerContent
@@ -268,7 +269,7 @@ fun LabelStickerPickerPanel(
         } else if (labelStickers.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorEmptyHint(
+            EditorQuietHint(
                 text = "편집할 라벨을 선택해."
             )
         }

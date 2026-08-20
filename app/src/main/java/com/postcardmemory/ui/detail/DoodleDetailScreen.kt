@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalWhite
@@ -159,7 +160,7 @@ fun DoodlePanel(
         if (doodleTool != DoodleTool.ERASER) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorEmptyHint(
+            EditorQuietHint(
                 text = "길게 누른 채 끌면 직선을 그릴 수 있어."
             )
         }

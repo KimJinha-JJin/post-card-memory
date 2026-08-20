@@ -111,6 +111,25 @@ fun EditorEmptyHint(
 }
 
 /**
+ * 진짜 빈 상태(EditorEmptyHint)가 아니라, 항목은 있지만 선택되지 않았거나
+ * 조작법·제약을 알려주는 조용한 한 줄 안내에 쓴다. 카드처럼 무게를 주지
+ * 않도록 배경·테두리·굵은 글씨 없이 Ink 계열 보조색 텍스트만 남긴다.
+ */
+@Composable
+fun EditorQuietHint(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        color = GraphiteAccent,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
+/**
  * 편집 패널 공통 슬라이더.
  *
  * 얇은 4dp 트랙과 작은 16dp 원형 손잡이로 통일한다. 색상은 개편 전

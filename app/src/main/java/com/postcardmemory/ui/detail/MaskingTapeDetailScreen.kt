@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.MaskingTapeContent
@@ -64,6 +65,7 @@ import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperField
+import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.SunsetGold
 import kotlin.math.roundToInt
 
@@ -313,7 +315,7 @@ internal fun MaskingTapePickerPanel(
         if (selectedTape == null) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorEmptyHint(
+            EditorQuietHint(
                 text = "편집할 마스킹테이프를 선택해."
             )
 
@@ -586,7 +588,7 @@ private fun MaskingTapeCustomEditor(
 
     Column(
         modifier = modifier
-            .background(color = Color(0xFFFFFBF3), shape = RoundedCornerShape(14.dp))
+            .background(color = PaperTray, shape = RoundedCornerShape(14.dp))
             .padding(14.dp)
     ) {
         Text(

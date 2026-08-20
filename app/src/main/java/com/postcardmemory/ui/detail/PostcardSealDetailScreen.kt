@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.theme.BrutalBlack
@@ -161,7 +162,7 @@ fun SealPickerPanel(
         if (!canAddSeal) {
             Spacer(modifier = Modifier.height(6.dp))
 
-            EditorEmptyHint(
+            EditorQuietHint(
                 text = "도장은 최대 ${MAX_SEAL_COUNT}개까지 추가할 수 있어."
             )
         }
@@ -236,7 +237,7 @@ fun SealPickerPanel(
         if (selectedSeal == null) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorEmptyHint(
+            EditorQuietHint(
                 text = "편집할 도장을 선택해."
             )
 
