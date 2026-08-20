@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -263,14 +262,6 @@ fun DoodlePanel(
                 selected = doodleWidth == DoodleStrokeWidth.THICK,
                 enabled = enabled,
                 onClick = { onWidthSelected(DoodleStrokeWidth.THICK) }
-            )
-        }
-
-        if (strokeCount == 0) {
-            Spacer(modifier = Modifier.height(14.dp))
-
-            EditorEmptyHint(
-                text = "손가락으로 엽서 위에 낙서를 그려봐."
             )
         }
 
