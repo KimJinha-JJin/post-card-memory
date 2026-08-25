@@ -23,8 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,8 +42,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.postcardmemory.ui.components.DecorationPresetTile
-import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorActionDivider
 import com.postcardmemory.ui.components.EditorQuietHint
+import com.postcardmemory.ui.components.EditorTextAction
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.theme.BrutalBlack
@@ -327,25 +326,20 @@ fun PhotoStickerPickerPanel(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                EditorOutlineButton(
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EditorTextAction(
                     text = "복제",
-                    icon = Icons.Default.ContentCopy,
                     onClick = { onDuplicateSticker(selectedSticker.id) },
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f)
+                    enabled = enabled
                 )
 
-                EditorOutlineButton(
+                EditorActionDivider()
+
+                EditorTextAction(
                     text = "삭제",
-                    icon = Icons.Default.Delete,
                     onClick = { onDeleteSticker(selectedSticker.id) },
                     enabled = enabled,
-                    contentColor = GalleryDangerRed,
-                    borderColor = GalleryDangerRed,
-                    modifier = Modifier.weight(1f)
+                    contentColor = GalleryDangerRed
                 )
             }
         } else if (photoStickers.isNotEmpty()) {

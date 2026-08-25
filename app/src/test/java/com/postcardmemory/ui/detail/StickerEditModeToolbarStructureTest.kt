@@ -37,6 +37,12 @@ import org.junit.Test
  * DetailScreen.kt에서 `PhotoStickerDetailScreen.kt`의 `PhotoStickerPickerPanel`
  * 안(복제·삭제 버튼과 같은 블록)으로 옮겨갔다. DetailScreen.kt는 이제 상태·콜백을
  * `PhotoStickerPickerPanel`에 파라미터로 전달만 하고 Toolbar를 직접 호출하지 않는다.
+ *
+ * 같은 날 제8차(Selected-object Action Box 철거)에서 이 툴바를 감싸던
+ * NeutralLight 둥근 배경과, 각 항목을 감싸던 filled Box인
+ * `StickerEditModeButton`을 완전히 삭제했다. 이제 공용
+ * `EditorTextAction`/`EditorActionDivider`(ui.components)로 평면 텍스트
+ * Action만 남는다 — 상태 판단·제스처·콜백 배선은 그대로다.
  */
 class StickerEditModeToolbarStructureTest {
 
@@ -110,17 +116,33 @@ class StickerEditModeToolbarStructureTest {
     }
 
     @Test
-    fun componentFile_declaresStickerEditModeButtonAsPrivateHelperOnly() {
-        assertEquals(
-            "StickerEditModeToolbar.kt에 Button 함수 선언이 정확히 1개 있어야 함",
-            1,
-            Regex("""(?m)^private fun StickerEditModeButton\(""")
-                .findAll(componentText)
-                .count()
+    fun componentFile_noLongerDeclaresStickerEditModeButton() {
+        // 53일차 제8차: 개별 항목을 감싸던 filled Box(StickerEditModeButton)를
+        // 완전히 삭제하고 공용 EditorTextAction으로 대체했다.
+        assertFalse(
+            "StickerEditModeButton 선언이 더 이상 남아 있으면 안 됨(EditorTextAction으로 대체)",
+            componentText.contains("StickerEditModeButton")
         )
         assertFalse(
-            "StickerEditModeButton은 DetailScreen.kt에서 더 이상 참조되면 안 됨(Toolbar 전용 helper)",
+            "StickerEditModeButton은 DetailScreen.kt에서도 참조되면 안 됨",
             detailScreenText.contains("StickerEditModeButton")
+        )
+        assertTrue(
+            "StickerEditModeToolbar.kt는 공용 EditorTextAction을 써야 함",
+            componentText.contains("EditorTextAction")
+        )
+    }
+
+    @Test
+    fun componentFile_noLongerWrapsToolbarInRoundedBackground() {
+        // NeutralLight 둥근 배경(기존 툴바 chrome)이 완전히 사라졌는지 확인.
+        assertFalse(
+            "StickerEditModeToolbar.kt에 NeutralLight 배경이 남아 있으면 안 됨",
+            componentText.contains("NeutralLight")
+        )
+        assertFalse(
+            "StickerEditModeToolbar.kt에 RoundedCornerShape가 남아 있으면 안 됨(개별/전체 Box 제거)",
+            componentText.contains("RoundedCornerShape")
         )
     }
 

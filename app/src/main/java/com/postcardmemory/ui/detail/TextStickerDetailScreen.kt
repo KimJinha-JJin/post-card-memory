@@ -22,8 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -46,8 +44,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.DecorationPresetTile
-import com.postcardmemory.ui.components.EditorOutlineButton
+import com.postcardmemory.ui.components.EditorActionDivider
 import com.postcardmemory.ui.components.EditorQuietHint
+import com.postcardmemory.ui.components.EditorTextAction
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.theme.BrutalBlack
@@ -196,25 +195,20 @@ fun TextStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                EditorOutlineButton(
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EditorTextAction(
                     text = "수정",
-                    icon = Icons.Default.Edit,
                     onClick = { showEditDialog = true },
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f)
+                    enabled = enabled
                 )
 
-                EditorOutlineButton(
+                EditorActionDivider()
+
+                EditorTextAction(
                     text = "삭제",
-                    icon = Icons.Default.Delete,
                     onClick = { onDeleteTextSticker(selectedTextSticker.id) },
                     enabled = enabled,
-                    contentColor = GalleryDangerRed,
-                    borderColor = GalleryDangerRed,
-                    modifier = Modifier.weight(1f)
+                    contentColor = GalleryDangerRed
                 )
             }
         } else if (textStickers.isNotEmpty()) {

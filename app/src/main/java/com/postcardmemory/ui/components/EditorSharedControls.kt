@@ -251,6 +251,53 @@ fun EditorOutlineButton(
 }
 
 /**
+ * 선택된 객체의 contextual action(수정·삭제·복제·배경제거·레이어 순서 등)을
+ * 위한 평면 텍스트 Action. 53일차 제8차 파일럿: Action이라는 이유만으로
+ * 매번 둥근 버튼 Box(배경·테두리·shape)로 감싸지 않는다 — 텍스트 자체가
+ * Action으로 읽히도록 하고, 클릭 영역·typography·disabled/destructive
+ * 색상만 유지한다. 배경/테두리가 없으므로 EditorOutlineButton과 달리
+ * 개별 그림자·카드 인상이 남지 않는다.
+ *
+ * EditorOutlineButton은 이 컴포저블과 별개로 그대로 유지된다 — 마스킹테이프·
+ * 도장·낙서 등 이번 파일럿 범위 밖의 화면은 계속 EditorOutlineButton을 쓴다.
+ */
+@Composable
+fun EditorTextAction(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    contentColor: Color = BrutalBlack
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = if (enabled) contentColor else contentColor.copy(alpha = 0.4f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** [EditorTextAction] 여러 개를 한 행에 나란히 둘 때 사이에 쓰는 매우 얇고 조용한 구분선. */
+@Composable
+fun EditorActionDivider(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .width(1.dp)
+            .height(20.dp)
+            .background(PaperDivider)
+    )
+}
+
+/**
  * 꾸미기 프리셋(스티커·도장·마스킹테이프·배경 패턴 등) 미리보기 타일의 공통 틀.
  *
  * 미리보기 박스(기본 모서리 10dp, 기본 배경 BrutalWhite) 아래에 필요하면 이름

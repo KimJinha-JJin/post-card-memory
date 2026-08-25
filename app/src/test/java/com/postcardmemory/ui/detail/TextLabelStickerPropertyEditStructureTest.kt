@@ -192,18 +192,21 @@ class TextLabelStickerPropertyEditStructureTest {
 
     /**
      * 53일차 제6단계: 선택된 스티커의 "수정"/"삭제" Action이 세로 2행이
-     * 아니라 Row 안에서 weight(1f)로 나란히 배치되는지 확인한다. 패널의
-     * "수정" 버튼이 각 파일에서 가장 먼저 나오는 "text = "수정"," 자리라
-     * (Dialog 제목의 "수정"보다 앞선 선언 순서), substringAfter/Before로
-     * 그 사이 구간만 잘라 검사한다.
+     * 아니라 한 Row 안에 나란히 배치되는지 확인한다. 제8단계에서
+     * EditorOutlineButton(+weight(1f))이 공용 EditorTextAction/
+     * EditorActionDivider로 바뀌었으므로, "같은 Row"라는 사실 자체를
+     * EditorActionDivider 존재로 확인한다. 패널의 "수정" 버튼이 각
+     * 파일에서 가장 먼저 나오는 "text = "수정"," 자리라(Dialog 제목의
+     * "수정"보다 앞선 선언 순서), substringAfter/Before로 그 사이 구간만
+     * 잘라 검사한다.
      */
     private fun assertActionsShareOneRow(sourceText: String, fileLabel: String) {
         val between = sourceText
             .substringAfter("text = \"수정\",")
             .substringBefore("text = \"삭제\",")
         assertTrue(
-            "$fileLabel: 수정 버튼이 삭제와 같은 Row 안에서 weight(1f)로 배치돼야 함",
-            between.contains("Modifier.weight(1f)")
+            "$fileLabel: 수정과 삭제 사이에 EditorActionDivider가 있어야 함(같은 Row 안 배치)",
+            between.contains("EditorActionDivider()")
         )
         assertFalse(
             "$fileLabel: 수정과 삭제 사이에 세로 분리용 14dp Spacer가 남아 있으면 안 됨(1행 배치로 대체)",
