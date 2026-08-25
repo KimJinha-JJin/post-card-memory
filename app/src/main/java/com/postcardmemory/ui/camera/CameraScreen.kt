@@ -70,6 +70,7 @@ import com.postcardmemory.ui.theme.SoftGray
 import com.postcardmemory.ui.theme.SurfaceGray
 import java.io.File
 import kotlin.math.max
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -119,7 +120,7 @@ fun CameraScreen(
      */
     LaunchedEffect(flashVisible) {
         if (flashVisible) {
-            delay(120)
+            delay(120.milliseconds)
             flashVisible = false
         }
     }
@@ -131,7 +132,7 @@ fun CameraScreen(
     LaunchedEffect(captureState) {
         when (captureState) {
             is CaptureState.Success -> {
-                delay(1100)
+                delay(1100.milliseconds)
 
                 viewModel.resetState()
                 onNavigateBack()

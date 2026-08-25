@@ -32,7 +32,7 @@ import kotlinx.coroutines.withContext
 @HiltViewModel
 class CameraViewModel @Inject constructor(
     private val repository: PostcardRepository,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _captureState =

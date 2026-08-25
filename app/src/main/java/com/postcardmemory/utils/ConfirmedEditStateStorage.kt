@@ -31,7 +31,7 @@ object ConfirmedEditStateStorage {
             }
 
             AtomicFileReplace.replace(tempFile, targetFile)
-        } catch (exception: IOException) {
+        } catch (_: IOException) {
             tempFile.delete()
             false
         }

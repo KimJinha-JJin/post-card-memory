@@ -78,7 +78,7 @@ object PostcardDraftStorage {
             }
 
             AtomicFileReplace.replace(tempFile, target)
-        } catch (exception: IOException) {
+        } catch (_: IOException) {
             tempFile.delete()
             false
         }

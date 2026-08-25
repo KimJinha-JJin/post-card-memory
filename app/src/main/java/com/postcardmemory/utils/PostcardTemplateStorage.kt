@@ -68,7 +68,7 @@ object PostcardTemplateStorage {
             }
 
             AtomicFileReplace.replace(tempFile, target)
-        } catch (exception: IOException) {
+        } catch (_: IOException) {
             tempFile.delete()
             false
         }
@@ -106,7 +106,7 @@ object PostcardTemplateStorage {
             }
 
             AtomicFileReplace.replace(tempFile, target)
-        } catch (exception: IOException) {
+        } catch (_: IOException) {
             tempFile.delete()
             false
         }

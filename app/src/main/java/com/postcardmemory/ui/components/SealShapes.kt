@@ -167,7 +167,7 @@ private fun DrawScope.drawWaveCancel(
         var up = true
         while (x < size.width) {
             val nextX = (x + waveWidth).coerceAtMost(size.width)
-            path.quadraticBezierTo(
+            path.quadraticTo(
                 x + waveWidth / 2f,
                 y + if (up) -waveHeight else waveHeight,
                 nextX,

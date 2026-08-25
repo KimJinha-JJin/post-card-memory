@@ -316,7 +316,7 @@ sealed interface PhotoColorExtractionState {
 class DetailViewModel @Inject constructor(
     private val repository: PostcardRepository,
     private val deletionManager: PostcardDeletionManager,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _postcard =
@@ -1001,14 +1001,6 @@ class DetailViewModel @Inject constructor(
         _selectedStickerId.value = id
     }
 
-    fun savePhotoStickersState(
-        postcardId: Long
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            persistStickerEditState(postcardId)
-        }
-    }
-
     /**
      * 스티커 확정 상태를 저장한다. 누끼 파일 승격이나 상태 파일 쓰기 중
      * 하나라도 실패하면 false를 반환하며, 이 경우 StateFlow와 undo/redo
@@ -1122,14 +1114,6 @@ class DetailViewModel @Inject constructor(
         _selectedSealId.value = id
     }
 
-    fun savePhotoSealsState(
-        postcardId: Long
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            persistSealEditState(postcardId)
-        }
-    }
-
     /** 도장 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
     private suspend fun persistSealEditState(
         postcardId: Long
@@ -1188,14 +1172,6 @@ class DetailViewModel @Inject constructor(
         id: String?
     ) {
         _selectedTextStickerId.value = id
-    }
-
-    fun saveTextStickersState(
-        postcardId: Long
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            persistTextStickerEditState(postcardId)
-        }
     }
 
     /** 텍스트 스티커 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
@@ -1284,14 +1260,6 @@ class DetailViewModel @Inject constructor(
             _photoMaskingTapes.value + duplicate
         _selectedMaskingTapeId.value = duplicate.id
         scheduleDraftAutosave()
-    }
-
-    fun savePhotoMaskingTapesState(
-        postcardId: Long
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            persistMaskingTapeEditState(postcardId)
-        }
     }
 
     /** 마스킹테이프 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
@@ -2349,7 +2317,7 @@ class DetailViewModel @Inject constructor(
         _lastAppliedTemplateId.value = template.id
 
         if (willAddSeal) {
-            val templateSeal = template.seal!!
+            val templateSeal = template.seal
             setPhotoSeals(
                 listOf(
                     PostcardSealItem(
@@ -2450,7 +2418,7 @@ class DetailViewModel @Inject constructor(
                 }
             } catch (exception: CancellationException) {
                 throw exception
-            } catch (exception: Exception) {
+            } catch (_: Exception) {
                 // 이 저장이 실패로 끝나는 사이 개별 슬라이더/색상/폰트 등
                 // 조작이 끼어들어 화면이 이미 이 템플릿 style과 달라졌다면,
                 // 20개 필드를 한꺼번에 previousStyle로 되돌리면 그 최신
@@ -3499,7 +3467,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.messageTextScale == normalizedScale) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -3571,7 +3539,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.dateTextScale == normalizedScale) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -3644,7 +3612,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.backgroundPatternDensity == normalizedDensity) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -3717,7 +3685,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.stampPhotoScale == normalizedScale) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -3789,7 +3757,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.polaroidPhotoScale == normalizedScale) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -3861,7 +3829,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.photoEdgeBlur == normalizedEdgeBlur) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -3941,7 +3909,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (
                         _postcard.value?.stampPhotoOffsetX == normalizedOffsetX &&
                         _postcard.value?.stampPhotoOffsetY == normalizedOffsetY
@@ -4025,7 +3993,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (
                         _postcard.value?.polaroidPhotoOffsetX == normalizedOffsetX &&
                         _postcard.value?.polaroidPhotoOffsetY == normalizedOffsetY
@@ -4109,7 +4077,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (
                         _postcard.value?.tapedFilmPhotoOffsetX == normalizedOffsetX &&
                         _postcard.value?.tapedFilmPhotoOffsetY == normalizedOffsetY
@@ -4183,7 +4151,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.stampPhotoZoom == normalizedZoom) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -4253,7 +4221,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.polaroidPhotoZoom == normalizedZoom) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -4323,7 +4291,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     if (_postcard.value?.tapedFilmPhotoZoom == normalizedZoom) {
                         _postcard.value =
                             _postcard.value?.copy(
@@ -4698,7 +4666,7 @@ class DetailViewModel @Inject constructor(
                     }
                 } catch (exception: CancellationException) {
                     throw exception
-                } catch (exception: Exception) {
+                } catch (_: Exception) {
                     // 이전 파일 정리 실패는 파일 누수일 뿐이므로 무시한다.
                 }
             }
@@ -4912,7 +4880,7 @@ class DetailViewModel @Inject constructor(
                                 postcardId = postcardId,
                                 sourceFile = captureFile
                             )
-                    } catch (exception: Exception) {
+                    } catch (_: Exception) {
                         null
                     } finally {
                         if (captureFile.exists()) {
@@ -4975,7 +4943,7 @@ class DetailViewModel @Inject constructor(
             return
         }
 
-        val sourceUri = original.removedBgUri!!
+        val sourceUri = original.removedBgUri
 
         viewModelScope.launch {
             val duplicate =
@@ -5304,7 +5272,7 @@ class DetailViewModel @Inject constructor(
                 _futureMailSendState.value = FutureMailSendState.Sent
             } catch (exception: CancellationException) {
                 throw exception
-            } catch (exception: Exception) {
+            } catch (_: Exception) {
                 _futureMailSendState.value =
                     FutureMailSendState.Error(
                         "보내지 못했어. 다시 시도해줘."
