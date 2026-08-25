@@ -1,10 +1,5 @@
 package com.postcardmemory.ui.detail
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -80,11 +75,17 @@ fun LabelStickerPickerPanel(
     labelStickers: List<LabelStickerItem>,
     selectedLabelStickerId: String?,
     onSelectLabelSticker: (String) -> Unit,
-    onAddLabelSticker: (text: String, style: LabelTapeStyle) -> Unit,
-    onEditLabelSticker: (id: String, text: String) -> Unit,
-    onTapeStyleSelected: (id: String, style: LabelTapeStyle) -> Unit,
-    onEnterCustomTapeColor: () -> Unit,
-    onCustomTapeColorSelected: (id: String, colorArgb: Long) -> Unit,
+    onAddLabelSticker: (
+        text: String,
+        style: LabelTapeStyle,
+        customTapeColorArgb: Long?
+    ) -> Unit,
+    onEditLabelSticker: (
+        id: String,
+        text: String,
+        style: LabelTapeStyle,
+        customTapeColorArgb: Long?
+    ) -> Unit,
     onDeleteLabelSticker: (String) -> Unit,
     onUndoLabelSticker: () -> Unit,
     onRedoLabelSticker: () -> Unit,
@@ -95,7 +96,6 @@ fun LabelStickerPickerPanel(
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
-    var customTapeColorExpanded by remember { mutableStateOf(false) }
 
     val selectedLabelSticker =
         labelStickers.find { it.id == selectedLabelStickerId }
@@ -206,41 +206,10 @@ fun LabelStickerPickerPanel(
             Spacer(modifier = Modifier.height(16.dp))
 
             EditorOutlineButton(
-                text = "문구 수정",
+                text = "수정",
                 icon = Icons.Default.Edit,
                 onClick = { showEditDialog = true },
                 enabled = enabled
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "테이프 색",
-                color = BrutalBlack,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LabelTapeStyleRow(
-                selectedStyle = selectedLabelSticker.style,
-                customTapeColorArgb = selectedLabelSticker.customTapeColorArgb,
-                enabled = enabled,
-                customPickerExpanded = customTapeColorExpanded,
-                onStyleSelected = { style ->
-                    customTapeColorExpanded = false
-                    onTapeStyleSelected(selectedLabelSticker.id, style)
-                },
-                onToggleCustomPicker = {
-                    if (!customTapeColorExpanded) {
-                        onEnterCustomTapeColor()
-                    }
-                    customTapeColorExpanded = !customTapeColorExpanded
-                },
-                onCustomColorSelected = { colorArgb ->
-                    onCustomTapeColorSelected(selectedLabelSticker.id, colorArgb)
-                }
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -265,8 +234,8 @@ fun LabelStickerPickerPanel(
     if (showCreateDialog) {
         LabelStickerCreateDialog(
             onDismiss = { showCreateDialog = false },
-            onConfirm = { text, style ->
-                onAddLabelSticker(text, style)
+            onConfirm = { text, style, customTapeColorArgb ->
+                onAddLabelSticker(text, style, customTapeColorArgb)
                 showCreateDialog = false
             }
         )
@@ -275,11 +244,17 @@ fun LabelStickerPickerPanel(
     if (showEditDialog && selectedLabelSticker != null) {
         LabelStickerEditDialog(
             initialText = selectedLabelSticker.text,
-            style = selectedLabelSticker.style,
-            customTapeColorArgb = selectedLabelSticker.customTapeColorArgb,
+            initialStyle = selectedLabelSticker.style,
+            initialCustomTapeColorArgb = selectedLabelSticker.customTapeColorArgb,
+            enabled = enabled,
             onDismiss = { showEditDialog = false },
-            onConfirm = { text ->
-                onEditLabelSticker(selectedLabelSticker.id, text)
+            onConfirm = { text, style, customTapeColorArgb ->
+                onEditLabelSticker(
+                    selectedLabelSticker.id,
+                    text,
+                    style,
+                    customTapeColorArgb
+                )
                 showEditDialog = false
             }
         )
@@ -354,12 +329,12 @@ private fun LabelTapeStyleRow(
         }
     }
 
+    // AlertDialog 안에서는 Dialog 자체가 별도 Window라 AnimatedVisibility로
+    // 높이를 애니메이션하면 매 프레임 Window relayout이 걸려 버벅인다(실기기
+    // 확인됨). 이 줄은 이제 Create/Edit Dialog 안에서만 쓰이므로 애니메이션
+    // 없이 즉시 표시/숨김으로 바꾼다.
     if (onToggleCustomPicker != null && onCustomColorSelected != null) {
-        AnimatedVisibility(
-            visible = customPickerExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
+        if (customPickerExpanded) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -439,7 +414,9 @@ private fun LabelTapeSwatch(
  * "라벨 뽑기" 진입 시 뜨는 생성 다이얼로그. 입력창부터 띄우는 텍스트 스티커
  * 다이얼로그와 달리, 맨 위에 지금 뽑히는 라벨을 실물 크기 감각으로 먼저
  * 보여주고 그 아래에서 문구와 테이프를 정한다 — 글을 쓰는 것이 아니라
- * 물건 하나를 만들어 내는 흐름이다.
+ * 물건 하나를 만들어 내는 흐름이다. 테이프 선택은 EditDialog와 동일하게
+ * LabelTapeStyleRow를 재사용해 프리셋뿐 아니라 기타(커스텀) 색상도 생성
+ * 시점에 바로 고를 수 있다.
  *
  * 입력값은 저장 여부 판단(isBlank)에만 쓰고 실제 저장 문자열은 trim하지
  * 않는다(텍스트 스티커와 동일 정책). 다만 개행과 탭은 줄·필드 단위로 읽는
@@ -448,10 +425,16 @@ private fun LabelTapeSwatch(
 @Composable
 private fun LabelStickerCreateDialog(
     onDismiss: () -> Unit,
-    onConfirm: (text: String, style: LabelTapeStyle) -> Unit
+    onConfirm: (
+        text: String,
+        style: LabelTapeStyle,
+        customTapeColorArgb: Long?
+    ) -> Unit
 ) {
     var textDraft by remember { mutableStateOf("") }
     var selectedStyle by remember { mutableStateOf(LabelTapeStyle.BLACK) }
+    var customTapeColorArgb by remember { mutableStateOf<Long?>(null) }
+    var customTapeColorExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -486,7 +469,8 @@ private fun LabelStickerCreateDialog(
                         text = textDraft.ifBlank { LABEL_STICKER_PREVIEW_PLACEHOLDER },
                         style = selectedStyle,
                         // 축소하지 않고 실제로 붙을 크기 그대로 보여준다.
-                        fontSizeSp = LABEL_STICKER_BASE_FONT_SIZE_SP
+                        fontSizeSp = LABEL_STICKER_BASE_FONT_SIZE_SP,
+                        customTapeColorArgb = customTapeColorArgb
                     )
                 }
 
@@ -545,18 +529,32 @@ private fun LabelStickerCreateDialog(
 
                 LabelTapeStyleRow(
                     selectedStyle = selectedStyle,
+                    customTapeColorArgb = customTapeColorArgb,
                     enabled = true,
-                    onStyleSelected = { style -> selectedStyle = style }
+                    customPickerExpanded = customTapeColorExpanded,
+                    onStyleSelected = { style ->
+                        customTapeColorExpanded = false
+                        selectedStyle = style
+                    },
+                    onToggleCustomPicker = {
+                        customTapeColorExpanded = !customTapeColorExpanded
+                    },
+                    onCustomColorSelected = { colorArgb ->
+                        selectedStyle = LabelTapeStyle.CUSTOM
+                        customTapeColorArgb = colorArgb
+                    }
                 )
             }
         },
         confirmButton = {
             TextButton(
                 enabled = textDraft.isNotBlank(),
-                onClick = { onConfirm(textDraft, selectedStyle) }
+                onClick = {
+                    onConfirm(textDraft, selectedStyle, customTapeColorArgb)
+                }
             ) {
                 Text(
-                    text = "뽑기",
+                    text = "저장",
                     color = if (textDraft.isNotBlank()) SunsetGold else InkSecondary,
                     fontWeight = FontWeight.Bold
                 )
@@ -575,21 +573,31 @@ private fun LabelStickerCreateDialog(
 }
 
 /**
- * 이미 뽑은 라벨의 문구만 고쳐 쓰는 Dialog. 테이프 색은 편집 패널에 이미
- * 있으므로 여기서 다시 고르게 하지 않고, 현재 스타일 그대로 실물 크기
- * 미리보기를 보여준다 — LabelStickerCreateDialog와 같은 LabelStickerContent를
- * 재사용해 문구가 바뀌는 대로 폭이 어떻게 달라지는지 그 자리에서 보여준다.
- * 위치·회전은 여기서 건드리지 않고 호출부에서 동일 id의 text 필드만 갱신한다.
+ * 이미 뽑은 라벨의 문구·테이프 색/스타일을 한 창에서 고쳐 쓰는 Dialog.
+ * 위치·회전은 여기서 건드리지 않고, 저장을 눌렀을 때만 호출부가 동일 id에
+ * text/style/customTapeColorArgb를 한 번에 반영한다. 테이프 선택 UI는
+ * 기존 하단 Property가 쓰던 LabelTapeStyleRow를 그대로 재사용하되, 값의
+ * 출처만 ViewModel에서 이 Dialog의 local state로 바꿨다.
  */
 @Composable
 private fun LabelStickerEditDialog(
     initialText: String,
-    style: LabelTapeStyle,
-    customTapeColorArgb: Long?,
+    initialStyle: LabelTapeStyle,
+    initialCustomTapeColorArgb: Long?,
+    enabled: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (text: String) -> Unit
+    onConfirm: (
+        text: String,
+        style: LabelTapeStyle,
+        customTapeColorArgb: Long?
+    ) -> Unit
 ) {
     var textDraft by remember { mutableStateOf(initialText) }
+    var styleDraft by remember { mutableStateOf(initialStyle) }
+    var customTapeColorArgbDraft by remember {
+        mutableStateOf(initialCustomTapeColorArgb)
+    }
+    var customTapeColorExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -599,7 +607,7 @@ private fun LabelStickerEditDialog(
         shape = RoundedCornerShape(20.dp),
         title = {
             Text(
-                text = "문구 수정",
+                text = "수정",
                 color = InkPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold
@@ -620,9 +628,9 @@ private fun LabelStickerEditDialog(
                 ) {
                     LabelStickerContent(
                         text = textDraft.ifBlank { LABEL_STICKER_PREVIEW_PLACEHOLDER },
-                        style = style,
+                        style = styleDraft,
                         fontSizeSp = LABEL_STICKER_BASE_FONT_SIZE_SP,
-                        customTapeColorArgb = customTapeColorArgb
+                        customTapeColorArgb = customTapeColorArgbDraft
                     )
                 }
 
@@ -667,12 +675,43 @@ private fun LabelStickerEditDialog(
                     color = InkSecondary,
                     fontSize = 11.sp
                 )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "테이프 색",
+                    color = BrutalBlack,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LabelTapeStyleRow(
+                    selectedStyle = styleDraft,
+                    customTapeColorArgb = customTapeColorArgbDraft,
+                    enabled = enabled,
+                    customPickerExpanded = customTapeColorExpanded,
+                    onStyleSelected = { style ->
+                        customTapeColorExpanded = false
+                        styleDraft = style
+                    },
+                    onToggleCustomPicker = {
+                        customTapeColorExpanded = !customTapeColorExpanded
+                    },
+                    onCustomColorSelected = { colorArgb ->
+                        styleDraft = LabelTapeStyle.CUSTOM
+                        customTapeColorArgbDraft = colorArgb
+                    }
+                )
             }
         },
         confirmButton = {
             TextButton(
                 enabled = textDraft.isNotBlank(),
-                onClick = { onConfirm(textDraft) }
+                onClick = {
+                    onConfirm(textDraft, styleDraft, customTapeColorArgbDraft)
+                }
             ) {
                 Text(
                     text = "저장",

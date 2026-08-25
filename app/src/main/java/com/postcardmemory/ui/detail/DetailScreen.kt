@@ -5155,73 +5155,26 @@ fun DetailScreen(
                                             }
                                         )
                                     },
-                                    onAddTextSticker = { text, colorArgb ->
+                                    onAddTextSticker = { text, colorArgb, outlineColorArgb ->
                                         viewModel.recordTextStickerSnapshotForUndo()
                                         val newTextSticker = TextStickerItem(
                                             text = text,
-                                            colorArgb = colorArgb
+                                            colorArgb = colorArgb,
+                                            outlineColorArgb = outlineColorArgb
                                         )
                                         viewModel.setTextStickers(textStickers + newTextSticker)
                                         viewModel.setSelectedTextStickerId(newTextSticker.id)
                                     },
-                                    onEditTextSticker = { id, text ->
+                                    onEditTextSticker = { id, text, colorArgb, outlineColorArgb ->
                                         viewModel.recordTextStickerSnapshotForUndo()
                                         viewModel.setTextStickers(
                                             textStickers.map {
                                                 if (it.id == id) {
-                                                    it.copy(text = text)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onColorSelected = { id, colorArgb ->
-                                        viewModel.recordTextStickerSnapshotForUndo()
-                                        viewModel.setTextStickers(
-                                            textStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(colorArgb = colorArgb)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onOutlineColorSelected = { id, outlineColorArgb ->
-                                        viewModel.recordTextStickerSnapshotForUndo()
-                                        viewModel.setTextStickers(
-                                            textStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(outlineColorArgb = outlineColorArgb)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onEnterCustomColor = {
-                                        viewModel.recordTextStickerSnapshotForUndo()
-                                    },
-                                    onCustomColorSelected = { id, colorArgb ->
-                                        viewModel.setTextStickers(
-                                            textStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(colorArgb = colorArgb)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onEnterCustomOutlineColor = {
-                                        viewModel.recordTextStickerSnapshotForUndo()
-                                    },
-                                    onCustomOutlineColorSelected = { id, outlineColorArgb ->
-                                        viewModel.setTextStickers(
-                                            textStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(outlineColorArgb = outlineColorArgb)
+                                                    it.copy(
+                                                        text = text,
+                                                        colorArgb = colorArgb,
+                                                        outlineColorArgb = outlineColorArgb
+                                                    )
                                                 } else {
                                                     it
                                                 }
@@ -5261,11 +5214,12 @@ fun DetailScreen(
                                             }
                                         )
                                     },
-                                    onAddLabelSticker = { text, style ->
+                                    onAddLabelSticker = { text, style, customTapeColorArgb ->
                                         viewModel.recordLabelStickerSnapshotForUndo()
                                         val newLabelSticker = LabelStickerItem(
                                             text = text,
-                                            style = style
+                                            style = style,
+                                            customTapeColorArgb = customTapeColorArgb
                                         )
                                         viewModel.setLabelStickers(
                                             labelStickers + newLabelSticker
@@ -5274,43 +5228,15 @@ fun DetailScreen(
                                             newLabelSticker.id
                                         )
                                     },
-                                    onEditLabelSticker = { id, text ->
+                                    onEditLabelSticker = { id, text, style, customTapeColorArgb ->
                                         viewModel.recordLabelStickerSnapshotForUndo()
-                                        viewModel.setLabelStickers(
-                                            labelStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(text = text)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onTapeStyleSelected = { id, style ->
-                                        viewModel.recordLabelStickerSnapshotForUndo()
-                                        viewModel.setLabelStickers(
-                                            labelStickers.map {
-                                                if (it.id == id) {
-                                                    it.copy(style = style)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    // 피커를 여는 순간 한 번만 snapshot을 남긴다 —
-                                    // 드래그 한 틱마다 쌓이면 Undo 한 번에 색이
-                                    // 조금씩만 되돌아간다(텍스트 스티커 자유색과 동일).
-                                    onEnterCustomTapeColor = {
-                                        viewModel.recordLabelStickerSnapshotForUndo()
-                                    },
-                                    onCustomTapeColorSelected = { id, colorArgb ->
                                         viewModel.setLabelStickers(
                                             labelStickers.map {
                                                 if (it.id == id) {
                                                     it.copy(
-                                                        style = LabelTapeStyle.CUSTOM,
-                                                        customTapeColorArgb = colorArgb
+                                                        text = text,
+                                                        style = style,
+                                                        customTapeColorArgb = customTapeColorArgb
                                                     )
                                                 } else {
                                                     it

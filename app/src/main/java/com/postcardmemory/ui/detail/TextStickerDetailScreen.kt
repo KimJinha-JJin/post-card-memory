@@ -1,10 +1,5 @@
 package com.postcardmemory.ui.detail
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,7 +60,6 @@ import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.SunsetGold
-import com.postcardmemory.ui.theme.textStickerColors
 import com.postcardmemory.ui.theme.textStickerOutlineColors
 
 /** 텍스트 스티커 문구의 최대 길이. surrogate pair를 자르지 않도록 잘라내지 않고, 초과분은 아예 반영하지 않는다. */
@@ -82,14 +76,13 @@ fun TextStickerPickerPanel(
     textStickers: List<TextStickerItem>,
     selectedTextStickerId: String?,
     onSelectTextSticker: (String) -> Unit,
-    onAddTextSticker: (text: String, colorArgb: Long) -> Unit,
-    onEditTextSticker: (id: String, text: String) -> Unit,
-    onColorSelected: (id: String, colorArgb: Long) -> Unit,
-    onOutlineColorSelected: (id: String, outlineColorArgb: Long) -> Unit,
-    onEnterCustomColor: () -> Unit,
-    onCustomColorSelected: (id: String, colorArgb: Long) -> Unit,
-    onEnterCustomOutlineColor: () -> Unit,
-    onCustomOutlineColorSelected: (id: String, outlineColorArgb: Long) -> Unit,
+    onAddTextSticker: (text: String, colorArgb: Long, outlineColorArgb: Long) -> Unit,
+    onEditTextSticker: (
+        id: String,
+        text: String,
+        colorArgb: Long,
+        outlineColorArgb: Long
+    ) -> Unit,
     onDeleteTextSticker: (String) -> Unit,
     onUndoTextSticker: () -> Unit,
     onRedoTextSticker: () -> Unit,
@@ -100,8 +93,6 @@ fun TextStickerPickerPanel(
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
-    var fillColorCustomExpanded by remember { mutableStateOf(false) }
-    var outlineColorCustomExpanded by remember { mutableStateOf(false) }
 
     val selectedTextSticker =
         textStickers.find { it.id == selectedTextStickerId }
@@ -206,54 +197,10 @@ fun TextStickerPickerPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             EditorOutlineButton(
-                text = "문구 수정",
+                text = "수정",
                 icon = Icons.Default.Edit,
                 onClick = { showEditDialog = true },
                 enabled = enabled
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            TextStickerColorPickerSection(
-                title = "글자색",
-                presetColors = textStickerColors,
-                selectedColorArgb = selectedTextSticker.colorArgb,
-                enabled = enabled,
-                customPickerExpanded = fillColorCustomExpanded,
-                onPresetSelected = { colorArgb ->
-                    onColorSelected(selectedTextSticker.id, colorArgb)
-                },
-                onToggleCustomPicker = {
-                    if (!fillColorCustomExpanded) {
-                        onEnterCustomColor()
-                    }
-                    fillColorCustomExpanded = !fillColorCustomExpanded
-                },
-                onCustomColorSelected = { colorArgb ->
-                    onCustomColorSelected(selectedTextSticker.id, colorArgb)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            TextStickerColorPickerSection(
-                title = "테두리색",
-                presetColors = textStickerOutlineColors,
-                selectedColorArgb = selectedTextSticker.outlineColorArgb,
-                enabled = enabled,
-                customPickerExpanded = outlineColorCustomExpanded,
-                onPresetSelected = { outlineColorArgb ->
-                    onOutlineColorSelected(selectedTextSticker.id, outlineColorArgb)
-                },
-                onToggleCustomPicker = {
-                    if (!outlineColorCustomExpanded) {
-                        onEnterCustomOutlineColor()
-                    }
-                    outlineColorCustomExpanded = !outlineColorCustomExpanded
-                },
-                onCustomColorSelected = { outlineColorArgb ->
-                    onCustomOutlineColorSelected(selectedTextSticker.id, outlineColorArgb)
-                }
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -278,8 +225,8 @@ fun TextStickerPickerPanel(
     if (showAddDialog) {
         TextStickerAddDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { text, colorArgb ->
-                onAddTextSticker(text, colorArgb)
+            onConfirm = { text, colorArgb, outlineColorArgb ->
+                onAddTextSticker(text, colorArgb, outlineColorArgb)
                 showAddDialog = false
             }
         )
@@ -288,9 +235,16 @@ fun TextStickerPickerPanel(
     if (showEditDialog && selectedTextSticker != null) {
         TextStickerEditDialog(
             initialText = selectedTextSticker.text,
+            initialOutlineColorArgb = selectedTextSticker.outlineColorArgb,
+            enabled = enabled,
             onDismiss = { showEditDialog = false },
-            onConfirm = { text ->
-                onEditTextSticker(selectedTextSticker.id, text)
+            onConfirm = { text, colorArgb, outlineColorArgb ->
+                onEditTextSticker(
+                    selectedTextSticker.id,
+                    text,
+                    colorArgb,
+                    outlineColorArgb
+                )
                 showEditDialog = false
             }
         )
@@ -422,11 +376,11 @@ private fun TextStickerColorPickerSection(
         }
     }
 
-    AnimatedVisibility(
-        visible = customPickerExpanded,
-        enter = expandVertically() + fadeIn(),
-        exit = shrinkVertically() + fadeOut()
-    ) {
+    // AlertDialog 안에서는 Dialog 자체가 별도 Window라 AnimatedVisibility로
+    // 높이를 애니메이션하면 매 프레임 Window relayout이 걸려 버벅인다(실기기
+    // 확인됨). 이 섹션은 이제 EditDialog 안에서만 쓰이므로 애니메이션 없이
+    // 즉시 표시/숨김으로 바꾼다.
+    if (customPickerExpanded) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -443,9 +397,12 @@ private fun TextStickerColorPickerSection(
 }
 
 /**
- * "Aa 텍스트" 진입 시 뜨는 입력 다이얼로그. 기존 "글귀 남기기" AlertDialog와
- * 동일한 스타일(PaperSurface/PaperField/SunsetGold)을 따르고, 색상은
- * 도장 잉크색 스와치와 동일한 형태의 고정 팔레트를 재사용한다.
+ * "추가" 타일 진입 시 뜨는 입력 다이얼로그. 기존 "글귀 남기기" AlertDialog와
+ * 동일한 스타일(PaperSurface/PaperField/SunsetGold)을 따른다. 사용자는
+ * 테두리색만 고르고(프리셋+기타, TextStickerColorPickerSection 재사용), 글자
+ * 채움색은 라벨의 테이프→문자색과 동일한 규칙(labelStickerTextColorArgbFor)으로
+ * 테두리색의 밝기에서 자동으로 골라 항상 잘 읽히게 한다 — 글자색을 따로
+ * 고르게 하지 않는다.
  *
  * 입력값은 저장 여부 판단(isBlank)에만 쓰이고, 실제로 저장하는 문자열은
  * trim하지 않는다 — 앞뒤 공백도 사용자가 입력한 표현의 일부일 수 있다.
@@ -453,10 +410,15 @@ private fun TextStickerColorPickerSection(
 @Composable
 private fun TextStickerAddDialog(
     onDismiss: () -> Unit,
-    onConfirm: (text: String, colorArgb: Long) -> Unit
+    onConfirm: (text: String, colorArgb: Long, outlineColorArgb: Long) -> Unit
 ) {
     var textDraft by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf(textStickerColors.first()) }
+    var outlineColorArgbDraft by remember {
+        mutableStateOf(
+            textStickerOutlineColors.first().toArgb().toLong() and 0xFFFFFFFFL
+        )
+    }
+    var outlineColorCustomExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -514,60 +476,22 @@ private fun TextStickerAddDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
-                    text = "글자색",
-                    color = BrutalBlack,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    textStickerColors.forEach { color ->
-                        val isColorSelected = selectedColor == color
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
-                                .clickable {
-                                    selectedColor = color
-                                }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .background(
-                                        color = color,
-                                        shape = CircleShape
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = BrutalBlack.copy(alpha = 0.35f),
-                                        shape = CircleShape
-                                    )
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .size(5.dp)
-                                    .background(
-                                        color = if (isColorSelected) SunsetGold else Color.Transparent,
-                                        shape = CircleShape
-                                    )
-                            )
-                        }
+                TextStickerColorPickerSection(
+                    title = "테두리색",
+                    presetColors = textStickerOutlineColors,
+                    selectedColorArgb = outlineColorArgbDraft,
+                    enabled = true,
+                    customPickerExpanded = outlineColorCustomExpanded,
+                    onPresetSelected = { outlineColorArgb ->
+                        outlineColorArgbDraft = outlineColorArgb
+                    },
+                    onToggleCustomPicker = {
+                        outlineColorCustomExpanded = !outlineColorCustomExpanded
+                    },
+                    onCustomColorSelected = { outlineColorArgb ->
+                        outlineColorArgbDraft = outlineColorArgb
                     }
-                }
+                )
             }
         },
         confirmButton = {
@@ -576,7 +500,8 @@ private fun TextStickerAddDialog(
                 onClick = {
                     onConfirm(
                         textDraft,
-                        selectedColor.toArgb().toLong() and 0xFFFFFFFFL
+                        labelStickerTextColorArgbFor(outlineColorArgbDraft),
+                        outlineColorArgbDraft
                     )
                 }
             ) {
@@ -600,17 +525,27 @@ private fun TextStickerAddDialog(
 }
 
 /**
- * 이미 붙여놓은 텍스트 스티커의 문구만 고쳐 쓰는 Dialog. 위치·크기·회전·
- * 색상은 여기서 건드리지 않고 호출부에서 동일 id의 text 필드만 갱신한다.
- * 색상 선택 UI는 이미 편집 패널에 있으므로 여기서는 다시 만들지 않는다.
+ * 이미 붙여놓은 텍스트 스티커의 문구·테두리색을 한 창에서 고쳐 쓰는 Dialog.
+ * 위치·크기·회전은 여기서 건드리지 않고, 저장을 눌렀을 때만 호출부가 동일
+ * id에 text/colorArgb/outlineColorArgb를 한 번에 반영한다. 글자 채움색은
+ * 사용자가 고르지 않고 라벨의 테이프→문자색과 동일한 규칙
+ * (labelStickerTextColorArgbFor)으로 테두리색의 밝기에서 자동으로 정해진다.
+ * 색상 선택 UI는 기존 하단 Property가 쓰던 TextStickerColorPickerSection을
+ * 그대로 재사용하되, 값의 출처만 ViewModel에서 이 Dialog의 local state로
+ * 바꿨다 — PostcardCustomColorPicker는 selectedColorArgb/onColorSelected만
+ * 지키면 되는 controlled component라 그대로 동작한다.
  */
 @Composable
 private fun TextStickerEditDialog(
     initialText: String,
+    initialOutlineColorArgb: Long,
+    enabled: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (text: String) -> Unit
+    onConfirm: (text: String, colorArgb: Long, outlineColorArgb: Long) -> Unit
 ) {
     var textDraft by remember { mutableStateOf(initialText) }
+    var outlineColorArgbDraft by remember { mutableStateOf(initialOutlineColorArgb) }
+    var outlineColorCustomExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -620,7 +555,7 @@ private fun TextStickerEditDialog(
         shape = RoundedCornerShape(20.dp),
         title = {
             Text(
-                text = "문구 수정",
+                text = "수정",
                 color = InkPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold
@@ -665,12 +600,37 @@ private fun TextStickerEditDialog(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextStickerColorPickerSection(
+                    title = "테두리색",
+                    presetColors = textStickerOutlineColors,
+                    selectedColorArgb = outlineColorArgbDraft,
+                    enabled = enabled,
+                    customPickerExpanded = outlineColorCustomExpanded,
+                    onPresetSelected = { outlineColorArgb ->
+                        outlineColorArgbDraft = outlineColorArgb
+                    },
+                    onToggleCustomPicker = {
+                        outlineColorCustomExpanded = !outlineColorCustomExpanded
+                    },
+                    onCustomColorSelected = { outlineColorArgb ->
+                        outlineColorArgbDraft = outlineColorArgb
+                    }
+                )
             }
         },
         confirmButton = {
             TextButton(
                 enabled = textDraft.isNotBlank(),
-                onClick = { onConfirm(textDraft) }
+                onClick = {
+                    onConfirm(
+                        textDraft,
+                        labelStickerTextColorArgbFor(outlineColorArgbDraft),
+                        outlineColorArgbDraft
+                    )
+                }
             ) {
                 Text(
                     text = "저장",
