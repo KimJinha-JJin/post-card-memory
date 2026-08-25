@@ -26,10 +26,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -51,7 +51,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.DecorationPresetTile
-import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -179,13 +178,13 @@ fun TextStickerPickerPanel(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        imageVector = Icons.Default.TextFields,
+                        imageVector = Icons.Default.Add,
                         contentDescription = null,
                         tint = GraphiteAccent,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "Aa 텍스트",
+                        text = "추가",
                         color = BrutalBlack,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold
@@ -272,14 +271,6 @@ fun TextStickerPickerPanel(
 
             EditorQuietHint(
                 text = "편집할 텍스트 스티커를 선택해."
-            )
-        }
-
-        if (textStickers.isEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
-
-            EditorEmptyHint(
-                text = "아직 추가한 텍스트 스티커가 없어."
             )
         }
     }

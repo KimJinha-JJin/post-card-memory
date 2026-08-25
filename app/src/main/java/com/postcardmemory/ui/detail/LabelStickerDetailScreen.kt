@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -43,7 +43,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -188,13 +187,13 @@ fun LabelStickerPickerPanel(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Label,
+                        imageVector = Icons.Default.Add,
                         contentDescription = null,
                         tint = GraphiteAccent,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "라벨 뽑기",
+                        text = "추가",
                         color = BrutalBlack,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold
@@ -259,14 +258,6 @@ fun LabelStickerPickerPanel(
 
             EditorQuietHint(
                 text = "편집할 라벨을 선택해."
-            )
-        }
-
-        if (labelStickers.isEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
-
-            EditorEmptyHint(
-                text = "짧은 문구를 넣고 라벨 한 조각을 뽑아봐."
             )
         }
     }
