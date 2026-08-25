@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.postcardmemory.ui.components.DecorationPresetTile
-import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -354,14 +353,6 @@ fun PhotoStickerPickerPanel(
 
             EditorQuietHint(
                 text = "편집할 스티커를 선택해."
-            )
-        }
-
-        if (photoStickers.isEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
-
-            EditorEmptyHint(
-                text = "아직 추가한 스티커가 없어."
             )
         }
 
