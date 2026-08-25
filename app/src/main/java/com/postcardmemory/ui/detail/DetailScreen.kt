@@ -155,6 +155,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlinx.coroutines.coroutineScope
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.EditorSegmentedTabRow
@@ -4262,74 +4263,6 @@ fun DetailScreen(
                 val canMoveSelectedStickerBackward =
                     selectedStickerIndex > 0
 
-                if (
-                    selectedSticker != null &&
-                    customizationPagerState.currentPage ==
-                    STICKER_TAB_PAGE_INDEX &&
-                    stickerSubTabIndex == 0
-                ) {
-                    Spacer(
-                        modifier = Modifier.height(12.dp)
-                    )
-
-                    StickerEditModeToolbar(
-                        sticker = selectedSticker,
-                        isRemovingBackground = isRemovingBackground,
-                        onToggleBackgroundRemoval = {
-                            if (selectedSticker.isBackgroundRemoved) {
-                                viewModel.recordStickerSnapshotForUndo()
-                                viewModel.setPhotoStickers(
-                                    photoStickers.map {
-                                        if (it.id == selectedSticker.id) {
-                                            it.copy(
-                                                displayedUri = it.originalUri,
-                                                isBackgroundRemoved = false
-                                            )
-                                        } else {
-                                            it
-                                        }
-                                    }
-                                )
-                                backgroundRemovalError = null
-                            } else {
-                                backgroundRemovalError = null
-                                val removedBgUri =
-                                    selectedSticker.removedBgUri
-                                if (removedBgUri != null) {
-                                    viewModel.recordStickerSnapshotForUndo()
-                                    viewModel.setPhotoStickers(
-                                        photoStickers.map {
-                                            if (it.id == selectedSticker.id) {
-                                                it.copy(
-                                                    displayedUri = removedBgUri,
-                                                    isBackgroundRemoved = true
-                                                )
-                                            } else {
-                                                it
-                                            }
-                                        }
-                                    )
-                                } else {
-                                    viewModel.removeStickerBackground(
-                                        stickerId = selectedSticker.id,
-                                        sourceUri = selectedSticker.originalUri
-                                    )
-                                }
-                            }
-                        },
-                        canMoveForward = canMoveSelectedStickerForward,
-                        canMoveBackward = canMoveSelectedStickerBackward,
-                        onMoveForward = {
-                            viewModel.moveStickerForward(selectedSticker.id)
-                        },
-                        onMoveBackward = {
-                            viewModel.moveStickerBackward(selectedSticker.id)
-                        },
-                        enabled = controlsEnabled,
-                        modifier = Modifier.fillMaxWidth(0.92f)
-                    )
-                }
-
                 Spacer(
                     modifier = Modifier.height(14.dp)
                 )
@@ -5149,6 +5082,63 @@ fun DetailScreen(
                                     },
                                     canUndoSticker = canUndoSticker,
                                     canRedoSticker = canRedoSticker,
+                                    isRemovingBackground = isRemovingBackground,
+                                    onToggleBackgroundRemoval = {
+                                        selectedSticker?.let { sticker ->
+                                            if (sticker.isBackgroundRemoved) {
+                                                viewModel.recordStickerSnapshotForUndo()
+                                                viewModel.setPhotoStickers(
+                                                    photoStickers.map {
+                                                        if (it.id == sticker.id) {
+                                                            it.copy(
+                                                                displayedUri = it.originalUri,
+                                                                isBackgroundRemoved = false
+                                                            )
+                                                        } else {
+                                                            it
+                                                        }
+                                                    }
+                                                )
+                                                backgroundRemovalError = null
+                                            } else {
+                                                backgroundRemovalError = null
+                                                val removedBgUri =
+                                                    sticker.removedBgUri
+                                                if (removedBgUri != null) {
+                                                    viewModel.recordStickerSnapshotForUndo()
+                                                    viewModel.setPhotoStickers(
+                                                        photoStickers.map {
+                                                            if (it.id == sticker.id) {
+                                                                it.copy(
+                                                                    displayedUri = removedBgUri,
+                                                                    isBackgroundRemoved = true
+                                                                )
+                                                            } else {
+                                                                it
+                                                            }
+                                                        }
+                                                    )
+                                                } else {
+                                                    viewModel.removeStickerBackground(
+                                                        stickerId = sticker.id,
+                                                        sourceUri = sticker.originalUri
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    canMoveForward = canMoveSelectedStickerForward,
+                                    canMoveBackward = canMoveSelectedStickerBackward,
+                                    onMoveForward = {
+                                        selectedSticker?.let {
+                                            viewModel.moveStickerForward(it.id)
+                                        }
+                                    },
+                                    onMoveBackward = {
+                                        selectedSticker?.let {
+                                            viewModel.moveStickerBackward(it.id)
+                                        }
+                                    },
                                     enabled = controlsEnabled,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -5783,7 +5773,7 @@ fun DetailScreen(
                     LaunchedEffect(draftSaveStatus) {
                         if (draftSaveStatus is DraftSaveStatus.Saved) {
                             showSavedBriefly = true
-                            delay(1500)
+                            delay(1500.milliseconds)
                             showSavedBriefly = false
                         } else {
                             showSavedBriefly = false

@@ -30,6 +30,13 @@ import org.junit.Test
  * 좌우·상하대칭 버튼을 툴바에서 제거했다. `editMode`/`onModeSelected`/
  * `onToggleFlipHorizontal`/`onToggleFlipVertical` 파라미터가 그래서 빠졌다.
  * `StickerEditMode` enum 자체와 기존 flip 데이터·렌더링은 그대로다.
+ *
+ * 53일차(2026-08-25) 스티커 UI/UX 문법 파일럿에서 Property(배경제거·레이어순서)와
+ * Object Action(복제·삭제)이 스크롤 본문의 서로 다른 위치에 떨어져 있던 걸
+ * "선택한 스티커" 컨텍스트 하나로 모았다. 그 결과 `StickerEditModeToolbar` 호출부가
+ * DetailScreen.kt에서 `PhotoStickerDetailScreen.kt`의 `PhotoStickerPickerPanel`
+ * 안(복제·삭제 버튼과 같은 블록)으로 옮겨갔다. DetailScreen.kt는 이제 상태·콜백을
+ * `PhotoStickerPickerPanel`에 파라미터로 전달만 하고 Toolbar를 직접 호출하지 않는다.
  */
 class StickerEditModeToolbarStructureTest {
 
@@ -58,6 +65,15 @@ class StickerEditModeToolbarStructureTest {
             listOf(
                 "src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt",
                 "app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt"
+            )
+        )
+    }
+
+    private val pickerPanelText: String by lazy {
+        readSource(
+            listOf(
+                "src/main/java/com/postcardmemory/ui/detail/PhotoStickerDetailScreen.kt",
+                "app/src/main/java/com/postcardmemory/ui/detail/PhotoStickerDetailScreen.kt"
             )
         )
     }
@@ -186,19 +202,29 @@ class StickerEditModeToolbarStructureTest {
     }
 
     @Test
-    fun detailScreen_hasExactlyOneCallSiteWithExistingStateAndCallbacksWired() {
+    fun detailScreen_noLongerCallsToolbarDirectly() {
+        assertFalse(
+            "DetailScreen.kt는 더 이상 StickerEditModeToolbar를 직접 호출하면 안 됨" +
+                "(PhotoStickerPickerPanel 안으로 옮겨감)",
+            Regex("""(?m)^\s*StickerEditModeToolbar\(""")
+                .containsMatchIn(detailScreenText)
+        )
+    }
+
+    @Test
+    fun pickerPanel_hasExactlyOneCallSiteWithExistingStateAndCallbacksWired() {
         val callStarts = Regex("""(?m)^\s*StickerEditModeToolbar\(""")
-            .findAll(detailScreenText)
+            .findAll(pickerPanelText)
             .map { it.range.first + it.value.indexOf("StickerEditModeToolbar") }
             .toList()
 
         assertEquals(
-            "DetailScreen.kt의 StickerEditModeToolbar 호출은 정확히 1곳이어야 함",
+            "PhotoStickerDetailScreen.kt의 StickerEditModeToolbar 호출은 정확히 1곳이어야 함",
             1,
             callStarts.size
         )
 
-        val block = extractBalancedCall(detailScreenText, callStarts.single())
+        val block = extractBalancedCall(pickerPanelText, callStarts.single())
 
         assertTrue("sticker = 전달", block.contains("sticker = selectedSticker"))
         assertTrue(
@@ -207,18 +233,42 @@ class StickerEditModeToolbarStructureTest {
         )
         assertTrue(
             "onToggleBackgroundRemoval 콜백 전달",
-            block.contains("onToggleBackgroundRemoval = {")
+            block.contains("onToggleBackgroundRemoval = onToggleBackgroundRemoval")
         )
         assertTrue(
             "canMoveForward = 전달",
-            block.contains("canMoveForward = canMoveSelectedStickerForward")
+            block.contains("canMoveForward = canMoveForward")
         )
         assertTrue(
             "canMoveBackward = 전달",
-            block.contains("canMoveBackward = canMoveSelectedStickerBackward")
+            block.contains("canMoveBackward = canMoveBackward")
         )
-        assertTrue("onMoveForward 콜백 전달", block.contains("onMoveForward = {"))
-        assertTrue("onMoveBackward 콜백 전달", block.contains("onMoveBackward = {"))
-        assertTrue("enabled = 전달", block.contains("enabled = controlsEnabled"))
+        assertTrue(
+            "onMoveForward 콜백 전달",
+            block.contains("onMoveForward = onMoveForward")
+        )
+        assertTrue(
+            "onMoveBackward 콜백 전달",
+            block.contains("onMoveBackward = onMoveBackward")
+        )
+        assertTrue("enabled = 전달", block.contains("enabled = enabled"))
+    }
+
+    @Test
+    fun pickerPanel_declaresToolbarRelayParameters() {
+        val expectedParams = listOf(
+            "isRemovingBackground: Boolean",
+            "onToggleBackgroundRemoval: () -> Unit",
+            "canMoveForward: Boolean",
+            "canMoveBackward: Boolean",
+            "onMoveForward: () -> Unit",
+            "onMoveBackward: () -> Unit"
+        )
+        for (param in expectedParams) {
+            assertTrue(
+                "[$param] 파라미터가 PhotoStickerPickerPanel 선언에 있어야 함",
+                pickerPanelText.contains(param)
+            )
+        }
     }
 }

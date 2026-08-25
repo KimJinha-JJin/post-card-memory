@@ -72,6 +72,12 @@ fun PhotoStickerPickerPanel(
     onRedoSticker: () -> Unit,
     canUndoSticker: Boolean,
     canRedoSticker: Boolean,
+    isRemovingBackground: Boolean,
+    onToggleBackgroundRemoval: () -> Unit,
+    canMoveForward: Boolean,
+    canMoveBackward: Boolean,
+    onMoveForward: () -> Unit,
+    onMoveBackward: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -294,6 +300,20 @@ fun PhotoStickerPickerPanel(
                 color = BrutalBlack,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            StickerEditModeToolbar(
+                sticker = selectedSticker,
+                isRemovingBackground = isRemovingBackground,
+                onToggleBackgroundRemoval = onToggleBackgroundRemoval,
+                canMoveForward = canMoveForward,
+                canMoveBackward = canMoveBackward,
+                onMoveForward = onMoveForward,
+                onMoveBackward = onMoveBackward,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(10.dp))
