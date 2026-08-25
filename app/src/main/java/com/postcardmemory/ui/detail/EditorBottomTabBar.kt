@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -25,7 +27,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
+import com.postcardmemory.ui.theme.InkPrimary
+import com.postcardmemory.ui.theme.PaperDivider
+import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.SunsetGold
 
 /**
@@ -100,6 +106,65 @@ internal fun EditorBottomTabBar(
                                 },
                             shape = RoundedCornerShape(1.dp)
                         )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 53일차 제7단계: 스티커 탭 안의 사진/텍스트/라벨 하위 종류를 고르는
+ * 완전히 평평한 navigation. 항목마다 별도 rounded Box나 카드를 만들지
+ * 않고, 하나의 Row 안에서 칸 자체의 배경색 변화(선택 시 SunsetGold 단색
+ * 채움, 미선택 시 PaperTray)만으로 선택 상태를 나타낸다 — Box 없이도
+ * subcategory 선택이 읽히는지 확인하는 파일럿이라 개별 radius/border/
+ * underline/dot을 전부 뺐다. 칸 사이 경계만 얇은 PaperDivider 세로선으로
+ * 표시해 하나의 bar 안에 세 칸이 있는 것처럼 보이게 한다.
+ *
+ * EditorBottomTabBar와 마찬가지로 스크롤 콘텐츠 밖 고정 영역에서만 쓰인다
+ * — 호출부가 이 컴포저블을 EditorBottomTabBar와 같은 고정 Box 안에 둔다.
+ */
+@Composable
+internal fun StickerSubcategoryNavBar(
+    options: List<String>,
+    selectedIndex: Int,
+    onOptionSelected: (Int) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(0.92f),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        options.forEachIndexed { index, option ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(24.dp)
+                        .background(PaperDivider)
+                )
+            }
+
+            val selected = index == selectedIndex
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp)
+                    .background(if (selected) SunsetGold else PaperTray)
+                    .clickable(enabled = enabled) {
+                        onOptionSelected(index)
+                    }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = option,
+                    color = if (selected) BrutalWhite else InkPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    textAlign = TextAlign.Center
                 )
             }
         }

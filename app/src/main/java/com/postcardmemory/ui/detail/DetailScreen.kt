@@ -158,7 +158,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.postcardmemory.ui.components.EditorSegmentedTabRow
 import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
 import com.postcardmemory.ui.components.LabelStickerContent
@@ -4999,15 +4998,10 @@ fun DetailScreen(
                                 Column(
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 ) {
-                                EditorSegmentedTabRow(
-                                    options = listOf("사진", "텍스트", "라벨"),
-                                    selectedIndex = stickerSubTabIndex,
-                                    onOptionSelected = { stickerSubTabIndex = it },
-                                    enabled = controlsEnabled
-                                )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
+                                // 사진/텍스트/라벨 선택 navigation은 53일차
+                                // 제7단계에서 하단 고정 영역(StickerSubcategoryNavBar)
+                                // 으로 옮겨졌다. 여기서는 stickerSubTabIndex가
+                                // 가리키는 하위 패널만 그린다.
                                 if (stickerSubTabIndex == 0) {
                                 PhotoStickerPickerPanel(
                                     photoStickers = photoStickers,
@@ -5741,7 +5735,15 @@ fun DetailScreen(
                 }
 
                 Spacer(
-                    modifier = Modifier.height(96.dp)
+                    modifier = Modifier.height(
+                        if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {
+                            // 스티커 탭에서만 고정 영역에 StickerSubcategoryNavBar가
+                            // 한 줄 더 얹히므로 그만큼 스크롤 하단 여백을 더 확보한다.
+                            152.dp
+                        } else {
+                            96.dp
+                        }
+                    )
                 )
             }
             }
@@ -6922,18 +6924,33 @@ fun DetailScreen(
                     .padding(top = 4.dp, bottom = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                EditorBottomTabBar(
-                    selectedPage = customizationPagerState.currentPage,
-                    labels = customizationPageLabels,
-                    icons = customizationPageIcons,
-                    enabled = controlsEnabled,
-                    onTabSelected = { pageIndex ->
-                        customizationPagerScope.launch {
-                            customizationPagerState
-                                .animateScrollToPage(pageIndex)
-                        }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {
+                        StickerSubcategoryNavBar(
+                            options = listOf("사진", "텍스트", "라벨"),
+                            selectedIndex = stickerSubTabIndex,
+                            onOptionSelected = { stickerSubTabIndex = it },
+                            enabled = controlsEnabled
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
                     }
-                )
+
+                    EditorBottomTabBar(
+                        selectedPage = customizationPagerState.currentPage,
+                        labels = customizationPageLabels,
+                        icons = customizationPageIcons,
+                        enabled = controlsEnabled,
+                        onTabSelected = { pageIndex ->
+                            customizationPagerScope.launch {
+                                customizationPagerState
+                                    .animateScrollToPage(pageIndex)
+                            }
+                        }
+                    )
+                }
             }
         }
 
