@@ -189,4 +189,35 @@ class TextLabelStickerPropertyEditStructureTest {
             labelStickerText.contains("text = \"뽑기\"")
         )
     }
+
+    /**
+     * 53일차 제6단계: 선택된 스티커의 "수정"/"삭제" Action이 세로 2행이
+     * 아니라 Row 안에서 weight(1f)로 나란히 배치되는지 확인한다. 패널의
+     * "수정" 버튼이 각 파일에서 가장 먼저 나오는 "text = "수정"," 자리라
+     * (Dialog 제목의 "수정"보다 앞선 선언 순서), substringAfter/Before로
+     * 그 사이 구간만 잘라 검사한다.
+     */
+    private fun assertActionsShareOneRow(sourceText: String, fileLabel: String) {
+        val between = sourceText
+            .substringAfter("text = \"수정\",")
+            .substringBefore("text = \"삭제\",")
+        assertTrue(
+            "$fileLabel: 수정 버튼이 삭제와 같은 Row 안에서 weight(1f)로 배치돼야 함",
+            between.contains("Modifier.weight(1f)")
+        )
+        assertFalse(
+            "$fileLabel: 수정과 삭제 사이에 세로 분리용 14dp Spacer가 남아 있으면 안 됨(1행 배치로 대체)",
+            between.contains("Spacer(modifier = Modifier.height(14.dp))")
+        )
+    }
+
+    @Test
+    fun textStickerSelectedActions_shareOneRow() {
+        assertActionsShareOneRow(textStickerText, "TextStickerPickerPanel")
+    }
+
+    @Test
+    fun labelStickerSelectedActions_shareOneRow() {
+        assertActionsShareOneRow(labelStickerText, "LabelStickerPickerPanel")
+    }
 }

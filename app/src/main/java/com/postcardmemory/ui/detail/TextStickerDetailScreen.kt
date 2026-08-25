@@ -196,23 +196,27 @@ fun TextStickerPickerPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            EditorOutlineButton(
-                text = "수정",
-                icon = Icons.Default.Edit,
-                onClick = { showEditDialog = true },
-                enabled = enabled
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                EditorOutlineButton(
+                    text = "수정",
+                    icon = Icons.Default.Edit,
+                    onClick = { showEditDialog = true },
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f)
+                )
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            EditorOutlineButton(
-                text = "삭제",
-                icon = Icons.Default.Delete,
-                onClick = { onDeleteTextSticker(selectedTextSticker.id) },
-                enabled = enabled,
-                contentColor = GalleryDangerRed,
-                borderColor = GalleryDangerRed
-            )
+                EditorOutlineButton(
+                    text = "삭제",
+                    icon = Icons.Default.Delete,
+                    onClick = { onDeleteTextSticker(selectedTextSticker.id) },
+                    enabled = enabled,
+                    contentColor = GalleryDangerRed,
+                    borderColor = GalleryDangerRed,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         } else if (textStickers.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
 
