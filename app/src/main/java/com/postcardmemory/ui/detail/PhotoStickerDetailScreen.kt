@@ -6,8 +6,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,8 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
-import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorActionDivider
+import com.postcardmemory.ui.components.EditorFlatPresetTile
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorTextAction
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -51,7 +49,6 @@ import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.GraphiteAccent
-import com.postcardmemory.ui.theme.BrutalWhite
 import java.io.File
 import java.util.UUID
 
@@ -235,7 +232,7 @@ fun PhotoStickerPickerPanel(
             photoStickers.forEach { sticker ->
                 val isSelected = sticker.id == selectedStickerId
 
-                DecorationPresetTile(
+                EditorFlatPresetTile(
                     onClick = { onSelectSticker(sticker.id) },
                     enabled = enabled,
                     previewModifier = Modifier.size(56.dp),
@@ -258,17 +255,10 @@ fun PhotoStickerPickerPanel(
             }
 
             // 추가 버튼
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .clickable(enabled = enabled) {
-                        showPhotoSourceMenu = true
-                    },
-                contentAlignment = Alignment.Center
+            EditorFlatPresetTile(
+                onClick = { showPhotoSourceMenu = true },
+                enabled = enabled,
+                previewModifier = Modifier.size(56.dp)
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally

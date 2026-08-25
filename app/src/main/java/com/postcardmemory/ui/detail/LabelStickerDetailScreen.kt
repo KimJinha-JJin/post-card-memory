@@ -31,12 +31,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.EditorActionDivider
+import com.postcardmemory.ui.components.EditorFlatPresetTile
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorTextAction
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -44,7 +44,6 @@ import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
 import com.postcardmemory.ui.components.LabelStickerContent
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.InkPrimary
@@ -169,18 +168,10 @@ fun LabelStickerPickerPanel(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable(enabled = enabled) {
-                        showCreateDialog = true
-                    },
-                contentAlignment = Alignment.Center
+            EditorFlatPresetTile(
+                onClick = { showCreateDialog = true },
+                enabled = enabled,
+                previewModifier = Modifier.size(56.dp)
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally

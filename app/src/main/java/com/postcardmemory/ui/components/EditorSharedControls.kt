@@ -365,6 +365,53 @@ fun DecorationPresetTile(
 }
 
 /**
+ * [DecorationPresetTile]의 평면(Box 없는) 버전. 53일차 제9차 파일럿:
+ * 사진/텍스트/라벨 스티커 목록 항목이 카드처럼 보이지 않고, 내용 자체와
+ * 선택 밑줄만으로 서도록 만든다. 미리보기를 감싸던 배경·clip·shape을
+ * 전부 없앴을 뿐 클릭 영역(`previewModifier`가 정하는 크기)과 선택
+ * 밑줄(2dp 높이 24dp 너비, 선택 시 SunsetGold)은 DecorationPresetTile과
+ * 완전히 동일하다.
+ *
+ * DecorationPresetTile 자체는 건드리지 않는다 — 배경 패턴·마스킹테이프·
+ * 도장은 이번 파일럿 범위 밖이라 계속 그 카드형 컴포저블을 쓴다.
+ */
+@Composable
+fun EditorFlatPresetTile(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    previewModifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(6.dp),
+    selected: Boolean = false,
+    preview: @Composable BoxScope.() -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Box(
+            modifier = previewModifier
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(contentPadding),
+            contentAlignment = Alignment.Center,
+            content = preview
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Box(
+            modifier = Modifier
+                .height(2.dp)
+                .width(24.dp)
+                .background(
+                    color = if (selected) SunsetGold else Color.Transparent,
+                    shape = RoundedCornerShape(1.dp)
+                )
+        )
+    }
+}
+
+/**
  * 한 편집 영역 안에서 서로 다른 하위 패널 중 하나만 보여줄 때 쓰는 텍스트
  * 칩 선택줄(예: 스티커 탭의 사진/텍스트/라벨). 엽서 레이아웃 선택
  * (`PostcardLayoutPicker`)과 같은 시각 언어 — 균등폭 칩, 선택 시 SunsetGold

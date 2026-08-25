@@ -43,14 +43,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.postcardmemory.ui.components.DecorationPresetTile
 import com.postcardmemory.ui.components.EditorActionDivider
+import com.postcardmemory.ui.components.EditorFlatPresetTile
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorTextAction
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.InkPrimary
@@ -132,7 +131,7 @@ fun TextStickerPickerPanel(
             textStickers.forEach { sticker ->
                 val isSelected = sticker.id == selectedTextStickerId
 
-                DecorationPresetTile(
+                EditorFlatPresetTile(
                     onClick = { onSelectTextSticker(sticker.id) },
                     enabled = enabled,
                     previewModifier = Modifier
@@ -152,17 +151,10 @@ fun TextStickerPickerPanel(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        color = BrutalWhite,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .clickable(enabled = enabled) {
-                        showAddDialog = true
-                    },
-                contentAlignment = Alignment.Center
+            EditorFlatPresetTile(
+                onClick = { showAddDialog = true },
+                enabled = enabled,
+                previewModifier = Modifier.size(56.dp)
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
