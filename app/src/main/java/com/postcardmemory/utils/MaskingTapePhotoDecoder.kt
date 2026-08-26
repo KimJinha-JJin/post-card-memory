@@ -24,9 +24,13 @@ object MaskingTapePhotoDecoder {
         val boundsOptions =
             BitmapFactory.Options().apply { inJustDecodeBounds = true }
 
+        // inJustDecodeBounds=true인 decodeStream은 성공해도 항상 null을 돌려주고
+        // outWidth/outHeight만 채운다. 그래서 이 호출 결과로 실패를 판정하면
+        // 안 된다 — 스트림이 정상이어도 매번 null로 빠져 사진이 영영 그려지지
+        // 않았다. 실제 실패는 바로 아래 outWidth/outHeight 검사로 걸러진다.
         context.contentResolver.openInputStream(uri)?.use { input ->
             BitmapFactory.decodeStream(input, null, boundsOptions)
-        } ?: return@runCatching null
+        }
 
         val sourceWidth = boundsOptions.outWidth
         val sourceHeight = boundsOptions.outHeight
