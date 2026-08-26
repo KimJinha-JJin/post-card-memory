@@ -114,18 +114,23 @@ internal fun EditorBottomTabBar(
 
 /**
  * 53일차 제7단계: 스티커 탭 안의 사진/텍스트/라벨 하위 종류를 고르는
- * 완전히 평평한 navigation. 항목마다 별도 rounded Box나 카드를 만들지
- * 않고, 하나의 Row 안에서 칸 자체의 배경색 변화(선택 시 SunsetGold 단색
- * 채움, 미선택 시 PaperTray)만으로 선택 상태를 나타낸다 — Box 없이도
- * subcategory 선택이 읽히는지 확인하는 파일럿이라 개별 radius/border/
- * underline/dot을 전부 뺐다. 칸 사이 경계만 얇은 PaperDivider 세로선으로
- * 표시해 하나의 bar 안에 세 칸이 있는 것처럼 보이게 한다.
+ * 완전히 평평한 navigation으로 처음 만들어졌다. 54일차부터는 마스킹테이프
+ * 탭의 기본 디자인/커스텀/사진 생성 방식 선택도 "같은 역할에는 같은
+ * 문법을 적용한다"는 원칙에 따라 이 컴포저블을 그대로 재사용한다 — 이름은
+ * 첫 사용처를 따랐을 뿐 스티커 전용 로직은 없다.
+ *
+ * 항목마다 별도 rounded Box나 카드를 만들지 않고, 하나의 Row 안에서 칸
+ * 자체의 배경색 변화(선택 시 SunsetGold 단색 채움, 미선택 시 PaperTray)만
+ * 으로 선택 상태를 나타낸다 — Box 없이도 subcategory 선택이 읽히는지
+ * 확인하는 파일럿이라 개별 radius/border/underline/dot을 전부 뺐다. 칸
+ * 사이 경계만 얇은 PaperDivider 세로선으로 표시해 하나의 bar 안에 여러
+ * 칸이 있는 것처럼 보이게 한다.
  *
  * EditorBottomTabBar와 마찬가지로 스크롤 콘텐츠 밖 고정 영역에서만 쓰인다
  * — 호출부가 이 컴포저블을 EditorBottomTabBar와 같은 고정 Box 안에 둔다.
  */
 @Composable
-internal fun StickerSubcategoryNavBar(
+internal fun EditorSubcategoryNavBar(
     options: List<String>,
     selectedIndex: Int,
     onOptionSelected: (Int) -> Unit,

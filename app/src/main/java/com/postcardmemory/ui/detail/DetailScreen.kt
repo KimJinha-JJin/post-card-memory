@@ -1354,16 +1354,6 @@ fun DetailScreen(
             StickerEditMode.Move
         }
 
-    var maskingTapeLengthDragSnapshotTaken by remember {
-        mutableStateOf(false)
-    }
-    var maskingTapeThicknessDragSnapshotTaken by remember {
-        mutableStateOf(false)
-    }
-    var maskingTapeRotationDragSnapshotTaken by remember {
-        mutableStateOf(false)
-    }
-
     var stickerSizes by remember {
         mutableStateOf(mapOf<String, IntSize>())
     }
@@ -1608,6 +1598,16 @@ fun DetailScreen(
      * 기본값은 기존 최상단이던 사진 스티커(0)를 유지한다.
      */
     var stickerSubTabIndex by rememberSaveable {
+        mutableStateOf(0)
+    }
+
+    /**
+     * 마스킹테이프 탭의 생성 방식(기본 디자인/커스텀/사진) 선택. 54일차부터
+     * stickerSubTabIndex와 같은 방식(고정 하단 EditorSubcategoryNavBar가
+     * 값을 바꾸고, MaskingTapePickerPanel은 결과만 받아 콘텐츠를 나눔)으로
+     * 다룬다 — 화면 로컬 상태라 Room·ViewModel로 확장하지 않는다.
+     */
+    var maskingTapeCreationTabIndex by rememberSaveable {
         mutableStateOf(0)
     }
 
@@ -4999,7 +4999,7 @@ fun DetailScreen(
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 ) {
                                 // 사진/텍스트/라벨 선택 navigation은 53일차
-                                // 제7단계에서 하단 고정 영역(StickerSubcategoryNavBar)
+                                // 제7단계에서 하단 고정 영역(EditorSubcategoryNavBar)
                                 // 으로 옮겨졌다. 여기서는 stickerSubTabIndex가
                                 // 가리키는 하위 패널만 그린다.
                                 if (stickerSubTabIndex == 0) {
@@ -5271,6 +5271,7 @@ fun DetailScreen(
                                 MaskingTapePickerPanel(
                                     photoMaskingTapes = photoMaskingTapes,
                                     selectedMaskingTapeId = selectedMaskingTapeId,
+                                    creationTabIndex = maskingTapeCreationTabIndex,
                                     onSelectMaskingTape = { id ->
                                         viewModel.setSelectedMaskingTapeId(
                                             if (selectedMaskingTapeId == id) {
@@ -5338,71 +5339,23 @@ fun DetailScreen(
                                     onDuplicateMaskingTape = { id ->
                                         viewModel.duplicateMaskingTape(id)
                                     },
-                                    onEdgeStyleSelected = { id, edgeStyle ->
+                                    onEditMaskingTapeProperties = {
+                                        id, edgeStyle, lengthScale, thicknessScale, rotationDegrees ->
                                         viewModel.recordMaskingTapeSnapshotForUndo()
                                         viewModel.setPhotoMaskingTapes(
                                             photoMaskingTapes.map {
                                                 if (it.id == id) {
-                                                    it.copy(edgeStyle = edgeStyle)
+                                                    it.copy(
+                                                        edgeStyle = edgeStyle,
+                                                        lengthScale = lengthScale,
+                                                        thicknessScale = thicknessScale,
+                                                        rotationDegrees = rotationDegrees
+                                                    )
                                                 } else {
                                                     it
                                                 }
                                             }
                                         )
-                                    },
-                                    onLengthScaleChanged = { id, lengthScale ->
-                                        if (!maskingTapeLengthDragSnapshotTaken) {
-                                            viewModel.recordMaskingTapeSnapshotForUndo()
-                                            maskingTapeLengthDragSnapshotTaken = true
-                                        }
-                                        viewModel.setPhotoMaskingTapes(
-                                            photoMaskingTapes.map {
-                                                if (it.id == id) {
-                                                    it.copy(lengthScale = lengthScale)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onLengthScaleChangeFinished = {
-                                        maskingTapeLengthDragSnapshotTaken = false
-                                    },
-                                    onThicknessScaleChanged = { id, thicknessScale ->
-                                        if (!maskingTapeThicknessDragSnapshotTaken) {
-                                            viewModel.recordMaskingTapeSnapshotForUndo()
-                                            maskingTapeThicknessDragSnapshotTaken = true
-                                        }
-                                        viewModel.setPhotoMaskingTapes(
-                                            photoMaskingTapes.map {
-                                                if (it.id == id) {
-                                                    it.copy(thicknessScale = thicknessScale)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onThicknessScaleChangeFinished = {
-                                        maskingTapeThicknessDragSnapshotTaken = false
-                                    },
-                                    onRotationChanged = { id, rotationDegrees ->
-                                        if (!maskingTapeRotationDragSnapshotTaken) {
-                                            viewModel.recordMaskingTapeSnapshotForUndo()
-                                            maskingTapeRotationDragSnapshotTaken = true
-                                        }
-                                        viewModel.setPhotoMaskingTapes(
-                                            photoMaskingTapes.map {
-                                                if (it.id == id) {
-                                                    it.copy(rotationDegrees = rotationDegrees)
-                                                } else {
-                                                    it
-                                                }
-                                            }
-                                        )
-                                    },
-                                    onRotationChangeFinished = {
-                                        maskingTapeRotationDragSnapshotTaken = false
                                     },
                                     onUndoMaskingTape = {
                                         viewModel.undoMaskingTapeChange()
@@ -5736,9 +5689,13 @@ fun DetailScreen(
 
                 Spacer(
                     modifier = Modifier.height(
-                        if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {
-                            // 스티커 탭에서만 고정 영역에 StickerSubcategoryNavBar가
-                            // 한 줄 더 얹히므로 그만큼 스크롤 하단 여백을 더 확보한다.
+                        if (
+                            customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX ||
+                            customizationPagerState.currentPage == MASKING_TAPE_TAB_PAGE_INDEX
+                        ) {
+                            // 스티커·마스킹테이프 탭에서만 고정 영역에
+                            // EditorSubcategoryNavBar가 한 줄 더 얹히므로
+                            // 그만큼 스크롤 하단 여백을 더 확보한다.
                             152.dp
                         } else {
                             96.dp
@@ -6928,10 +6885,19 @@ fun DetailScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {
-                        StickerSubcategoryNavBar(
+                        EditorSubcategoryNavBar(
                             options = listOf("사진", "텍스트", "라벨"),
                             selectedIndex = stickerSubTabIndex,
                             onOptionSelected = { stickerSubTabIndex = it },
+                            enabled = controlsEnabled
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                    } else if (customizationPagerState.currentPage == MASKING_TAPE_TAB_PAGE_INDEX) {
+                        EditorSubcategoryNavBar(
+                            options = listOf("기본 디자인", "커스텀", "사진"),
+                            selectedIndex = maskingTapeCreationTabIndex,
+                            onOptionSelected = { maskingTapeCreationTabIndex = it },
                             enabled = controlsEnabled
                         )
 
