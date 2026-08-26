@@ -31,8 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material3.ButtonDefaults
@@ -54,10 +52,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.DecorationPresetTile
+import com.postcardmemory.ui.components.EditorActionDivider
 import com.postcardmemory.ui.components.EditorEmptyHint
 import com.postcardmemory.ui.components.EditorOutlineButton
 import com.postcardmemory.ui.components.EditorQuietHint
 import com.postcardmemory.ui.components.EditorSlider
+import com.postcardmemory.ui.components.EditorTextAction
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.MaskingTapeContent
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
@@ -407,25 +407,20 @@ internal fun MaskingTapePickerPanel(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            EditorOutlineButton(
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            EditorTextAction(
                 text = "복제",
-                icon = Icons.Default.ContentCopy,
                 onClick = { onDuplicateMaskingTape(selectedTape.id) },
-                enabled = enabled,
-                modifier = Modifier.weight(1f)
+                enabled = enabled
             )
 
-            EditorOutlineButton(
+            EditorActionDivider()
+
+            EditorTextAction(
                 text = "삭제",
-                icon = Icons.Default.Delete,
                 onClick = { onDeleteMaskingTape(selectedTape.id) },
                 enabled = enabled,
-                contentColor = GalleryDangerRed,
-                borderColor = GalleryDangerRed,
-                modifier = Modifier.weight(1f)
+                contentColor = GalleryDangerRed
             )
         }
     }
