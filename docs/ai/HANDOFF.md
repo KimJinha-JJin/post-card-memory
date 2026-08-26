@@ -45,3 +45,57 @@
 **Git 상태**: `git status --short` 기준 — `CLAUDE.md`(M, 이전 작업분), `AGENTS.md`·`docs/ai/`(??, 이전 작업분), `.kotlin/`(??, 무관). 이번 조사로 새로 변경된 추적 파일은 `docs/ai/*.md` 갱신뿐이며 앱 코드 변경 없음. staged/commit/push 없음.
 
 **남은 위험 / 미확인**: `backgroundImagePath`를 실제 기능으로 쓸지, 죽은 컬럼으로 정리할지는 이번 조사 범위 밖 — 사용자 판단 필요 시 별도 작업으로 진행.
+
+## 2026-08-26 — 54일차: `/compact`·`/clear` 경계 규칙 + 마스킹테이프 UI/생성 문법 정돈
+
+> 2026-08-15 이후 이 문서는 갱신되지 않았다. 그 사이 작업은 수동 표준 모드로
+> 진행돼 완료보고서로 인수인계됐고, 이 문서가 비어 있다고 해서 작업이 없었던
+> 것은 아니다. 이번 항목은 54일차 결과만 다룬다.
+
+**오늘 올라간 커밋 4개** (브랜치 `feature/photo-sticker`)
+
+1. `5f0aaa2` — `CLAUDE.md`에 `/compact`·`/clear` 작업 경계 규칙 명문화
+2. `a0a431f` — 마스킹테이프 복제/삭제를 평면 텍스트 액션으로 전환
+3. `7e40e72` — 생성 navigation을 고정 하단으로, 상세 Property를 편집창으로 이동
+4. `fe8435a` — 세 생성 방식을 `+ 추가` 하나로 통일 + 사진 미반영 버그 수정
+
+**변경 파일**
+
+- `CLAUDE.md` — "세션 관리"에 `COMPACT/CLEAR 권장 지점` 명시 출력 규칙, `/clear` 금지 조건 8가지, "대화가 길다"만으로는 권장하지 않는다는 문장 추가. "Compact Instructions"를 `/clear` 사전 조건으로도 겸용.
+- `app/src/main/java/com/postcardmemory/ui/detail/MaskingTapeDetailScreen.kt` — 패널 전면 재구성.
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt` — 마스킹테이프 생성 탭 상태(`maskingTapeCreationTabIndex`) 추가, Property 콜백 5개를 `onEditMaskingTapeProperties` 하나로 통합, 슬라이더 드래그 스냅샷 플래그 3개 제거.
+- `app/src/main/java/com/postcardmemory/ui/detail/EditorBottomTabBar.kt` — `StickerSubcategoryNavBar` → `EditorSubcategoryNavBar`로 일반화(스티커 전용 로직은 원래 없었음).
+- `app/src/main/java/com/postcardmemory/utils/MaskingTapePhotoDecoder.kt` — 사진 버그 수정 1줄.
+- `app/src/test/.../EditorSubcategoryNavBarStructureTest.kt` — 구 `StickerSubcategoryNavBarStructureTest.kt`에서 rename + 마스킹테이프 호출부 검사 추가.
+- `app/src/test/.../MaskingTapeCreationGrammarStructureTest.kt` — 신규.
+
+**확인된 사실 / 결정**
+
+- **사진 마스킹테이프는 지금까지 한 번도 렌더된 적이 없었다.** 원인은 권한이나 URI가 아니라 `MaskingTapePhotoDecoder`의 로직 버그였다 — bounds 측정 단계에서 `inJustDecodeBounds = true`로 부른 `decodeStream`은 **성공해도 설계상 항상 null**을 돌려주는데, 그 결과를 `?: return@runCatching null`로 실패 판정에 써서 모든 사진이 예외 없이 null로 빠졌다. 실제 실패는 바로 아래 `outWidth/outHeight <= 0` 검사가 이미 걸러내고 있어, 잘못된 가드만 제거하는 1줄 수정으로 복구했다. 미리보기(`MaskingTapeShapes.kt`)와 저장/공유 export(`PostcardImageExporter.kt`)가 같은 디코더를 공유하므로 양쪽이 함께 복구됐다.
+- 마스킹테이프 Undo는 ViewModel이 자동 기록하는 구조가 아니라 **호출부가 `recordMaskingTapeSnapshotForUndo()`를 명시적으로 부르는 구조**다. 덕분에 ViewModel·Undo 구조를 건드리지 않고 "저장 1회 = Undo 1단계"를 호출부 정리만으로 달성할 수 있었다.
+- 생성(`+ 추가`)과 기존 객체 편집(`편집|복제|삭제`)을 역할로 분리했다. 세 생성 방식(기본 디자인/커스텀/사진)은 모두 "새 테이프 추가"라는 같은 역할이므로 진입점을 하나로 통일하고, 탭은 목적지만 결정한다. 세 목적지가 전부 modal이라 탭을 바꿔도 패널 높이와 `+ 추가` 위치가 고정된다.
+- 프리셋 선택·커스텀 편집은 생성창 안의 local draft이며 `저장`에서만 실제 테이프가 생긴다. 취소/Back/바깥 dismiss는 아무것도 만들지 않는다.
+- 빈 상태 안내 상자(`EditorEmptyHint`)와 "붙인 마스킹테이프" 제목은 제거했다. `+ 추가`가 목록 줄 안에 항상 있어 같은 말을 반복하게 되고, 제목 유무에 따라 `+ 추가` 위치가 흔들리기 때문이다.
+
+**검증**
+
+- `compileDebugKotlin` — 성공(마스킹테이프 관련 신규 경고 없음).
+- `testDebugUnitTest` — **51 suites / 495 tests / failures 0 / errors 0**. 신규·rename된 구조 테스트가 실제로 실행됐음을 `test-results` XML에서 확인(skipped 0).
+- `git diff --check` 이상 없음. 각 커밋마다 의도한 파일만 stage(`.kotlin/`은 매번 제외).
+- **실기기 검증 완료** — 사용자가 4개 커밋 각각에 대해 확인함.
+- **미실행**: `MaskingTapePhotoDecoder` 전용 자동 테스트는 없다. `BitmapFactory`·`ContentResolver` 의존이라 이 프로젝트의 순수 JUnit 환경에서는 작성할 수 없어, 사진 렌더 회귀는 현재 실기기 확인으로만 잡힌다.
+
+**Git 상태**: `feature/photo-sticker`, HEAD `fe8435a`, local == origin (ahead/behind 0/0), working tree clean(`.kotlin/` 기존 untracked만).
+
+**남은 위험 / 미확인**
+
+- **`PickVisualMedia` URI를 persistable로 가정하는 전제가 코드에 남아 있다 (후속 작업 후보).**
+  - 근거 1: `DetailViewModel.kt`의 `duplicateMaskingTape` 주석 — *"persistable 권한을 받은 갤러리 Uri라 복사가 필요 없다"*.
+  - 근거 2: `MaskingTapeItem.photoUri` 선언부 주석 — *"영구 저장소에 복사된 사용자 사진"*.
+  - 실제로는 안드로이드 시스템 포토피커(`ActivityResultContracts.PickVisualMedia`)가 돌려주는 `content://media/picker/...` URI는 persistable이 아니다. `takePersistableUriPermission` 호출은 `SecurityException`을 던지고 `runCatching`에 조용히 삼켜진다. **즉 두 주석 모두 사실과 다르고, 사진을 앱 저장소로 복사하는 코드는 어디에도 없다.**
+  - 54일차 사진 수정은 "즉시 렌더" 회귀 복구만을 범위로 했고, 저장 구조 재설계는 사용자가 명시적으로 범위에서 제외했다.
+  - 결과적으로 **장기 보관 시 사진이 유실될 가능성이 남아 있다.** 오래된 엽서를 다시 열었을 때 사진 테이프가 폴백색으로 보이는 신고가 들어오면 이 항목을 먼저 의심할 것. 해결하려면 사진 스티커처럼 앱 저장소로 복사하는 구조가 필요하고, 그때는 삭제 방어(`PostcardDeletionManager`, `OrphanFileDiagnostics`)까지 함께 검토해야 하므로 **별도 작업으로 분리한다.**
+- 마스킹테이프 편집창의 미리보기는 회전 시 Dialog 영역 밖으로 잘릴 수 있다(clip하지 않음). 실기기에서 문제로 보고되지 않아 그대로 뒀다.
+- 53일차 조사에서 확인된 UI token / 콘텐츠 색 / legacy alias의 hex 중복 정리는 계속 미착수(의도적 보류).
+
+**다음 작업 하나**: 위 `PickVisualMedia` 영속성 전제 문제를 실제로 다룰지 결정하기. 다루기로 하면 "사진 마스킹테이프를 앱 저장소로 복사 + 삭제 방어 연결"을 독립 작업으로 시작한다.
