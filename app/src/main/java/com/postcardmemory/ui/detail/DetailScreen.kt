@@ -215,11 +215,6 @@ internal enum class StickerEditMode {
     Rotate
 }
 
-private enum class TextScaleTarget {
-    Message,
-    Date
-}
-
 internal fun clampStickerOffset(
     offset: Offset,
     postcardSize: IntSize,
@@ -1569,10 +1564,6 @@ fun DetailScreen(
         mutableStateOf(false)
     }
 
-    var textScaleTarget by rememberSaveable {
-        mutableStateOf(TextScaleTarget.Message)
-    }
-
     val customizationPagerState = rememberPagerState(
         pageCount = { 7 }
     )
@@ -1657,10 +1648,6 @@ fun DetailScreen(
 
     val messageTextScalePercent =
         ((postcard?.messageTextScale ?: 1f) * 100f)
-            .roundToInt()
-
-    val dateTextScalePercent =
-        ((postcard?.dateTextScale ?: 1f) * 100f)
             .roundToInt()
 
     val backgroundPatternDensityPercent =
@@ -4885,108 +4872,21 @@ fun DetailScreen(
                         modifier = Modifier.height(14.dp)
                     )
 
-                    Text(
-                        text = "조절 대상",
-                        color = BrutalBlack,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    Row(
-                        horizontalArrangement =
-                            Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(
-                            TextScaleTarget.Message to "글귀",
-                            TextScaleTarget.Date to "날짜"
-                        ).forEach { (target, targetLabel) ->
-                            val targetSelected =
-                                textScaleTarget == target
-
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        if (targetSelected) {
-                                            SunsetGold.copy(alpha = 0.16f)
-                                        } else {
-                                            Color.Transparent
-                                        }
-                                    )
-                                    .clickable(
-                                        enabled = controlsEnabled
-                                    ) {
-                                        textScaleTarget = target
-                                    }
-                                    .padding(
-                                        horizontal = 16.dp,
-                                        vertical = 7.dp
-                                    )
-                            ) {
-                                Text(
-                                    text = targetLabel,
-                                    color =
-                                        if (targetSelected) {
-                                            SunsetGold
-                                        } else {
-                                            GraphiteAccent
-                                        },
-                                    fontSize = 14.sp,
-                                    fontWeight =
-                                        if (targetSelected) {
-                                            FontWeight.Bold
-                                        } else {
-                                            FontWeight.Medium
-                                        }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(
-                        modifier = Modifier.height(12.dp)
-                    )
-
-                    val messageTargetSelected =
-                        textScaleTarget == TextScaleTarget.Message
-
                     EditorPercentSlider(
                         label = "크기",
-                        percent =
-                            if (messageTargetSelected) {
-                                messageTextScalePercent
-                            } else {
-                                dateTextScalePercent
-                            },
+                        percent = messageTextScalePercent,
                         minPercent = 60,
-                        maxPercent =
-                            if (messageTargetSelected) 140 else 180,
+                        maxPercent = 140,
                         enabled = controlsEnabled,
                         onPreviewPercentChanged = { percent ->
-                            if (messageTargetSelected) {
-                                viewModel.setMessageTextScalePreview(
-                                    percent / 100f
-                                )
-                            } else {
-                                viewModel.setDateTextScalePreview(
-                                    percent / 100f
-                                )
-                            }
+                            viewModel.setMessageTextScalePreview(
+                                percent / 100f
+                            )
                         },
                         onPercentConfirmed = { percent ->
-                            if (messageTargetSelected) {
-                                viewModel.saveMessageTextScale(
-                                    percent / 100f
-                                )
-                            } else {
-                                viewModel.saveDateTextScale(
-                                    percent / 100f
-                                )
-                            }
+                            viewModel.saveMessageTextScale(
+                                percent / 100f
+                            )
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
