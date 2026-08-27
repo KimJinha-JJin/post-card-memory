@@ -258,8 +258,8 @@ fun EditorOutlineButton(
  * 색상만 유지한다. 배경/테두리가 없으므로 EditorOutlineButton과 달리
  * 개별 그림자·카드 인상이 남지 않는다.
  *
- * EditorOutlineButton은 이 컴포저블과 별개로 그대로 유지된다 — 마스킹테이프·
- * 도장·낙서 등 이번 파일럿 범위 밖의 화면은 계속 EditorOutlineButton을 쓴다.
+ * EditorOutlineButton은 이 컴포저블과 별개로 그대로 유지된다 — 낙서 등
+ * 아직 옮기지 않은 화면은 계속 EditorOutlineButton을 쓴다.
  */
 @Composable
 fun EditorTextAction(
@@ -372,8 +372,8 @@ fun DecorationPresetTile(
  * 밑줄(2dp 높이 24dp 너비, 선택 시 SunsetGold)은 DecorationPresetTile과
  * 완전히 동일하다.
  *
- * DecorationPresetTile 자체는 건드리지 않는다 — 배경 패턴·마스킹테이프·
- * 도장은 이번 파일럿 범위 밖이라 계속 그 카드형 컴포저블을 쓴다.
+ * DecorationPresetTile 자체는 건드리지 않는다 — 배경 패턴처럼 카드 배경이
+ * 실제로 필요한 화면은 계속 그 컴포저블을 쓴다.
  */
 @Composable
 fun EditorFlatPresetTile(

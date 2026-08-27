@@ -80,6 +80,14 @@ val sealInkColors = listOf(
 )
 
 /*
+ * 도장 색상 선택지 — 도장은 채움 없는 얇은 선(Stroke)으로만 그려져
+ * 밝은 배경 위에서 흰 잉크가 사실상 안 보이므로 textStickerColors와
+ * 같은 이유로 신규 선택지에서 흰색을 제외한다. sealInkColors 자체는
+ * 그대로 두어 이미 저장된 흰 잉크 도장은 계속 SealInkWhite로 렌더된다.
+ */
+val sealSelectableInkColors = sealInkColors.filterNot { it == SealInkWhite }
+
+/*
  * 텍스트 스티커 글자색 — 흰색 외곽선과 항상 대비돼야 하므로 흰색은
  * 제외한다. 콘텐츠 팔레트(pastelColors)와 잉크 톤을 섞어 "귀엽고
  * 사랑스러운" 느낌에 맞춘다.

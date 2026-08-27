@@ -5427,7 +5427,7 @@ fun DetailScreen(
                                             }
                                         )
                                     },
-                                    onAddSeal = { type ->
+                                    onAddSeal = { type, colorArgb ->
                                         if (photoSeals.size >= MAX_SEAL_COUNT) {
                                             Toast.makeText(
                                                 context,
@@ -5439,7 +5439,8 @@ fun DetailScreen(
                                             val newSeal =
                                                 PostcardSealItem(
                                                     type = type,
-                                                    scale = type.defaultScale
+                                                    scale = type.defaultScale,
+                                                    colorArgb = colorArgb
                                                 )
                                             viewModel.setPhotoSeals(
                                                 photoSeals + newSeal
@@ -5463,12 +5464,15 @@ fun DetailScreen(
                                             )
                                         }
                                     },
-                                    onColorSelected = { id, colorArgb ->
+                                    onEditSeal = { id, type, colorArgb ->
                                         viewModel.recordSealSnapshotForUndo()
                                         viewModel.setPhotoSeals(
                                             photoSeals.map {
                                                 if (it.id == id) {
-                                                    it.copy(colorArgb = colorArgb)
+                                                    it.copy(
+                                                        type = type,
+                                                        colorArgb = colorArgb
+                                                    )
                                                 } else {
                                                     it
                                                 }
