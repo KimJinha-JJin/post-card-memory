@@ -482,7 +482,11 @@ internal const val MASKING_TAPE_TAB_PAGE_INDEX = 4
 /** 도장 탭의 페이지 인덱스. 다른 탭에서는 도장 선택 표시·제스처를 시작하지 않는다. */
 internal const val SEAL_TAB_PAGE_INDEX = 5
 
-/** 낙서 탭의 페이지 인덱스. 다른 탭에서는 낙서 입력·지우개 판정을 시작하지 않는다. */
+/**
+ * 낙서 탭의 페이지 인덱스. 다른 탭에서는 낙서 입력·지우개 판정을 시작하지
+ * 않는다. 하단 고정 영역에 도구 선택 EditorSubcategoryNavBar도 이 탭에서만
+ * 추가로 얹힌다.
+ */
 internal const val DOODLE_TAB_PAGE_INDEX = 6
 
 /** 이 거리(정규화 좌표 기준 화면 px)보다 가까운 점은 새로 추가하지 않아 획 데이터가 과도하게 촘촘해지지 않게 한다. */
@@ -5499,8 +5503,6 @@ fun DetailScreen(
                                 contentAlignment = Alignment.TopCenter
                             ) {
                                 DoodlePanel(
-                                    doodleTool = doodleTool,
-                                    onToolSelected = { doodleTool = it },
                                     doodleColorArgb = doodleColorArgb,
                                     onColorSelected = { doodleColorArgb = it },
                                     doodleWidth = doodleWidth,
@@ -5695,9 +5697,10 @@ fun DetailScreen(
                     modifier = Modifier.height(
                         if (
                             customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX ||
-                            customizationPagerState.currentPage == MASKING_TAPE_TAB_PAGE_INDEX
+                            customizationPagerState.currentPage == MASKING_TAPE_TAB_PAGE_INDEX ||
+                            customizationPagerState.currentPage == DOODLE_TAB_PAGE_INDEX
                         ) {
-                            // 스티커·마스킹테이프 탭에서만 고정 영역에
+                            // 스티커·마스킹테이프·낙서 탭에서만 고정 영역에
                             // EditorSubcategoryNavBar가 한 줄 더 얹히므로
                             // 그만큼 스크롤 하단 여백을 더 확보한다.
                             152.dp
@@ -6902,6 +6905,17 @@ fun DetailScreen(
                             options = listOf("기본 디자인", "커스텀", "사진"),
                             selectedIndex = maskingTapeCreationTabIndex,
                             onOptionSelected = { maskingTapeCreationTabIndex = it },
+                            enabled = controlsEnabled
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                    } else if (customizationPagerState.currentPage == DOODLE_TAB_PAGE_INDEX) {
+                        EditorSubcategoryNavBar(
+                            options = listOf("펜", "형광펜", "점선", "지우개"),
+                            selectedIndex = DoodleTool.entries.indexOf(doodleTool),
+                            onOptionSelected = { index ->
+                                doodleTool = DoodleTool.entries[index]
+                            },
                             enabled = controlsEnabled
                         )
 
