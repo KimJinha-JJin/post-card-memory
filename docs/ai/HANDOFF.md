@@ -231,23 +231,8 @@
 
 - `gradle compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
 - `gradle testDebugUnitTest` — 494 tests / failures 0 / errors 0. `SaveErrorDialogStructureTest`(7종→6종 다이얼로그로 앵커·개수 갱신, `imageError` 테스트 삭제)와 `EditorSubcategoryNavBarStructureTest`(3곳→4곳 호출, 사진 탭이 첫 번째 분기가 되도록 순서 갱신)를 실제 구조 변경에 맞춰 함께 수정.
-- **미실행**: 실기기 검증. 아래 20개 시나리오는 사용자 확인 필요.
+- **실기기 검증 완료** — 사용자가 확인함(레이아웃 세로 체크 목록 재설계 포함).
 
-**실기기 검증 필요 시나리오(사용자 확인 대기)**
+**Git 상태**: `feature/photo-sticker`, HEAD `7b3edd9`, local == origin(ahead/behind 0/0), working tree clean(`.kotlin/` 기존 untracked만). `PostcardLayoutPicker.kt`(Undo/Redo 제거 + 세로 체크 목록 재설계), `DetailScreen.kt`, `DetailViewModel.kt`, `PostcardRepository.kt`, `PostcardDao.kt`, `SaveErrorDialogStructureTest.kt`, `EditorSubcategoryNavBarStructureTest.kt`, 이 문서 갱신까지 함께 commit·push 완료.
 
-1. 기존 엽서 진입 → 사진 탭
-2. 하단 `레이아웃 | 사진 편집` 표시 확인
-3. 현재 선택 tab의 selected 상태(진한 색) 확인
-4. 레이아웃 4종(우표/폴라로이드/테이프 필름/편지지) 전환
-5. 추천 템플릿 없음 확인
-6. 내 템플릿 없음 확인
-7. 사진 편집 탭 진입, 크기 Slider 조작 + Undo/Redo
-8. 블러 Slider 조작 + Undo/Redo
-9. 캔버스 drag(pan) / pinch(zoom) 정상 동작
-10. 저장 → 닫기 → 재진입 시 상태 복원 확인
-11. "사진 바꾸기" UI가 더 이상 노출되지 않음 확인
-12. export/공유 결과가 화면 미리보기와 일치하는지 확인
-
-**Git 상태**: `feature/photo-sticker`. Unstaged 수정: `DetailScreen.kt`, `DetailViewModel.kt`, `PostcardLayoutPicker.kt`, `PostcardRepository.kt`, `PostcardDao.kt`, `SaveErrorDialogStructureTest.kt`, `EditorSubcategoryNavBarStructureTest.kt`(+ 이 HANDOFF 갱신). `AGENTS.md`는 이전 항목에서 이미 commit·push 완료(`1591c24`). 이번 사진 UI 변경은 아직 commit/push 안 함 — 실기기 검증 후 사용자 승인 대기.
-
-**다음 작업**: 위 12개 시나리오 실기기 검증 → 문제 없으면 commit/push 승인 요청. 검증 후에는 저장소가 다시 "배경 UI/UX 전수조사" 등 다음 후보로 이어갈 수 있는 상태가 된다.
+**다음 작업**: 사진 UI 작업은 완전히 닫혔다. 다음 후보는 "배경 UI/UX 전수조사"(사용자 확정 필요) 등 이전 조사에서 남긴 항목들.
