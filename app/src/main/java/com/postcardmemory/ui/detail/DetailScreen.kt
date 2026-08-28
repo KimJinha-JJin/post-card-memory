@@ -2321,9 +2321,7 @@ fun DetailScreen(
                                         rotationZ = tape.rotationDegrees
                                     }
                                     .onSizeChanged { size ->
-                                        maskingTapeSizes =
-                                            maskingTapeSizes +
-                                                    (tape.id to size)
+                                        maskingTapeSizes += (tape.id to size)
                                     }
                                     .then(
                                         if (
@@ -2512,9 +2510,7 @@ fun DetailScreen(
                                 modifier = stickerPositionModifier
                                     .size(STICKER_BASE_SIZE * sticker.scale)
                                     .onSizeChanged { size ->
-                                        stickerSizes =
-                                            stickerSizes +
-                                                    (sticker.id to size)
+                                        stickerSizes += (sticker.id to size)
                                     }
                             ) {
                                 AsyncImage(
@@ -3028,8 +3024,7 @@ fun DetailScreen(
                                                             remaining
                                                         )
                                                 }
-                                                stickerSizes =
-                                                    stickerSizes - sticker.id
+                                                stickerSizes -= sticker.id
                                                 if (selectedStickerId == sticker.id) {
                                                     viewModel.setSelectedStickerId(
                                                         remaining.lastOrNull()?.id
@@ -3473,9 +3468,7 @@ fun DetailScreen(
                                     modifier = Modifier
                                         .size(sealVisualSize)
                                         .onSizeChanged { size ->
-                                            sealSizes =
-                                                sealSizes +
-                                                        (seal.id to size)
+                                            sealSizes += (seal.id to size)
                                         }
                                         .then(
                                             if (isSealVisuallySelected) {
@@ -3552,9 +3545,7 @@ fun DetailScreen(
                                             textSticker.rotationDegrees
                                     }
                                     .onSizeChanged { size ->
-                                        textStickerSizes =
-                                            textStickerSizes +
-                                                    (textSticker.id to size)
+                                        textStickerSizes += (textSticker.id to size)
                                     }
                                     .then(
                                         if (
@@ -3846,9 +3837,7 @@ fun DetailScreen(
                                                                 resumePosition,
                                                                 postcardPreviewSize
                                                             )?.let { resumePoint ->
-                                                                currentDoodleStrokePoints =
-                                                                    currentDoodleStrokePoints +
-                                                                            resumePoint
+                                                                currentDoodleStrokePoints += resumePoint
                                                             }
                                                             lastRawPosition = resumePosition
                                                         }
@@ -3936,8 +3925,7 @@ fun DetailScreen(
                                                                             postcardPreviewSize
                                                                         )
                                                                     if (point != null) {
-                                                                        currentDoodleStrokePoints =
-                                                                            currentDoodleStrokePoints + point
+                                                                        currentDoodleStrokePoints += point
                                                                     }
                                                                     lastRawPosition = change.position
                                                                 }
@@ -4055,9 +4043,7 @@ fun DetailScreen(
                                             labelSticker.rotationDegrees
                                     }
                                     .onSizeChanged { size ->
-                                        labelStickerSizes =
-                                            labelStickerSizes +
-                                                    (labelSticker.id to size)
+                                        labelStickerSizes += (labelSticker.id to size)
                                     }
                                     .then(
                                         if (
@@ -4962,7 +4948,7 @@ fun DetailScreen(
                                                 remaining
                                             )
                                         }
-                                        stickerSizes = stickerSizes - id
+                                        stickerSizes -= id
                                         if (selectedStickerId == id) {
                                             viewModel.setSelectedStickerId(
                                                 remaining.lastOrNull()?.id
@@ -5083,7 +5069,7 @@ fun DetailScreen(
                                         viewModel.recordTextStickerSnapshotForUndo()
                                         val remaining = textStickers.filter { it.id != id }
                                         viewModel.setTextStickers(remaining)
-                                        textStickerSizes = textStickerSizes - id
+                                        textStickerSizes -= id
                                         if (selectedTextStickerId == id) {
                                             viewModel.setSelectedTextStickerId(null)
                                         }
@@ -5146,7 +5132,7 @@ fun DetailScreen(
                                         viewModel.recordLabelStickerSnapshotForUndo()
                                         val remaining = labelStickers.filter { it.id != id }
                                         viewModel.setLabelStickers(remaining)
-                                        labelStickerSizes = labelStickerSizes - id
+                                        labelStickerSizes -= id
                                         if (selectedLabelStickerId == id) {
                                             viewModel.setSelectedLabelStickerId(null)
                                         }
@@ -5233,7 +5219,7 @@ fun DetailScreen(
                                                 it.id != id
                                             }
                                         viewModel.setPhotoMaskingTapes(remaining)
-                                        maskingTapeSizes = maskingTapeSizes - id
+                                        maskingTapeSizes -= id
                                         if (selectedMaskingTapeId == id) {
                                             viewModel.setSelectedMaskingTapeId(
                                                 remaining.lastOrNull()?.id
@@ -5361,7 +5347,7 @@ fun DetailScreen(
                                                 it.id != id
                                             }
                                         viewModel.setPhotoSeals(remaining)
-                                        sealSizes = sealSizes - id
+                                        sealSizes -= id
                                         if (selectedSealId == id) {
                                             viewModel.setSelectedSealId(
                                                 remaining.lastOrNull()?.id

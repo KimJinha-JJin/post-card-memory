@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.geometry.Offset
+import androidx.core.graphics.createBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.tasks.Task
@@ -54,6 +55,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "DetailViewModel"
 private const val SEAL_HISTORY_LIMIT = 50
@@ -755,7 +757,7 @@ class DetailViewModel @Inject constructor(
 
         draftAutosaveJob?.cancel()
         draftAutosaveJob = viewModelScope.launch {
-            delay(DRAFT_AUTOSAVE_DEBOUNCE_MS)
+            delay(DRAFT_AUTOSAVE_DEBOUNCE_MS.milliseconds)
             persistDraftNow()
         }
     }
@@ -1006,7 +1008,7 @@ class DetailViewModel @Inject constructor(
      * 하나라도 실패하면 false를 반환하며, 이 경우 StateFlow와 undo/redo
      * 이력, 기존 확정 파일 모두 건드리지 않아 재시도가 안전하다.
      */
-    private suspend fun persistStickerEditState(
+    private fun persistStickerEditState(
         postcardId: Long
     ): Boolean {
         val stickerCacheDir =
@@ -1059,7 +1061,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 확정 저장된 스티커 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
-    private suspend fun readConfirmedStickerState(
+    private fun readConfirmedStickerState(
         postcardId: Long
     ): List<PhotoStickerItem> {
         val file =
@@ -1115,7 +1117,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 도장 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
-    private suspend fun persistSealEditState(
+    private fun persistSealEditState(
         postcardId: Long
     ): Boolean {
         val stateFile =
@@ -1130,7 +1132,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 확정 저장된 도장 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
-    private suspend fun readConfirmedSealState(
+    private fun readConfirmedSealState(
         postcardId: Long
     ): List<PostcardSealItem> {
         val file =
@@ -1175,7 +1177,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 텍스트 스티커 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
-    private suspend fun persistTextStickerEditState(
+    private fun persistTextStickerEditState(
         postcardId: Long
     ): Boolean {
         val stateFile =
@@ -1190,7 +1192,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 확정 저장된 텍스트 스티커 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
-    private suspend fun readConfirmedTextStickerState(
+    private fun readConfirmedTextStickerState(
         postcardId: Long
     ): List<TextStickerItem> {
         val file =
@@ -1256,14 +1258,13 @@ class DetailViewModel @Inject constructor(
                 offset = original.offset?.plus(Offset(40f, 40f))
             )
 
-        _photoMaskingTapes.value =
-            _photoMaskingTapes.value + duplicate
+        _photoMaskingTapes.value += duplicate
         _selectedMaskingTapeId.value = duplicate.id
         scheduleDraftAutosave()
     }
 
     /** 마스킹테이프 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
-    private suspend fun persistMaskingTapeEditState(
+    private fun persistMaskingTapeEditState(
         postcardId: Long
     ): Boolean {
         val stateFile =
@@ -1278,7 +1279,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 확정 저장된 마스킹테이프 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
-    private suspend fun readConfirmedMaskingTapeState(
+    private fun readConfirmedMaskingTapeState(
         postcardId: Long
     ): List<MaskingTapeItem> {
         val file =
@@ -1323,7 +1324,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 라벨 스티커 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
-    private suspend fun persistLabelStickerEditState(
+    private fun persistLabelStickerEditState(
         postcardId: Long
     ): Boolean {
         val stateFile =
@@ -1338,7 +1339,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 확정 저장된 라벨 스티커 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
-    private suspend fun readConfirmedLabelStickerState(
+    private fun readConfirmedLabelStickerState(
         postcardId: Long
     ): List<LabelStickerItem> {
         val file =
@@ -1371,7 +1372,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 낙서 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
-    private suspend fun persistDoodleEditState(
+    private fun persistDoodleEditState(
         postcardId: Long
     ): Boolean {
         val stateFile =
@@ -1386,7 +1387,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 확정 저장된 낙서 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
-    private suspend fun readConfirmedDoodleState(
+    private fun readConfirmedDoodleState(
         postcardId: Long
     ): List<DoodleStroke> {
         val file =
@@ -2605,7 +2606,7 @@ class DetailViewModel @Inject constructor(
 
             try {
                 val previewBitmap =
-                    Bitmap.createBitmap(
+                    createBitmap(
                         TEMPLATE_PREVIEW_SIZE,
                         TEMPLATE_PREVIEW_SIZE,
                         Bitmap.Config.ARGB_8888
@@ -3177,83 +3178,6 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun updateMessageFont(
-        messageFont: String
-    ) {
-        val currentPostcard =
-            _postcard.value
-                ?: return
-
-        val normalizedFont =
-            normalizeMessageFont(
-                messageFont
-            )
-
-        if (
-            normalizedFont ==
-            currentPostcard.messageFont
-        ) {
-            return
-        }
-
-        val previousFont =
-            currentPostcard.messageFont
-
-        _postcard.value =
-            currentPostcard.copy(
-                messageFont = normalizedFont
-            )
-
-        _fontUpdateState.value =
-            FontUpdateState.Saving
-
-        messageFontSaveJob = viewModelScope.launch {
-            try {
-                val writtenFont =
-                    withContext(Dispatchers.IO) {
-                        styleWriteMutex.withLock {
-                            // 템플릿 일괄 저장과의 경합 방지: Mutex를 획득한
-                            // 이 순간 _postcard.value를 다시 읽어서 쓴다.
-                            val latestFont =
-                                _postcard.value?.messageFont
-                                    ?: return@withLock null
-                            repository
-                                .updatePostcardMessageFont(
-                                    id = currentPostcard.id,
-                                    messageFont = latestFont
-                                )
-                            latestFont
-                        }
-                    }
-
-                if (writtenFont != null) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            messageFont = writtenFont
-                        )
-                }
-
-                _fontUpdateState.value =
-                    FontUpdateState.Success
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                // 이미 더 최신 폰트 조작이 반영됐다면 그 값을 건드리지 않는다.
-                if (_postcard.value?.messageFont == normalizedFont) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            messageFont = previousFont
-                        )
-                }
-                _fontUpdateState.value =
-                    FontUpdateState.Error(
-                        exception.message
-                            ?: "글귀 폰트를 저장하지 못했습니다."
-                    )
-            }
-        }
-    }
-
     fun updateLayoutStyle(
         layoutStyle: String
     ) {
@@ -3323,80 +3247,6 @@ class DetailViewModel @Inject constructor(
                     LayoutUpdateState.Error(
                         exception.message
                             ?: "레이아웃을 저장하지 못했습니다."
-                    )
-            }
-        }
-    }
-
-    fun updateDateFormat(
-        dateFormat: String
-    ) {
-        val currentPostcard =
-            _postcard.value
-                ?: return
-
-        val normalizedDateFormat =
-            normalizeDateFormat(
-                dateFormat
-            )
-
-        if (
-            normalizedDateFormat ==
-            currentPostcard.dateFormat
-        ) {
-            return
-        }
-
-        val previousDateFormat =
-            currentPostcard.dateFormat
-
-        _postcard.value =
-            currentPostcard.copy(
-                dateFormat = normalizedDateFormat
-            )
-
-        _dateFormatUpdateState.value =
-            DateFormatUpdateState.Saving
-
-        dateFormatSaveJob = viewModelScope.launch {
-            try {
-                val writtenDateFormat =
-                    withContext(Dispatchers.IO) {
-                        styleWriteMutex.withLock {
-                            val latestDateFormat =
-                                _postcard.value?.dateFormat
-                                    ?: return@withLock null
-                            repository
-                                .updatePostcardDateFormat(
-                                    id = currentPostcard.id,
-                                    dateFormat = latestDateFormat
-                                )
-                            latestDateFormat
-                        }
-                    }
-
-                if (writtenDateFormat != null) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            dateFormat = writtenDateFormat
-                        )
-                }
-
-                _dateFormatUpdateState.value =
-                    DateFormatUpdateState.Success
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                if (_postcard.value?.dateFormat == normalizedDateFormat) {
-                    _postcard.value =
-                        _postcard.value?.copy(
-                            dateFormat = previousDateFormat
-                        )
-                }
-                _dateFormatUpdateState.value =
-                    DateFormatUpdateState.Error(
-                        exception.message
-                            ?: "날짜 형식을 저장하지 못했습니다."
                     )
             }
         }
@@ -3476,78 +3326,6 @@ class DetailViewModel @Inject constructor(
                     }
                     _textScaleSaveErrors.trySend(
                         "글귀 크기를 저장하지 못했어."
-                    )
-                }
-            }
-    }
-
-    fun setDateTextScalePreview(
-        scale: Float
-    ) {
-        val currentPostcard =
-            _postcard.value
-                ?: return
-
-        _postcard.value =
-            currentPostcard.copy(
-                dateTextScale =
-                    scale.coerceIn(0.6f, 1.8f)
-            )
-    }
-
-    fun saveDateTextScale(
-        scale: Float
-    ) {
-        val currentPostcard =
-            _postcard.value
-                ?: return
-        val previousScale =
-            currentPostcard.dateTextScale
-        val normalizedScale =
-            scale.coerceIn(0.6f, 1.8f)
-
-        _postcard.value =
-            currentPostcard.copy(
-                dateTextScale = normalizedScale
-            )
-
-        dateTextScaleSaveJob?.cancel()
-        dateTextScaleSaveJob =
-            viewModelScope.launch {
-                try {
-                    val writtenScale =
-                        withContext(Dispatchers.IO) {
-                            styleWriteMutex.withLock {
-                                val latestScale =
-                                    _postcard.value?.dateTextScale
-                                        ?: return@withLock null
-                                repository
-                                    .updatePostcardDateTextScale(
-                                        id = currentPostcard.id,
-                                        dateTextScale =
-                                            latestScale
-                                    )
-                                latestScale
-                            }
-                        }
-
-                    if (writtenScale != null) {
-                        _postcard.value =
-                            _postcard.value?.copy(
-                                dateTextScale = writtenScale
-                            )
-                    }
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (_: Exception) {
-                    if (_postcard.value?.dateTextScale == normalizedScale) {
-                        _postcard.value =
-                            _postcard.value?.copy(
-                                dateTextScale = previousScale
-                            )
-                    }
-                    _textScaleSaveErrors.trySend(
-                        "날짜 크기를 저장하지 못했어."
                     )
                 }
             }
@@ -4560,7 +4338,7 @@ class DetailViewModel @Inject constructor(
             ).filter { it.isActive }
 
         if (pendingJobs.isNotEmpty()) {
-            withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS) {
+            withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS.milliseconds) {
                 pendingJobs.joinAll()
             }
         }
@@ -4896,8 +4674,7 @@ class DetailViewModel @Inject constructor(
                         displayedUri = originalUri
                     )
 
-                _photoStickers.value =
-                    _photoStickers.value + newSticker
+                _photoStickers.value += newSticker
                 _selectedStickerId.value =
                     newSticker.id
                 scheduleDraftAutosave()
@@ -4936,8 +4713,7 @@ class DetailViewModel @Inject constructor(
                     offset = duplicateOffset
                 )
 
-            _photoStickers.value =
-                _photoStickers.value + duplicate
+            _photoStickers.value += duplicate
             _selectedStickerId.value = newId
             scheduleDraftAutosave()
             return
@@ -4978,8 +4754,7 @@ class DetailViewModel @Inject constructor(
                     }
                 }
 
-            _photoStickers.value =
-                _photoStickers.value + duplicate
+            _photoStickers.value += duplicate
             _selectedStickerId.value = newId
             scheduleDraftAutosave()
         }
@@ -5298,20 +5073,6 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    private fun normalizeMessageFont(
-        messageFont: String
-    ): String {
-        return when (messageFont) {
-            "DEFAULT",
-            "SANS_SERIF",
-            "SERIF",
-            "MONOSPACE",
-            "CURSIVE" -> messageFont
-
-            else -> "SERIF"
-        }
-    }
-
     private fun normalizeLayoutStyle(
         layoutStyle: String
     ): String {
@@ -5322,20 +5083,6 @@ class DetailViewModel @Inject constructor(
             "LETTER" -> layoutStyle
 
             else -> "STAMP"
-        }
-    }
-
-
-    private fun normalizeDateFormat(
-        dateFormat: String
-    ): String {
-        return when (dateFormat) {
-            "DOT",
-            "KOREAN",
-            "ENGLISH_LONG",
-            "ENGLISH_SHORT" -> dateFormat
-
-            else -> "DOT"
         }
     }
 

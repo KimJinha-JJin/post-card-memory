@@ -63,7 +63,7 @@ class FutureMailboxViewModel @Inject constructor(
             return
         }
 
-        _openingDeliverAtMillis.value = _openingDeliverAtMillis.value + group.deliverAtMillis
+        _openingDeliverAtMillis.value += group.deliverAtMillis
 
         viewModelScope.launch(Dispatchers.IO) {
             group.postcardIds.forEach { id ->
@@ -71,7 +71,7 @@ class FutureMailboxViewModel @Inject constructor(
             }
 
             _openedMessages.trySend("엽서가 갤러리로 돌아왔어요")
-            _openingDeliverAtMillis.value = _openingDeliverAtMillis.value - group.deliverAtMillis
+            _openingDeliverAtMillis.value -= group.deliverAtMillis
         }
     }
 }

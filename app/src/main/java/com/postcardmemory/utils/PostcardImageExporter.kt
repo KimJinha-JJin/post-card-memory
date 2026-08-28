@@ -21,6 +21,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.graphics.createBitmap
 import androidx.exifinterface.media.ExifInterface
 import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
@@ -362,7 +363,7 @@ object PostcardImageExporter {
 
         try {
             val outputBitmap =
-                Bitmap.createBitmap(
+                createBitmap(
                     OUTPUT_SIZE,
                     OUTPUT_SIZE,
                     Bitmap.Config.ARGB_8888

@@ -193,7 +193,7 @@ fun SheepRanchStage(
 
     LaunchedEffect(showNotEnoughHint) {
         if (showNotEnoughHint) {
-            delay(RACE_NOT_ENOUGH_HINT_MILLIS)
+            delay(RACE_NOT_ENOUGH_HINT_MILLIS.milliseconds)
             showNotEnoughHint = false
         }
     }

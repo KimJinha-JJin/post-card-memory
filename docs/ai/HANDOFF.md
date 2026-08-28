@@ -99,3 +99,41 @@
 - 53일차 조사에서 확인된 UI token / 콘텐츠 색 / legacy alias의 hex 중복 정리는 계속 미착수(의도적 보류).
 
 **다음 작업 하나**: 위 `PickVisualMedia` 영속성 전제 문제를 실제로 다룰지 결정하기. 다루기로 하면 "사진 마스킹테이프를 앱 저장소로 복사 + 삭제 방어 연결"을 독립 작업으로 시작한다.
+
+## 2026-08-28 — 56일차: IDE inspection warning cleanup 마감
+
+**목표**: Android Studio가 표시하던 IDE warning 8개 카테고리를 production 동작·공개 계약 변경 없이 정리(독립 작업 단위).
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt`
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`
+- `app/src/main/java/com/postcardmemory/ui/futuremail/FutureMailboxViewModel.kt`
+- `app/src/main/java/com/postcardmemory/ui/gallery/SheepRanchStage.kt`
+- `app/src/main/java/com/postcardmemory/utils/PostcardImageExporter.kt`
+
+**핵심 변경**
+
+- **미사용 함수 삭제 (DetailViewModel.kt)**: `updateMessageFont`, `updateDateFormat`, `setDateTextScalePreview`, `saveDateTextScale` — 전체 코드베이스 grep으로 호출부 0개 확인. 폰트/날짜형식은 템플릿 일괄 적용 경로로만 바뀌고, 날짜 크기 조절 UI는 54일차 이전 "조절 대상 토글" 제거로 이미 화면에서 사라졌음을 확인. 이 4개만 쓰던 헬퍼 `normalizeMessageFont`, `normalizeDateFormat`도 함께 삭제(연쇄 고아화).
+- **불필요한 `suspend` 제거 12곳 (DetailViewModel.kt)**: 스티커/도장/텍스트 스티커/마스킹테이프/라벨 스티커/낙서 각각의 `persist*EditState()`/`readConfirmed*State()` — 내부에 suspend 호출 없는 순수 블로킹 파일 I/O이고 전부 private, 호출부는 이미 `viewModelScope.launch(Dispatchers.IO)` 내부라 시그니처 변경이 안전함을 호출부까지 확인. `awaitStickerCleanupSweep`/`awaitPendingStyleSaves`/`persistDraftNow`/`awaitResult`는 실제 suspend 호출이 있어 그대로 둠.
+- **Legacy Long → Duration 3곳**: `PENDING_STYLE_SAVE_TIMEOUT_MS`, `DRAFT_AUTOSAVE_DEBOUNCE_MS`(DetailViewModel.kt), `RACE_NOT_ENOUGH_HINT_MILLIS`(SheepRanchStage.kt)에 `.milliseconds` 적용. DetailScreen.kt의 `withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis)`는 Compose `AwaitPointerEventScope`가 제공하는 별도 Long 전용 멤버 함수(Duration 오버로드 없음)라 변환 시도 시 컴파일 에러 발생 → 원본 그대로 원복.
+- **KTX `createBitmap` 전환 2곳**: 빈 Bitmap 생성 패턴만(`DetailViewModel.kt`, `PostcardImageExporter.kt`) `androidx.core.graphics.createBitmap`으로 교체. source crop/matrix 오버로드 4곳(`ImageUtils.kt`, `PostcardImageExporter.kt`, `PostcardRenderSpec.kt`)은 core-ktx 1.16.0 소스 확인 결과 대응 wrapper가 없어 유지.
+- **operator-assignment 19곳**: `x = x + y`/`x = x - y` → `x += y`/`x -= y` 기계적 치환(DetailScreen.kt 13, DetailViewModel.kt 4, FutureMailboxViewModel.kt 2). `MaskingTapeShapes.kt`/`SealShapes.kt`의 `strokeWidth = strokeWidth * 0.7f` 등 3곳은 `drawLine(...)` 내부의 named argument라 대상 아님으로 확인해 제외.
+- **의도적으로 손대지 않음**: Typo 경고(`removedBgUri`, `Snackbar`, `uACBD`, `uACFC`)는 IDE spellcheck 오탐 — 식별자 변경도 suppression 추가도 하지 않음. Android Studio/Clangd 플러그인 내부 오류는 production 코드 경고가 아니므로 이번 범위에서 제외.
+
+**검증 방법과 결과**
+
+- `gradle compileDebugKotlin` — BUILD SUCCESSFUL (무관한 기존 경고만 남음: Migration 파라미터명, LocalLifecycleOwner deprecation 등).
+- `gradle testDebugUnitTest` — 전체 통과.
+- 삭제한 함수 6개(`updateMessageFont`/`updateDateFormat`/`setDateTextScalePreview`/`saveDateTextScale`/`normalizeMessageFont`/`normalizeDateFormat`) 전체 코드베이스 grep 재확인 — 실제 호출부 0, `DetailScreenExitSaveLossTest.kt` 주석 2곳에서만 이름 언급(코드 아님, 컴파일 영향 없음).
+- 최종 `git diff` 5개 파일 전수 재검토 — 위 항목 외 예상 밖 production 변경 없음, operator-assignment 개수(13+4+2=19)와 createBitmap 개수(1+1=2)가 지시서 기대치와 일치.
+
+**남은 위험 또는 미검증 항목**
+
+- `DetailScreenExitSaveLossTest.kt` 주석 2곳이 삭제된 함수 이름을 그대로 언급 — 컴파일/동작에는 영향 없는 stale 주석이며 이번 cleanup 범위 밖으로 남겨둠.
+- `FontUpdateState`/`DateFormatUpdateState` UI 상태 plumbing은 이제 항상 Idle로만 남는 죽은 경로가 됐으나, 이번 함수 삭제와 별개로 상태 자체를 지우는 것은 범위 확대라 손대지 않음.
+- 실기기 검증 없음(경고성 리팩터링이라 자동 컴파일/테스트로 충분하다고 판단, 화면 동작 변화 없음).
+
+**Git 상태**: `feature/photo-sticker`, HEAD `d4e95b9`, local == origin(ahead/behind 0/0). 위 5개 파일 unstaged 수정 상태였고, 이번 HANDOFF 갱신 직후 이 문서 갱신 작업까지 함께 commit/push 예정(사용자 승인 후).
+
+**다음 작업**: HANDOFF 운영 규칙을 AGENTS.md에 보강한 뒤, 사진(Photo) UI/UX 전수조사(코드 조사만, production 수정 금지)로 진행.
