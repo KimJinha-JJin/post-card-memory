@@ -25,7 +25,6 @@ import com.postcardmemory.utils.PhotoStickerImageStorage
 import com.postcardmemory.utils.PostcardDeletionManager
 import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
-import com.postcardmemory.utils.PostcardImageStorage
 import com.postcardmemory.utils.PostcardRenderSpec
 import com.postcardmemory.utils.PostcardTemplateStorage
 import com.postcardmemory.utils.deserializeDoodleStroke
@@ -265,19 +264,6 @@ sealed interface DateFormatUpdateState {
     ) : DateFormatUpdateState
 }
 
-sealed interface ImageUpdateState {
-
-    data object Idle : ImageUpdateState
-
-    data object Saving : ImageUpdateState
-
-    data object Success : ImageUpdateState
-
-    data class Error(
-        val message: String
-    ) : ImageUpdateState
-}
-
 sealed interface StickerBackgroundRemovalState {
 
     data object Idle : StickerBackgroundRemovalState
@@ -404,15 +390,6 @@ class DetailViewModel @Inject constructor(
             StateFlow<DateFormatUpdateState> =
         _dateFormatUpdateState
 
-    private val _imageUpdateState =
-        MutableStateFlow<ImageUpdateState>(
-            ImageUpdateState.Idle
-        )
-
-    val imageUpdateState:
-            StateFlow<ImageUpdateState> =
-        _imageUpdateState
-
     private val _stickerBackgroundRemovalState =
         MutableStateFlow<StickerBackgroundRemovalState>(
             StickerBackgroundRemovalState.Idle
@@ -470,8 +447,6 @@ class DetailViewModel @Inject constructor(
     private var layoutStyleSaveJob: Job? = null
 
     private var dateFormatSaveJob: Job? = null
-
-    private var imageUpdateJob: Job? = null
 
     private var messageUpdateJob: Job? = null
 
@@ -1962,7 +1937,8 @@ class DetailViewModel @Inject constructor(
         val tapedFilmPhotoOffsetY: Float,
         val stampPhotoZoom: Float,
         val polaroidPhotoZoom: Float,
-        val tapedFilmPhotoZoom: Float
+        val tapedFilmPhotoZoom: Float,
+        val photoEdgeBlur: Float
     )
 
     private val photoTransformUndoStack =
@@ -1998,7 +1974,8 @@ class DetailViewModel @Inject constructor(
             tapedFilmPhotoOffsetY = current.tapedFilmPhotoOffsetY,
             stampPhotoZoom = current.stampPhotoZoom,
             polaroidPhotoZoom = current.polaroidPhotoZoom,
-            tapedFilmPhotoZoom = current.tapedFilmPhotoZoom
+            tapedFilmPhotoZoom = current.tapedFilmPhotoZoom,
+            photoEdgeBlur = current.photoEdgeBlur
         )
     }
 
@@ -2074,6 +2051,9 @@ class DetailViewModel @Inject constructor(
         }
         if (current.tapedFilmPhotoZoom != snapshot.tapedFilmPhotoZoom) {
             saveTapedFilmPhotoZoom(snapshot.tapedFilmPhotoZoom)
+        }
+        if (current.photoEdgeBlur != snapshot.photoEdgeBlur) {
+            savePhotoEdgeBlur(snapshot.photoEdgeBlur)
         }
     }
 
@@ -4326,7 +4306,6 @@ class DetailViewModel @Inject constructor(
                 layoutStyleSaveJob,
                 dateFormatSaveJob,
                 templateStyleSaveJob,
-                imageUpdateJob,
                 messageUpdateJob,
                 backRecipientModifierSaveJob,
                 backMessageSaveJob,
@@ -4344,116 +4323,6 @@ class DetailViewModel @Inject constructor(
         }
 
         awaitStickerCleanupSweep()
-    }
-
-    /**
-     * 중심 사진 교체. 새 파일 복사 → Room 갱신 → 화면 갱신까지 모두 성공한
-     * 뒤에만 이전 사진 파일을 지운다 — 예전에는 이 성공 경로에서 이전
-     * 파일을 전혀 정리하지 않아 교체할 때마다 filesDir/postcards/에 과거
-     * 사진이 계속 누적됐다. Room 갱신 실패 시에는 이전 그대로 새로 만든
-     * 파일만 지운다(기존 동작 유지). previousImagePath와 newImagePath가
-     * 같은 경우(이론상 UUID 기반이라 발생하지 않지만 방어적으로)는 이전
-     * 파일을 지우지 않는다.
-     */
-    fun updatePostcardImage(
-        sourceUri: Uri
-    ) {
-        val currentPostcard =
-            _postcard.value
-                ?: return
-
-        if (
-            _imageUpdateState.value is
-                    ImageUpdateState.Saving
-        ) {
-            return
-        }
-
-        val previousImagePath =
-            currentPostcard.imagePath
-
-        _imageUpdateState.value =
-            ImageUpdateState.Saving
-
-        imageUpdateJob = viewModelScope.launch {
-            var newImagePath: String? =
-                null
-
-            try {
-                newImagePath =
-                    withContext(Dispatchers.IO) {
-                        PostcardImageStorage
-                            .copyToAppStorage(
-                                context = context,
-                                sourceUri = sourceUri
-                            )
-                    }
-
-                withContext(Dispatchers.IO) {
-                    repository.updatePostcardImagePath(
-                        id = currentPostcard.id,
-                        imagePath = newImagePath
-                    )
-                }
-
-                _postcard.value =
-                    currentPostcard.copy(
-                        imagePath = newImagePath
-                    )
-
-                _imageUpdateState.value =
-                    ImageUpdateState.Success
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                withContext(Dispatchers.IO) {
-                    newImagePath
-                        ?.let { path ->
-                            val newFile =
-                                File(path)
-
-                            if (newFile.exists()) {
-                                newFile.delete()
-                            }
-                        }
-                }
-
-                _imageUpdateState.value =
-                    ImageUpdateState.Error(
-                        exception.message
-                            ?: "사진을 바꾸지 못했습니다."
-                    )
-
-                return@launch
-            }
-
-            // 여기 도달했다는 것은 새 파일 복사와 Room/화면 갱신이 모두
-            // 성공해 새 사진이 이미 확정됐다는 뜻이다. 이후 이전 파일 정리가
-            // 실패하거나 취소돼도 새 파일은 여전히 Room과 화면 상태가 가리키는
-            // 유효한 파일이므로, 위 catch처럼 새 파일을 지우거나 성공 상태를
-            // Error로 되돌리면 안 된다 — 정리 실패는 이전 파일이 남는 누수일
-            // 뿐, "존재하지 않는 파일을 가리키는 깨진 엽서"보다 안전하다.
-            if (previousImagePath != newImagePath) {
-                try {
-                    withContext(Dispatchers.IO) {
-                        PostcardImageStorage
-                            .deleteIfOwnedByApp(
-                                context = context,
-                                path = previousImagePath
-                            )
-                    }
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (_: Exception) {
-                    // 이전 파일 정리 실패는 파일 누수일 뿐이므로 무시한다.
-                }
-            }
-        }
-    }
-
-    fun resetImageUpdateState() {
-        _imageUpdateState.value =
-            ImageUpdateState.Idle
     }
 
     fun resetFontUpdateState() {

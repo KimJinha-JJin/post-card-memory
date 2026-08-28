@@ -194,3 +194,60 @@
 **Git 상태**: `feature/photo-sticker`, 이번 조사로 코드 변경 없음. `AGENTS.md`(56일차 HANDOFF 규칙 보강)만 아직 commit 승인 대기.
 
 **다음 작업**: 위 수정 후보 4가지 중 어느 것을 어떤 순서로 진행할지 사용자 확정 필요 — STOP.
+
+## 2026-08-28 — 56일차: 사진 탭 2단 구조 개편 (레이아웃 | 사진 편집) + 템플릿·사진 변경 UI 제거
+
+**목표**: 전수조사에서 확인한 사진 탭의 역할(레이아웃 상태 vs 사진 표현 상태)에 맞춰 하단 subcategory를 `레이아웃 | 사진 편집` 두 화면으로 분리하고, 추천/내 템플릿 UI와 "사진 바꾸기" 기능을 사진 탭에서 제거한다. 저장 구조·Room·RenderSpec·pan/pinch 동작은 변경하지 않는다.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt` (핵심 변경)
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt`
+- `app/src/main/java/com/postcardmemory/ui/components/PostcardLayoutPicker.kt`
+- `app/src/main/java/com/postcardmemory/data/PostcardRepository.kt`
+- `app/src/main/java/com/postcardmemory/data/PostcardDao.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/SaveErrorDialogStructureTest.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/EditorSubcategoryNavBarStructureTest.kt`
+
+**핵심 변경**
+
+- 하단 고정 subcategory nav에 `PHOTO_TAB_PAGE_INDEX`(=0) 분기를 추가해 `레이아웃 | 사진 편집`을 표시(기존 스티커/마스킹테이프/낙서와 같은 `EditorSubcategoryNavBar` 재사용, 화면 로컬 상태 `photoSubTabIndex`).
+- **레이아웃 화면**: `PostcardLayoutPicker`에서 Undo/Redo 버튼과 "사진 위치·크기" 텍스트를 제거. 이후 사용자 지시로 4개 선택지를 가로 나열(탭/세그먼트형)에서 세로 4행 목록으로 다시 바꿈 — 각 행 왼쪽에 사각(둥근 모서리 4dp) 체크 표시, 선택된 항목만 SunsetGold로 채워진 체크 아이콘 표시, 원형 라디오버튼 형태는 사용하지 않음, 항목 전체를 감싸는 큰 Box 없이 행별 클릭 영역과 체크 상태·텍스트만으로 선택 관계를 전달(선택 상태를 보여주는 표시는 실제 정보이므로 유지 — box-removal 대상 아님).
+- **사진 편집 화면**: Undo/Redo 버튼(`EditorUndoRedoButtons`)을 레이아웃 화면에서 이쪽으로 옮겨 "레이아웃 전환이 Undo 버튼 옆에 있어 history처럼 보이는" 문제를 해소. 슬라이더 라벨을 "사진 크기"→"크기", "가장자리 흐림"→"블러"로 자연스럽게 다듬음(표시 문구만 변경, `photoEdgeBlur` 필드명·`savePhotoEdgeBlur` 등 내부 이름은 그대로).
+- **템플릿 UI 제거**: "템플릿" 접기/펼치기 헤더, "추천 템플릿"/"내 템플릿" `PostcardTemplateSection` 호출 2곳, "현재 꾸밈 저장" 진입점, 그리고 이들만 쓰던 저장/이름변경/덮어쓰기/삭제 다이얼로그 4개 + 관련 `LaunchedEffect` 2개를 DetailScreen.kt에서 제거. `templatesExpanded`/`showSaveTemplateDialog`/`templatePendingRename`/`templatePendingOverwrite`/`templatePendingDelete`/`canUndoTemplateStyle`/`canRedoTemplateStyle`/`userTemplates`/`templateSaveState`/`templateManageState`/`lastAppliedTemplateId`/`effectiveSelectedTemplateId` 등 DetailScreen.kt 전용 로컬 state도 함께 정리.
+- **사진 변경 기능 제거**: "사진 바꾸기" 버튼, `PhotoSourceMenu` 호출, 3개 launcher(`postcardPhotoPicker`/`postcardFilePicker`/`postcardCameraCapture`), `launchPostcardCameraCapture()`, `showPhotoSourceMenu`/`pendingCameraCapturePath`/`pendingCameraCaptureCleanupPath` 상태, `LaunchedEffect(imageUpdateState)` 정리 로직을 DetailScreen.kt에서 제거.
+- **연쇄 dead code 삭제(호출부 0 확인 후)**: `DetailViewModel.updatePostcardImage()`, `resetImageUpdateState()`, `ImageUpdateState` sealed interface, `_imageUpdateState`/`imageUpdateState` StateFlow, `imageUpdateJob`(awaitPendingStyleSaves 목록에서도 제거), `PostcardRepository.updatePostcardImagePath()`, `PostcardDao.updatePostcardImagePath()`(단순 UPDATE 쿼리 메서드, 컬럼/스키마/Migration 변경 아님). `imagePath` 컬럼 자체와 초기 엽서 생성 경로(`CameraViewModel`)는 완전히 별개라 영향 없음을 확인.
+- **의도적으로 남긴 것(범위 확대 방지)**: `PostcardTemplateSection`/`PostcardTemplateRow.kt`/`rememberTemplatePreviewBitmap`/`BuiltInTemplates`/`resolveEffectiveSelectedTemplateId`와 `DetailViewModel`의 `applyTemplate`/`saveCurrentStyleAsNewTemplate`/`renameUserTemplate`/`overwriteUserTemplateWithCurrentStyle`/`deleteUserTemplate`/`undoTemplateStyleChange`/`redoTemplateStyleChange`/`TemplateSaveState`/`TemplateManageState`/`userTemplates` 흐름은 전부 그대로 둠 — 사진 탭에서 호출부는 사라졌지만 템플릿 시스템 자체(데이터·DB·썸네일·export)는 이번 작업 범위 밖. `PostcardImageStorage`(사진 파일 복사/삭제 유틸)도 `PostcardImageStorageTest.kt`가 직접 검증하는 대상이라 그대로 둠.
+- 가장자리 흐림 Undo 스냅샷(직전 작업에서 추가한 `photoEdgeBlur` 필드 포함 `PhotoTransformSnapshot`), pan/pinch 제스처, `PostcardRenderSpec`/`PostcardImageExporter`는 전혀 손대지 않음.
+
+**정적 확인 결과**
+
+- "사진 바꾸기" 관련 심볼(`사진 바꾸기`, `showPhotoSourceMenu`, `ImageUpdateState`, `postcardPhotoPicker` 등) grep 재확인 — DetailScreen.kt에 잔여 호출부 0.
+- "추천 템플릿"/"내 템플릿"/`PostcardTemplateSection`/`BuiltInTemplates`/`rememberTemplatePreviewBitmap` grep 재확인 — DetailScreen.kt에 잔여 참조 0(단, 컴포넌트 파일 자체는 의도적으로 보존).
+- `PostcardRenderSpec.kt`/`PostcardImageExporter.kt`/`PhotoSourceMenu.kt`/`PostcardTemplateRow.kt` — `git status`에 등장하지 않음(완전히 미변경 확인).
+- `PostcardDao.kt`/`PostcardRepository.kt` diff — `updatePostcardImagePath` 메서드 삭제만 있고 컬럼·스키마·Migration 변경 없음.
+
+**검증 방법과 결과**
+
+- `gradle compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
+- `gradle testDebugUnitTest` — 494 tests / failures 0 / errors 0. `SaveErrorDialogStructureTest`(7종→6종 다이얼로그로 앵커·개수 갱신, `imageError` 테스트 삭제)와 `EditorSubcategoryNavBarStructureTest`(3곳→4곳 호출, 사진 탭이 첫 번째 분기가 되도록 순서 갱신)를 실제 구조 변경에 맞춰 함께 수정.
+- **미실행**: 실기기 검증. 아래 20개 시나리오는 사용자 확인 필요.
+
+**실기기 검증 필요 시나리오(사용자 확인 대기)**
+
+1. 기존 엽서 진입 → 사진 탭
+2. 하단 `레이아웃 | 사진 편집` 표시 확인
+3. 현재 선택 tab의 selected 상태(진한 색) 확인
+4. 레이아웃 4종(우표/폴라로이드/테이프 필름/편지지) 전환
+5. 추천 템플릿 없음 확인
+6. 내 템플릿 없음 확인
+7. 사진 편집 탭 진입, 크기 Slider 조작 + Undo/Redo
+8. 블러 Slider 조작 + Undo/Redo
+9. 캔버스 drag(pan) / pinch(zoom) 정상 동작
+10. 저장 → 닫기 → 재진입 시 상태 복원 확인
+11. "사진 바꾸기" UI가 더 이상 노출되지 않음 확인
+12. export/공유 결과가 화면 미리보기와 일치하는지 확인
+
+**Git 상태**: `feature/photo-sticker`. Unstaged 수정: `DetailScreen.kt`, `DetailViewModel.kt`, `PostcardLayoutPicker.kt`, `PostcardRepository.kt`, `PostcardDao.kt`, `SaveErrorDialogStructureTest.kt`, `EditorSubcategoryNavBarStructureTest.kt`(+ 이 HANDOFF 갱신). `AGENTS.md`는 이전 항목에서 이미 commit·push 완료(`1591c24`). 이번 사진 UI 변경은 아직 commit/push 안 함 — 실기기 검증 후 사용자 승인 대기.
+
+**다음 작업**: 위 12개 시나리오 실기기 검증 → 문제 없으면 commit/push 승인 요청. 검증 후에는 저장소가 다시 "배경 UI/UX 전수조사" 등 다음 후보로 이어갈 수 있는 상태가 된다.

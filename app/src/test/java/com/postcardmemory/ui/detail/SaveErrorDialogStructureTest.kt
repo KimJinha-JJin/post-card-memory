@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 저장 에러(및 내보내기 성공) 안내 다이얼로그 7종의 현재 구조를 소스 텍스트 기준으로
+ * 저장 에러(및 내보내기 성공) 안내 다이얼로그 6종의 현재 구조를 소스 텍스트 기준으로
  * 고정한다.
  *
  * 이 프로젝트는 Compose UI 테스트 인프라(androidx.compose.ui:ui-test)나
@@ -17,9 +17,10 @@ import org.junit.Test
  * 불변식을 고정한다.
  *
  * 제3차(2026-08-07)에서 7개 다이얼로그의 AlertDialog UI를 공통 Composable
- * `SaveResultAlertDialog`(SaveResultAlertDialog.kt)로 추출했다. 그 결과 이
- * 테스트가 고정하는 지점이 두 층으로 나뉜다:
- *  - DetailScreen.kt: 7개 호출부가 여전히 올바른 상태 조건에서, 올바른 제목·
+ * `SaveResultAlertDialog`(SaveResultAlertDialog.kt)로 추출했다. 56일차 사진
+ * 탭 개편에서 "사진 바꾸기" 기능 자체가 제거되며 imageError 다이얼로그도 함께
+ * 사라져 6개로 줄었다. 이 테스트가 고정하는 지점은 두 층으로 나뉜다:
+ *  - DetailScreen.kt: 6개 호출부가 여전히 올바른 상태 조건에서, 올바른 제목·
  *    제목색·본문·reset 콜백으로 SaveResultAlertDialog를 호출하는지
  *  - SaveResultAlertDialog.kt: 공통 Composable 자체가 dismiss와 confirm 모두
  *    같은 onAcknowledge를 부르고, dismissButton이 없고, ViewModel을 직접
@@ -37,7 +38,6 @@ class SaveErrorDialogStructureTest {
             "exportSuccess" to "if (exportState is ExportState.Success)",
             "exportError" to "(exportState as? ExportState.Error)?.let",
             "backgroundError" to "as? BackgroundUpdateState.Error",
-            "imageError" to "as? ImageUpdateState.Error",
             "fontError" to "as? FontUpdateState.Error",
             "layoutError" to "as? LayoutUpdateState.Error",
             "dateFormatError" to "as? DateFormatUpdateState.Error"
@@ -130,12 +130,12 @@ class SaveErrorDialogStructureTest {
     }
 
     @Test
-    fun exactlySevenDialogCallSitesExistInThisSectionInExpectedOrder() {
-        // CallSiteSource.blocks 초기화 자체가 7개 앵커 + 종료 앵커를 정확히 이
+    fun exactlySixDialogCallSitesExistInThisSectionInExpectedOrder() {
+        // CallSiteSource.blocks 초기화 자체가 6개 앵커 + 종료 앵커를 정확히 이
         // 순서로 찾아야 성공한다(하나라도 순서가 어긋나거나 사라지면 위
         // sliceBlocks에서 즉시 예외 발생). 이 테스트는 그 결과를 명시적으로
         // 재확인한다.
-        assertEquals(7, CallSiteSource.blocks.size)
+        assertEquals(6, CallSiteSource.blocks.size)
     }
 
     @Test
@@ -174,25 +174,6 @@ class SaveErrorDialogStructureTest {
         assertTrue(
             "[backgroundError] 본문이 backgroundError.message를 그대로 노출해야 함",
             block.contains("body = backgroundError.message")
-        )
-    }
-
-    @Test
-    fun imageErrorDialog_addsExistingPhotoKeptReassuranceUnlikeOtherFive() {
-        val block = CallSiteSource.blocks.getValue("imageError")
-        assertSingleCallSite("imageError", block)
-        assertOnAcknowledgeCallsReset("imageError", block, "resetImageUpdateState")
-        assertTitle("imageError", block, "사진을 바꾸지 못했어")
-        assertTitleColor("imageError", block, "BrutalCoral")
-        // 6개 에러 다이얼로그 중 이것만 유일하게 메시지 앞에 고정 안내문을 붙인다
-        // (제1차/제2차 조사에서 확인된 유일한 개별 예외).
-        assertTrue(
-            "[imageError] '기존 사진은 그대로 유지했어' 고정 안내문이 있어야 함",
-            block.contains("기존 사진은 그대로 유지했어")
-        )
-        assertTrue(
-            "[imageError] 안내문 뒤에 imageError.message가 이어붙어야 함",
-            block.contains("imageError.message")
         )
     }
 

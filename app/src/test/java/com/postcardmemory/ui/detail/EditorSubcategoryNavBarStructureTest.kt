@@ -11,9 +11,10 @@ import org.junit.Test
  * 스크롤 콘텐츠 안 pill형 EditorSegmentedTabRow에서, 스크롤 밖 고정 영역의
  * 평평한 EditorSubcategoryNavBar(EditorBottomTabBar.kt)로 옮겼다. 54일차부터는
  * 마스킹테이프 탭의 기본 디자인/커스텀/사진 생성 방식 선택도, 55일차 후속
- * (낙서 도구형 개편)부터는 낙서 탭의 펜/형광펜/점선/지우개 도구 선택도 같은
- * 역할이라 같은 컴포저블을 재사용한다 — 세 호출부 모두 각자의 페이지 조건
- * 안에서만 렌더돼야 한다.
+ * (낙서 도구형 개편)부터는 낙서 탭의 펜/형광펜/점선/지우개 도구 선택도, 56일차
+ * 사진 탭 2단 구조 개편부터는 사진 탭의 레이아웃/사진 편집 선택도 같은 역할이라
+ * 같은 컴포저블을 재사용한다 — 네 호출부 모두 각자의 페이지 조건 안에서만
+ * 렌더돼야 한다.
  * Compose UI 테스트 인프라가 없는 프로젝트 관례([[StickerEditModeToolbarStructureTest]]
  * 참고)에 따라 소스 텍스트 기준으로 다음을 고정한다.
  */
@@ -57,33 +58,47 @@ class EditorSubcategoryNavBarStructureTest {
     }
 
     @Test
-    fun detailScreen_callsEditorSubcategoryNavBarForStickerMaskingTapeAndDoodle() {
+    fun detailScreen_callsEditorSubcategoryNavBarForPhotoStickerMaskingTapeAndDoodle() {
         assertEquals(
-            "EditorSubcategoryNavBar 호출은 DetailScreen.kt에 정확히 3곳(스티커, 마스킹테이프, 낙서)이어야 함",
-            3,
+            "EditorSubcategoryNavBar 호출은 DetailScreen.kt에 정확히 4곳(사진, 스티커, 마스킹테이프, 낙서)이어야 함",
+            4,
             Regex("""EditorSubcategoryNavBar\(""")
                 .findAll(detailScreenText)
                 .count()
         )
 
-        val stickerCallIndex = detailScreenText.indexOf("EditorSubcategoryNavBar(")
+        val photoCallIndex = detailScreenText.indexOf("EditorSubcategoryNavBar(")
+        val beforePhoto = detailScreenText.substring(0, photoCallIndex)
+        assertTrue(
+            "첫 번째 EditorSubcategoryNavBar 호출은 PHOTO_TAB_PAGE_INDEX 조건 안에 있어야 함",
+            beforePhoto.trimEnd().endsWith(
+                "if (customizationPagerState.currentPage == PHOTO_TAB_PAGE_INDEX) {"
+            )
+        )
+
+        val stickerCallIndex =
+            detailScreenText.indexOf("EditorSubcategoryNavBar(", photoCallIndex + 1)
+        assertTrue(
+            "두 번째 EditorSubcategoryNavBar 호출을 찾지 못함",
+            stickerCallIndex > photoCallIndex
+        )
         val beforeSticker = detailScreenText.substring(0, stickerCallIndex)
         assertTrue(
-            "첫 번째 EditorSubcategoryNavBar 호출은 STICKER_TAB_PAGE_INDEX 조건 안에 있어야 함",
+            "두 번째 EditorSubcategoryNavBar 호출은 STICKER_TAB_PAGE_INDEX 조건 안에 있어야 함",
             beforeSticker.trimEnd().endsWith(
-                "if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {"
+                "} else if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {"
             )
         )
 
         val maskingTapeCallIndex =
             detailScreenText.indexOf("EditorSubcategoryNavBar(", stickerCallIndex + 1)
         assertTrue(
-            "두 번째 EditorSubcategoryNavBar 호출을 찾지 못함",
+            "세 번째 EditorSubcategoryNavBar 호출을 찾지 못함",
             maskingTapeCallIndex > stickerCallIndex
         )
         val beforeMaskingTape = detailScreenText.substring(0, maskingTapeCallIndex)
         assertTrue(
-            "두 번째 EditorSubcategoryNavBar 호출은 MASKING_TAPE_TAB_PAGE_INDEX 조건 안에 있어야 함",
+            "세 번째 EditorSubcategoryNavBar 호출은 MASKING_TAPE_TAB_PAGE_INDEX 조건 안에 있어야 함",
             beforeMaskingTape.trimEnd().endsWith(
                 "} else if (customizationPagerState.currentPage == MASKING_TAPE_TAB_PAGE_INDEX) {"
             )
@@ -92,12 +107,12 @@ class EditorSubcategoryNavBarStructureTest {
         val doodleCallIndex =
             detailScreenText.indexOf("EditorSubcategoryNavBar(", maskingTapeCallIndex + 1)
         assertTrue(
-            "세 번째 EditorSubcategoryNavBar 호출을 찾지 못함",
+            "네 번째 EditorSubcategoryNavBar 호출을 찾지 못함",
             doodleCallIndex > maskingTapeCallIndex
         )
         val beforeDoodle = detailScreenText.substring(0, doodleCallIndex)
         assertTrue(
-            "세 번째 EditorSubcategoryNavBar 호출은 DOODLE_TAB_PAGE_INDEX 조건 안에 있어야 함",
+            "네 번째 EditorSubcategoryNavBar 호출은 DOODLE_TAB_PAGE_INDEX 조건 안에 있어야 함",
             beforeDoodle.trimEnd().endsWith(
                 "} else if (customizationPagerState.currentPage == DOODLE_TAB_PAGE_INDEX) {"
             )

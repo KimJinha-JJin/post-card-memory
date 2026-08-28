@@ -11,11 +11,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.UUID
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -159,9 +155,9 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.ui.components.EditorSlider
+import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
 import com.postcardmemory.ui.components.LabelStickerContent
-import com.postcardmemory.ui.components.PhotoSourceMenu
 import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
 import com.postcardmemory.ui.components.PostcardBackFaceContent
@@ -467,6 +463,9 @@ internal fun snappedDoodleLineEndpoint(
     DoodleLineSnapDirection.VERTICAL -> Offset(start.x, current.y)
     DoodleLineSnapDirection.NONE -> current
 }
+
+/** 사진 탭의 페이지 인덱스. 하단 고정 영역에 레이아웃/사진 편집 선택 EditorSubcategoryNavBar가 이 탭에서만 얹힌다. */
+internal const val PHOTO_TAB_PAGE_INDEX = 0
 
 /** 스티커 탭의 페이지 인덱스. 다른 탭에서는 스티커 선택 표시·조작 손잡이·제스처를 시작하지 않는다. */
 internal const val STICKER_TAB_PAGE_INDEX = 3
@@ -1033,9 +1032,9 @@ internal fun createMaskingTapeOverlaysForExport(
 }
 
 /**
- * 세 패널의 보조 행동(사진 바꾸기·색 가져오기·직접 고르기·문구 편집)에
- * 쓰는 가벼운 외곽선 버튼. 주요 선택지와 달리 검은 풀폭 버튼으로 강조하지
- * 않고, 아이콘+라벨만 얇은 테두리로 보여 준다.
+ * 편집 패널의 보조 행동(예: 사진에서 색 가져오기)에 쓰는 가벼운 외곽선
+ * 버튼. 주요 선택지와 달리 검은 풀폭 버튼으로 강조하지 않고, 아이콘+라벨만
+ * 얇은 테두리로 보여 준다.
  */
 @Composable
 private fun EditorSecondaryButton(
@@ -1195,7 +1194,6 @@ fun DetailScreen(
     val draftSaveStatus by viewModel.draftSaveStatus.collectAsState()
     val confirmSaveState by viewModel.confirmSaveState.collectAsState()
     val backgroundUpdateState by viewModel.backgroundUpdateState.collectAsState()
-    val imageUpdateState by viewModel.imageUpdateState.collectAsState()
     val fontUpdateState by viewModel.fontUpdateState.collectAsState()
     val layoutUpdateState by viewModel.layoutUpdateState.collectAsState()
     val dateFormatUpdateState by viewModel.dateFormatUpdateState.collectAsState()
@@ -1310,29 +1308,13 @@ fun DetailScreen(
     val canRedoDoodle by viewModel.canRedoDoodle.collectAsState()
     val canUndoPhotoTransform by viewModel.canUndoPhotoTransform.collectAsState()
     val canRedoPhotoTransform by viewModel.canRedoPhotoTransform.collectAsState()
-    val canUndoTemplateStyle by viewModel.canUndoTemplateStyle.collectAsState()
-    val canRedoTemplateStyle by viewModel.canRedoTemplateStyle.collectAsState()
-    val userTemplates by viewModel.userTemplates.collectAsState()
-    val templateSaveState by viewModel.templateSaveState.collectAsState()
-    val templateManageState by viewModel.templateManageState.collectAsState()
-    val lastAppliedTemplateId by viewModel.lastAppliedTemplateId.collectAsState()
-    val effectiveSelectedTemplateId =
-        resolveEffectiveSelectedTemplateId(
-            lastAppliedTemplateId = lastAppliedTemplateId,
-            candidateTemplates = BuiltInTemplates.all + userTemplates,
-            currentStyle = postcard?.toTemplateStyle()
-        )
-    var showSaveTemplateDialog by remember { mutableStateOf(false) }
-    var saveTemplateNameInput by remember { mutableStateOf("") }
-    var templatesExpanded by remember { mutableStateOf(true) }
-    var templatePendingRename by remember { mutableStateOf<PostcardTemplate?>(null) }
-    var renameTemplateNameInput by remember { mutableStateOf("") }
-    var templatePendingOverwrite by remember { mutableStateOf<PostcardTemplate?>(null) }
-    var templatePendingDelete by remember { mutableStateOf<PostcardTemplate?>(null) }
     var stampPhotoScaleDragSnapshotTaken by remember {
         mutableStateOf(false)
     }
     var polaroidPhotoScaleDragSnapshotTaken by remember {
+        mutableStateOf(false)
+    }
+    var photoEdgeBlurDragSnapshotTaken by remember {
         mutableStateOf(false)
     }
     val latestPostcard by rememberUpdatedState(postcard)
@@ -1437,129 +1419,6 @@ fun DetailScreen(
     }
     val context = LocalContext.current
 
-    val postcardPhotoPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.PickVisualMedia()
-        ) { uri ->
-            if (uri != null) {
-                viewModel.updatePostcardImage(uri)
-            }
-        }
-
-    val postcardFilePicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.OpenDocument()
-        ) { uri ->
-            if (uri != null) {
-                viewModel.updatePostcardImage(uri)
-            }
-        }
-
-    var showPhotoSourceMenu by rememberSaveable {
-        mutableStateOf(false)
-    }
-
-    /*
-     * TakePicture 결과 콜백은 화면 재구성이나
-     * 프로세스 재생성 뒤에도 올 수 있어서,
-     * 임시 촬영 파일 경로를 rememberSaveable로 들고 있는다.
-     */
-    var pendingCameraCapturePath by rememberSaveable {
-        mutableStateOf<String?>(null)
-    }
-
-    /*
-     * 촬영 성공 후 viewModel.updatePostcardImage()가
-     * 내부 저장을 끝낼 때까지는 임시 파일을 지우면 안 되므로,
-     * imageUpdateState가 Success/Error로 정리된 뒤에만 삭제한다.
-     */
-    var pendingCameraCaptureCleanupPath by rememberSaveable {
-        mutableStateOf<String?>(null)
-    }
-
-    val postcardCameraCapture =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.TakePicture()
-        ) { success ->
-            val capturePath =
-                pendingCameraCapturePath
-            pendingCameraCapturePath = null
-
-            if (capturePath == null) {
-                return@rememberLauncherForActivityResult
-            }
-
-            val captureFile = File(capturePath)
-
-            if (success) {
-                val captureUri =
-                    FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        captureFile
-                    )
-
-                pendingCameraCaptureCleanupPath =
-                    capturePath
-
-                viewModel.updatePostcardImage(
-                    captureUri
-                )
-            } else {
-                if (captureFile.exists()) {
-                    captureFile.delete()
-                }
-            }
-        }
-
-    fun launchPostcardCameraCapture() {
-        val captureDir =
-            File(
-                context.cacheDir,
-                "camera_capture"
-            )
-
-        if (
-            !captureDir.exists() &&
-            !captureDir.mkdirs()
-        ) {
-            Toast.makeText(
-                context,
-                "임시 촬영 폴더를 만들지 못했어.",
-                Toast.LENGTH_SHORT
-            ).show()
-            return
-        }
-
-        val captureFile =
-            File(
-                captureDir,
-                "capture_${UUID.randomUUID()}.jpg"
-            )
-
-        pendingCameraCapturePath =
-            captureFile.absolutePath
-
-        val captureUri =
-            FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                captureFile
-            )
-
-        runCatching {
-            postcardCameraCapture.launch(captureUri)
-        }.onFailure {
-            pendingCameraCapturePath = null
-
-            Toast.makeText(
-                context,
-                "카메라 앱을 찾지 못했어.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
     var customColorDrawerExpanded by rememberSaveable {
         mutableStateOf(false)
     }
@@ -1584,6 +1443,15 @@ fun DetailScreen(
             Icons.Default.Verified,
             Icons.Default.Draw
         )
+    }
+
+    /**
+     * "사진" 탭 안의 레이아웃 선택과 사진 편집(크기·블러)을 하위 선택으로
+     * 나눈다. 엽서 데이터가 아니라 지금 어떤 패널을 보여줄지만 나타내는
+     * 값이라 Room·ViewModel로 확장하지 않고 화면 로컬 상태로 둔다.
+     */
+    var photoSubTabIndex by rememberSaveable {
+        mutableStateOf(0)
     }
 
     /**
@@ -1773,32 +1641,6 @@ fun DetailScreen(
         }
     }
 
-    LaunchedEffect(imageUpdateState) {
-        if (imageUpdateState is ImageUpdateState.Success) {
-            viewModel.resetImageUpdateState()
-        }
-
-        /*
-         * updatePostcardImage()가 Success/Error로 끝났다는 것은
-         * 임시 촬영 파일의 바이트를 이미 다 읽었다는 뜻이라
-         * 이 시점에 지워도 안전하다.
-         */
-        if (
-            imageUpdateState is ImageUpdateState.Success ||
-            imageUpdateState is ImageUpdateState.Error
-        ) {
-            pendingCameraCaptureCleanupPath?.let { cleanupPath ->
-                pendingCameraCaptureCleanupPath = null
-
-                File(cleanupPath).let { cleanupFile ->
-                    if (cleanupFile.exists()) {
-                        cleanupFile.delete()
-                    }
-                }
-            }
-        }
-    }
-
     LaunchedEffect(fontUpdateState) {
         if (fontUpdateState is FontUpdateState.Success) {
             viewModel.resetFontUpdateState()
@@ -1947,7 +1789,6 @@ fun DetailScreen(
                 fontUpdateState !is FontUpdateState.Saving &&
                 layoutUpdateState !is LayoutUpdateState.Saving &&
                 dateFormatUpdateState !is DateFormatUpdateState.Saving &&
-                imageUpdateState !is ImageUpdateState.Saving &&
                 confirmSaveState !is ConfirmSaveState.Saving &&
                 deleteState !is PostcardDeleteState.Deleting &&
                 !isRemovingBackground
@@ -4261,6 +4102,7 @@ fun DetailScreen(
                                 modifier =
                                     Modifier.fillMaxWidth(0.92f)
                             ) {
+                    if (photoSubTabIndex == 0) {
                     PostcardLayoutPicker(
                         selectedLayout =
                             selectedLayout,
@@ -4269,171 +4111,40 @@ fun DetailScreen(
                                 layout.name
                             )
                         },
-                        onUndoPhotoTransform = {
-                            viewModel.undoPhotoTransformChange()
-                        },
-                        onRedoPhotoTransform = {
-                            viewModel.redoPhotoTransformChange()
-                        },
-                        canUndoPhotoTransform = canUndoPhotoTransform,
-                        canRedoPhotoTransform = canRedoPhotoTransform,
                         enabled = controlsEnabled,
                         modifier =
                             Modifier.fillMaxWidth()
                     )
-
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
+                    } else {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                onClick = {
-                                    templatesExpanded = !templatesExpanded
-                                }
-                            ),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text(
-                            text = "템플릿",
-                            color = BrutalBlack,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Icon(
-                            imageVector =
-                                if (templatesExpanded) {
-                                    Icons.Default.KeyboardArrowUp
-                                } else {
-                                    Icons.Default.KeyboardArrowDown
-                                },
-                            contentDescription =
-                                if (templatesExpanded) {
-                                    "템플릿 영역 접기"
-                                } else {
-                                    "템플릿 영역 펼치기"
-                                },
-                            tint = BrutalBlack
+                        EditorUndoRedoButtons(
+                            canUndo = canUndoPhotoTransform,
+                            canRedo = canRedoPhotoTransform,
+                            onUndo = {
+                                viewModel.undoPhotoTransformChange()
+                            },
+                            onRedo = {
+                                viewModel.redoPhotoTransformChange()
+                            },
+                            enabled = controlsEnabled,
+                            undoContentDescription = "실행 취소",
+                            redoContentDescription = "다시 실행"
                         )
                     }
 
                     Spacer(
-                        modifier = Modifier.height(8.dp)
+                        modifier = Modifier.height(10.dp)
                     )
-
-                    if (templatesExpanded) {
-                    postcard?.let { currentPostcardForTemplates ->
-                        val templatePreviewBitmap =
-                            rememberTemplatePreviewBitmap(
-                                currentPostcardForTemplates.imagePath
-                            )
-
-                        PostcardTemplateSection(
-                            title = "추천 템플릿",
-                            templates = BuiltInTemplates.all,
-                            sourceBitmap = templatePreviewBitmap,
-                            selectedTemplateId = effectiveSelectedTemplateId,
-                            onSelect = { template ->
-                                viewModel.applyTemplate(template)
-                            },
-                            enabled = controlsEnabled,
-                            canUndo = canUndoTemplateStyle,
-                            canRedo = canRedoTemplateStyle,
-                            onUndo = { viewModel.undoTemplateStyleChange() },
-                            onRedo = { viewModel.redoTemplateStyleChange() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(14.dp)
-                        )
-
-                        PostcardTemplateSection(
-                            title = "내 템플릿",
-                            templates = userTemplates,
-                            sourceBitmap = templatePreviewBitmap,
-                            selectedTemplateId = effectiveSelectedTemplateId,
-                            onSelect = { template ->
-                                viewModel.applyTemplate(template)
-                            },
-                            enabled = controlsEnabled,
-                            modifier = Modifier.fillMaxWidth(),
-                            onRequestRename = { template ->
-                                templatePendingRename = template
-                                renameTemplateNameInput = template.name
-                            },
-                            onRequestOverwrite = { template ->
-                                templatePendingOverwrite = template
-                            },
-                            onRequestDelete = { template ->
-                                templatePendingDelete = template
-                            },
-                            leadingContent = {
-                                Column(
-                                    modifier = Modifier
-                                        .width(84.dp)
-                                        .clickable(
-                                            enabled = controlsEnabled,
-                                            onClick = {
-                                                saveTemplateNameInput =
-                                                    viewModel.suggestNewTemplateName()
-                                                showSaveTemplateDialog = true
-                                            }
-                                        ),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(PaperField)
-                                            .border(
-                                                width = 1.dp,
-                                                color = PaperDivider,
-                                                shape = RoundedCornerShape(10.dp)
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "+",
-                                            color = SunsetGold,
-                                            fontSize = 28.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                    Text(
-                                        text = "현재 꾸밈 저장",
-                                        color = BrutalBlack,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        modifier = Modifier.widthIn(max = 68.dp)
-                                    )
-                                }
-                            }
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(14.dp)
-                        )
-                    }
-                    }
 
                     if (
                         selectedLayout ==
                         PostcardLayoutStyle.POLAROID
                     ) {
                         EditorPercentSlider(
-                            label = "사진 크기",
+                            label = "크기",
                             percent =
                                 polaroidPhotoScalePercent,
                             minPercent = 75,
@@ -4471,7 +4182,7 @@ fun DetailScreen(
                                     PostcardLayoutStyle.LETTER
 
                         EditorPercentSlider(
-                            label = "사진 크기",
+                            label = "크기",
                             percent =
                                 stampPhotoScalePercent,
                             minPercent = if (isNarrowScaleRange) 85 else 70,
@@ -4506,19 +4217,27 @@ fun DetailScreen(
                     )
 
                     EditorPercentSlider(
-                        label = "가장자리 흐림",
+                        label = "블러",
                         percent =
                             photoEdgeBlurPercent,
                         minPercent = 0,
                         maxPercent = 100,
                         enabled = controlsEnabled,
                         onPreviewPercentChanged = { percent ->
+                            if (!photoEdgeBlurDragSnapshotTaken) {
+                                viewModel.recordPhotoTransformSnapshotForUndo()
+                                photoEdgeBlurDragSnapshotTaken = true
+                            }
                             viewModel
                                 .setPhotoEdgeBlurPreview(
                                     percent / 100f
                                 )
                         },
                         onPercentConfirmed = { percent ->
+                            if (!photoEdgeBlurDragSnapshotTaken) {
+                                viewModel.recordPhotoTransformSnapshotForUndo()
+                            }
+                            photoEdgeBlurDragSnapshotTaken = false
                             viewModel
                                 .savePhotoEdgeBlur(
                                     percent / 100f
@@ -4526,20 +4245,7 @@ fun DetailScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
-
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
-                    EditorSecondaryButton(
-                        text = "사진 바꾸기",
-                        icon = Icons.Default.Edit,
-                        enabled = controlsEnabled,
-                        onClick = {
-                            showPhotoSourceMenu = true
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    }
                             }
                             }
                         }
@@ -5902,7 +5608,6 @@ fun DetailScreen(
                             enabled = controlsEnabled,
                             onClick = {
                                 moreMenuExpanded = false
-                                showPhotoSourceMenu = false
                                 isFocusPreviewMode = true
                             }
                         )
@@ -5978,34 +5683,6 @@ fun DetailScreen(
                 )
             }
         }
-    }
-
-    if (showPhotoSourceMenu) {
-        PhotoSourceMenu(
-            onDismiss = {
-                showPhotoSourceMenu = false
-            },
-            onCameraSelected = {
-                showPhotoSourceMenu = false
-                launchPostcardCameraCapture()
-            },
-            onGallerySelected = {
-                showPhotoSourceMenu = false
-                postcardPhotoPicker.launch(
-                    PickVisualMediaRequest(
-                        ActivityResultContracts
-                            .PickVisualMedia
-                            .ImageOnly
-                    )
-                )
-            },
-            onFileSelected = {
-                showPhotoSourceMenu = false
-                postcardFilePicker.launch(
-                    arrayOf("image/*")
-                )
-            }
-        )
     }
 
     if (showMessageDialog) {
@@ -6133,362 +5810,6 @@ fun DetailScreen(
                 TextButton(
                     onClick = {
                         showMessageDialog = false
-                    }
-                ) {
-                    Text(
-                        text = "취소",
-                        color = InkSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        )
-    }
-
-    LaunchedEffect(templateSaveState) {
-        if (templateSaveState is TemplateSaveState.Saved) {
-            showSaveTemplateDialog = false
-            viewModel.resetTemplateSaveState()
-        }
-    }
-
-    if (showSaveTemplateDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showSaveTemplateDialog = false
-                viewModel.resetTemplateSaveState()
-            },
-            containerColor = PaperSurface,
-            titleContentColor = InkPrimary,
-            textContentColor = InkPrimary,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Text(
-                    text = "현재 꾸밈 저장",
-                    color = InkPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "지금 이 엽서의 배경·레이아웃·크기 같은 꾸밈 방식만 템플릿으로 저장해. 사진과 글은 저장되지 않아.",
-                        color = InkSecondary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = saveTemplateNameInput,
-                        onValueChange = { newValue ->
-                            if (newValue.length <= 20) {
-                                saveTemplateNameInput = newValue
-                            }
-                        },
-                        label = {
-                            Text("템플릿 이름")
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = PaperField,
-                            unfocusedContainerColor = PaperField,
-                            disabledContainerColor =
-                                PaperField.copy(alpha = 0.6f),
-                            focusedBorderColor = SunsetGold,
-                            unfocusedBorderColor = PaperDivider,
-                            disabledBorderColor =
-                                PaperDivider.copy(alpha = 0.6f),
-                            focusedLabelColor = SunsetGold,
-                            unfocusedLabelColor = InkSecondary,
-                            focusedTextColor = InkPrimary,
-                            unfocusedTextColor = InkPrimary,
-                            cursorColor = SunsetGold
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (
-                        saveTemplateNameInput.isNotBlank() &&
-                        viewModel.isTemplateNameDuplicate(saveTemplateNameInput)
-                    ) {
-                        Text(
-                            text = "이미 같은 이름의 템플릿이 있어. 그래도 저장하면 따로 구분해서 보관돼.",
-                            color = InkSecondary,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-
-                    val currentTemplateSaveState = templateSaveState
-                    if (currentTemplateSaveState is TemplateSaveState.Error) {
-                        Text(
-                            text = currentTemplateSaveState.message,
-                            color = GalleryDangerRed,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.saveCurrentStyleAsNewTemplate(
-                            saveTemplateNameInput
-                        )
-                    },
-                    enabled =
-                        saveTemplateNameInput.trim().isNotBlank() &&
-                                templateSaveState !is TemplateSaveState.Saving
-                ) {
-                    Text(
-                        text = "저장",
-                        color = SunsetGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showSaveTemplateDialog = false
-                        viewModel.resetTemplateSaveState()
-                    }
-                ) {
-                    Text(
-                        text = "취소",
-                        color = InkSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        )
-    }
-
-    LaunchedEffect(templateManageState) {
-        if (templateManageState is TemplateManageState.Success) {
-            templatePendingRename = null
-            templatePendingOverwrite = null
-            templatePendingDelete = null
-            viewModel.resetTemplateManageState()
-        }
-    }
-
-    templatePendingRename?.let { templateToRename ->
-        AlertDialog(
-            onDismissRequest = {
-                templatePendingRename = null
-                viewModel.resetTemplateManageState()
-            },
-            containerColor = PaperSurface,
-            titleContentColor = InkPrimary,
-            textContentColor = InkPrimary,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Text(
-                    text = "템플릿 이름 변경",
-                    color = InkPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = renameTemplateNameInput,
-                        onValueChange = { newValue ->
-                            if (newValue.length <= 20) {
-                                renameTemplateNameInput = newValue
-                            }
-                        },
-                        label = {
-                            Text("템플릿 이름")
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = PaperField,
-                            unfocusedContainerColor = PaperField,
-                            disabledContainerColor =
-                                PaperField.copy(alpha = 0.6f),
-                            focusedBorderColor = SunsetGold,
-                            unfocusedBorderColor = PaperDivider,
-                            disabledBorderColor =
-                                PaperDivider.copy(alpha = 0.6f),
-                            focusedLabelColor = SunsetGold,
-                            unfocusedLabelColor = InkSecondary,
-                            focusedTextColor = InkPrimary,
-                            unfocusedTextColor = InkPrimary,
-                            cursorColor = SunsetGold
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    val currentTemplateManageState = templateManageState
-                    if (currentTemplateManageState is TemplateManageState.Error) {
-                        Text(
-                            text = currentTemplateManageState.message,
-                            color = GalleryDangerRed,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.renameUserTemplate(
-                            templateToRename.id,
-                            renameTemplateNameInput
-                        )
-                    },
-                    enabled =
-                        renameTemplateNameInput.trim().isNotBlank() &&
-                                templateManageState !is TemplateManageState.InProgress
-                ) {
-                    Text(
-                        text = "저장",
-                        color = SunsetGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        templatePendingRename = null
-                        viewModel.resetTemplateManageState()
-                    }
-                ) {
-                    Text(
-                        text = "취소",
-                        color = InkSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        )
-    }
-
-    templatePendingOverwrite?.let { templateToOverwrite ->
-        AlertDialog(
-            onDismissRequest = {
-                templatePendingOverwrite = null
-                viewModel.resetTemplateManageState()
-            },
-            containerColor = PaperSurface,
-            titleContentColor = InkPrimary,
-            textContentColor = InkPrimary,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Text(
-                    text = "현재 꾸밈으로 바꿀까?",
-                    color = InkPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text =
-                            "'${templateToOverwrite.name}' 템플릿을 지금 이 엽서의 꾸밈으로 덮어써. 이전 스타일은 되돌릴 수 없어.",
-                        color = InkSecondary,
-                        fontSize = 13.sp
-                    )
-
-                    val currentTemplateManageState = templateManageState
-                    if (currentTemplateManageState is TemplateManageState.Error) {
-                        Text(
-                            text = currentTemplateManageState.message,
-                            color = GalleryDangerRed,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.overwriteUserTemplateWithCurrentStyle(
-                            templateToOverwrite.id
-                        )
-                    },
-                    enabled = templateManageState !is TemplateManageState.InProgress
-                ) {
-                    Text(
-                        text = "덮어쓰기",
-                        color = SunsetGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        templatePendingOverwrite = null
-                        viewModel.resetTemplateManageState()
-                    }
-                ) {
-                    Text(
-                        text = "취소",
-                        color = InkSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        )
-    }
-
-    templatePendingDelete?.let { templateToDelete ->
-        AlertDialog(
-            onDismissRequest = {
-                templatePendingDelete = null
-                viewModel.resetTemplateManageState()
-            },
-            containerColor = PaperSurface,
-            titleContentColor = InkPrimary,
-            textContentColor = InkPrimary,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Text(
-                    text = "템플릿을 삭제할까?",
-                    color = InkPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Text(
-                    text =
-                        "'${templateToDelete.name}' 템플릿을 삭제해. 이 템플릿을 과거에 적용했던 엽서들은 영향받지 않아.",
-                    color = InkSecondary,
-                    fontSize = 13.sp
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteUserTemplate(templateToDelete.id)
-                    },
-                    enabled = templateManageState !is TemplateManageState.InProgress
-                ) {
-                    Text(
-                        text = "삭제",
-                        color = GalleryDangerRed,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        templatePendingDelete = null
-                        viewModel.resetTemplateManageState()
                     }
                 ) {
                     Text(
@@ -6712,20 +6033,6 @@ fun DetailScreen(
         }
 
     (
-            imageUpdateState
-                    as? ImageUpdateState.Error
-            )?.let { imageError ->
-
-            SaveResultAlertDialog(
-                title = "사진을 바꾸지 못했어",
-                titleColor = BrutalCoral,
-                body = "사진을 바꾸지 못했어. 기존 사진은 그대로 유지했어.\n" +
-                        imageError.message,
-                onAcknowledge = { viewModel.resetImageUpdateState() }
-            )
-        }
-
-    (
             fontUpdateState
                     as? FontUpdateState.Error
             )?.let { fontError ->
@@ -6777,7 +6084,16 @@ fun DetailScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {
+                    if (customizationPagerState.currentPage == PHOTO_TAB_PAGE_INDEX) {
+                        EditorSubcategoryNavBar(
+                            options = listOf("레이아웃", "사진 편집"),
+                            selectedIndex = photoSubTabIndex,
+                            onOptionSelected = { photoSubTabIndex = it },
+                            enabled = controlsEnabled
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                    } else if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {
                         EditorSubcategoryNavBar(
                             options = listOf("사진", "텍스트", "라벨"),
                             selectedIndex = stickerSubTabIndex,

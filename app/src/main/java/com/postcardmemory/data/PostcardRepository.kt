@@ -165,16 +165,6 @@ class PostcardRepository @Inject constructor(
         )
     }
 
-    suspend fun updatePostcardImagePath(
-        id: Long,
-        imagePath: String
-    ) {
-        dao.updatePostcardImagePath(
-            id = id,
-            imagePath = imagePath
-        )
-    }
-
     suspend fun updatePostcardPhotoEdgeBlur(
         id: Long,
         photoEdgeBlur: Float
