@@ -236,3 +236,38 @@
 **Git 상태**: `feature/photo-sticker`, HEAD `7b3edd9`, local == origin(ahead/behind 0/0), working tree clean(`.kotlin/` 기존 untracked만). `PostcardLayoutPicker.kt`(Undo/Redo 제거 + 세로 체크 목록 재설계), `DetailScreen.kt`, `DetailViewModel.kt`, `PostcardRepository.kt`, `PostcardDao.kt`, `SaveErrorDialogStructureTest.kt`, `EditorSubcategoryNavBarStructureTest.kt`, 이 문서 갱신까지 함께 commit·push 완료.
 
 **다음 작업**: 사진 UI 작업은 완전히 닫혔다. 다음 후보는 "배경 UI/UX 전수조사"(사용자 확정 필요) 등 이전 조사에서 남긴 항목들.
+
+## 2026-08-28 — 56일차: 배경 UI/UX 전수조사 (코드 수정 없음, STOP)
+
+**목표**: 배경 탭에 섞여 있는 여러 메커니즘(색상 프리셋/커스텀 색상/사진 색 추출/패턴/패턴 세기/이미지)을 선택형·생성형·이미지형·속성형으로 분류하고, 저장·복원·Undo·Preview·Export·이미지 URI 안전성을 전수조사한다. Production 코드는 수정하지 않았다.
+
+**핵심 발견**
+
+- **배경 색과 배경 패턴은 상호 배타 "타입"이 아니라 항상 공존하는 두 독립 레이어다.** 색(`backgroundColorArgb`)은 항상 있고, 패턴(`backgroundPattern`)은 그 위에 얹히는 선택적 오버레이(`NONE` 포함 9종)라 "타입 전환 시 이전 값 유지 여부"라는 질문 자체가 성립하지 않는다 — 둘 다 각자 컬럼에 항상 남는다.
+- **패턴 색은 사용자가 고르는 값이 아니라 배경색 밝기에서 자동 계산된다**(`PostcardRenderSpec.getPatternColor()` — 밝으면 어두운 반투명, 어두우면 밝은 반투명). "패턴 색상"이라는 별도 속성은 실제로 존재하지 않는다.
+- **배경 탭은 앱 전체에서 유일하게 Undo/Redo가 전혀 없는 주요 탭이다.** 색상 프리셋·기타 색상(HSV)·사진에서 색 추출·패턴·패턴 세기 슬라이더 전부 Undo 스냅샷 없음(사진/스티커/텍스트/라벨/테이프/도장/낙서는 전부 각자 Undo 스택 보유). 조작은 전부 즉시(또는 슬라이더 확정 시) Room에 직접 저장되는 구조라 draft 복원 개념도 없다(사진 탭의 레이아웃/스케일/오프셋/줌/블러와 같은 부류).
+- **이미지 배경 기능은 존재하지 않는다.** `backgroundImagePath` 컬럼과 삭제 방어(`PostcardDeletionManager`, `OrphanFileDiagnostics`)는 남아 있지만 UI/코드 경로가 전혀 없다. `BackgroundColorSaveRaceTest.kt`의 코드 주석이 직접 확인해준다 — "현재 앱에서 backgroundImagePath를 non-null로 만드는 UI 경로는 없다(호출자가 없던 updateBackgroundImage/removeBackgroundImage는 dead code 정리로 이미 제거됐다)." 새로 발견한 위험이 아니라 이미 알려져 있고 한 차례 정리까지 된 완전 비활성 스키마 잔재.
+- **배경만 유일하게 자유 색상 생성(HSV) 도구를 가진다.** `PostcardCustomColorPicker`(2D 채도·명도 캔버스 + 색상환 바)는 다른 어떤 꾸미기 요소에도 없는 배경 고유 문법 — 프리셋과 억지로 통일할 대상이 아니다. 커스텀 색은 "저장해서 다시 고르는 팔레트"가 아니라 마지막 색이 즉시 배경색 자체가 되는 구조.
+- **패턴 타일의 카드 배경(Box)은 장식이 아니라 기능이다** — 선택 시 실제 배경색으로 채워져 색+패턴 조합을 미리 보여준다. 53일차 box-removal 파일럿 당시 이미 이 이유로 의도적으로 유지 결정된 사례(`EditorSharedControls.kt`의 `EditorFlatPresetTile` 주석: "배경 패턴처럼 카드 배경이 실제로 필요한 화면은 계속 [DecorationPresetTile을] 쓴다"). 패턴 프리셋 타일은 도장·마스킹테이프와 `DecorationPresetTile` 공유.
+- 화면 미리보기·저장/공유·템플릿 썸네일이 전부 `PostcardRenderSpec.drawBackground()/drawBackgroundPattern()` 하나만 사용 — 계산 갈라질 여지 없음(AGENTS.md 13장 불변값 재확인). `backgroundImagePath`는 애초에 어디에도 전달되지 않는다.
+- 사소한 기술 부채: 사진에서 추출한 색 스와치가 프리셋 색상 스와치와 똑같은 "원+점" 시각 언어를 인라인 코드로 중복 구현(공유 컴포저블 없음).
+- 배경 탭 전용 UI 구조 고정 테스트(`*StructureTest.kt`류)가 하나도 없음 — 다른 탭 대비 리팩터링 회귀 안전망이 약함.
+
+**분류(선택형/생성형/이미지형/속성형)**: 프리셋 색상=선택형, 기타 색상(HSV)=생성형+즉시선택형, 사진에서 색 추출=생성형에서 파생된 선택형, 패턴=선택형, 패턴 세기=속성형, 이미지=없음.
+
+**수정 후보(구현 안 함, 범위별)**
+
+1. (최소 UI 정돈) 추출색 스와치를 프리셋 색상과 같은 공유 컴포저블로 통합해 중복 코드 제거.
+2. (중간 범위) 배경 조작에 Undo/Redo를 추가할지 결정 — "즉시 저장" 구조는 그대로 두고 스냅샷 스택만 얹으면 되는 사진 탭 사례와 유사한 범위가 될 수 있음.
+3. (구조 변경) `backgroundImagePath` 컬럼·삭제방어 코드를 완전히 제거할지, 혹은 실제 이미지 배경 기능으로 살릴지 — 어느 쪽이든 Migration 또는 새 기능 설계 필요.
+4. (구조 변경) 커스텀 색상을 "즉시 반영"이 아니라 "내 팔레트에 저장" 구조로 바꿀지.
+
+**위험**: 데이터 손상 위험 없음(`backgroundImagePath`가 완전 비활성이라 유실될 파일도 없음). Undo 부재는 데이터 손상이 아니라 사용자 실수 복구 불가라는 UX 위험. 구조 고정 테스트 부재는 향후 리팩터링 회귀 위험.
+
+**변경 파일**: 없음(코드 조사만, `docs/ai/HANDOFF.md`만 갱신).
+
+**검증**: 코드 읽기·grep 기반 조사만 수행, 빌드/테스트 대상 없음.
+
+**Git 상태**: `feature/photo-sticker`, 이번 조사로 코드 변경 없음.
+
+**다음 작업**: 위 수정 후보 4가지 중 어느 것을 어떤 순서로 진행할지, 혹은 보류할지 사용자 확정 필요 — STOP.
