@@ -17,11 +17,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -79,6 +77,59 @@ enum class PostcardBackgroundPattern(
     HEISEI("잔꽃무늬", "❀")
 }
 
+/**
+ * 배경 색상 스와치 하나(프리셋·사진 추출색 공용). 원형 미리보기 + 아래
+ * 선택 점만으로 선택 상태를 전달한다 — 카드 배경 없음.
+ */
+@Composable
+fun BackgroundColorSwatch(
+    colorArgb: Long,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+            .clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .background(
+                    color = Color(colorArgb),
+                    shape = CircleShape
+                )
+                .border(
+                    width = 1.dp,
+                    color = BrutalBlack.copy(alpha = 0.35f),
+                    shape = CircleShape
+                )
+        )
+
+        Spacer(
+            modifier = Modifier.height(4.dp)
+        )
+
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .background(
+                    color =
+                        if (selected) {
+                            SunsetGold
+                        } else {
+                            Color.Transparent
+                        },
+                    shape = CircleShape
+                )
+        )
+    }
+}
+
 @Composable
 fun PostcardBackgroundColorPicker(
     selectedColorArgb: Long,
@@ -110,50 +161,14 @@ fun PostcardBackgroundColorPicker(
             verticalAlignment = Alignment.Top
         ) {
             postcardBackgroundPalette.forEach { colorArgb ->
-                val selected =
-                    selectedColorArgb == colorArgb
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
-                        .clickable(enabled = enabled) {
-                            onColorSelected(colorArgb)
-                        }
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .background(
-                                color = Color(colorArgb),
-                                shape = CircleShape
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = BrutalBlack.copy(alpha = 0.35f),
-                                shape = CircleShape
-                            )
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(5.dp)
-                            .background(
-                                color =
-                                    if (selected) {
-                                        SunsetGold
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                shape = CircleShape
-                            )
-                    )
-                }
+                BackgroundColorSwatch(
+                    colorArgb = colorArgb,
+                    selected = selectedColorArgb == colorArgb,
+                    enabled = enabled,
+                    onClick = {
+                        onColorSelected(colorArgb)
+                    }
+                )
             }
         }
     }
@@ -400,11 +415,6 @@ fun PostcardCustomColorPicker(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                color = BrutalWhite,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp)
     ) {
         Text(
             text = "기타 색상",

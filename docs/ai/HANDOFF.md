@@ -271,3 +271,39 @@
 **Git 상태**: `feature/photo-sticker`, 이번 조사로 코드 변경 없음.
 
 **다음 작업**: 위 수정 후보 4가지 중 어느 것을 어떤 순서로 진행할지, 혹은 보류할지 사용자 확정 필요 — STOP.
+
+## 2026-08-28 — 56일차: 배경 탭 2단 구조 개편(색상 | 패턴) + 서랍장형 UI 제거
+
+**목표**: 전수조사에서 확인한 구조에 맞춰 배경 탭 하단을 `색상 | 패턴` 두 화면으로 분리하고, "기타 색상" 카드의 큰 둥근 외곽 container를 제거해 제목·여백 중심의 평면 구조로 재구성한다. 패턴 타일의 Box(색+패턴 조합 미리보기)는 기능적 의미가 있어 유지. Undo/Redo, `backgroundImagePath` 정리, DB Migration, 커스텀 색 팔레트 저장 기능은 이번 범위에서 제외.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/components/PostcardBackgroundPicker.kt`
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/EditorSubcategoryNavBarStructureTest.kt`
+
+**핵심 변경**
+
+- 하단 고정 subcategory nav에 `BACKGROUND_TAB_PAGE_INDEX`(=1) 분기를 추가해 `색상 | 패턴`을 표시(기존 사진/스티커/마스킹테이프/낙서와 같은 `EditorSubcategoryNavBar` 재사용, 화면 로컬 상태 `backgroundSubTabIndex`).
+- **색상 화면**: 배경 색상 프리셋 12개, "직접 고르기"(HSV 커스텀 색상), "사진에서 색 가져오기" + 추출색 스와치를 배치.
+- **패턴 화면**: 배경 패턴 9종 + "패턴 세기" 슬라이더를 배치.
+- **서랍장형 UI 제거**: `PostcardCustomColorPicker`("기타 색상")를 감싸던 `.background(BrutalWhite, RoundedCornerShape(16.dp)).padding(16.dp)` 카드 배경을 제거하고 평면 Column으로 변경. DetailScreen.kt에서 이를 감싸던 불필요한 `Box(fillMaxWidth().padding(top=8.dp))` 래퍼도 제거하고 padding을 `PostcardCustomColorPicker` 자신의 modifier로 옮김.
+- **패턴 타일 Box는 그대로 유지**: `PostcardBackgroundPatternPicker`/`DecorationPresetTile` 자체는 손대지 않음 — 선택 시 실제 배경색으로 채워지는 기능적 미리보기이기 때문.
+- **추출색 스와치 중복 제거**: 신규 공용 컴포저블 `BackgroundColorSwatch`(원형 스와치 30dp + 선택 점 5dp)를 만들어 프리셋 색상(`PostcardBackgroundColorPicker`)과 사진 추출색(DetailScreen.kt) 양쪽에서 재사용 — 기존에 인라인으로 중복 구현되던 코드 제거(시각적으로는 32dp→30dp로 거의 차이 없음).
+- Undo/Redo는 추가하지 않음(DetailViewModel.kt 무변경), `backgroundImagePath`/DB/Migration/커스텀 팔레트 저장 기능도 손대지 않음.
+
+**정적 확인 결과**
+
+- `git status` — 위 3개 파일만 변경, `DetailViewModel.kt`/`Postcard.kt`/`PostcardDao.kt`/`PostcardRepository.kt`/`PostcardDatabase.kt` 전부 미변경 확인(저장 구조·Migration·Undo 영향 없음).
+- `PostcardBackgroundPatternPicker` 함수 본문 diff 없음 — 패턴 타일 Box 보존 확인.
+- `PostcardCustomColorPickerTest.kt`(순수 로직 `shouldResyncCustomColorHsv`/`shouldEmitCustomColor` 테스트)는 이번 변경(카드 배경 제거)과 무관해 영향 없음.
+
+**검증 방법과 결과**
+
+- `gradle compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
+- `gradle testDebugUnitTest` — 전체 통과. `EditorSubcategoryNavBarStructureTest`를 4곳→5곳 호출(사진→배경→스티커→마스킹테이프→낙서 순서)로 갱신.
+- **미실행**: 실기기 검증 필요 — ①배경 탭 하단 `색상 | 패턴` 표시 ②색상 화면에 프리셋/직접 고르기/사진에서 색 가져오기 정상 동작 ③"기타 색상"이 카드 배경 없이 평면적으로 보이는지 ④패턴 화면에 패턴 9종(카드 배경 유지) + 패턴 세기 슬라이더 정상 동작 ⑤저장/재진입 복원 ⑥export/공유 결과 일치.
+
+**Git 상태**: `feature/photo-sticker`. 위 3개 파일 unstaged 수정 상태, 아직 commit 안 함(실기기 확인 전).
+
+**다음 작업**: 실기기 검증 → 문제 없으면 commit/push 승인 요청. 이후 별도 작업 단위로 배경 Undo/Redo 추가 여부를 진행할 수 있다.

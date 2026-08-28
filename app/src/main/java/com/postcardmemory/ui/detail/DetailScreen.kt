@@ -154,6 +154,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.postcardmemory.ui.components.BackgroundColorSwatch
 import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
@@ -466,6 +467,9 @@ internal fun snappedDoodleLineEndpoint(
 
 /** 사진 탭의 페이지 인덱스. 하단 고정 영역에 레이아웃/사진 편집 선택 EditorSubcategoryNavBar가 이 탭에서만 얹힌다. */
 internal const val PHOTO_TAB_PAGE_INDEX = 0
+
+/** 배경 탭의 페이지 인덱스. 하단 고정 영역에 색상/패턴 선택 EditorSubcategoryNavBar가 이 탭에서만 얹힌다. */
+internal const val BACKGROUND_TAB_PAGE_INDEX = 1
 
 /** 스티커 탭의 페이지 인덱스. 다른 탭에서는 스티커 선택 표시·조작 손잡이·제스처를 시작하지 않는다. */
 internal const val STICKER_TAB_PAGE_INDEX = 3
@@ -1451,6 +1455,16 @@ fun DetailScreen(
      * 값이라 Room·ViewModel로 확장하지 않고 화면 로컬 상태로 둔다.
      */
     var photoSubTabIndex by rememberSaveable {
+        mutableStateOf(0)
+    }
+
+    /**
+     * "배경" 탭 안의 색상 선택(프리셋/기타 색상/사진에서 가져오기)과 패턴
+     * 선택(종류/세기)을 하위 선택으로 나눈다. 엽서 데이터가 아니라 지금
+     * 어떤 패널을 보여줄지만 나타내는 값이라 Room·ViewModel로 확장하지
+     * 않고 화면 로컬 상태로 둔다.
+     */
+    var backgroundSubTabIndex by rememberSaveable {
         mutableStateOf(0)
     }
 
@@ -4260,6 +4274,7 @@ fun DetailScreen(
                                 modifier =
                                     Modifier.fillMaxWidth(0.92f)
                             ) {
+                    if (backgroundSubTabIndex == 0) {
                     PostcardBackgroundColorPicker(
                         selectedColorArgb =
                             pc.backgroundColorArgb,
@@ -4316,24 +4331,19 @@ fun DetailScreen(
                         exit =
                             shrinkVertically() + fadeOut()
                     ) {
-                        Box(
+                        PostcardCustomColorPicker(
+                            selectedColorArgb =
+                                pc.backgroundColorArgb,
+                            enabled = controlsEnabled,
+                            onColorSelected = { colorArgb ->
+                                viewModel.updateBackgroundColor(
+                                    colorArgb
+                                )
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 8.dp)
-                        ) {
-                            PostcardCustomColorPicker(
-                                selectedColorArgb =
-                                    pc.backgroundColorArgb,
-                                enabled = controlsEnabled,
-                                onColorSelected = { colorArgb ->
-                                    viewModel.updateBackgroundColor(
-                                        colorArgb
-                                    )
-                                },
-                                modifier =
-                                    Modifier.fillMaxWidth()
-                            )
-                        }
+                        )
                     }
 
                     Spacer(
@@ -4376,60 +4386,20 @@ fun DetailScreen(
                             verticalAlignment = Alignment.Top
                         ) {
                             successState.colors.forEach { extractedColor ->
-                                val extractedSelected =
-                                    pc.backgroundColorArgb ==
-                                            extractedColor.colorArgb
-
-                                Column(
-                                    horizontalAlignment =
-                                        Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable(
-                                        enabled = controlsEnabled
-                                    ) {
+                                BackgroundColorSwatch(
+                                    colorArgb = extractedColor.colorArgb,
+                                    selected =
+                                        pc.backgroundColorArgb ==
+                                                extractedColor.colorArgb,
+                                    enabled = controlsEnabled,
+                                    onClick = {
                                         viewModel
                                             .updateBackgroundColor(
                                                 extractedColor
                                                     .colorArgb
                                             )
                                     }
-                                ) {
-                                    Box(
-                                        modifier = Modifier.size(44.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .background(
-                                                    color =
-                                                        Color(
-                                                            extractedColor
-                                                                .colorArgb
-                                                        ),
-                                                    shape = CircleShape
-                                                )
-                                                .border(
-                                                    width = 1.dp,
-                                                    color = SurfaceGray,
-                                                    shape = CircleShape
-                                                )
-                                        )
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(5.dp)
-                                            .background(
-                                                color =
-                                                    if (extractedSelected) {
-                                                        SunsetGold
-                                                    } else {
-                                                        Color.Transparent
-                                                    },
-                                                shape = CircleShape
-                                            )
-                                    )
-                                }
+                                )
                             }
                         }
                     }
@@ -4449,11 +4419,7 @@ fun DetailScreen(
                             fontWeight = FontWeight.Medium
                         )
                     }
-
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
+                    } else {
                     PostcardBackgroundPatternPicker(
                         selectedColorArgb =
                             pc.backgroundColorArgb,
@@ -4494,6 +4460,7 @@ fun DetailScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    }
                             }
                             }
                         }
@@ -6089,6 +6056,15 @@ fun DetailScreen(
                             options = listOf("레이아웃", "사진 편집"),
                             selectedIndex = photoSubTabIndex,
                             onOptionSelected = { photoSubTabIndex = it },
+                            enabled = controlsEnabled
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                    } else if (customizationPagerState.currentPage == BACKGROUND_TAB_PAGE_INDEX) {
+                        EditorSubcategoryNavBar(
+                            options = listOf("색상", "패턴"),
+                            selectedIndex = backgroundSubTabIndex,
+                            onOptionSelected = { backgroundSubTabIndex = it },
                             enabled = controlsEnabled
                         )
 
