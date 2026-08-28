@@ -134,6 +134,63 @@
 - `FontUpdateState`/`DateFormatUpdateState` UI 상태 plumbing은 이제 항상 Idle로만 남는 죽은 경로가 됐으나, 이번 함수 삭제와 별개로 상태 자체를 지우는 것은 범위 확대라 손대지 않음.
 - 실기기 검증 없음(경고성 리팩터링이라 자동 컴파일/테스트로 충분하다고 판단, 화면 동작 변화 없음).
 
-**Git 상태**: `feature/photo-sticker`, HEAD `d4e95b9`, local == origin(ahead/behind 0/0). 위 5개 파일 unstaged 수정 상태였고, 이번 HANDOFF 갱신 직후 이 문서 갱신 작업까지 함께 commit/push 예정(사용자 승인 후).
+**Git 상태**: `feature/photo-sticker`, 이번 HANDOFF 갱신을 포함해 commit `78d336f`로 push 완료. local == origin(ahead/behind 0/0), working tree clean(`.kotlin/` 기존 untracked만).
 
 **다음 작업**: HANDOFF 운영 규칙을 AGENTS.md에 보강한 뒤, 사진(Photo) UI/UX 전수조사(코드 조사만, production 수정 금지)로 진행.
+
+## 2026-08-28 — 56일차: HANDOFF 갱신 시점 규칙을 AGENTS.md에 보강
+
+**목표**: "독립 작업 단위 종료 시 HANDOFF.md 갱신"이 `/clear` 전용 규칙이 아니라 일반 작업 루틴임을 `AGENTS.md`에 명문화(기존 STOP 규칙·자율 진행 조건·선례 사용 원칙·commit/push 승인 경계·데이터 안전 규칙·`/compact`·`/clear`는 재작성하지 않음).
+
+**변경 파일**
+
+- `AGENTS.md` — 11장 제목을 "Android Studio와 작업 종료"에서 "독립 작업 단위 종료와 Android Studio 작업 환경"으로 바꾸고, 기존 Android Studio 파일 잠금 규정 2줄은 그대로 유지한 채 다음을 추가: HANDOFF 갱신 트리거 6가지(조사 완료/구현+자동검증 완료/실기기 검증 완료/commit·push 완료/중요한 제품 판단 확정/다음 독립 작업 진입 직전), 갱신하지 않는 중간 상태 4가지, Git/AGENTS·CLAUDE/HANDOFF/세션 기억 각각의 역할 구분, `/compact`·`/clear`와의 관계는 `CLAUDE.md`를 따른다는 교차 참조 한 줄. 기존 "세션이나 터미널을 끝내기 전에…" 이하 4개 불릿은 문구만 "작업 단위 종료"로 일반화하고 내용은 그대로 둠.
+
+**검증 방법과 결과**
+
+- 문서 변경만 있고 앱 코드/Room/Gradle 변경 없음 → 빌드·테스트 실행 대상 없음.
+- 갱신 후 자체 점검: 기존 규칙과 충돌 없음(세션 종료 케이스는 그대로 하위 항목으로 유지), 같은 내용을 `CLAUDE.md`와 중복 기재하지 않고 교차 참조만 추가, "파일 하나 읽음"류의 사소한 행동마다 갱신하라는 과잉 규칙이 되지 않도록 반대 목록을 명시, `/clear`에만 종속되지 않음을 첫 문장에서 직접 명시, Claude Code/Codex 어느 쪽에도 적용 가능한 일반 규칙(도구별 세부사항은 `CLAUDE.md`로 위임)임을 확인.
+
+**남은 위험 또는 미검증 항목**: 없음(문서 전용 변경).
+
+**Git 상태**: `feature/photo-sticker`, `AGENTS.md`만 unstaged 수정 상태. 지시서 11장 "필요한 commit/push 경계는 기존 프로젝트 규칙을 따른다"에 따라 자동으로 commit/push하지 않고 사용자 승인 대기로 남김(task 1의 cleanup commit과 달리 이 문서 변경은 명시적 commit/push 지시가 없었음).
+
+**다음 작업**: 사진(Photo) UI/UX 전수조사(코드 조사만, production 수정 금지) 진행 후 결과를 별도 HANDOFF 항목으로 남기고 STOP.
+
+## 2026-08-28 — 56일차: 사진(Photo) UI/UX 전수조사 (코드 수정 없음, STOP)
+
+**목표**: "사진" 탭(엽서 기본 사진) 사용자 흐름·코드 구조·저장/복원·Undo/Redo·export를 조사하고, 사진 스티커 등 기존 선례와 비교해 문제·위험·수정 후보를 보고한다. Production 코드는 수정하지 않았다.
+
+**핵심 발견**
+
+- `Postcard.kt`의 `imagePath`(필수, non-null 파일 경로)가 "사진"이고, `layoutStyle`(STAMP/POLAROID/TAPED_FILM/LETTER)별로 독립된 scale/offset/zoom 컬럼 + 공통 `photoEdgeBlur`를 가진다. 스티커·테이프·도장·라벨처럼 "여러 개 중 하나를 선택해 리스트로 관리"하는 객체가 아니라 postcard당 정확히 1개, 필수, 교체만 가능(삭제 개념 없음).
+- 위치/확대는 미리보기 캔버스 전체에 대한 pan(드래그)+pinch(확대, 1~3배) 제스처로 조작한다(`DetailScreen.kt` ~2065-2231) — 개별 오브젝트 드래그가 아니라 "캔버스 안 사진을 크롭/줌"하는 역할. `awaitEachGesture`로 제스처당 Undo 스냅샷 1회.
+- 사진 교체(`updatePostcardImage`, `DetailViewModel.kt:4358`)는 `PostcardImageStorage.copyToAppStorage`로 **즉시 앱 filesDir/postcards/에 실제 파일 복사** 후 Room 갱신, 성공 확정 후에만 이전 파일을 소유권 확인(`deleteIfOwnedByApp`) 후 삭제. 스티커/테이프처럼 draft 2단계가 아니라 스타일 값들과 함께 즉시 Room에 쓴다.
+- 화면 미리보기(`PostcardPreviewContent`)·최종 저장/공유(`PostcardImageExporter`)·템플릿 썸네일이 모두 `PostcardRenderSpec.drawBaseContent()/drawStampPhoto()/drawPolaroidPhoto()/drawTapedFilmPhoto()` 하나만 호출 — 계산이 갈라질 여지 없음(AGENTS.md 13장 불변값 재확인).
+- **사진 스티커(갤러리/파일로 추가한 것)는 원본 URI를 앱 저장소로 복사하지 않고 Photo Picker/Document URI를 그대로 보관한다**(`PhotoStickerDetailScreen.kt:81-111`, `PhotoStickerItem(originalUri = uri, displayedUri = uri)`) — `takePersistableUriPermission`을 부르지만 `runCatching`으로 실패를 삼킨다. 54일차에 마스킹테이프 사진에서 발견한 것과 **같은 근본 원인·같은 위험**이 사진 스티커에도 그대로 있다. 반면 "사진"(`imagePath`) 자체는 항상 앱 저장소 복사본이라 이 위험이 없다 — 두 기능의 저장 안전성이 다르다.
+
+**Undo/Redo 상세**
+
+- pan/pinch 이동·확대, 사진 크기 슬라이더 → `PhotoTransformSnapshot` 스택으로 Undo/Redo 가능(제스처/슬라이더 조작 1회 = 1단계).
+- **가장자리 흐림 슬라이더는 `PhotoTransformSnapshot`에 필드 자체가 없어 Undo 불가능** — 옆에 있는 실행취소 버튼이 이 값은 되돌리지 못한다.
+- 레이아웃(우표/폴라로이드/…) 전환은 Undo 스택에 없다(다만 각 레이아웃 값이 독립 컬럼이라 전환 자체가 파괴적이지는 않음).
+- "사진 바꾸기"는 Undo가 전혀 없고, 성공 즉시 이전 파일이 삭제되어 재선택 외에는 되돌릴 방법이 없다.
+
+**현재 UI 문법 판단**: 레이아웃 선택 Box(우표/폴라로이드/테이프필름/편지지)는 상호 배타적 선택 상태를 보여주는 실제 정보라 box-removal 대상이 아님. 사진 탭 나머지(슬라이더·버튼)는 이미 공용 컴포넌트(`EditorPercentSlider`, `EditorSecondaryButton`, `EditorUndoRedoButtons`) 사용 중이라 문법 부채 없음.
+
+**수정 후보(구현 안 함, 우선순위순)**
+
+1. (작고 안전) `PhotoTransformSnapshot`에 `photoEdgeBlur` 필드 추가해 Undo 대상에 포함.
+2. (저장 구조 변경, 별도 지시서 필요) 사진 스티커 원본을 마스킹테이프처럼 앱 저장소로 복사하는 구조로 바꿀지 결정.
+3. (선택, 급하지 않음) 레이아웃 전환이 Undo 버튼 옆에 있어 "이것도 되돌려주겠지"라는 오해를 줄 수 있음 — UX 문구/배치만 조정할지 판단.
+4. (판단 필요, 데이터 삭제 정책 변경) "사진 바꾸기" 실행취소 지원 여부 — 이전 파일 즉시 삭제 정책을 바꿔야 해서 범위가 큼, 권장하지 않되 사용자 판단에 맡김.
+
+**위험**: 데이터 손상 위험은 없음(사진 자체 저장 경로는 안전). 위 1은 신뢰도(기대한 실행취소가 안 먹힘) 문제, 2는 54일차에 이미 열어둔 것과 같은 계열의 잠재적 사진 유실 위험, 4는 사용자 실수 복구 불가 문제.
+
+**변경 파일**: 없음(코드 조사만, `docs/ai/HANDOFF.md`만 갱신).
+
+**검증**: 코드 읽기·grep 기반 조사만 수행, 빌드/테스트 대상 없음.
+
+**Git 상태**: `feature/photo-sticker`, 이번 조사로 코드 변경 없음. `AGENTS.md`(56일차 HANDOFF 규칙 보강)만 아직 commit 승인 대기.
+
+**다음 작업**: 위 수정 후보 4가지 중 어느 것을 어떤 순서로 진행할지 사용자 확정 필요 — STOP.
