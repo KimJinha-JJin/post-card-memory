@@ -307,3 +307,40 @@
 **Git 상태**: `feature/photo-sticker`. 위 3개 파일 unstaged 수정 상태, 아직 commit 안 함(실기기 확인 전).
 
 **다음 작업**: 실기기 검증 → 문제 없으면 commit/push 승인 요청. 이후 별도 작업 단위로 배경 Undo/Redo 추가 여부를 진행할 수 있다.
+
+## 2026-08-28 — 56일차: 배경 UI 2차 정돈 — 패턴 카드 제거 + 직접 고르기 Dialog 전환
+
+**목표**: 1차 개편(색상 | 패턴 2단 구조) 이후 남아 있던 두 UI 문제만 최소 범위로 정리한다 — ①패턴 선택 타일을 감싸던 네모 카드 제거 ②"직접 고르기"의 인라인 펼침형 HSV 팔레트를 별도 Dialog로 분리. 저장 구조·DB·RenderSpec·Undo/Redo는 변경하지 않는다.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/components/PostcardBackgroundPicker.kt`
+- `app/src/main/java/com/postcardmemory/ui/components/EditorSharedControls.kt`
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/StickerItemFlatBoxRemovalStructureTest.kt` (주석 갱신)
+- `app/src/test/java/com/postcardmemory/ui/detail/BackgroundPatternFlatBoxRemovalStructureTest.kt` (신규)
+
+**핵심 변경**
+
+- **패턴 카드 제거**: `PostcardBackgroundPatternPicker`가 카드형 `DecorationPresetTile` 대신 스티커/텍스트/라벨과 같은 평면형 `EditorFlatPresetTile`을 쓰도록 교체 — 기호(symbol)+이름(label)+선택 밑줄만 남고 카드 배경·둥근 Box 없음. `EditorFlatPresetTile`에 선택적 `label: String? = null` 파라미터를 새로 추가해 재사용했다(기존 5개 호출부는 기본값 `null`이라 동작 변화 없음). 선택 상태는 기존 앱 문법(선택 밑줄, SunsetGold)에 더해 기호 색 강조(선택 시 SunsetGold)로 표현.
+- 카드 배경이 하던 "선택 시 실제 배경색으로 채워 색+패턴 조합을 미리 보여주는" 기능은 이번 정돈으로 의도적으로 빠졌다(지시서 목표 UI에 해당 기능이 없음) — `PostcardBackgroundPatternPicker`의 `selectedColorArgb` 파라미터가 완전히 불필요해져 함께 제거(단일 호출부인 DetailScreen.kt도 갱신).
+- **직접 고르기 Dialog 전환**: 색상 탭 본문에서 `AnimatedVisibility` + 인라인 `PostcardCustomColorPicker`를 제거하고, "직접 고르기" 버튼이 `showCustomColorDialog`(구 `customColorDrawerExpanded`) 상태로 별도 `AlertDialog`를 열도록 변경. Dialog 안에는 `PostcardCustomColorPicker`를 그대로(계산 로직·HSV UI 전혀 수정 없이) 배치, "닫기" 버튼 하나만 추가. 별도 헤더 title 없이 picker 자신의 "기타 색상" 텍스트가 헤더 역할을 하도록 둬 중복 헤더를 피함.
+- **저장 정책 유지(STOP 회피)**: Dialog로 옮기면서도 HSV 드래그 → `onColorSelected` → `viewModel.updateBackgroundColor()` 즉시 반영/저장 흐름을 그대로 유지 — local draft/적용/취소 개념을 새로 만들지 않았다. 따라서 12번 STOP 조건(적용/취소 의미 재정의 필요)에 해당하지 않아 STOP 없이 진행했다.
+- **구조 테스트 추가**: `BackgroundPatternFlatBoxRemovalStructureTest`(신규) — 배경 패턴이 더 이상 `DecorationPresetTile`을 호출하지 않는지, `EditorFlatPresetTile`에 `label`을 전달하는지, 색상 탭 본문에 `PostcardCustomColorPicker`/`AnimatedVisibility`가 남아있지 않은지, `showCustomColorDialog` 게이트 안에 `AlertDialog`가 있는지를 소스 텍스트 기준으로 고정. 기존 `StickerItemFlatBoxRemovalStructureTest`의 "배경 패턴은 계속 DecorationPresetTile을 쓴다"는 전제 주석도 이번 변경에 맞춰 갱신.
+
+**정적 확인 결과**
+
+- `git status` — 위 파일들만 변경, `Postcard.kt`/`PostcardDao.kt`/`PostcardRepository.kt`/`PostcardDatabase.kt`/`PostcardRenderSpec.kt`/`DetailViewModel.kt` 전부 미변경 확인(데이터·렌더·Undo 영향 없음).
+- `DecorationPresetTile`은 도장(`PostcardSealDetailScreen.kt`)·마스킹테이프(`MaskingTapeDetailScreen.kt`)에서 계속 사용 — 공용 컴포넌트 자체는 건드리지 않음, 배경 사용처만 분리했다.
+
+**검증 방법과 결과**
+
+- `gradle compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
+- `gradle testDebugUnitTest` — 498 tests / failures 0 / errors 0(신규 테스트 4건 포함, 기존 회귀 없음).
+- **미실행**: 실기기 검증 필요 — ①패턴 탭에서 카드 없이 기호+이름+밑줄만 보이는지 ②9종 패턴 식별 가능 여부 ③선택 상태 명확성 ④"직접 고르기" 클릭 시 인라인 펼침 없이 Dialog가 뜨는지 ⑤Dialog 안 HSV 조작이 배경에 즉시 반영되는지 ⑥Dialog 닫기 후 화면 깨짐 없는지 ⑦저장/재진입 복원 ⑧export/공유 결과 기존과 동일.
+
+**남은 Undo/Redo 과제**: 이번 작업에서 추가하지 않음(지시대로 보류) — 배경 색상/패턴/세기/HSV Undo는 UI 개편이 완전히 닫힌 뒤 별도 독립 작업으로 진행.
+
+**Git 상태**: `feature/photo-sticker`. 위 5개 파일 unstaged 수정 상태, 아직 commit 안 함(실기기 확인 전).
+
+**다음 작업**: 실기기 검증 → 문제 없으면 commit/push 승인 요청.

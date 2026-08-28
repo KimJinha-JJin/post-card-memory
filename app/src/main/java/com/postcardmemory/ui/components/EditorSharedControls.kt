@@ -370,10 +370,9 @@ fun DecorationPresetTile(
  * 선택 밑줄만으로 서도록 만든다. 미리보기를 감싸던 배경·clip·shape을
  * 전부 없앴을 뿐 클릭 영역(`previewModifier`가 정하는 크기)과 선택
  * 밑줄(2dp 높이 24dp 너비, 선택 시 SunsetGold)은 DecorationPresetTile과
- * 완전히 동일하다.
- *
- * DecorationPresetTile 자체는 건드리지 않는다 — 배경 패턴처럼 카드 배경이
- * 실제로 필요한 화면은 계속 그 컴포저블을 쓴다.
+ * 완전히 동일하다. 이름 라벨(`label`)이 필요하면 DecorationPresetTile과
+ * 같은 자리·크기(10sp SemiBold)로 미리보기와 선택 밑줄 사이에 넣을 수
+ * 있다 — 56일차 배경 패턴 카드 제거 때 배경 패턴 선택에도 재사용됐다.
  */
 @Composable
 fun EditorFlatPresetTile(
@@ -382,6 +381,7 @@ fun EditorFlatPresetTile(
     modifier: Modifier = Modifier,
     previewModifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(6.dp),
+    label: String? = null,
     selected: Boolean = false,
     preview: @Composable BoxScope.() -> Unit
 ) {
@@ -396,6 +396,17 @@ fun EditorFlatPresetTile(
             contentAlignment = Alignment.Center,
             content = preview
         )
+
+        if (label != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = label,
+                color = BrutalBlack,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
 

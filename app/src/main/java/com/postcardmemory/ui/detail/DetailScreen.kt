@@ -1423,7 +1423,7 @@ fun DetailScreen(
     }
     val context = LocalContext.current
 
-    var customColorDrawerExpanded by rememberSaveable {
+    var showCustomColorDialog by rememberSaveable {
         mutableStateOf(false)
     }
 
@@ -4294,8 +4294,7 @@ fun DetailScreen(
 
                     TextButton(
                         onClick = {
-                            customColorDrawerExpanded =
-                                !customColorDrawerExpanded
+                            showCustomColorDialog = true
                         },
                         enabled = controlsEnabled,
                         colors = ButtonDefaults.textButtonColors(
@@ -4313,36 +4312,9 @@ fun DetailScreen(
                         )
 
                         Text(
-                            text =
-                                if (customColorDrawerExpanded) {
-                                    "직접 고르기 닫기"
-                                } else {
-                                    "직접 고르기"
-                                },
+                            text = "직접 고르기",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    AnimatedVisibility(
-                        visible = customColorDrawerExpanded,
-                        enter =
-                            expandVertically() + fadeIn(),
-                        exit =
-                            shrinkVertically() + fadeOut()
-                    ) {
-                        PostcardCustomColorPicker(
-                            selectedColorArgb =
-                                pc.backgroundColorArgb,
-                            enabled = controlsEnabled,
-                            onColorSelected = { colorArgb ->
-                                viewModel.updateBackgroundColor(
-                                    colorArgb
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp)
                         )
                     }
 
@@ -4421,8 +4393,6 @@ fun DetailScreen(
                     }
                     } else {
                     PostcardBackgroundPatternPicker(
-                        selectedColorArgb =
-                            pc.backgroundColorArgb,
                         selectedPattern = selectedPattern,
                         enabled = controlsEnabled,
                         onPatternSelected = { pattern ->
@@ -5787,6 +5757,43 @@ fun DetailScreen(
                 }
             }
         )
+    }
+
+    if (showCustomColorDialog) {
+        postcard?.let { pc ->
+            AlertDialog(
+                onDismissRequest = {
+                    showCustomColorDialog = false
+                },
+                containerColor = PaperSurface,
+                titleContentColor = InkPrimary,
+                textContentColor = InkPrimary,
+                shape = RoundedCornerShape(20.dp),
+                text = {
+                    PostcardCustomColorPicker(
+                        selectedColorArgb = pc.backgroundColorArgb,
+                        enabled = controlsEnabled,
+                        onColorSelected = { colorArgb ->
+                            viewModel.updateBackgroundColor(colorArgb)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showCustomColorDialog = false
+                        }
+                    ) {
+                        Text(
+                            text = "닫기",
+                            color = SunsetGold,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            )
+        }
     }
 
     if (showDeleteDialog) {

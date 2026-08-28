@@ -41,8 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalWhite
-import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.SunsetGold
 
 val postcardBackgroundPalette =
@@ -174,9 +172,15 @@ fun PostcardBackgroundColorPicker(
     }
 }
 
+/**
+ * 배경 패턴 선택. 56일차 카드 제거 개편: 패턴 기호를 감싸던 카드형
+ * `DecorationPresetTile` 대신 평면형 `EditorFlatPresetTile`(스티커/텍스트/
+ * 라벨 목록과 같은 문법)을 써서 기호+이름+선택 밑줄만 남긴다. 선택된
+ * 패턴은 기호 색을 SunsetGold로 강조해 카드 배경(색상+패턴 조합 미리보기)이
+ * 없어도 어떤 패턴인지, 무엇이 선택됐는지 구분되게 한다.
+ */
 @Composable
 fun PostcardBackgroundPatternPicker(
-    selectedColorArgb: Long,
     selectedPattern: PostcardBackgroundPattern = PostcardBackgroundPattern.NONE,
     enabled: Boolean = true,
     onPatternSelected: (PostcardBackgroundPattern) -> Unit,
@@ -215,21 +219,20 @@ fun PostcardBackgroundPatternPicker(
                 .horizontalScroll(
                     rememberScrollState()
                 ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.Top
         ) {
             PostcardBackgroundPattern.entries.forEach { pattern ->
                 val selected =
                     visibleSelectedPattern == pattern
 
-                DecorationPresetTile(
+                EditorFlatPresetTile(
                     onClick = {
                         localSelectedPatternName = pattern.name
                         onPatternSelected(pattern)
                     },
                     enabled = enabled,
-                    previewModifier = Modifier.size(52.dp),
-                    backgroundColor = if (selected) Color(selectedColorArgb) else PaperField,
+                    previewModifier = Modifier.size(40.dp),
                     label = pattern.label,
                     selected = selected
                 ) {
@@ -237,7 +240,7 @@ fun PostcardBackgroundPatternPicker(
                         text = pattern.symbol,
                         color =
                             if (selected) {
-                                BrutalWhite
+                                SunsetGold
                             } else {
                                 BrutalBlack
                             },

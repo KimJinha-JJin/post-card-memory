@@ -9,11 +9,12 @@ import org.junit.Test
  * 53일차 제9단계: 사진/텍스트/라벨 스티커의 `+ 추가` 타일과 목록 항목을
  * 감싸던 둥근 Box(DecorationPresetTile — 배경·clip·shape)를 없애고, 같은
  * 클릭 영역·선택 밑줄만 유지하는 평면 버전(EditorFlatPresetTile)으로
- * 옮겼다. DecorationPresetTile 자체는 배경 패턴·마스킹테이프·도장이 계속
- * 쓰므로 건드리지 않았다 — 이번 파일럿 3개 파일에서만 새 컴포저블을
- * 쓰는지 소스 텍스트 기준으로 고정한다. 라벨 목록 항목은 애초에
- * DecorationPresetTile을 쓴 적이 없어(이미 평면) 이번 단계에서 `+ 추가`
- * 타일만 바뀌었다.
+ * 옮겼다. 그 시점엔 DecorationPresetTile을 배경 패턴·마스킹테이프·도장이
+ * 계속 써서 건드리지 않았지만, 56일차 배경 패턴 카드 제거로 배경도
+ * EditorFlatPresetTile로 옮겨졌다([[BackgroundPatternFlatBoxRemovalStructureTest]]
+ * 참고) — 이번 파일럿 3개 파일에서만 새 컴포저블을 쓰는지 소스 텍스트
+ * 기준으로 고정한다. 라벨 목록 항목은 애초에 DecorationPresetTile을 쓴
+ * 적이 없어(이미 평면) 이번 단계에서 `+ 추가` 타일만 바뀌었다.
  */
 class StickerItemFlatBoxRemovalStructureTest {
 
