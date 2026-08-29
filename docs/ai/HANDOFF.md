@@ -780,6 +780,10 @@
 - `app/src/test/java/com/postcardmemory/ui/detail/DetailScreenExitSaveGuaranteeTest.kt`
 - `docs/ai/HANDOFF.md`
 
-**Git 상태**: `feature/photo-sticker`, HEAD `e1c7192`(무변경, 이번 작업은 아직 commit 안 함). 위 파일 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+**실기기 검증**: 완료 — 사용자가 위 3개 시나리오(초안 flush, 확정 저장 후 재생성 없음, 지연 없음)를 확인함.
 
-**다음 작업**: 위 실기기 시나리오 확인 → 문제 없으면 사용자 승인 받아 commit/push. Part A(21개 Job 2초 timeout 유실 가능성)를 다룰지는 별도 판단 필요 — 승인·검증까지 닫히면 제5차도 완전히 마감되고, 장기작업 지시서 제1~5차 전체가 완료된다(제6차 이후는 지시서에 따라 별도 지시 필요).
+**Git 상태**: `feature/photo-sticker`, commit `596dcb2`("Flush pending draft autosave before leaving the detail screen")로 push 완료. local == origin(`596dcb2`), working tree clean(`.kotlin/` 기존 untracked만).
+
+**제5차 최종 마감**: 제5차 완전히 닫혔다. Part A(21개 Job 2초 timeout 유실 가능성)는 사용자 판단으로 **보류**한다 — 트리거 조건이 좁고(2초 안에 여러 style을 연속으로 바꿔야 함) 실제 재현 사례가 확인된 것은 아니다.
+
+**저장·데이터 안전성 챕터(제1~5차) 전체 마감**: 57일차 장기작업 지시서의 제1~5차가 모두 완료됐다 — URI 영속성(제1~2차), HSV 저장 경로(제3차, 배경색 깜빡임 회귀 포함), draft 삭제 실패 처리(제4차), 화면 이탈 시 pending save/autosave 보장(제5차). 제6차 이후는 지시서에 따라 사용자의 별도 지시가 있을 때 진행한다.
