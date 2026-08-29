@@ -735,3 +735,51 @@
 **제4차 최종 마감**: 제4차 완전히 닫혔다.
 
 **다음 작업**: 장기작업 지시서의 제5차(화면 이탈 시 pending save/autosave 보장)로 진행 가능.
+
+## 2026-08-29 — 57일차 저장·데이터 안전성 챕터 제5차: 화면 이탈 시 pending save/autosave 보장 조사 + draftAutosaveJob 최소 수정
+
+**목표**: `awaitPendingStyleSaves()`(pending style save timeout)와 `draftAutosaveJob`(초안 자동저장 debounce) 두 경로를 화면 이탈 안전성 관점에서 조사하고, 명확하고 제품 의미를 바꾸지 않는 범위에서만 최소 수정한다.
+
+### A. `awaitPendingStyleSaves()` 조사 결과 (수정 없음 — 확인만)
+
+- **뒤로가기 경로 전수 확인**: 시스템 back(`BackHandler`)과 상단바 아이콘 버튼 모두 `navigateBackAfterPendingStyleSaves`(`DetailScreen.kt:1564`, 5288번 줄 호출)를 거쳐 `awaitPendingStyleSaves()` → `onNavigateBack()` 순서를 지킨다. `onNavigateBack()`을 우회 없이 직접 부르는 곳은 두 곳뿐인데(`PostcardDeleteState.Deleted`, `FutureMailSendState.Sent`), 둘 다 이후에 style 저장 자체가 무의미해지는 종료 상태라 우회가 타당하다 — 새로운 우회 경로는 발견되지 않았다.
+- **timeout 이후 실제로 벌어지는 일을 확인했다**: `withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS)`이 시간 초과되면 `pendingJobs.joinAll()`을 기다리던 이 코루틴만 취소되고 반환되지만, **개별 저장 Job들 자신은 취소되지 않고 `viewModelScope`에서 계속 살아 있는다.** `DetailViewModel`은 `hiltViewModel()`(기본, `NavBackStackEntry` 스코프)로 얻으므로, `onNavigateBack()`이 `popBackStack()`을 호출하면 통상 애니메이션 없는 pop에서는 그 직후에 가깝게 `ViewModelStore.clear()`가 일어나 `viewModelScope`가 취소된다. **즉 timeout이 실제로 발생하면(2초 안에 못 끝난 저장이 있으면), 아직 `styleWriteMutex` 대기열에서 시작도 못 한 뒤쪽 저장들이 navigation 직후 취소로 인해 조용히 유실될 수 있다** — 지시서가 후보로 제기한 위험이 실제로 존재함을 코드 근거로 확인했다.
+- **트리거 조건**: 21개 style-save Job이 전부 같은 `styleWriteMutex`로 직렬화되므로, 이 timeout이 실제로 문제되려면 사용자가 매우 짧은 시간에 다수의 서로 다른 style을 연속으로 바꾸고(각각 실제 DAO/파일 쓰기가 필요) 그 총 소요 시간이 2초를 넘겨야 한다 — 일상적인 단일 조작으로는 거의 발생하지 않지만, 기기 성능 저하나 저장소 지연이 겹치면 이론상 가능하다.
+- **왜 여기서 고치지 않았는가**: 실제 개선책들(timeout 시간을 늘림, timeout 후에도 Job이 viewModelScope 밖에서 계속 살아남도록 스코프를 분리함, navigation을 저장 완료까지 막음, 사용자에게 알림)은 전부 지시서의 명시적 STOP 목록("timeout 시 navigation 차단", "저장 완료까지 화면 유지", "Snackbar/Dialog 표시", "timeout 시간 변경")에 직접 해당한다. 이 중 어느 것도 "기존 lifecycle/save 선례를 그대로 적용하며 제품 동작 변화 없이 누락된 Job만 기다리는" 자율 수정 범위에 들지 않아 그대로 두었다.
+
+### B. `draftAutosaveJob` 최소 수정 (자율 진행 — 명확한 원인, 기존 선례 재사용)
+
+- **원인**: `draftAutosaveJob`은 `awaitPendingStyleSaves()`의 21개 Job 목록에 처음부터 없었다(다른 20+1개 style-save Job 필드는 전부 목록에 있음, `draftAutosaveJob`만 유일하게 빠짐 — grep으로 전수 확인). `flushDraftNow()`의 기존 doc 주석은 "화면 이탈·백그라운드 전환 시 사용한다"고 이미 밝히고 있지만, 실제로는 `ON_STOP`(앱 백그라운드 전환)에만 연결돼 있고 인앱 뒤로가기(같은 Activity 안에서 NavBackStackEntry만 바뀌는 이동이라 `ON_STOP`이 발생하지 않음)에는 연결되지 않았다 — 코드의 실제 동작이 자신의 문서화된 의도에 못 미치는 격차였다.
+- **실제 위험**: 사용자가 스티커/도장 등을 편집한 직후(디바운스 900ms가 끝나기 전) 바로 뒤로가기를 누르면(흔한 사용 패턴), `draftAutosaveJob`이 아직 `delay()` 중일 때 `viewModelScope`가 취소돼 그 편집이 초안 파일에 전혀 반영되지 못한 채 사라진다 — 확정 저장(`saveEditsAndClearDraft`)을 하지 않은 진행 중 편집이 대상이라 데이터 손상은 아니지만, 초안 자동저장 시스템이 애초에 막으려던 바로 그 시나리오다.
+- **적용한 수정**: `awaitPendingStyleSaves()`에 `draftAutosaveJob`을 단순히 join하는 대신(그러면 남은 debounce 시간만큼 불필요하게 기다리게 됨), `flushDraftNow()`와 동일한 방식 — `draftAutosaveJob?.cancel()` 후 `persistDraftNow()`를 직접 호출해 즉시 완료를 기다리는 코드를 추가했다. `persistDraftNow()`가 없거나(`currentDraftPostcardId <= 0L`) 애초에 pending Job이 없으면(`draftAutosaveJob?.isActive != true`) 아무 일도 하지 않는다. 기존 `PENDING_STYLE_SAVE_TIMEOUT_MS` 상수를 그대로 재사용해(새 timeout 값 도입 안 함) 무기한 대기를 방지했다.
+- **확정 저장 직후 재생성 위험 없음을 확인**: `saveEditsAndClearDraft()`는 시작 시 이미 `draftAutosaveJob?.cancel()`을 호출하므로, 확정 저장이 성공해 draft가 삭제된 직후 바로 뒤로가기를 눌러도 이 시점엔 `draftAutosaveJob.isActive`가 false라 새 fallback이 실행되지 않는다 — 제4차에서 고친 "stale draft 재생성" 버그를 이번 수정이 다시 만들지 않음을 코드로 확인했다.
+- **신규 테스트(`DetailScreenExitSaveGuaranteeTest.kt`, 3개, 기존 FakeViewModel 구조 확장)**: `awaitBeforeExit_pendingDraftAutosaveIsFlushedNotLostToDebounce`(10초 debounce 중에도 즉시 flush돼 저장됨), `awaitBeforeExit_pendingDraftAutosave_doesNotWaitFullDebounce`(실제로 10초를 기다리지 않고 빠르게 반환됨을 실측), `awaitBeforeExit_noPendingDraftAutosave_doesNothing`(pending이 없으면 아무 일도 안 함).
+
+**검증 방법과 결과**
+
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만).
+- `:app:testDebugUnitTest`(`DetailScreenExitSaveGuaranteeTest` 단독) — 8 tests(기존 5 + 신규 3) / failures 0 / errors 0.
+- `:app:testDebugUnitTest`(전체) — BUILD SUCCESSFUL, **493 tests / failures 0 / errors 0 / skipped 0**(직전 490 + 신규 3, 회귀 없음).
+- `git diff --check` — 이상 없음(기존 LF/CRLF 경고만).
+- diff 재검토 — `DetailViewModel.kt`는 `awaitPendingStyleSaves()`에 7줄 + 주석만 추가, 나머지 무변경. `DetailScreen.kt`/Room/Migration/저장 형식 전부 무변경.
+
+**실기기 검증 시나리오(사용자 확인 대기)**
+
+1. 스티커나 도장을 옮긴 직후(1초 이내, 확정 저장은 누르지 않고) 바로 뒤로가기 → 다시 진입 → 방금 옮긴 위치가 초안으로 복원되는지 확인(이번 수정의 핵심 재현 시나리오 — 수정 전이면 유실될 수 있었던 케이스).
+2. "완료"로 확정 저장 → 화면이 자동으로 나가짐 → 재진입 → 확정한 최신 상태가 정상 표시되는지(초안이 엉뚱하게 재생성되지 않는지) 확인 — 제4차 수정과의 상호작용 회귀 확인.
+3. 평소처럼 여러 조작을 자연스럽게 하다가 뒤로가기 → 눈에 띄는 지연이나 버벅임 없이 화면이 바로 전환되는지 확인(대부분의 경우 pending debounce가 없거나 즉시 flush가 매우 빨라 체감 지연이 없어야 함).
+
+**남은 위험**
+
+- Part A(21개 style-save Job의 2초 timeout 후 viewModelScope 취소로 인한 유실 가능성)는 실재하는 위험으로 확인됐으나 이번 차수에서 고치지 않았다 — 고치려면 timeout 정책·저장 스코프 분리·사용자 안내 중 최소 하나를 결정해야 하는 제품 판단이 필요하다(사용자 확인 필요, 다음 논의 후보).
+- Part B 수정은 낮은 위험 — 기존 `flushDraftNow()` 선례를 그대로 재사용했고 확정 저장과의 상호작용도 코드로 확인했다.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/DetailScreenExitSaveGuaranteeTest.kt`
+- `docs/ai/HANDOFF.md`
+
+**Git 상태**: `feature/photo-sticker`, HEAD `e1c7192`(무변경, 이번 작업은 아직 commit 안 함). 위 파일 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+
+**다음 작업**: 위 실기기 시나리오 확인 → 문제 없으면 사용자 승인 받아 commit/push. Part A(21개 Job 2초 timeout 유실 가능성)를 다룰지는 별도 판단 필요 — 승인·검증까지 닫히면 제5차도 완전히 마감되고, 장기작업 지시서 제1~5차 전체가 완료된다(제6차 이후는 지시서에 따라 별도 지시 필요).

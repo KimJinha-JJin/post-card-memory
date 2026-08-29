@@ -36,17 +36,20 @@ class DetailScreenExitSaveGuaranteeTest {
     private class FakeRoom {
         var fieldA: Int = 0
         var fieldC: Int = 0
+        var draftField: Int = -1
     }
 
     private class FakeViewModel(parentJob: Job) {
         var uiFieldA: Int = 0
         var uiFieldC: Int = 0
+        var uiDraftField: Int = -1
         val room = FakeRoom()
         val errors = mutableListOf<String>()
         private val scope = CoroutineScope(parentJob)
         private val styleWriteMutex = Mutex()
         private var fieldASaveJob: Job? = null
         private var fieldCSaveJob: Job? = null
+        private var draftAutosaveJob: Job? = null
 
         fun saveFieldA(
             newValue: Int,
@@ -98,18 +101,53 @@ class DetailScreenExitSaveGuaranteeTest {
             return job
         }
 
-        /** DetailViewModel.awaitPendingStyleSaves()와 동일한 형태. */
+        /**
+         * DetailViewModel.scheduleDraftAutosave()와 동일한 형태 — debounce
+         * 뒤에야 실제 저장이 일어난다.
+         */
+        fun scheduleDraftAutosave(
+            newValue: Int,
+            debounceMillis: Long,
+            beforeWrite: suspend () -> Unit = {}
+        ) {
+            uiDraftField = newValue
+
+            draftAutosaveJob?.cancel()
+            draftAutosaveJob = scope.launch {
+                delay(debounceMillis)
+                beforeWrite()
+                persistDraftNow()
+            }
+        }
+
+        private suspend fun persistDraftNow() {
+            styleWriteMutex.withLock {
+                room.draftField = uiDraftField
+            }
+        }
+
+        /**
+         * DetailViewModel.awaitPendingStyleSaves()와 동일한 형태 —
+         * draftAutosaveJob은 join하지 않고, 아직 debounce 대기 중이면
+         * cancel 후 persistDraftNow()를 직접 호출해 즉시 완료를 기다린다
+         * (flushDraftNow()와 동일한 방식 — 57일차 제5차 수정).
+         */
         suspend fun awaitPendingStyleSaves(timeoutMillis: Long = 2_000L) {
             val pendingJobs =
                 listOfNotNull(fieldASaveJob, fieldCSaveJob)
                     .filter { it.isActive }
 
-            if (pendingJobs.isEmpty()) {
-                return
+            if (pendingJobs.isNotEmpty()) {
+                withTimeoutOrNull(timeoutMillis) {
+                    pendingJobs.joinAll()
+                }
             }
 
-            withTimeoutOrNull(timeoutMillis) {
-                pendingJobs.joinAll()
+            if (draftAutosaveJob?.isActive == true) {
+                draftAutosaveJob?.cancel()
+                withTimeoutOrNull(timeoutMillis) {
+                    persistDraftNow()
+                }
             }
         }
     }
@@ -237,5 +275,65 @@ class DetailScreenExitSaveGuaranteeTest {
 
         assertFalse(fieldCJob.isCancelled)
         assertEquals(7, vm.room.fieldC) // await가 취소보다 먼저 저장을 끝냈다
+    }
+
+    // ---- 57일차 저장·데이터 안전성 챕터 제5차: draftAutosaveJob(초안 자동저장
+    // debounce)도 이제 화면 이탈 전에 보존된다 ----
+    //
+    // draftAutosaveJob은 style-save Job들과 달리 스스로 delay(debounce)를
+    // 거친 뒤에야 실제 저장을 한다. 수정 전에는 awaitPendingStyleSaves()의
+    // 추적 대상에 전혀 없어서, debounce가 끝나기 전에 화면을 나가면(흔한
+    // 사용 패턴 — 편집 직후 바로 뒤로가기) 아직 시작도 안 한 초안 저장이
+    // viewModelScope 취소로 그대로 유실됐다. 수정은 flushDraftNow()와 동일한
+    // 방식으로 debounce를 기다리지 않고 즉시 cancel 후 persistDraftNow()를
+    // 직접 호출해 완료를 기다리는 것이다.
+
+    @Test
+    fun awaitBeforeExit_pendingDraftAutosaveIsFlushedNotLostToDebounce() = runBlocking {
+        val parentJob = SupervisorJob()
+        val vm = FakeViewModel(parentJob)
+
+        // 편집 직후(디바운스가 끝나기 한참 전) 바로 나가는 상황을 흉내낸다.
+        vm.scheduleDraftAutosave(newValue = 99, debounceMillis = 10_000L)
+        assertEquals(-1, vm.room.draftField) // 아직 debounce 중이라 저장 전
+
+        vm.awaitPendingStyleSaves()
+
+        // debounce(10초)를 기다리지 않고도 즉시 flush돼 저장됐어야 한다.
+        assertEquals(99, vm.room.draftField)
+
+        parentJob.cancel()
+    }
+
+    @Test
+    fun awaitBeforeExit_pendingDraftAutosave_doesNotWaitFullDebounce() = runBlocking {
+        val parentJob = SupervisorJob()
+        val vm = FakeViewModel(parentJob)
+
+        vm.scheduleDraftAutosave(newValue = 7, debounceMillis = 10_000L)
+
+        val elapsedMillis = kotlin.system.measureTimeMillis {
+            vm.awaitPendingStyleSaves()
+        }
+
+        // debounce(10초)를 그대로 기다렸다면 이 값이 훨씬 컸을 것이다 —
+        // cancel 후 즉시 flush하므로 가상 시간이 아니어도 매우 빨라야 한다.
+        assertTrue(elapsedMillis < 2_000L)
+        assertEquals(7, vm.room.draftField)
+
+        parentJob.cancel()
+    }
+
+    @Test
+    fun awaitBeforeExit_noPendingDraftAutosave_doesNothing() = runBlocking {
+        val parentJob = SupervisorJob()
+        val vm = FakeViewModel(parentJob)
+
+        // 예약된 초안 저장이 전혀 없는 상태 — 아무 것도 하지 않고 조용히 통과해야 한다.
+        vm.awaitPendingStyleSaves()
+
+        assertEquals(-1, vm.room.draftField)
+
+        parentJob.cancel()
     }
 }

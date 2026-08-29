@@ -3663,6 +3663,13 @@ class DetailViewModel @Inject constructor(
      * 이미 취소된 뒤 호출되므로 그 안에서 정리를 시도하면 아무 파일도
      * 지워지지 않는다.
      *
+     * draftAutosaveJob(초안 자동저장 debounce)은 위 style-save Job 목록과
+     * 별개다 — flushDraftNow()가 ON_STOP(백그라운드 전환)에서 이미 하는
+     * 것과 동일하게, 아직 debounce 대기 중인 초안 저장이 있으면 그 debounce를
+     * 건너뛰고 즉시 persistDraftNow()를 직접 호출해 완료를 기다린다. 단순히
+     * draftAutosaveJob을 join()하면 남은 debounce 시간(최대
+     * DRAFT_AUTOSAVE_DEBOUNCE_MS)만큼 불필요하게 기다리게 되므로, 대신
+     * flushDraftNow()와 같은 방식으로 즉시 실행한다.
      */
     suspend fun awaitPendingStyleSaves() {
         val pendingJobs =
@@ -3693,6 +3700,13 @@ class DetailViewModel @Inject constructor(
         if (pendingJobs.isNotEmpty()) {
             withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS.milliseconds) {
                 pendingJobs.joinAll()
+            }
+        }
+
+        if (draftAutosaveJob?.isActive == true) {
+            draftAutosaveJob?.cancel()
+            withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS.milliseconds) {
+                persistDraftNow()
             }
         }
 
