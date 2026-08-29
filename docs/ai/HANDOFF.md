@@ -558,3 +558,91 @@
 **Git 상태**: `feature/photo-sticker`, commit `77966d4`("Copy Photo Picker sourced sticker/masking-tape photos to app storage")로 push 완료. local == origin(`77966d4`), working tree clean(`.kotlin/` 기존 untracked만).
 
 **다음 작업**: 제2차까지 완전히 닫혔다. 장기작업 지시서의 제3차(HSV 배경색 저장 경로 안정화)로 진행 가능.
+
+## 2026-08-29 — 57일차 저장·데이터 안전성 챕터 제3차: HSV 배경색 저장 경로 조사 + `enabled` wiring 자율 수정
+
+**목표**: `PostcardCustomColorPicker`(HSV 색상 선택기)의 저장 경로를 조사하고, 지시서 후보 문제(Room write 폭주, debounce 없음, 이전 Job cancel 없음, `enabled`가 실제 입력 차단에 연결되지 않았을 가능성)를 확인한다.
+
+**조사 결과**
+
+- **`enabled`가 실제로 완전히 죽어 있었다(자율 수정 대상)**: `PostcardCustomColorPicker(enabled: Boolean = true, ...)`가 파라미터로 존재하지만 함수 본문 어디에서도 참조되지 않았다. 색상판(채도·명도) Canvas와 색상 계열(hue) 바 Canvas의 `pointerInput` 제스처(`detectTapGestures`/`detectDragGestures`) 4곳 모두 `enabled`와 무관하게 항상 동작했다. 호출부(`DetailScreen.kt:5777` 배경, `MaskingTapeDetailScreen.kt`, `LabelStickerDetailScreen.kt`, `TextStickerDetailScreen.kt` — 이 컴포넌트는 배경 전용이 아니라 4곳의 커스텀 색상 다이얼로그가 공유하는 공용 컴포넌트임을 이번에 확인)는 전부 의도를 갖고 `enabled = controlsEnabled`(또는 동등한 값)를 넘기고 있었으므로, 저장 중에도 사용자가 HSV를 계속 조작해 추가 저장을 계속 트리거할 수 있었다 — 다른 모든 Editor 컨트롤(`EditorFlatPresetTile`, `EditorUndoRedoButtons` 등)이 저장 중 입력을 막는 것과 다른 예외였다.
+- **`backgroundColorSaveJob`이 이전 Job을 cancel하지 않는 것은 버그가 아니라 의도된 설계였다**: `DetailViewModel.kt:442` 주석이 `da80596` 커밋을 근거로, `styleWriteMutex` + 저장 시점 최신 state 재읽기만으로 완료 순서와 무관하게 항상 최신 조작이 최종 Room 상태로 수렴함을 명시하고 있었다. 지시서가 후보로 지목한 이 항목은 **재확인 결과 실제 문제가 아니다**(다른 4개 style-save Job도 동일 정책).
+- **Room write 폭주는 실재하지만 데이터 손상이 아니라 성능/자원 낭비 문제다**: `updateSaturationAndValue`/`updateHue`가 매 드래그 이동마다 `emitColor()`를 호출하고, `emitColor()`는 `shouldEmitCustomColor`로 "직전과 정확히 같은 반올림 RGB"만 중복 제거한다(연속 그라디언트 드래그 중에는 사실상 거의 매번 값이 달라지므로 실효적 억제력이 낮음) → `updateBackgroundColor()`가 매번 `viewModelScope.launch { styleWriteMutex.withLock { ... Room UPDATE ... } }`를 새로 만든다. `styleWriteMutex`가 직렬화하고 매번 최신 `_postcard.value`를 다시 읽으므로 **최종 저장값은 항상 정확하다** — 문제는 드래그 한 번에 Room UPDATE 쿼리가 수십 번 순차 실행되어 대부분이 즉시 무의미해지는(다음 쓰기가 바로 덮어씀) 낭비라는 점.
+
+**적용한 수정(자율 진행 범위 — 단순 wiring 누락, 제품 의미 변경 없음)**
+
+- `PostcardBackgroundPicker.kt`의 `PostcardCustomColorPicker`에 `val latestEnabled by rememberUpdatedState(enabled)` 추가 — `DetailScreen.kt`가 이미 쓰고 있는 `latestControlsEnabled` 패턴(같은 파일 1809번 줄)과 동일한 이유: `pointerInput`은 키가 바뀌지 않으면 코루틴을 재시작하지 않으므로, 이미 실행 중인 드래그 제스처 코루틴에도 최신 `enabled` 값이 반영되려면 `rememberUpdatedState`가 필요하다.
+- `updateSaturationAndValue()`/`updateHue()`(색상판 드래그·hue 바 드래그의 공용 진입점, 탭 제스처도 이 함수들을 거침) 맨 앞에 `if (!latestEnabled) return` 추가 — 이제 disabled 상태에서는 로컬 hue/saturation/value 갱신과 `onColorSelected` 호출(=Room 저장 트리거) 자체가 일어나지 않는다.
+- 시각 피드백으로 `PostcardLayoutPicker.kt`/`PostcardTemplateRow.kt`가 이미 쓰는 `.alpha(if (enabled) 1f else 0.55f)`를 감싸는 `Column`에 동일하게 적용 — disabled인데 평소와 똑같아 보이는 상태를 피함.
+- 신규 StructureTest `PostcardCustomColorPickerEnabledStructureTest.kt`(소스 텍스트 기준, 3개) — `rememberUpdatedState(enabled)` 존재, `updateSaturationAndValue`/`updateHue` 본문에 `!latestEnabled` 가드 존재를 고정해 같은 wiring 누락이 재발하지 않도록 감시.
+
+**의도적으로 손대지 않은 것(제품 판단 필요 — 사용자 확인 대기)**
+
+- **Room write 폭주(위 세 번째 발견)는 고치지 않았다.** 지시서의 STOP 조건에 따라 debounce 도입/이전 Job cancel/"drag 중 로컬 미리보기만 하고 확정 시 1회 저장"/Apply 버튼 도입은 전부 "즉시 저장" 의미를 바꾸거나 여러 구현 대안이 실질적으로 동등하게 존재하는 경우라 임의로 결정하지 않았다. 데이터 손상 위험은 없다(mutex+재읽기로 항상 정확) — 실기기에서 실제로 버벅임이나 배터리 영향이 체감되는지가 이 문제를 다룰지 판단하는 기준이 될 수 있다.
+
+**검증 방법과 결과**
+
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만).
+- `:app:testDebugUnitTest`(전체) — BUILD SUCCESSFUL, **483 tests / failures 0 / errors 0 / skipped 0**(기존 480 + 신규 3, 회귀 없음). 기존 `PostcardCustomColorPickerTest.kt`(순수 함수 `shouldResyncCustomColorHsv`/`shouldEmitCustomColor` 검증)는 무변경 함수를 대상으로 하므로 그대로 통과.
+- `git diff --check` — 이상 없음(기존 LF/CRLF 경고만).
+- diff 재검토 — `PostcardBackgroundPicker.kt` 하나만 변경(import 2줄 + `latestEnabled` 선언 + 가드 2곳 + alpha 1곳), `DetailViewModel.kt`/Room/Migration/저장 형식 전부 무변경 확인.
+- 실기기 검증 **미실행** — 아래 시나리오로 사용자 확인 대기.
+
+**실기기 검증 시나리오(사용자 확인 대기)**
+
+1. 배경 탭 "직접 고르기"에서 배경색을 바꾸는 저장이 진행되는 짧은 순간(가능하면 여러 번 빠르게) HSV 색상판/색상 계열 바를 눌러도 반응하지 않는지 확인 — 사실 저장이 매우 빨라 체감이 어려울 수 있으므로, 정상 상태(저장 중이 아닐 때)에서 HSV 조작이 여전히 잘 되는지가 더 중요한 회귀 확인 포인트.
+2. 정상 상태에서 HSV 색상판/색상 계열 바를 드래그해 배경색이 그대로 부드럽게 바뀌는지(회귀 없음) 확인.
+3. 마스킹테이프 커스텀/라벨 스티커 커스텀/텍스트 스티커 커스텀 색상 다이얼로그에서도 HSV 조작이 기존과 동일하게 동작하는지 확인(공용 컴포넌트라 4곳 모두 영향받음).
+4. (선택) 저장 중 dimmed(반투명) 표시가 실제로 보이는지 — 저장이 워낙 빨라 육안으로 안 보일 수 있음, 문제 아님.
+
+**남은 위험**: 낮음. `enabled` 미사용은 실제 버그였고 수정은 다른 컨트롤과 동일한 의미로 맞춘 것뿐이라 제품 의미 변화 없음. Room write 폭주는 성능 문제로 남아 있으나 데이터 손상 위험은 없다.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/components/PostcardBackgroundPicker.kt`
+- `app/src/test/java/com/postcardmemory/ui/components/PostcardCustomColorPickerEnabledStructureTest.kt`(신규)
+- `docs/ai/HANDOFF.md`
+
+**Git 상태**: `feature/photo-sticker`, HEAD `8893759`(무변경, 이번 작업은 아직 commit 안 함). 위 파일 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+
+**다음 작업**: 실기기 확인 → 승인 시 commit/push. Room write 폭주를 다룰지는 사용자 판단 필요 — 다루기로 하면 같은 제3차 안에서 이어가고, 보류하면 제4차(draft 삭제 실패 처리)로 진행.
+
+## 2026-08-29 — 57일차 저장·데이터 안전성 챕터 제3차 실기기 회귀 수정: 배경색 HSV 드래그 깜빡임
+
+**사용자 보고**: "배경색 HSV에서 드래그 시 화면이 매우 빠르게 깜빡인다. 스티커/마스킹테이프의 동일 HSV 컴포넌트에서는 발생하지 않는다." — 위 `enabled` wiring 자율 수정 직후 실기기 검증에서 발견된 회귀. 이 항목의 변경은 **사용자 지시로 commit/push 금지** 상태다.
+
+**원인(확인됨, 사용자 가설과 일치)**: `DetailScreen.kt`의 `controlsEnabled`(1799번 줄)는 `backgroundUpdateState !is BackgroundUpdateState.Saving`을 조건에 포함한다. 배경색 커스텀 색상 다이얼로그(5777번 줄 부근)는 `PostcardCustomColorPicker`의 `enabled`에 이 `controlsEnabled`를 그대로 넘기고 있었다. 그런데 `DetailViewModel.updateBackgroundColor()`는 **HSV 드래그의 매 프레임(`emitColor()`가 호출될 때마다)** 즉시 호출되고, 호출 즉시 `_backgroundUpdateState.value = BackgroundUpdateState.Saving`으로 바꿨다가 그 저장이 끝나면 `.Success`로 되돌린다 — `styleWriteMutex` 직렬화 자체는 빠르지만, 연속 드래그 중에는 이 Saving↔Success 전환이 초당 수십 번 일어난다. 직전 제3차에서 추가한 `enabled` wiring(및 `.alpha(if (enabled) 1f else 0.55f)`)이 이 값을 그대로 반영하면서, **피커 자신의 저장 상태가 자신의 입력을 계속 막았다 풀었다 하는 자기참조 피드백 루프**가 생겨 화면이 빠르게 깜빡였다. 스티커/마스킹테이프/라벨 스티커/텍스트 스티커의 같은 공용 `PostcardCustomColorPicker` 호출부는 `onColorSelected`가 ViewModel 저장을 즉시 부르지 않고 **로컬 Compose draft 상태**(`var baseColorArgb`/`patternColorArgb` 등, 다이얼로그의 "저장" 확정 시에만 실제 반영)만 갱신하므로 이런 피드백 루프 자체가 존재하지 않는다 — 그래서 회귀가 배경색에서만 재현됐다.
+
+**지시 확인 사항**: 공용 HSV 컴포넌트(`PostcardCustomColorPicker`)의 `enabled` 연결 자체는 되돌리지 않았다 — 문제는 컴포넌트가 아니라 배경색 호출부가 자기 자신의 저장 상태를 자신의 입력 차단 조건에 섞어 넣은 wiring이었다.
+
+**적용한 수정(원인이 명확하고 기존 제품 의미를 유지하는 최소 수정 — 자율 진행)**: `DetailScreen.kt`에 `controlsEnabled`와 별개로 `backgroundColorPickerEnabled`를 신설 — `backgroundUpdateState` 조건만 뺀 나머지 전부(export/공유/폰트/레이아웃/날짜형식 저장/확정 저장/삭제/배경제거)는 동일하게 유지한다. 배경색 다이얼로그의 `PostcardCustomColorPicker` 호출부만 `enabled = backgroundColorPickerEnabled`로 바꿨다. `controlsEnabled` 자체와 다른 모든 사용처는 무변경.
+
+- debounce, local preview, Apply 버튼 같은 "즉시 저장 의미 변경"은 필요하지 않았다 — 문제가 저장 빈도가 아니라 그 저장 상태를 자기 입력 차단에 재사용한 wiring이었기 때문에, 즉시 저장 의미를 그대로 유지한 채 해결됐다.
+- 신규 StructureTest `BackgroundColorPickerEnabledStructureTest.kt`(소스 텍스트 기준, 2개) — `backgroundColorPickerEnabled` 선언에 `backgroundUpdateState`가 없는지, `PostcardCustomColorPicker` 호출부가 `controlsEnabled`가 아니라 `backgroundColorPickerEnabled`를 쓰는지 고정.
+
+**검증 방법과 결과**
+
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만).
+- `:app:testDebugUnitTest`(전체) — BUILD SUCCESSFUL, **485 tests / failures 0 / errors 0 / skipped 0**(직전 483 + 신규 2).
+- `git diff --check` — 이상 없음(기존 LF/CRLF 경고만).
+- diff 재검토 — `DetailScreen.kt`(`backgroundColorPickerEnabled` 신설 + 호출부 1곳 교체)와 `PostcardBackgroundPicker.kt`(직전 항목, 무변경 유지) 외 예상 밖 변경 없음. `controlsEnabled` 자체·다른 모든 사용처·Room·저장 형식 전부 무변경.
+- 실기기 검증 **미실행** — 아래 시나리오로 사용자 재확인 대기.
+
+**실기기 검증 시나리오(사용자 재확인 대기)**
+
+1. **배경색 빠른 연속 드래그**: 배경 탭 "직접 고르기"에서 HSV 색상판/색상 계열 바를 빠르게 여러 번 연속으로 드래그 → 화면 깜빡임 없이 부드럽게 색이 바뀌는지 확인(이번 회귀의 핵심 재현 시나리오).
+2. **배경색 저장 정상 동작**: 드래그 후 다이얼로그를 닫고 재진입 → 마지막 색이 정상 저장·복원되는지 확인(회귀 없음).
+3. **스티커/마스킹테이프 회귀 없음**: 사진 스티커·마스킹테이프의 커스텀 색상(배경제거 없는 케이스, CUSTOM 스타일)에서도 여전히 정상 동작하는지 확인(이번 수정이 손대지 않은 경로).
+4. **다른 차단 상태 정상 유지**: (선택, 재현 어려움) 폰트/레이아웃/날짜형식 저장이나 확정 저장이 진행 중일 때 배경색 HSV 피커가 여전히 dimmed되고 입력이 막히는지 — 정상 상태에서 이 상태들은 매우 빨리 끝나 육안 확인이 어려울 수 있으므로 필수는 아님.
+
+**남은 위험**: 낮음. 이번 수정은 배경색 호출부 하나의 wiring만 바꿨고 공용 컴포넌트·다른 호출부·저장 의미는 그대로다. Room write 폭주(제3차 첫 조사에서 발견) 자체는 여전히 남아 있으나 이번 깜빡임과는 별개 항목이며 데이터 손상 위험은 없다.
+
+**변경 파일(이번 항목만, 이전 `PostcardBackgroundPicker.kt` 변경과 합쳐서 아직 commit 전)**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/BackgroundColorPickerEnabledStructureTest.kt`(신규)
+- `docs/ai/HANDOFF.md`
+
+**Git 상태**: `feature/photo-sticker`, HEAD `8893759`(무변경). `PostcardBackgroundPicker.kt`(제3차 첫 수정) + `DetailScreen.kt`(이번 회귀 수정) + 신규 테스트 2개 + HANDOFF 전부 unstaged. **commit/push 금지 — 사용자가 이번 턴에 명시적으로 지시함.**
+
+**다음 작업**: 위 실기기 시나리오(특히 1·3번) 재확인 → 문제 없으면 사용자 승인 받아 그때 commit/push. Room write 폭주를 다룰지는 여전히 별도 판단 필요.

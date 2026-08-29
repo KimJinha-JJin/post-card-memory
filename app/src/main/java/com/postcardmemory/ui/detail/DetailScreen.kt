@@ -1808,6 +1808,30 @@ fun DetailScreen(
                 !isRemovingBackground
     val latestControlsEnabled by rememberUpdatedState(controlsEnabled)
 
+    /**
+     * 배경색 HSV 피커(PostcardCustomColorPicker) 전용 — controlsEnabled에서
+     * backgroundUpdateState 조건만 뺀 값. updateBackgroundColor()는 HSV
+     * 드래그 프레임마다 즉시 호출돼 backgroundUpdateState를 Saving→Success로
+     * 매우 빠르게 반복 전환시키므로, controlsEnabled를 그대로 이 피커의
+     * enabled로 넘기면 피커 자신의 저장 상태가 자신의 입력을 계속 막았다
+     * 풀었다 하는 자기참조 피드백 루프가 생겨 드래그 중 화면이 빠르게
+     * 깜빡인다(57일차 실기기 회귀 — enabled wiring 수정 직후 발견). 스티커/
+     * 마스킹테이프 등 다른 곳의 같은 HSV 컴포넌트는 커스텀 색상을 로컬
+     * draft로만 들고 있다가 확정 시에만 저장하므로 이 문제가 없다. export/
+     * 공유/폰트/레이아웃/날짜형식 저장·확정 저장·삭제·배경제거처럼 이
+     * 피커와 무관한 다른 진짜 차단 상태에서는 controlsEnabled와 동일하게
+     * 계속 막는다.
+     */
+    val backgroundColorPickerEnabled =
+        exportState !is ExportState.Exporting &&
+                shareState !is ShareState.Preparing &&
+                fontUpdateState !is FontUpdateState.Saving &&
+                layoutUpdateState !is LayoutUpdateState.Saving &&
+                dateFormatUpdateState !is DateFormatUpdateState.Saving &&
+                confirmSaveState !is ConfirmSaveState.Saving &&
+                deleteState !is PostcardDeleteState.Deleting &&
+                !isRemovingBackground
+
     val detailSnackbarHostState =
         remember { SnackbarHostState() }
 
@@ -5776,7 +5800,7 @@ fun DetailScreen(
                 text = {
                     PostcardCustomColorPicker(
                         selectedColorArgb = pc.backgroundColorArgb,
-                        enabled = controlsEnabled,
+                        enabled = backgroundColorPickerEnabled,
                         onColorSelected = { colorArgb ->
                             viewModel.updateBackgroundColor(colorArgb)
                         },

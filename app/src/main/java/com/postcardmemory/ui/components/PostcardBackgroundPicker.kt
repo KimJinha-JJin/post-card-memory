@@ -27,10 +27,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -301,6 +303,8 @@ fun PostcardCustomColorPicker(
     onColorSelected: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val latestEnabled by rememberUpdatedState(enabled)
+
     val initialHsv =
         remember {
             colorArgbToHsv(selectedColorArgb)
@@ -390,6 +394,10 @@ fun PostcardCustomColorPicker(
     fun updateSaturationAndValue(
         offset: Offset
     ) {
+        if (!latestEnabled) {
+            return
+        }
+
         saturation =
             (offset.x / colorAreaWidth.toFloat())
                 .coerceIn(0f, 1f)
@@ -405,6 +413,10 @@ fun PostcardCustomColorPicker(
     fun updateHue(
         offset: Offset
     ) {
+        if (!latestEnabled) {
+            return
+        }
+
         hue =
             (
                     offset.x /
@@ -418,6 +430,7 @@ fun PostcardCustomColorPicker(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.55f)
     ) {
         Text(
             text = "기타 색상",
