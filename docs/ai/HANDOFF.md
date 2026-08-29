@@ -553,6 +553,8 @@
 - `app/src/main/java/com/postcardmemory/utils/OrphanFileDiagnostics.kt`
 - `docs/ai/HANDOFF.md`(이 항목 + 제1차 항목)
 
-**Git 상태**: `feature/photo-sticker`, HEAD `a8576e5`(무변경, 이번 작업은 아직 commit 안 함). 위 파일 전부 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+**실기기 검증**: 완료 — 사용자가 위 6개 시나리오를 확인함.
 
-**다음 작업**: 위 실기기 시나리오 확인 → 문제 없으면 사용자 승인 받아 commit/push. 승인·검증까지 닫힌 뒤 장기작업 지시서의 제3차(HSV 배경색 저장 경로 안정화)로 진행 가능.
+**Git 상태**: `feature/photo-sticker`, commit `77966d4`("Copy Photo Picker sourced sticker/masking-tape photos to app storage")로 push 완료. local == origin(`77966d4`), working tree clean(`.kotlin/` 기존 untracked만).
+
+**다음 작업**: 제2차까지 완전히 닫혔다. 장기작업 지시서의 제3차(HSV 배경색 저장 경로 안정화)로 진행 가능.
