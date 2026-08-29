@@ -17,7 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * DetailScreenExitSaveLossTest가 재현한 문제(슬라이더·템플릿 저장이 실제 DAO
+ * DetailScreenExitSaveLossTest가 재현한 문제(개별 스타일 저장이 실제 DAO
  * 쓰기 전에 viewModelScope가 취소되면 마지막 값이 유실됨)에 대한 수정을
  * 검증한다. 실제 수정은 DetailViewModel.awaitPendingStyleSaves()를 추가하고,
  * DetailScreen의 뒤로 가기(아이콘 버튼·시스템 back 모두)를
@@ -35,20 +35,17 @@ class DetailScreenExitSaveGuaranteeTest {
 
     private class FakeRoom {
         var fieldA: Int = 0
-        var fieldB: Int = 0
         var fieldC: Int = 0
     }
 
     private class FakeViewModel(parentJob: Job) {
         var uiFieldA: Int = 0
-        var uiFieldB: Int = 0
         var uiFieldC: Int = 0
         val room = FakeRoom()
         val errors = mutableListOf<String>()
         private val scope = CoroutineScope(parentJob)
         private val styleWriteMutex = Mutex()
         private var fieldASaveJob: Job? = null
-        private var templateSaveJob: Job? = null
         private var fieldCSaveJob: Job? = null
 
         fun saveFieldA(
@@ -79,25 +76,6 @@ class DetailScreenExitSaveGuaranteeTest {
             return job
         }
 
-        fun applyTemplate(
-            newA: Int,
-            newB: Int,
-            beforeWrite: suspend () -> Unit = {}
-        ): Job {
-            uiFieldA = newA
-            uiFieldB = newB
-
-            templateSaveJob?.cancel()
-            val job = scope.launch {
-                beforeWrite()
-                styleWriteMutex.withLock {
-                    room.fieldA = uiFieldA
-                    room.fieldB = uiFieldB
-                }
-            }
-            templateSaveJob = job
-            return job
-        }
 
         /**
          * DetailViewModel.updateBackgroundColor 등 5개 수정 후와 동일한 형태:
@@ -123,7 +101,7 @@ class DetailScreenExitSaveGuaranteeTest {
         /** DetailViewModel.awaitPendingStyleSaves()와 동일한 형태. */
         suspend fun awaitPendingStyleSaves(timeoutMillis: Long = 2_000L) {
             val pendingJobs =
-                listOfNotNull(fieldASaveJob, templateSaveJob, fieldCSaveJob)
+                listOfNotNull(fieldASaveJob, fieldCSaveJob)
                     .filter { it.isActive }
 
             if (pendingJobs.isEmpty()) {
@@ -188,54 +166,6 @@ class DetailScreenExitSaveGuaranteeTest {
 
         assertFalse(saveJobB.isCancelled)
         assertEquals(2, vm.room.fieldA) // 더 이상 오래된 1로 되돌아가지 않는다
-    }
-
-    // ---- 시나리오 C: 템플릿 적용 직후 이탈 — 템플릿이 온전히 저장된다 ----
-
-    @Test
-    fun templateApplied_awaitBeforeExit_templatePersists() = runBlocking {
-        val parentJob = SupervisorJob()
-        val vm = FakeViewModel(parentJob)
-        val reachedDispatchPoint = CompletableDeferred<Unit>()
-
-        val templateJob = vm.applyTemplate(newA = 100, newB = 200) {
-            reachedDispatchPoint.await()
-        }
-        val exitJob = launch { exitScreen(vm, parentJob) }
-
-        reachedDispatchPoint.complete(Unit)
-        templateJob.join()
-        exitJob.join()
-
-        assertFalse(templateJob.isCancelled)
-        assertEquals(100, vm.room.fieldA)
-        assertEquals(200, vm.room.fieldB)
-    }
-
-    // ---- 시나리오 D: 템플릿 적용 후 개별 조작 직후 이탈 — 둘 다 보존된다 ----
-
-    @Test
-    fun templateAppliedThenIndividualEdit_awaitBeforeExit_bothPersist() = runBlocking {
-        val parentJob = SupervisorJob()
-        val vm = FakeViewModel(parentJob)
-        val reachedDispatchPoint = CompletableDeferred<Unit>()
-
-        vm.applyTemplate(newA = 100, newB = 200).join()
-        assertEquals(100, vm.room.fieldA)
-        assertEquals(200, vm.room.fieldB)
-
-        val editJob = vm.saveFieldA(newValue = 55) {
-            reachedDispatchPoint.await()
-        }
-        val exitJob = launch { exitScreen(vm, parentJob) }
-
-        reachedDispatchPoint.complete(Unit)
-        editJob.join()
-        exitJob.join()
-
-        assertFalse(editJob.isCancelled)
-        assertEquals(55, vm.room.fieldA) // 마지막 개별 조작이 살아남고
-        assertEquals(200, vm.room.fieldB) // 템플릿의 나머지 값도 그대로 유지된다
     }
 
     // ---- 저장 실패는 취소가 아니다 — await 도입 후에도 실패 롤백은 그대로 동작한다 ----

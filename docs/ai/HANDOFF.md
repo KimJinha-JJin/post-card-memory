@@ -337,10 +337,112 @@
 
 - `gradle compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
 - `gradle testDebugUnitTest` — 498 tests / failures 0 / errors 0(신규 테스트 4건 포함, 기존 회귀 없음).
-- **미실행**: 실기기 검증 필요 — ①패턴 탭에서 카드 없이 기호+이름+밑줄만 보이는지 ②9종 패턴 식별 가능 여부 ③선택 상태 명확성 ④"직접 고르기" 클릭 시 인라인 펼침 없이 Dialog가 뜨는지 ⑤Dialog 안 HSV 조작이 배경에 즉시 반영되는지 ⑥Dialog 닫기 후 화면 깨짐 없는지 ⑦저장/재진입 복원 ⑧export/공유 결과 기존과 동일.
+- **실기기 검증 완료** — 사용자가 확인함: 패턴 탭에서 카드 없이 기호+이름+밑줄만 보이는 것, 9종 패턴 식별, 선택 상태 명확성, "직접 고르기" Dialog 전환, Dialog 안 HSV 조작 즉시 반영, Dialog 닫기 후 화면 정상, 기존 색상/패턴/패턴 세기 동작, 저장/재진입 복원 모두 정상 확인.
 
 **남은 Undo/Redo 과제**: 이번 작업에서 추가하지 않음(지시대로 보류) — 배경 색상/패턴/세기/HSV Undo는 UI 개편이 완전히 닫힌 뒤 별도 독립 작업으로 진행.
 
-**Git 상태**: `feature/photo-sticker`. 위 5개 파일 unstaged 수정 상태, 아직 commit 안 함(실기기 확인 전).
+**Git 상태**: `feature/photo-sticker`, HEAD `8258503`("Remove background pattern card and move custom color to a dialog")로 commit·push 완료. local == origin(ahead/behind 0/0), working tree clean(`.kotlin/` 기존 untracked만).
 
-**다음 작업**: 실기기 검증 → 문제 없으면 commit/push 승인 요청.
+**다음 작업**: 배경 UI 작업은 완전히 닫혔다. 다음 후보는 배경 Undo/Redo 추가 여부 등 이전 조사에서 남긴 항목들.
+
+## 2026-08-29 — 57일차 선행 작업: IDE inspection dead template runtime 정리
+
+**사용자 관점 요약**: 56일차에 화면에서 제거된 템플릿 기능이 상세 화면 뒤에서 계속 상태와 저장 Job을 만들고 사용자 템플릿 파일을 읽던 경로를 제거했다. 앱 화면과 기존 엽서 동작은 바꾸지 않았고, 기존 사용자 템플릿 파일·저장 형식·Room 데이터도 삭제하거나 변환하지 않았다.
+
+**제거한 dead runtime**
+
+- `DetailViewModel`의 template 적용·Undo/Redo 상태와 공개 StateFlow: `canUndoTemplateStyle`, `canRedoTemplateStyle`, `lastAppliedTemplateId` 및 대응 private state·history stack·snapshot.
+- template 적용·복원 runtime: `applyTemplate`, `undoTemplateStyleChange`, `redoTemplateStyleChange`, `persistTemplateStyle`와 직접 고아가 된 private helper·상수·`templateStyleSaveJob`.
+- 사용자 template 관리 runtime: `userTemplates`, `templateSaveState`, `templateManageState`, `loadUserTemplates`, 이름 추천·중복 확인·상태 reset·신규 저장·이름 변경·덮어쓰기·삭제 함수와 직접 고아가 된 미리보기 helper·Job·import.
+- `loadPostcard()`에서 template history 초기화와 `loadUserTemplates()` 호출을 제거해, 상세 화면 진입 때 더 이상 사용되지 않는 사용자 template 파일을 읽지 않게 했다.
+- `awaitPendingStyleSaves()`에서 template 적용·저장·관리 Job을 제거하고 현재 살아 있는 저장 Job만 기다리도록 주석과 목록을 정리했다.
+- 삭제된 production runtime을 그대로 복제하던 `TemplateStyleSaveRollbackTest.kt`를 삭제하고, `StyleSaveRaceTest`·`DetailScreenExitSaveGuaranteeTest`·`DetailScreenExitSaveLossTest` 안의 template 전용 fake state·case를 제거했다. 현재 살아 있는 개별 저장 경합·화면 이탈 검증은 유지했다. 이 cleanup으로 dead runtime만 검증하던 테스트 22개가 전체 테스트 수에서 빠졌다.
+
+**유지한 persistence와 테스트**
+
+- `PostcardTemplateStorage`, `PostcardTemplate`, `PostcardTemplateStyle`, `BuiltInTemplates`, template UI helper 파일, 사용자 template 저장 파일과 serialization 형식은 그대로 보존했다.
+- Room Entity·DAO·schema·Migration, 기존 엽서와 저장 파일 구조는 전혀 수정하지 않았다.
+- `PostcardTemplateStorageTest`와 template 모델·legacy 호환 테스트는 유지했다. 혼합 저장 경합·화면 이탈 테스트에서는 template 전용 부분만 제거하고 현재 살아 있는 개별 저장 계약을 검증하는 case는 그대로 보존했다.
+
+**typo inspection 판정**
+
+- 실제 rename 없음.
+- `removedBgUri`: `PhotoStickerItem`의 저장·복원 필드와 여러 production 경로에서 일관되게 쓰는 `background` 약어다. 전역 rename은 코드 의미나 가독성 개선보다 범위만 키우므로 spell checker false positive로 판정했다.
+- `Snackbar`: Android/Compose의 정상 API·용어라 false positive로 판정했다.
+- `uACBD`, `uACFC`: 한글 오류 문장의 `\\uBC30\\uACBD`, `\\uC81C\\uACFC` Unicode escape 내부 조각이다. 문자열 의미를 바꾸지 않고 false positive로 판정했다.
+- IDE dictionary·suppression은 저장소에 추가하지 않았다.
+
+**검증**
+
+- 후보 production 심볼과 template Job·`loadUserTemplates()` 재검색 — `DetailViewModel` 잔여 0. `PostcardTemplate.kt`의 `lastAppliedTemplateId` 파라미터 helper는 별도 top-level 모델 로직이라 이번 범위에서 유지.
+- 관련 테스트 6개 클래스(`StyleSaveRaceTest`, `DetailScreenExitSaveGuaranteeTest`, `DetailScreenExitSaveLossTest`, `PostcardTemplateTest`, `BuiltInTemplatesTest`, `PostcardTemplateStorageTest`) — BUILD SUCCESSFUL.
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL. 이번 변경 관련 신규 경고 없음. 기존 Migration 파라미터명·deprecated API 경고는 범위 밖이라 유지.
+- `:app:testDebugUnitTest` — 최종 상태에서 51 suites / 476 tests / failures 0 / errors 0 / skipped 0.
+- `git diff --check` — 이상 없음.
+- 첫 sandbox 실행은 Foojay plugin을 해석하지 못해 코드 검증 전에 실패했다. 네트워크 권한을 허용한 재실행에서는 plugin 해석 후 compile·test까지 정상 완료했으므로 코드 실패가 아닌 실행환경 실패로 분류했다.
+- 실기기 검증 미실행 — UI와 사용자 동작을 바꾸지 않는 dead runtime cleanup이며 자동 compile·test까지만 확인했다.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/StyleSaveRaceTest.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/DetailScreenExitSaveGuaranteeTest.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/DetailScreenExitSaveLossTest.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/TemplateStyleSaveRollbackTest.kt` (삭제)
+- `docs/ai/HANDOFF.md` (기존 사용자 실기기 확인 기록 보존 + 이번 항목 추가)
+
+**Git 상태**: `feature/photo-sticker`, HEAD `8258503`, local == origin(ahead/behind 0/0). 위 코드·테스트·HANDOFF 변경은 unstaged이며 commit/push하지 않았다. 기존 untracked `.claude/`, `.kotlin/`은 건드리지 않았다.
+
+**다음 작업**: `updateMessage()` race 수정과 재발 방지 테스트를 별도 독립 작업으로 진행한다.
+
+## 2026-08-29 — 57일차: `updateMessage()` 저장 race 수정 + production StructureTest 추가
+
+**시작 HEAD**: `8258503`(직전 57일차 선행 작업인 IDE inspection cleanup·template dead runtime 정리가 이미 unstaged로 반영된 상태에서 시작). 이번 작업 시작 전 `git status`로 확인한 결과 unstaged 변경은 그 선행 작업분(`DetailViewModel.kt`, 관련 테스트 3개, `TemplateStyleSaveRollbackTest.kt` 삭제, `docs/ai/HANDOFF.md`)뿐이었고 충돌 없음.
+
+**race 원인**: `updateMessage()`가 다른 style 저장 함수(`updateBackMessage`, `updateBackRecipientModifier` 등)와 달리 `styleWriteMutex`를 쓰지 않았다. 함수 호출 시점의 `currentPostcard`(전체 Postcard snapshot)를 잡아둔 채 `withContext(Dispatchers.IO)`로 Room에 저장한 뒤, 저장이 끝나고 나서 `_postcard.value = currentPostcard.copy(message = normalizedMessage)`로 **그 오래된 snapshot 전체를 되썼다**. 글귀 저장이 진행되는 동안 사용자가 다른 style(배경색·패턴·사진 크기·blur 등)을 바꾸면, 그 최신 값이 메모리에서 과거로 되돌아갈 수 있었고, 이어서 다른 저장 Job이 오염된 `_postcard.value`를 최신으로 읽으면 Room에도 과거 값이 저장될 위험이 있었다.
+
+**적용한 기존 안전 패턴**: `updateBackMessage()`(`DetailViewModel.kt:2342` 부근)를 선례로 그대로 재사용.
+
+- 호출 시점에 `previous`(되돌릴 이전 값)만 별도로 잡아두고, `_postcard.value`는 `currentPostcard.copy(message = normalizedMessage)`로 **즉시(낙관적) 갱신**한다 — 이건 저장 시작 전 동기 구간이라 stale 문제가 없다.
+- 실제 저장은 `viewModelScope.launch { withContext(Dispatchers.IO) { styleWriteMutex.withLock { ... } } }` 안에서, mutex 획득 후 `_postcard.value`를 다시 읽은 `latest`의 `message` 필드만 `repository.updatePostcardMessage()`에 넘긴다 — 저장 시점의 실제 최신 state를 기준으로 하므로 그 사이 바뀐 다른 style 값을 덮어쓰지 않는다.
+- 실패 시 `_postcard.value?.message == normalizedMessage`(즉 그 사이 아무도 message를 다시 바꾸지 않았을 때만) `previous`로 message 필드만 롤백 — 다른 필드는 건드리지 않는다.
+- `messageUpdateJob`은 그대로 유지, `awaitPendingStyleSaves()`의 대기 목록(`DetailViewModel.kt:3530` 부근)도 이미 포함돼 있어 수정 불필요.
+- 성공/실패 의미, 함수 시그니처, 호출부는 전혀 바꾸지 않음.
+
+**production StructureTest**: 신규 `app/src/test/java/com/postcardmemory/ui/detail/UpdateMessageSaveMutexStructureTest.kt` — `BackgroundPatternFlatBoxRemovalStructureTest`와 같은 소스 텍스트 기준 방식(candidates 경로로 `DetailViewModel.kt` 원문을 읽어 `updateMessage()` 함수 body만 잘라 검사). 4개 테스트:
+
+1. `updateMessage_usesStyleWriteMutex` — `styleWriteMutex.withLock` 사용 확인.
+2. `updateMessage_reRedsLatestStateInsideMutex` — mutex 블록 안에서 `val latest = _postcard.value`로 재조회한 뒤 `repository.updatePostcardMessage(...)`에 `latest.message`를 넘기는지 확인(호출 시점 인자를 그대로 쓰면 실패).
+3. `updateMessage_doesNotRewriteStaleFullSnapshotAfterAsyncSave` — `viewModelScope.launch` 블록(비동기 구간) 안에 `_postcard.value = currentPostcard.copy(` 형태(오래된 전체 snapshot 되쓰기)가 없는지 정규식으로 확인.
+4. `updateMessage_optimisticSyncUpdateOnlyTouchesMessageField` — launch 이전 동기 구간에 `_postcard.value = currentPostcard.copy(message = normalizedMessage)` 낙관적 갱신이 있는지 확인.
+
+세부 문체(공백·변수명)가 아니라 저장 안전 계약(mutex 사용, 최신 state 재읽기, stale snapshot 되쓰기 금지)만 검사하도록 설계했다. 기존 Fake 기반 race test(`StyleSaveRaceTest` 등)는 수정하지 않았다 — 그쪽은 안전 패턴 자체의 정합성을, 이 신규 테스트는 production 코드가 실제로 그 패턴을 쓰는지를 검증하는 보완 관계다.
+
+**검증 방법과 결과**
+
+- 신규 `UpdateMessageSaveMutexStructureTest` 단독 실행 — BUILD SUCCESSFUL(4개 전부 통과).
+- 관련 기존 테스트(`StyleSaveRaceTest`, `DetailScreenExitSaveGuaranteeTest`, `DetailScreenExitSaveLossTest`) — BUILD SUCCESSFUL, regression 없음.
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL, 신규 경고 없음.
+- `:app:testDebugUnitTest`(전체) — BUILD SUCCESSFUL. JUnit XML 52개 파일 집계 기준 **480 tests / failures 0 / errors 0 / skipped 0**(직전 476 + 신규 4).
+- `git diff --check` — 이상 없음(기존 LF/CRLF 경고만, 실제 whitespace 오류 없음).
+- `DetailViewModel.kt` diff 전수 재검토 — `updateMessage()` 함수 하나(HANDOFF 기준 `@@ -3005,6 +2237,7` ~ `@@ -3015,26 +2248,37` 구간)만 이번 변경이고, 나머지 hunk는 전부 직전 57일차 선행 template cleanup 작업분임을 확인(새로 섞인 변경 없음).
+- 실기기 검증 **미실행** — 아래 시나리오로 사용자 확인 대기.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt` — `updateMessage()` 최소 수정.
+- `app/src/test/java/com/postcardmemory/ui/detail/UpdateMessageSaveMutexStructureTest.kt` (신규).
+- `docs/ai/HANDOFF.md` (이 항목 추가).
+
+**실기기 검증 시나리오(사용자 확인 대기)**
+
+1. 엽서 글귀를 수정.
+2. 저장 직후 빠르게 다른 style(배경색/사진 크기/blur 등) 변경.
+3. 글귀 저장 완료 후 방금 바꾼 최신 style 값이 이전으로 되돌아가지 않는지 확인.
+4. 화면에서 나갔다가 다시 진입해 글귀와 마지막 style 변경값이 모두 최신 상태로 복원되는지 확인.
+
+**남은 위험**: 낮음 — 기존 검증된 mutex 패턴을 그대로 재사용한 최소 patch. 자동 테스트로는 실제 Room/코루틴 타이밍 경합까지는 재현하지 못하므로 위 실기기 시나리오 확인 전까지는 완전히 닫힌 것으로 보지 않는다.
+
+**Git 상태**: `feature/photo-sticker`, HEAD `8258503`(변경 전과 동일, 이번 작업은 아직 commit 안 함). `DetailViewModel.kt`/테스트 3개/`TemplateStyleSaveRollbackTest.kt` 삭제(선행 작업분) + 이번 `updateMessage()` 수정 + 신규 StructureTest + 이 HANDOFF 갱신까지 전부 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+
+**다음 작업**: 실기기 검증 → 문제 없으면 사용자 승인 받아 commit/push. 승인·검증까지 완전히 닫힌 뒤의 다음 독립 작업은 "사진 스티커 / 사진 마스킹테이프 URI 영속성 전수조사".

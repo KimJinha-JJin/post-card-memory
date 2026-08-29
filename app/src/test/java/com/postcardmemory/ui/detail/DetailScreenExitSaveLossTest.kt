@@ -16,10 +16,10 @@ import org.junit.Test
 
 /**
  * DetailViewModel의 슬라이더 계열 저장(saveStampPhotoScale, saveBackgroundPatternDensity,
- * saveMessageTextScale 등)과 persistTemplateStyle(템플릿 적용)은 viewModelScope.launch로
- * 실행된다. DetailScreen.kt의 controlsEnabled는 backgroundUpdateState/fontUpdateState/
+ * saveMessageTextScale 등)은 viewModelScope.launch로 실행된다.
+ * DetailScreen.kt의 controlsEnabled는 backgroundUpdateState/fontUpdateState/
  * layoutUpdateState/dateFormatUpdateState/imageUpdateState만 확인할 뿐, 이
- * 슬라이더·템플릿 저장군에는 대응하는 Saving 상태가 없어 저장이 끝나기 전에도
+ * 슬라이더 저장군에는 대응하는 Saving 상태가 없어 저장이 끝나기 전에도
  * 뒤로 가기 버튼이 계속 활성 상태다. MainActivity.kt의 composable("detail/{id}")는
  * 커스텀 전환 애니메이션이 없어 popBackStack() 직후 거의 바로 NavBackStackEntry의
  * ViewModelStore가 clear()되고, onCleared() -> viewModelScope.cancel()이 뒤따른다.
@@ -35,20 +35,17 @@ class DetailScreenExitSaveLossTest {
 
     private class FakeRoom {
         var fieldA: Int = 0
-        var fieldB: Int = 0
         var fieldC: Int = 0
     }
 
     /** viewModelScope에 해당 — ViewModelStore.clear()가 parentJob을 취소하면 함께 취소된다. */
     private class FakeViewModel(parentJob: Job) {
         var uiFieldA: Int = 0
-        var uiFieldB: Int = 0
         var uiFieldC: Int = 0
         val room = FakeRoom()
         private val scope = CoroutineScope(parentJob)
         private val styleWriteMutex = Mutex()
         private var fieldASaveJob: Job? = null
-        private var templateSaveJob: Job? = null
 
         /** saveStampPhotoScale() 등 슬라이더 저장 함수와 동일한 형태. */
         fun saveFieldA(
@@ -68,36 +65,16 @@ class DetailScreenExitSaveLossTest {
             return job
         }
 
-        /** persistTemplateStyle()과 동일한 형태(두 필드 일괄 저장). */
-        fun applyTemplate(
-            newA: Int,
-            newB: Int,
-            beforeWrite: suspend () -> Unit = {}
-        ): Job {
-            uiFieldA = newA
-            uiFieldB = newB
-
-            templateSaveJob?.cancel()
-            val job = scope.launch {
-                beforeWrite()
-                styleWriteMutex.withLock {
-                    room.fieldA = uiFieldA
-                    room.fieldB = uiFieldB
-                }
-            }
-            templateSaveJob = job
-            return job
-        }
 
         /**
          * DetailViewModel.awaitPendingStyleSaves()와 동일한 형태 — 단, 실제
-         * 코드처럼 fieldASaveJob/templateSaveJob만 기다리고 아래
+         * 코드처럼 fieldASaveJob만 기다리고 아래
          * updateFieldC(색/패턴/폰트/레이아웃/날짜형식처럼 Job 추적이 없는
          * styleWriteMutex 저장군을 대표)는 목록에 없다.
          */
         suspend fun awaitPendingStyleSaves() {
             val pendingJobs =
-                listOfNotNull(fieldASaveJob, templateSaveJob)
+                listOfNotNull(fieldASaveJob)
                     .filter { it.isActive }
 
             if (pendingJobs.isEmpty()) {
@@ -178,53 +155,6 @@ class DetailScreenExitSaveLossTest {
         assertEquals(1, vm.room.fieldA) // Room에는 오래된 1만 남는다 -> 재진입 시 2가 사라져 있다
     }
 
-    // ---- 시나리오 C: 템플릿 적용 직후 화면 이탈 — 템플릿 자체가 저장되지 못한다 ----
-
-    @Test
-    fun templateApplied_scopeCancelledBeforeWrite_templateNeverPersists() = runBlocking {
-        val parentJob = SupervisorJob()
-        val vm = FakeViewModel(parentJob)
-        val reachedDispatchPoint = CompletableDeferred<Unit>()
-
-        val job = vm.applyTemplate(newA = 100, newB = 200) {
-            reachedDispatchPoint.await()
-        }
-
-        parentJob.cancel()
-        job.join()
-
-        assertTrue(job.isCancelled)
-        assertEquals(100, vm.uiFieldA)
-        assertEquals(200, vm.uiFieldB)
-        assertEquals(0, vm.room.fieldA) // 템플릿을 적용한 화면을 보고 나갔지만 Room은 그대로다
-        assertEquals(0, vm.room.fieldB)
-    }
-
-    // ---- 시나리오 D: 템플릿 적용 후 개별 조작 직후 이탈 — 마지막 개별 조작이 유실된다 ----
-
-    @Test
-    fun templateAppliedThenIndividualEdit_scopeCancelledBeforeWrite_individualEditLost() =
-        runBlocking {
-            val parentJob = SupervisorJob()
-            val vm = FakeViewModel(parentJob)
-            val reachedDispatchPoint = CompletableDeferred<Unit>()
-
-            vm.applyTemplate(newA = 100, newB = 200).join() // 템플릿은 정상적으로 저장 완료
-            assertEquals(100, vm.room.fieldA)
-            assertEquals(200, vm.room.fieldB)
-
-            val job = vm.saveFieldA(newValue = 55) {
-                reachedDispatchPoint.await()
-            }
-            parentJob.cancel() // 개별 조작이 쓰기 전에 화면 이탈
-            job.join()
-
-            assertTrue(job.isCancelled)
-            assertEquals(55, vm.uiFieldA) // 마지막으로 조작한 값은 55였지만
-            assertEquals(100, vm.room.fieldA) // Room에는 템플릿의 100만 남는다 -> 마지막 조작이 사라져 있다
-            assertEquals(200, vm.room.fieldB) // 템플릿의 나머지 값은 그대로 유지된다
-        }
-
     // ---- 시나리오 E: awaitPendingStyleSaves()를 기다려도 Job 추적이 없는
     //      저장(배경색/배경 패턴/폰트/레이아웃/날짜 형식과 동일한 형태)은
     //      여전히 유실된다 ----
@@ -251,7 +181,7 @@ class DetailScreenExitSaveLossTest {
         }
 
         // 실제 DetailScreen처럼 이탈 전 awaitPendingStyleSaves()를 기다린다.
-        // fieldASaveJob/templateSaveJob이 모두 비어 있으므로 즉시 반환된다.
+        // fieldASaveJob이 비어 있으므로 즉시 반환된다.
         vm.awaitPendingStyleSaves()
 
         // await가 fieldC 저장을 애초에 몰랐으므로, 아직 Dispatchers.IO

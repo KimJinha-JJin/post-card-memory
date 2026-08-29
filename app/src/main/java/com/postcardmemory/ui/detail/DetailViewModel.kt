@@ -2,7 +2,6 @@ package com.postcardmemory.ui.detail
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.geometry.Offset
@@ -25,8 +24,6 @@ import com.postcardmemory.utils.PhotoStickerImageStorage
 import com.postcardmemory.utils.PostcardDeletionManager
 import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
-import com.postcardmemory.utils.PostcardRenderSpec
-import com.postcardmemory.utils.PostcardTemplateStorage
 import com.postcardmemory.utils.deserializeDoodleStroke
 import com.postcardmemory.utils.serialize as serializeDoodleStroke
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -64,9 +61,6 @@ private const val TEXT_STICKER_HISTORY_LIMIT = 50
 private const val MASKING_TAPE_HISTORY_LIMIT = 50
 private const val LABEL_STICKER_HISTORY_LIMIT = 50
 private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
-private const val TEMPLATE_STYLE_HISTORY_LIMIT = 50
-private const val MAX_TEMPLATE_NAME_LENGTH = 20
-private const val TEMPLATE_PREVIEW_SIZE = 320
 private const val DRAFT_AUTOSAVE_DEBOUNCE_MS = 900L
 private const val PENDING_STYLE_SAVE_TIMEOUT_MS = 2_000L
 
@@ -81,30 +75,6 @@ sealed interface DraftSaveStatus {
     data object Saved : DraftSaveStatus
 
     data object Failed : DraftSaveStatus
-}
-
-/** "현재 꾸밈 저장"(새 사용자 템플릿 생성)의 상태. */
-sealed interface TemplateSaveState {
-
-    data object Idle : TemplateSaveState
-
-    data object Saving : TemplateSaveState
-
-    data object Saved : TemplateSaveState
-
-    data class Error(val message: String) : TemplateSaveState
-}
-
-/** 이름 변경·덮어쓰기·삭제 등 기존 사용자 템플릿 관리 동작의 상태. */
-sealed interface TemplateManageState {
-
-    data object Idle : TemplateManageState
-
-    data object InProgress : TemplateManageState
-
-    data object Success : TemplateManageState
-
-    data class Error(val message: String) : TemplateManageState
 }
 
 /** 완료 버튼(확정 저장)의 상태. 스티커·도장 저장을 이 상태로만 판단한다. */
@@ -456,21 +426,13 @@ class DetailViewModel @Inject constructor(
 
     private var confirmSaveJob: Job? = null
 
-    private var userTemplateSaveJob: Job? = null
-
-    private var userTemplateRenameJob: Job? = null
-
-    private var userTemplateOverwriteJob: Job? = null
-
-    private var userTemplateDeleteJob: Job? = null
-
     /**
-     * 개별 스타일 저장(위 Job들)과 템플릿 일괄 저장(persistTemplateStyle)의
-     * 실제 DAO 쓰기 구간을 직렬화한다. 각 저장은 이 Mutex를 획득한 시점에
+     * 개별 스타일 저장(위 Job들)의 실제 DAO 쓰기 구간을 직렬화한다.
+     * 각 저장은 이 Mutex를 획득한 시점에
      * _postcard.value에서 자신이 쓸 값을 다시 읽어서 DAO에 넘기므로(호출
      * 시점에 캡처해둔 값이 아니라), 완료 순서가 뒤바뀌어도 가장 나중에
      * 커밋하는 저장이 항상 그 순간의 실제 화면 상태를 그대로 쓰게 된다 —
-     * 개별 저장과 템플릿 일괄 저장 중 어느 쪽이 사용자의 시간상 마지막
+     * 서로 다른 개별 저장 중 어느 쪽이 사용자의 시간상 마지막
      * 조작이었는지와 무관하게, "다시 읽기 + 직렬화"만으로 항상 최신 조작이
      * 최종 Room 상태가 된다. Mutex 없이 다시 읽기만 하면 읽기와 커밋 사이의
      * 시간차 때문에 오래된 읽기가 나중에 커밋되며 다시 역전될 수 있어 두
@@ -2085,733 +2047,6 @@ class DetailViewModel @Inject constructor(
         updatePhotoTransformHistoryAvailability()
     }
 
-    /**
-     * 템플릿 적용 한 번을 되돌릴 수 있는 스냅샷. seals가 null이면 이 템플릿
-     * 적용이 도장을 건드리지 않았다는 뜻이라 되돌릴 때도 도장은 그대로 둔다
-     * (기존 sealUndoStack과는 완전히 독립적 — 스티커·도장 자체 Undo는 건드리지 않는다).
-     */
-    private data class TemplateApplicationSnapshot(
-        val style: PostcardTemplateStyle,
-        val seals: List<PostcardSealItem>?
-    )
-
-    private val templateStyleUndoStack =
-        ArrayDeque<TemplateApplicationSnapshot>()
-
-    private val templateStyleRedoStack =
-        ArrayDeque<TemplateApplicationSnapshot>()
-
-    private val _canUndoTemplateStyle =
-        MutableStateFlow(false)
-
-    val canUndoTemplateStyle: StateFlow<Boolean> =
-        _canUndoTemplateStyle
-
-    private val _canRedoTemplateStyle =
-        MutableStateFlow(false)
-
-    val canRedoTemplateStyle: StateFlow<Boolean> =
-        _canRedoTemplateStyle
-
-    private fun updateTemplateStyleHistoryAvailability() {
-        _canUndoTemplateStyle.value =
-            templateStyleUndoStack.isNotEmpty()
-        _canRedoTemplateStyle.value =
-            templateStyleRedoStack.isNotEmpty()
-    }
-
-    private fun clearTemplateStyleHistory() {
-        templateStyleUndoStack.clear()
-        templateStyleRedoStack.clear()
-        updateTemplateStyleHistoryAvailability()
-    }
-
-    /**
-     * 현재 "선택됨"으로 표시할 템플릿 id. DetailScreen의 Compose 로컬 상태가
-     * 아니라 여기서 관리하는 이유: 저장 실패 롤백 시 스타일·Undo/Redo 스택과
-     * 같은 트랜잭션(같은 onSaveFailed 콜백) 안에서 함께 되돌려야, 실패한
-     * 적용이 선택된 것처럼 보이거나 오래된 실패가 그 사이에 사용자가 고른
-     * 최신 선택을 덮어쓰는 일이 없다.
-     */
-    private val _lastAppliedTemplateId =
-        MutableStateFlow<String?>(null)
-
-    val lastAppliedTemplateId: StateFlow<String?> =
-        _lastAppliedTemplateId
-
-    private fun applyTemplateApplicationSnapshot(
-        snapshot: TemplateApplicationSnapshot,
-        onSaveFailed: () -> Unit
-    ) {
-        val currentPostcard =
-            _postcard.value ?: return
-        val previousStyle =
-            currentPostcard.toTemplateStyle()
-
-        persistTemplateStyle(
-            postcardId = currentPostcard.id,
-            style = snapshot.style,
-            previousStyle = previousStyle,
-            onSaveFailed = onSaveFailed
-        )
-
-        if (snapshot.seals != null) {
-            // setPhotoSeals()/undoSealChange()와 동일하게 초안 자동저장도
-            // 함께 트리거해야 한다 — 그렇지 않으면 템플릿 Undo/Redo로 되돌린
-            // 도장이 인메모리·화면에서는 사라졌는데 크래시 복구용 초안
-            // 파일(PostcardDraftStorage)에는 예전 도장이 남아, "완료" 버튼을
-            // 누르기 전에 앱이 종료되면 재실행 시 되돌렸던 도장이 복구
-            // 제안으로 다시 나타날 수 있다.
-            _photoSeals.value = snapshot.seals
-            scheduleDraftAutosave()
-        }
-    }
-
-    fun undoTemplateStyleChange() {
-        if (templateStyleUndoStack.isEmpty()) return
-        val currentPostcard =
-            _postcard.value ?: return
-
-        val undoStackBeforeExecution =
-            ArrayDeque(templateStyleUndoStack)
-        val redoStackBeforeExecution =
-            ArrayDeque(templateStyleRedoStack)
-        val sealsBeforeExecution =
-            _photoSeals.value
-
-        val previous =
-            templateStyleUndoStack.removeLastOrNull() ?: return
-
-        templateStyleRedoStack.addLast(
-            TemplateApplicationSnapshot(
-                style = currentPostcard.toTemplateStyle(),
-                seals =
-                    if (previous.seals != null) {
-                        _photoSeals.value
-                    } else {
-                        null
-                    }
-            )
-        )
-
-        applyTemplateApplicationSnapshot(
-            snapshot = previous,
-            onSaveFailed = {
-                templateStyleUndoStack.clear()
-                templateStyleUndoStack.addAll(undoStackBeforeExecution)
-                templateStyleRedoStack.clear()
-                templateStyleRedoStack.addAll(redoStackBeforeExecution)
-                updateTemplateStyleHistoryAvailability()
-
-                if (previous.seals != null) {
-                    _photoSeals.value = sealsBeforeExecution
-                    scheduleDraftAutosave()
-                }
-            }
-        )
-        updateTemplateStyleHistoryAvailability()
-    }
-
-    fun redoTemplateStyleChange() {
-        if (templateStyleRedoStack.isEmpty()) return
-        val currentPostcard =
-            _postcard.value ?: return
-
-        val undoStackBeforeExecution =
-            ArrayDeque(templateStyleUndoStack)
-        val redoStackBeforeExecution =
-            ArrayDeque(templateStyleRedoStack)
-        val sealsBeforeExecution =
-            _photoSeals.value
-
-        val next =
-            templateStyleRedoStack.removeLastOrNull() ?: return
-
-        templateStyleUndoStack.addLast(
-            TemplateApplicationSnapshot(
-                style = currentPostcard.toTemplateStyle(),
-                seals =
-                    if (next.seals != null) {
-                        _photoSeals.value
-                    } else {
-                        null
-                    }
-            )
-        )
-
-        applyTemplateApplicationSnapshot(
-            snapshot = next,
-            onSaveFailed = {
-                templateStyleUndoStack.clear()
-                templateStyleUndoStack.addAll(undoStackBeforeExecution)
-                templateStyleRedoStack.clear()
-                templateStyleRedoStack.addAll(redoStackBeforeExecution)
-                updateTemplateStyleHistoryAvailability()
-
-                if (next.seals != null) {
-                    _photoSeals.value = sealsBeforeExecution
-                    scheduleDraftAutosave()
-                }
-            }
-        )
-        updateTemplateStyleHistoryAvailability()
-    }
-
-    /**
-     * 템플릿을 적용한다. 사진·문구·날짜·스티커·기존 도장은 그대로 두고
-     * 스타일 값만 바꾼다. 도장은 현재 엽서에 도장이 하나도 없을 때만 템플릿
-     * 도장을 추가하고(기존 도장이 있으면 템플릿 도장은 무시, 최대 개수 위반
-     * 불가능), 적용 전 상태를 스냅샷 하나로 남겨 Undo 한 번으로 스타일과
-     * (추가됐다면) 도장까지 함께 되돌릴 수 있다.
-     */
-    fun applyTemplate(
-        template: PostcardTemplate
-    ) {
-        val currentPostcard =
-            _postcard.value ?: return
-
-        val willAddSeal =
-            template.seal != null && _photoSeals.value.isEmpty()
-        val previousStyle =
-            currentPostcard.toTemplateStyle()
-        val previousSeals =
-            _photoSeals.value
-        val previousTemplateId =
-            _lastAppliedTemplateId.value
-        val undoStackBeforeExecution =
-            ArrayDeque(templateStyleUndoStack)
-        val redoStackBeforeExecution =
-            ArrayDeque(templateStyleRedoStack)
-
-        templateStyleUndoStack.addLast(
-            TemplateApplicationSnapshot(
-                style = previousStyle,
-                seals = if (willAddSeal) previousSeals else null
-            )
-        )
-        if (templateStyleUndoStack.size > TEMPLATE_STYLE_HISTORY_LIMIT) {
-            templateStyleUndoStack.removeFirst()
-        }
-        templateStyleRedoStack.clear()
-        updateTemplateStyleHistoryAvailability()
-
-        _lastAppliedTemplateId.value = template.id
-
-        if (willAddSeal) {
-            val templateSeal = template.seal
-            setPhotoSeals(
-                listOf(
-                    PostcardSealItem(
-                        type = templateSeal.type,
-                        scale = templateSeal.type.defaultScale,
-                        colorArgb = templateSeal.colorArgb
-                    )
-                )
-            )
-        }
-
-        persistTemplateStyle(
-            postcardId = currentPostcard.id,
-            style = template.style,
-            previousStyle = previousStyle,
-            onSaveFailed = {
-                templateStyleUndoStack.clear()
-                templateStyleUndoStack.addAll(undoStackBeforeExecution)
-                templateStyleRedoStack.clear()
-                templateStyleRedoStack.addAll(redoStackBeforeExecution)
-                updateTemplateStyleHistoryAvailability()
-
-                _lastAppliedTemplateId.value = previousTemplateId
-
-                if (willAddSeal) {
-                    _photoSeals.value = previousSeals
-                    scheduleDraftAutosave()
-                }
-            }
-        )
-    }
-
-    /**
-     * 템플릿 스타일 저장 전용 job. 슬라이더 저장 함수들(saveStampPhotoScale
-     * 등)과 동일하게, 새 저장을 시작하기 전 이전 저장을 취소한다 — 그렇지
-     * 않으면 템플릿을 빠르게 연속 적용(A→B→C)했을 때 Dispatchers.IO의 실행
-     * 순서가 보장되지 않아 나중에 적용한 스타일이 먼저 완료된 이전 스타일에
-     * 덮어써질 수 있다. _postcard.value는 항상 동기적으로 최신값이므로
-     * 화면에는 영향이 없지만, Room에 저장되는 값이 화면과 달라져 앱을 다시
-     * 켰을 때 이전 템플릿으로 되돌아가 보일 수 있었다.
-     *
-     * 취소(templateStyleSaveJob?.cancel())는 슬라이더 저장 함수들과 동일하게
-     * CancellationException을 먼저 rethrow해서 실패로 취급하지 않는다 — 이
-     * 덕분에 A→B→C 연속 적용에서 취소된 이전 저장은 자기 catch(Exception)
-     * 블록에 도달하지 못해 최신 상태를 롤백할 수 없다(오래된 작업의 롤백
-     * 방지는 별도 세대 번호 없이 이 취소·rethrow 구조만으로 보장된다).
-     */
-    private var templateStyleSaveJob: Job? = null
-
-    private fun persistTemplateStyle(
-        postcardId: Long,
-        style: PostcardTemplateStyle,
-        previousStyle: PostcardTemplateStyle,
-        onSaveFailed: () -> Unit
-    ) {
-        _postcard.value =
-            _postcard.value?.applyTemplateStyle(style)
-
-        templateStyleSaveJob?.cancel()
-        templateStyleSaveJob = viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    styleWriteMutex.withLock {
-                        // 개별 스타일 저장과의 경합 방지: 캡처해둔 style이
-                        // 아니라 Mutex를 획득한 이 순간의 _postcard.value를
-                        // 다시 읽어서 쓴다 — 그 사이 개별 슬라이더 조작이
-                        // 끼어들었다면 그 값이 이미 반영돼 있으므로 함께
-                        // 저장되고, 반대로 이 템플릿 저장이 늦게 커밋되더라도
-                        // 자신이 밀려난 옛 style로 최신 조작을 덮어쓰지 않는다.
-                        val latestStyle =
-                            _postcard.value?.toTemplateStyle()
-                                ?: return@withLock
-
-                        repository.updatePostcardTemplateStyle(
-                            id = postcardId,
-                            layoutStyle = latestStyle.layoutStyle,
-                            backgroundColorArgb = latestStyle.backgroundColorArgb,
-                            backgroundPattern = latestStyle.backgroundPattern,
-                            backgroundPatternDensity = latestStyle.backgroundPatternDensity,
-                            messageFont = latestStyle.messageFont,
-                            dateFormat = latestStyle.dateFormat,
-                            messageTextScale = latestStyle.messageTextScale,
-                            dateTextScale = latestStyle.dateTextScale,
-                            photoEdgeBlur = latestStyle.photoEdgeBlur,
-                            stampPhotoScale = latestStyle.stampPhotoScale,
-                            stampPhotoOffsetX = latestStyle.stampPhotoOffsetX,
-                            stampPhotoOffsetY = latestStyle.stampPhotoOffsetY,
-                            stampPhotoZoom = latestStyle.stampPhotoZoom,
-                            polaroidPhotoScale = latestStyle.polaroidPhotoScale,
-                            polaroidPhotoOffsetX = latestStyle.polaroidPhotoOffsetX,
-                            polaroidPhotoOffsetY = latestStyle.polaroidPhotoOffsetY,
-                            polaroidPhotoZoom = latestStyle.polaroidPhotoZoom,
-                            tapedFilmPhotoOffsetX = latestStyle.tapedFilmPhotoOffsetX,
-                            tapedFilmPhotoOffsetY = latestStyle.tapedFilmPhotoOffsetY,
-                            tapedFilmPhotoZoom = latestStyle.tapedFilmPhotoZoom
-                        )
-                    }
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (_: Exception) {
-                // 이 저장이 실패로 끝나는 사이 개별 슬라이더/색상/폰트 등
-                // 조작이 끼어들어 화면이 이미 이 템플릿 style과 달라졌다면,
-                // 20개 필드를 한꺼번에 previousStyle로 되돌리면 그 최신
-                // 개별 조작(이미 Room에 커밋됐을 수도 있는)까지 함께 지워
-                // 버린다. 화면이 여전히 이 템플릿을 그대로 반영하고 있을
-                // 때만 되돌린다 — 템플릿 적용 자체의 undo/redo, 도장 등
-                // 나머지 실패 처리(onSaveFailed)는 이 저장이 실패했다는
-                // 사실 자체에 대한 것이라 별개로 항상 실행한다.
-                val reverted =
-                    _postcard.value?.toTemplateStyle() == style
-                if (reverted) {
-                    _postcard.value =
-                        _postcard.value?.applyTemplateStyle(previousStyle)
-                }
-                onSaveFailed()
-                _textScaleSaveErrors.trySend(
-                    if (reverted) {
-                        "템플릿 스타일을 저장하지 못했어. 이전 상태로 되돌렸어."
-                    } else {
-                        "템플릿 스타일을 저장하지 못했어."
-                    }
-                )
-            }
-        }
-    }
-
-    // ---- 내 템플릿(사용자 템플릿) ----
-
-    private val _userTemplates =
-        MutableStateFlow<List<PostcardTemplate>>(emptyList())
-
-    val userTemplates: StateFlow<List<PostcardTemplate>> =
-        _userTemplates
-
-    private val _templateSaveState =
-        MutableStateFlow<TemplateSaveState>(TemplateSaveState.Idle)
-
-    val templateSaveState: StateFlow<TemplateSaveState> =
-        _templateSaveState
-
-    private val _templateManageState =
-        MutableStateFlow<TemplateManageState>(TemplateManageState.Idle)
-
-    val templateManageState: StateFlow<TemplateManageState> =
-        _templateManageState
-
-    /** 저장된 사용자 템플릿을 filesDir에서 읽어온다. 손상된 파일은 storage가 이미 걸러낸 뒤다. */
-    fun loadUserTemplates() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val loaded =
-                PostcardTemplateStorage.loadAllTemplates(context)
-                    .sortedByDescending { it.updatedAtMillis }
-
-            withContext(Dispatchers.Main) {
-                _userTemplates.value = loaded
-            }
-        }
-    }
-
-    /** "나의 템플릿 N" 형태의 기본 이름을 제안한다. 이미 쓰이는 이름과 겹치지 않는 번호를 고른다. */
-    fun suggestNewTemplateName(): String {
-        val existingNames =
-            _userTemplates.value.map { it.name }.toSet()
-        var index = _userTemplates.value.size + 1
-        var candidate = "나의 템플릿 $index"
-
-        while (candidate in existingNames) {
-            index += 1
-            candidate = "나의 템플릿 $index"
-        }
-
-        return candidate
-    }
-
-    fun isTemplateNameDuplicate(name: String): Boolean =
-        _userTemplates.value.any {
-            it.name == name.trim()
-        }
-
-    fun resetTemplateSaveState() {
-        _templateSaveState.value = TemplateSaveState.Idle
-    }
-
-    fun resetTemplateManageState() {
-        _templateManageState.value = TemplateManageState.Idle
-    }
-
-    /**
-     * 현재 엽서의 스타일 값(+도장이 정확히 하나면 그 도장도)을 새 사용자
-     * 템플릿으로 저장한다. 사진 원본·문구·날짜·스티커는 절대 포함하지 않는다.
-     * 저장 실패 시 기존에 있던 정상 템플릿 목록은 손대지 않고, 부분적으로
-     * 생성됐을 수 있는 파일을 정리한다.
-     */
-    fun saveCurrentStyleAsNewTemplate(
-        name: String
-    ) {
-        val currentPostcard =
-            _postcard.value ?: return
-
-        val trimmedName =
-            name.trim().take(MAX_TEMPLATE_NAME_LENGTH)
-
-        if (trimmedName.isBlank()) {
-            _templateSaveState.value =
-                TemplateSaveState.Error("템플릿 이름을 입력해줘.")
-            return
-        }
-
-        _templateSaveState.value = TemplateSaveState.Saving
-
-        val style = currentPostcard.toTemplateStyle()
-        val currentSeals = _photoSeals.value
-        val seal =
-            if (currentSeals.size == 1) {
-                PostcardTemplateSeal(
-                    type = currentSeals[0].type,
-                    colorArgb = currentSeals[0].colorArgb
-                )
-            } else {
-                null
-            }
-
-        val template =
-            PostcardTemplate(
-                name = trimmedName,
-                style = style,
-                seal = seal
-            )
-
-        userTemplateSaveJob = viewModelScope.launch(Dispatchers.IO) {
-            val previewBitmap =
-                renderTemplatePreviewBitmap(
-                    imagePath = currentPostcard.imagePath,
-                    style = style
-                )
-
-            val templateSaved =
-                PostcardTemplateStorage.saveTemplateAtomically(
-                    context = context,
-                    template = template
-                )
-
-            if (!templateSaved) {
-                previewBitmap?.recycle()
-                withContext(Dispatchers.Main) {
-                    _templateSaveState.value =
-                        TemplateSaveState.Error(
-                            "템플릿을 저장하지 못했어. 잠시 뒤 다시 시도해줘."
-                        )
-                }
-                return@launch
-            }
-
-            // 미리보기 생성/저장 실패는 템플릿 자체 저장 실패로 취급하지 않는다 —
-            // 카드에서는 항상 현재 엽서 사진으로 실시간 미리보기를 그리므로
-            // 저장된 미리보기 파일은 향후를 위한 보조 자산일 뿐이다.
-            if (previewBitmap != null) {
-                PostcardTemplateStorage.savePreviewAtomically(
-                    context = context,
-                    templateId = template.id,
-                    bitmap = previewBitmap
-                )
-                previewBitmap.recycle()
-            }
-
-            withContext(Dispatchers.Main) {
-                _userTemplates.value =
-                    (_userTemplates.value + template)
-                        .sortedByDescending { it.updatedAtMillis }
-                _templateSaveState.value =
-                    TemplateSaveState.Saved
-            }
-        }
-    }
-
-    /** 작은 미리보기 전용 렌더. 실패해도 예외를 던지지 않고 null을 반환한다. */
-    private fun renderTemplatePreviewBitmap(
-        imagePath: String,
-        style: PostcardTemplateStyle
-    ): Bitmap? =
-        runCatching {
-            val sourceBitmap =
-                PostcardRenderSpec.decodeSourceBitmap(File(imagePath))
-
-            try {
-                val previewBitmap =
-                    createBitmap(
-                        TEMPLATE_PREVIEW_SIZE,
-                        TEMPLATE_PREVIEW_SIZE,
-                        Bitmap.Config.ARGB_8888
-                    )
-
-                PostcardRenderSpec.drawBaseContent(
-                    canvas = Canvas(previewBitmap),
-                    sourceBitmap = sourceBitmap,
-                    backgroundColorArgb = style.backgroundColorArgb,
-                    backgroundPattern = style.backgroundPattern,
-                    message = "",
-                    messageFont = style.messageFont,
-                    layoutStyle = style.layoutStyle,
-                    capturedAt = System.currentTimeMillis(),
-                    dateFormat = style.dateFormat,
-                    targetSize = TEMPLATE_PREVIEW_SIZE.toFloat(),
-                    messageTextScale = style.messageTextScale,
-                    dateTextScale = style.dateTextScale,
-                    backgroundPatternDensity = style.backgroundPatternDensity,
-                    stampPhotoScale = style.stampPhotoScale,
-                    polaroidPhotoScale = style.polaroidPhotoScale,
-                    photoEdgeBlur = style.photoEdgeBlur,
-                    stampPhotoOffsetX = style.stampPhotoOffsetX,
-                    stampPhotoOffsetY = style.stampPhotoOffsetY,
-                    polaroidPhotoOffsetX = style.polaroidPhotoOffsetX,
-                    polaroidPhotoOffsetY = style.polaroidPhotoOffsetY,
-                    tapedFilmPhotoOffsetX = style.tapedFilmPhotoOffsetX,
-                    tapedFilmPhotoOffsetY = style.tapedFilmPhotoOffsetY,
-                    stampPhotoZoom = style.stampPhotoZoom,
-                    polaroidPhotoZoom = style.polaroidPhotoZoom,
-                    tapedFilmPhotoZoom = style.tapedFilmPhotoZoom
-                )
-
-                previewBitmap
-            } finally {
-                if (!sourceBitmap.isRecycled) {
-                    sourceBitmap.recycle()
-                }
-            }
-        }.getOrNull()
-
-    /**
-     * 이름 변경. id·스타일·미리보기·생성 시각은 그대로 두고 이름과 수정
-     * 시각만 바꾼다. 내장 템플릿은 _userTemplates에 없으므로 애초에
-     * 대상이 될 수 없다.
-     */
-    fun renameUserTemplate(
-        templateId: String,
-        newName: String
-    ) {
-        val target =
-            _userTemplates.value.firstOrNull { it.id == templateId }
-                ?: run {
-                    _templateManageState.value =
-                        TemplateManageState.Error(
-                            "이미 지워진 템플릿이야. 목록을 새로고침해줘."
-                        )
-                    return
-                }
-
-        val trimmedName =
-            newName.trim().take(MAX_TEMPLATE_NAME_LENGTH)
-
-        if (trimmedName.isBlank()) {
-            _templateManageState.value =
-                TemplateManageState.Error("템플릿 이름을 입력해줘.")
-            return
-        }
-
-        _templateManageState.value = TemplateManageState.InProgress
-
-        val renamed =
-            target.copy(
-                name = trimmedName,
-                updatedAtMillis = System.currentTimeMillis()
-            )
-
-        userTemplateRenameJob = viewModelScope.launch(Dispatchers.IO) {
-            val saved =
-                PostcardTemplateStorage.saveTemplateAtomically(
-                    context = context,
-                    template = renamed
-                )
-
-            withContext(Dispatchers.Main) {
-                if (saved) {
-                    _userTemplates.value =
-                        _userTemplates.value
-                            .map { if (it.id == templateId) renamed else it }
-                            .sortedByDescending { it.updatedAtMillis }
-                    _templateManageState.value =
-                        TemplateManageState.Success
-                } else {
-                    _templateManageState.value =
-                        TemplateManageState.Error(
-                            "이름을 바꾸지 못했어. 기존 템플릿은 그대로야."
-                        )
-                }
-            }
-        }
-    }
-
-    /**
-     * 현재 엽서의 꾸밈으로 덮어쓴다. id·이름·생성 시각은 유지하고 스타일·
-     * (있다면)도장·미리보기·수정 시각만 갱신한다. 저장에 실패하면 기존
-     * 템플릿 파일은 그대로 남는다(temp+rename 원자적 저장이라 반쯤 쓰인
-     * 파일이 기존 파일을 대체하지 않음).
-     */
-    fun overwriteUserTemplateWithCurrentStyle(
-        templateId: String
-    ) {
-        val target =
-            _userTemplates.value.firstOrNull { it.id == templateId }
-                ?: run {
-                    _templateManageState.value =
-                        TemplateManageState.Error(
-                            "이미 지워진 템플릿이야. 목록을 새로고침해줘."
-                        )
-                    return
-                }
-        val currentPostcard =
-            _postcard.value ?: return
-
-        _templateManageState.value = TemplateManageState.InProgress
-
-        val style = currentPostcard.toTemplateStyle()
-        val currentSeals = _photoSeals.value
-        val seal =
-            if (currentSeals.size == 1) {
-                PostcardTemplateSeal(
-                    type = currentSeals[0].type,
-                    colorArgb = currentSeals[0].colorArgb
-                )
-            } else {
-                null
-            }
-
-        val updated =
-            target.copy(
-                style = style,
-                seal = seal,
-                updatedAtMillis = System.currentTimeMillis()
-            )
-
-        userTemplateOverwriteJob = viewModelScope.launch(Dispatchers.IO) {
-            val previewBitmap =
-                renderTemplatePreviewBitmap(
-                    imagePath = currentPostcard.imagePath,
-                    style = style
-                )
-
-            val saved =
-                PostcardTemplateStorage.saveTemplateAtomically(
-                    context = context,
-                    template = updated
-                )
-
-            if (!saved) {
-                previewBitmap?.recycle()
-                withContext(Dispatchers.Main) {
-                    _templateManageState.value =
-                        TemplateManageState.Error(
-                            "템플릿을 덮어쓰지 못했어. 기존 템플릿은 그대로야."
-                        )
-                }
-                return@launch
-            }
-
-            if (previewBitmap != null) {
-                PostcardTemplateStorage.savePreviewAtomically(
-                    context = context,
-                    templateId = updated.id,
-                    bitmap = previewBitmap
-                )
-                previewBitmap.recycle()
-            }
-
-            withContext(Dispatchers.Main) {
-                _userTemplates.value =
-                    _userTemplates.value
-                        .map { if (it.id == templateId) updated else it }
-                        .sortedByDescending { it.updatedAtMillis }
-                _templateManageState.value =
-                    TemplateManageState.Success
-            }
-        }
-    }
-
-    /**
-     * 사용자 템플릿과 그 미리보기 파일만 지운다(PostcardTemplateStorage.
-     * deleteTemplate이 둘 다 정리). 이 템플릿을 과거에 적용했던 엽서들은
-     * 이미 스타일 값이 각자 Room에 복사되어 있으므로 전혀 영향받지 않는다.
-     */
-    fun deleteUserTemplate(
-        templateId: String
-    ) {
-        val target =
-            _userTemplates.value.firstOrNull { it.id == templateId }
-                ?: return
-
-        _templateManageState.value = TemplateManageState.InProgress
-
-        userTemplateDeleteJob = viewModelScope.launch(Dispatchers.IO) {
-            val deleted =
-                PostcardTemplateStorage.deleteTemplate(
-                    context = context,
-                    templateId = target.id
-                )
-
-            withContext(Dispatchers.Main) {
-                if (deleted) {
-                    _userTemplates.value =
-                        _userTemplates.value.filter { it.id != templateId }
-                    _templateManageState.value =
-                        TemplateManageState.Success
-                } else {
-                    _templateManageState.value =
-                        TemplateManageState.Error(
-                            "템플릿을 지우지 못했어. 기존 템플릿은 그대로야."
-                        )
-                }
-            }
-        }
-    }
-
     private var subjectSegmenter: SubjectSegmenter? =
         null
 
@@ -2819,9 +2054,6 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ) {
         clearPhotoTransformHistory()
-        clearTemplateStyleHistory()
-        _lastAppliedTemplateId.value = null
-        loadUserTemplates()
 
         viewModelScope.launch {
             val loadedPostcard =
@@ -3005,6 +2237,7 @@ class DetailViewModel @Inject constructor(
         )
     }
 
+    /** updateBackRecipientModifier와 동일한 이유로 styleWriteMutex를 재사용한다. */
     fun updateMessage(
         message: String
     ) {
@@ -3015,26 +2248,37 @@ class DetailViewModel @Inject constructor(
         val normalizedMessage =
             message.take(120)
 
+        val previous =
+            currentPostcard.message
+
+        _postcard.value =
+            currentPostcard.copy(
+                message = normalizedMessage
+            )
+
         messageUpdateJob = viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    repository.updatePostcardMessage(
-                        id = currentPostcard.id,
-                        message = normalizedMessage
-                    )
+                    styleWriteMutex.withLock {
+                        val latest =
+                            _postcard.value
+                                ?: return@withLock
+                        repository.updatePostcardMessage(
+                            id = currentPostcard.id,
+                            message = latest.message
+                        )
+                    }
                 }
-
-                _postcard.value =
-                    currentPostcard.copy(
-                        message = normalizedMessage
-                    )
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                // 다른 update 함수들과 달리 이 값을 관찰하는 UI 상태가 없어
-                // _postcard.value는 원래 값 그대로 두고(쓰기 전에 실패했으므로
-                // 이미 안전) 로그만 남긴다. 실패해도 앱이 죽지 않게 하는 것이
-                // 목적이다.
+                if (_postcard.value?.message == normalizedMessage) {
+                    _postcard.value =
+                        _postcard.value?.copy(
+                            message = previous
+                        )
+                }
+
                 Log.w(
                     TAG,
                     "글귀 저장 실패: ${exception.message}"
@@ -3269,13 +2513,12 @@ class DetailViewModel @Inject constructor(
                     val writtenScale =
                         withContext(Dispatchers.IO) {
                             styleWriteMutex.withLock {
-                                // 템플릿 일괄 저장과의 경합 방지: 이 순간
+                                // 다른 스타일 저장과의 경합 방지: 이 순간
                                 // _postcard.value에 남아있는 값을 다시 읽어서
                                 // 쓴다(호출 당시 캡처한 normalizedScale이
-                                // 아니라) — 그 사이 템플릿이 적용됐다면 그
-                                // 값을 그대로 유지하고, 재확인(reconfirm)도
-                                // 이 값 기준으로 해야 템플릿 값을 되돌리지
-                                // 않는다.
+                                // 아니라) — 그 사이 더 최신 조작이 반영됐다면
+                                // 그 값을 그대로 유지하고, 재확인(reconfirm)도
+                                // 이 값 기준으로 해야 최신 값을 되돌리지 않는다.
                                 val latestScale =
                                     _postcard.value?.messageTextScale
                                         ?: return@withLock null
@@ -4256,11 +3499,9 @@ class DetailViewModel @Inject constructor(
 
     /**
      * 슬라이더 계열 저장(saveStampPhotoScale 등), 배경색·배경 패턴·폰트·
-     * 레이아웃·날짜 형식 저장(updateBackgroundColor 등), 템플릿 적용
-     * (persistTemplateStyle), 사진 교체(updatePostcardImage), 글귀 저장
+     * 레이아웃·날짜 형식 저장(updateBackgroundColor 등), 글귀 저장
      * (updateMessage), 뒷면 편지 저장(updateBackRecipientModifier,
-     * updateBackMessage), 스티커·도장 확정 저장(saveEditsAndClearDraft), 내
-     * 템플릿 저장/이름변경/덮어쓰기는 모두
+     * updateBackMessage), 스티커·도장 확정 저장(saveEditsAndClearDraft)은
      * DetailScreen의 controlsEnabled가 확인하는 Saving 상태만으로는 뒤로
      * 가기를 막지 못한다 — 아이콘 뒤로 가기 버튼은 enabled=controlsEnabled로
      * 저장 중 클릭을 막지만, 시스템 back(BackHandler)은 이 플래그를 전혀
@@ -4277,13 +3518,6 @@ class DetailViewModel @Inject constructor(
      * 취소된 뒤 호출되므로 그 안에서 정리를 시도하면 아무 파일도 지워지지
      * 않는다.
      *
-     * 내 템플릿 저장/이름변경/덮어쓰기 Job은, 각 다이얼로그의 "취소" 버튼과
-     * 바깥 탭 dismiss가 InProgress/Saving 여부와 무관하게 항상 활성화돼
-     * 있어(확인 버튼만 저장 중 비활성화됨) 저장이 실제 파일 쓰기에 닿기
-     * 전에도 다이얼로그를 닫을 수 있다. 다이얼로그를 닫아도 코루틴 자체는
-     * 취소되지 않지만, 곧바로 화면 전체에서 시스템 back까지 누르면
-     * ViewModelStore가 clear될 수 있어 다른 저장들과 동일하게 여기서
-     * 함께 기다린다.
      */
     suspend fun awaitPendingStyleSaves() {
         val pendingJobs =
@@ -4305,15 +3539,10 @@ class DetailViewModel @Inject constructor(
                 messageFontSaveJob,
                 layoutStyleSaveJob,
                 dateFormatSaveJob,
-                templateStyleSaveJob,
                 messageUpdateJob,
                 backRecipientModifierSaveJob,
                 backMessageSaveJob,
-                confirmSaveJob,
-                userTemplateSaveJob,
-                userTemplateRenameJob,
-                userTemplateOverwriteJob,
-                userTemplateDeleteJob
+                confirmSaveJob
             ).filter { it.isActive }
 
         if (pendingJobs.isNotEmpty()) {
