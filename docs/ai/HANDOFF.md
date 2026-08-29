@@ -728,6 +728,10 @@
 - `app/src/test/java/com/postcardmemory/utils/PostcardDraftStorageTest.kt`
 - `docs/ai/HANDOFF.md`
 
-**Git 상태**: `feature/photo-sticker`, HEAD `887c1cd`(무변경, 이번 작업은 아직 commit 안 함). 위 파일 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+**실기기 검증**: 완료 — 사용자가 정상 경로(확정 저장 후 재진입, 초안 자동저장 후 재진입) 회귀 없음을 확인함.
 
-**다음 작업**: 위 실기기 회귀 시나리오 확인 → 문제 없으면 사용자 승인 받아 commit/push. 승인·검증까지 닫힌 뒤의 다음 후보는 제5차(화면 이탈 시 pending save/autosave 보장).
+**Git 상태**: `feature/photo-sticker`, commit `8a54299`("Add fallback for draft-delete failure after confirmed save")로 push 완료. local == origin(`8a54299`), working tree clean(`.kotlin/` 기존 untracked만).
+
+**제4차 최종 마감**: 제4차 완전히 닫혔다.
+
+**다음 작업**: 장기작업 지시서의 제5차(화면 이탈 시 pending save/autosave 보장)로 진행 가능.
