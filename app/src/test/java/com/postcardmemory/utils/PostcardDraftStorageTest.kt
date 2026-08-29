@@ -297,6 +297,100 @@ class PostcardDraftStorageTest {
         PostcardDraftStorage.deleteDraft(filesDir, 999L)
     }
 
+    /**
+     * 57일차 저장·데이터 안전성 챕터 제4차: `deleteDraft()`의 `File.delete()`가
+     * 드문 파일시스템 오류로 실패하는 상황을 플랫폼 독립적으로 재현하기
+     * 어려워, fallback인 `invalidateDraftFile()` 자체와 `loadDraft()`의
+     * 상호작용을 직접 검증한다 — 핵심 계약: fallback이 남긴 내용을
+     * `loadDraft()`가 항상 "복원 대상 없음"으로 안전하게 처리해야 한다.
+     */
+    @Test
+    fun invalidateDraftFile_succeedsAndLeavesFileThatLoadDraftTreatsAsAbsent() {
+        val filesDir = tempFolder.newFolder("files")
+
+        PostcardDraftStorage.saveDraftAtomically(
+            filesDir,
+            draft(postcardId = 50L, revision = 4L)
+        )
+        val draftFile = File(filesDir, "drafts/edit_state/50.draft.txt")
+        assertTrue(draftFile.exists())
+
+        val invalidated =
+            PostcardDraftStorage.invalidateDraftFile(filesDir, draftFile, 50L)
+        assertTrue(invalidated)
+
+        // 파일 자체는 여전히 존재하지만(delete가 아니라 replace이므로),
+        // loadDraft()는 형식 오류로 판정해 복원하지 않고 스스로 지운다.
+        assertTrue(draftFile.exists())
+        val loaded = PostcardDraftStorage.loadDraft(filesDir, 50L)
+        assertNull(loaded)
+        assertFalse(draftFile.exists())
+    }
+
+    @Test
+    fun invalidateDraftFile_leavesNoLeftoverTempFile() {
+        val filesDir = tempFolder.newFolder("files")
+
+        PostcardDraftStorage.saveDraftAtomically(filesDir, draft(postcardId = 51L))
+        val draftFile = File(filesDir, "drafts/edit_state/51.draft.txt")
+
+        PostcardDraftStorage.invalidateDraftFile(filesDir, draftFile, 51L)
+
+        val draftDir = File(filesDir, "drafts/edit_state")
+        val leftoverTemp = File(draftDir, "51.draft.invalidate.tmp")
+        assertFalse(leftoverTemp.exists())
+    }
+
+    @Test
+    fun invalidateDraftFile_doesNotAffectOtherPostcardIds() {
+        val filesDir = tempFolder.newFolder("files")
+
+        PostcardDraftStorage.saveDraftAtomically(filesDir, draft(postcardId = 52L))
+        PostcardDraftStorage.saveDraftAtomically(filesDir, draft(postcardId = 53L))
+        val draftFile52 = File(filesDir, "drafts/edit_state/52.draft.txt")
+
+        PostcardDraftStorage.invalidateDraftFile(filesDir, draftFile52, 52L)
+
+        assertNull(PostcardDraftStorage.loadDraft(filesDir, 52L))
+        assertNotNull(PostcardDraftStorage.loadDraft(filesDir, 53L))
+    }
+
+    @Test
+    fun invalidateDraftFile_doesNotTouchConfirmedStateFiles() {
+        val filesDir = tempFolder.newFolder("files")
+
+        val stickerStateFile = File(filesDir, "sticker_states/54.txt")
+        stickerStateFile.parentFile?.mkdirs()
+        stickerStateFile.writeText("confirmed-sticker-state")
+
+        PostcardDraftStorage.saveDraftAtomically(filesDir, draft(postcardId = 54L))
+        val draftFile = File(filesDir, "drafts/edit_state/54.draft.txt")
+
+        PostcardDraftStorage.invalidateDraftFile(filesDir, draftFile, 54L)
+
+        assertTrue(stickerStateFile.exists())
+        assertEquals("confirmed-sticker-state", stickerStateFile.readText())
+    }
+
+    /**
+     * deleteDraft()의 정상 삭제 경로(File.delete() 성공)는 이번 fallback
+     * 추가로 영향받지 않아야 한다 — fallback은 delete 실패 시에만 실행된다.
+     */
+    @Test
+    fun deleteDraft_normalDeleteSucceeds_fallbackNeverInvoked() {
+        val filesDir = tempFolder.newFolder("files")
+
+        PostcardDraftStorage.saveDraftAtomically(filesDir, draft(postcardId = 55L))
+        val deleted = PostcardDraftStorage.deleteDraft(filesDir, 55L)
+
+        assertTrue(deleted)
+        val draftFile = File(filesDir, "drafts/edit_state/55.draft.txt")
+        assertFalse(draftFile.exists())
+        val leftoverTemp =
+            File(filesDir, "drafts/edit_state/55.draft.invalidate.tmp")
+        assertFalse(leftoverTemp.exists())
+    }
+
     @Test
     fun loadDraft_corruptedFile_alsoRemovesDraftOwnedStickerBackgroundDir() {
         val filesDir = tempFolder.newFolder("files")

@@ -132,11 +132,51 @@ object PostcardDraftStorage {
      */
     internal fun deleteDraft(filesDir: File, postcardId: Long): Boolean {
         val file = draftFile(filesDir, postcardId)
-        val fileDeleted = !file.exists() || file.delete()
+        var fileDeleted = !file.exists() || file.delete()
+
+        if (!fileDeleted) {
+            fileDeleted = invalidateDraftFile(filesDir, file, postcardId)
+        }
 
         val dirDeleted =
             draftStickerBackgroundDir(filesDir, postcardId).deleteRecursively()
 
         return fileDeleted && dirDeleted
+    }
+
+    /**
+     * `file.delete()`가 실패했을 때(드문 파일시스템 오류)의 fallback.
+     * 확정 저장이 이미 성공한 뒤라 이 초안은 어차피 폐기 대상이므로, 파일
+     * 자체를 지우는 대신 saveDraftAtomically와 동일한 atomic-replace로
+     * 빈 내용을 덮어써 무효화한다. 다음 loadDraft() 호출에서
+     * parsePostcardEditDraft가 빈 내용을 형식 오류로 판정해(2줄 미만) 손상된
+     * 초안과 동일하게 취급하고 스스로 삭제한 뒤 null을 반환하므로, 새 파일
+     * 형식이나 복원 정책을 만들지 않고 기존 손상 초안 처리 경로만 재사용한다.
+     * 이 fallback마저 실패하면 이전과 동일하게 false를 반환한다.
+     *
+     * internal: 순수 JUnit에서 `deleteDraft()`를 거치지 않고 이 fallback
+     * 자체와 `loadDraft()`의 상호작용을 직접 검증하기 위함(실제 OS
+     * 파일시스템에서 `File.delete()`만 실패하고 atomic rename은 성공하는
+     * 상황을 플랫폼 독립적으로 재현하기 어렵기 때문).
+     */
+    internal fun invalidateDraftFile(
+        filesDir: File,
+        file: File,
+        postcardId: Long
+    ): Boolean {
+        val dir = draftDir(filesDir)
+        val tempFile = File(dir, "$postcardId.draft.invalidate.tmp")
+
+        return try {
+            FileOutputStream(tempFile).use { outputStream ->
+                outputStream.write(ByteArray(0))
+                outputStream.flush()
+            }
+
+            AtomicFileReplace.replace(tempFile, file)
+        } catch (_: IOException) {
+            tempFile.delete()
+            false
+        }
     }
 }

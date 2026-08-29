@@ -647,4 +647,87 @@
 
 **Git 상태**: `feature/photo-sticker`, commit `1549b8c`("Wire enabled into HSV custom color picker, fix background flicker regression")로 push 완료. 이 commit에 `PostcardBackgroundPicker.kt`(제3차 enabled wiring)와 `DetailScreen.kt`(배경색 깜빡임 회귀 수정) + 신규 테스트 2개가 함께 포함됐다(둘 다 같은 제3차 작업 단위 안에서 연속으로 발견·수정됨). local == origin(`1549b8c`), working tree clean(`.kotlin/` 기존 untracked만).
 
-**다음 작업**: Room write 폭주(제3차 첫 조사에서 발견, 데이터 손상 아닌 성능 문제)를 다룰지는 여전히 별도 판단 필요 — 다루기로 하면 같은 제3차 안에서 이어가고, 보류하면 제4차(draft 삭제 실패 처리)로 진행.
+**제3차 최종 마감 결정**: Room write 폭주(드래그 중 매 프레임 Room UPDATE, 성능 문제·데이터 손상 아님)는 사용자 판단으로 **이번 챕터에서는 보류**한다. 제3차는 이 결정으로 완전히 닫혔다.
+
+**다음 작업**: 장기작업 지시서의 제4차(draft 삭제 실패 처리)로 진행.
+
+## 2026-08-29 — 57일차 저장·데이터 안전성 챕터 제4차: draft 삭제 실패 처리 조사 (코드 수정 없음, STOP)
+
+**목표**: `saveEditsAndClearDraft()`의 `PostcardDraftStorage.deleteDraft()` 실패 처리와, 그로 인해 stale draft가 다음 화면 진입 시 확정 상태 위에 복원될 가능성을 조사한다. 이번 차수는 조사 전용이며 production 코드는 수정하지 않았다.
+
+**핵심 발견**
+
+- **`deleteDraft()`의 Boolean 반환값은 실제로 무시된다.** `saveEditsAndClearDraft()`(`DetailViewModel.kt:854`)는 `allSaved`일 때 `draftSaveMutex.withLock { ...; PostcardDraftStorage.deleteDraft(context, postcardId) }`를 호출만 하고 결과를 검사하지 않는다. 이 위에 있는 기존 주석(848~852번 줄)은 이를 의도된 설계로 설명한다 — "초안 삭제 자체의 실패는 정리 실패로만 취급하고 전체 결과는 성공으로 본다 ... deleteDraft는 예외를 던지지 않으므로 재시도 시 자동저장이 다음 임시저장에서 초안 파일을 다시 갱신해 자연히 해소된다."
+- **`PostcardDraftStorage.deleteDraft()`가 실제로 실패하는 유일한 경로를 확인했다**: `internal fun deleteDraft(filesDir, postcardId)`는 `val fileDeleted = !file.exists() || file.delete()`로 draft 텍스트 파일을 지우고, 별개로 `draftStickerBackgroundDir(...).deleteRecursively()`로 누끼 디렉터리를 지운 뒤 `fileDeleted && dirDeleted`를 반환한다. **`loadDraft()`가 stale draft를 다시 발견하려면 `<postcardId>.draft.txt` 파일 자체가 여전히 존재해야 하므로, 실제 위험 경로는 `file.delete()`가 파일이 존재하는데도 실패하는 경우 하나뿐**이다(디렉터리쪽만 실패하면 draft.txt는 이미 없어 `loadDraft()`가 곧바로 null을 반환하므로 무해함 — orphan 디렉터리만 남고, 이건 `OrphanFileDiagnostics`가 별도로 다루는 영역).
+- **"자동저장이 자연히 해소한다"는 전제는 사용자가 확정 저장 직후 화면을 나가면 성립하지 않는다.** `loadStickerSealStateAndAutoRestoreDraft()`(`DetailViewModel.kt:502`)는 확정 상태(`readConfirmedStickerState` 등)를 먼저 읽어 `_photoStickers.value` 등에 반영한 뒤, **`existingDraft != null`이면 시간·revision 비교 없이 무조건 그 draft로 덮어쓰고** `_draftAutoRestoredEvents.trySend(Unit)`을 보낸다(558~580번 줄). draft 삭제가 실패한 채로 사용자가 확정 저장 직후 바로 화면을 나가 재진입하면, 방금 올바르게 저장된 확정 상태가 화면에서 오래된 draft 내용으로 조용히 되돌아간다 — 사용자가 다시 편집을 이어가야만(그래서 새 autosave가 draft를 최신화해야만) 이 상태가 자연히 해소된다는 전제가 성립하는데, "확정 저장 후 즉시 이탈"은 오히려 흔한 사용 패턴이다.
+- **데이터 손상은 아니다.** `sticker_states/`·`seal_states/` 등 확정 저장 파일 자체는 이미 올바르게 쓰였고 Room도 무관하다(이 흐름은 Room을 건드리지 않음). 문제는 화면에 표시되는 in-memory 상태가 오래된 draft로 되돌아가는 **표시 계층의 불일치**이며, 사용자가 그 상태에서 다시 아무 조작이라도 하면 다음 confirm-save가 다시 올바른 최신 상태를 확정 저장한다. 다만 사용자가 되돌아간 화면을 보고 "방금 한 편집이 사라졌다"고 오인해 그 잘못된(구) 상태를 그대로 다시 확정 저장하면, 방금 만든 최신 편집이 실제로 덮어써질 수 있다.
+- **트리거 빈도는 매우 낮다.** `file.delete()`가 파일이 존재하는데 실패하는 것은 일반적인 Android 파일시스템에서 드물다(디스크 풀, 일부 벤더 파일시스템 이슈 등). 코루틴 레벨 경합 가능성도 검토했다 — `saveEditsAndClearDraft()`는 시작 시 `draftAutosaveJob?.cancel()`을 호출하고, `persistDraftNow()`/confirm-delete 둘 다 같은 `draftSaveMutex`를 쓰며, `Mutex.withLock`의 lock 획득은 취소 가능(cancellable)한 suspend 지점이라 이미 락 대기 중이던 autosave Job은 cancel 이후 락을 실제로 얻지 못하고 CancellationException으로 종료된다. autosave Job이 cancel 시점에 이미 락을 쥐고 동기 파일 I/O를 실행 중이었을 극히 좁은 타이밍 창에서만 "confirm 삭제 → 그 직후 이미 진행 중이던 autosave 쓰기가 뒤늦게 완료되어 draft를 되살림" race가 이론상 가능하지만, 재현하기 매우 어려운 수준이다.
+
+**왜 STOP했는가**: 실제 수정 방향이 지시서 STOP 목록의 여러 항목과 직접 맞닿아 있어 임의로 하나를 고르지 않았다.
+
+- **stale draft를 자동 폐기할지(복원 시 무시할지)** — 확정 상태와 draft의 신선도를 비교하려면 Postcard/확정 상태 어딘가에 "마지막 확정 저장 시각" 같은 지속적인 기준값이 있어야 하는데, 현재 `Postcard.kt`에는 `capturedAt`(생성 시각, 편집으로 갱신되지 않음)만 있고 그런 필드가 없다 — 새로 추가하면 **Room schema 변경**이 되어 이 작업 범위(및 프로젝트 전역 규칙)를 벗어난다. 필드 없이 "폐기 여부"를 판단하는 대안(예: 파일 마커, in-memory 플래그)은 그 자체로 새로운 복원 정책을 발명하는 것이다.
+- **삭제 실패를 더 적극적으로(atomic replace 등으로) "폐기"할지** — 현재 정책("삭제 실패는 무해한 재시도 대기 상태로 둔다")을 "가능한 모든 수단으로 반드시 지운다"로 바꾸는 것도 폐기 방식에 대한 제품 판단이다.
+- **사용자에게 오류를 띄울지** — 지금은 완전히 조용하다. 이 드문 경우에 사용자에게 알릴지는 UX 판단이다.
+
+**선택지(구현 안 함, 사용자 판단 필요)**
+
+1. **현행 유지(권장)** — 트리거 빈도가 극히 낮고, 데이터 손상이 아니라 표시 계층 불일치이며, 이미 존재하는 위험을 이번에 새로 발견한 것뿐이다. 발생해도 사용자가 아무 조작이나 하면 다음 confirm-save로 자연 해소된다.
+2. **삭제 실패 시 draft 파일을 atomic-replace로 강제 비움(빈 내용으로 덮어쓰기)** — `File.delete()` 실패 경로만 보강, 새 지속 필드는 필요 없다. 다만 "삭제 실패를 어떻게 폐기로 취급할지"에 대한 제품 판단이 필요해 임의로 진행하지 않았다.
+3. **드문 삭제 실패를 사용자에게 조용히 로그만 남기지 않고 알림(Snackbar 등)으로 노출** — 사용자가 인지하고 필요 시 재진입을 피하거나 재시도할 수 있게 함. UX 정책 변경.
+4. **Room/Postcard에 마지막 확정 저장 시각 필드를 추가해 진짜 신선도 비교를 도입** — 가장 확실하지만 Room schema 변경이 필요해 범위가 크다.
+
+**변경 파일**: 없음(코드 조사만, `docs/ai/HANDOFF.md`만 갱신).
+
+**검증**: 코드 읽기·grep 기반 조사만 수행, 빌드/테스트 대상 없음.
+
+**Git 상태**: `feature/photo-sticker`, HEAD `887c1cd`, 이번 조사로 코드 변경 없음.
+
+**다음 작업**: 위 선택지 중 방향을 확정하면 그 방향으로 제4차를 이어가고, 보류하면 제5차(화면 이탈 시 pending save/autosave 보장)로 진행 — STOP.
+
+## 2026-08-29 — 57일차 저장·데이터 안전성 챕터 제4차 구현: 선택지 2번 적용(삭제 실패 시 최소 fallback)
+
+**목표**: 사용자 승인(선택지 2번) — 확정 저장이 이미 성공한 뒤의 draft 폐기는 기존 제품 의미이므로, `deleteDraft()`의 `File.delete()` 실패 시에도 stale draft가 다음 진입에서 복원되지 않도록 최소 fallback을 추가한다. 사용자 알림 추가, Room 필드 추가, Migration 변경은 지시대로 하지 않았다.
+
+**구현 전 확인(지시대로 먼저 검증)**: `PostcardDraftStorage.loadDraft()`는 이미 다음을 보장한다 — `parsePostcardEditDraft(text)`는 `text.split("\n")`의 줄 수가 2 미만이면 즉시 null을 반환하는데, 빈 문자열(`""`)은 `split`시 원소 1개(`[""]`)이므로 이 조건에 해당한다. `loadDraft()`는 `parsed == null`이면 이를 "손상된 초안"으로 판정해 **즉시 파일과 초안 전용 누끼 디렉터리를 스스로 삭제하고 null을 반환**한다(기존 `loadDraft_deletesCorruptedFileAndReturnsNull` 테스트가 이미 검증). 즉 **빈 내용의 draft 파일은 이미 존재하는 "손상된 초안" 처리 경로를 통해 안전하게 "복원 대상 없음"으로 처리되고 스스로 정리된다** — 새 파일 형식이나 새 복원 정책이 전혀 필요 없다.
+
+**적용한 수정(최소, 기존 선례 재사용)**
+
+- `PostcardDraftStorage.kt`의 `internal fun deleteDraft(filesDir, postcardId)` — `file.delete()`가 실패하면(파일이 존재하는데도 삭제 실패), 새 `invalidateDraftFile(filesDir, file, postcardId)`를 호출한다.
+- `invalidateDraftFile()`은 `saveDraftAtomically()`가 이미 쓰는 `AtomicFileReplace.replace()`를 그대로 재사용해 draft 파일을 **빈 내용으로 atomic 교체**한다 — 새 유틸리티나 새 저장 메커니즘을 만들지 않았다. 이 fallback마저 실패하면(예: 파일시스템이 완전히 막힘) 이전과 동일하게 `false`를 반환해 동작 저하가 없다.
+- `invalidateDraftFile`은 `internal`로 선언해 순수 JUnit에서 직접 검증 가능하게 했다(실제 OS에서 "delete만 실패하고 atomic rename은 성공하는" 상황을 플랫폼 독립적으로 재현하기 어렵기 때문 — `deleteDraft()`를 거치지 않고 fallback 자체와 `loadDraft()`의 상호작용을 직접 테스트).
+- 사용자에게 보이는 오류 메시지, Room/Postcard schema, Migration은 전혀 건드리지 않았다(지시대로).
+
+**신규 테스트(`PostcardDraftStorageTest.kt`, 5개)**
+
+1. `invalidateDraftFile_succeedsAndLeavesFileThatLoadDraftTreatsAsAbsent` — fallback 성공 후 파일은 여전히 존재하지만(삭제가 아니라 교체이므로) `loadDraft()`가 null을 반환하고 그 파일을 스스로 지우는 핵심 계약을 검증.
+2. `invalidateDraftFile_leavesNoLeftoverTempFile` — 임시 파일 leftover 없음(기존 `saveDraftAtomically_leavesNoLeftoverTempFile`과 동일한 패턴).
+3. `invalidateDraftFile_doesNotAffectOtherPostcardIds` — 다른 postcardId의 draft에 영향 없음.
+4. `invalidateDraftFile_doesNotTouchConfirmedStateFiles` — 확정 상태 파일(`sticker_states/` 등) 무영향.
+5. `deleteDraft_normalDeleteSucceeds_fallbackNeverInvoked` — 정상 삭제 성공 시 fallback이 실행되지 않고 기존 동작(회귀 없음) 그대로임을 확인.
+
+**검증 방법과 결과**
+
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만).
+- `:app:testDebugUnitTest`(`PostcardDraftStorageTest` 단독) — 24 tests(기존 19 + 신규 5) / failures 0 / errors 0.
+- `:app:testDebugUnitTest`(전체) — BUILD SUCCESSFUL, **490 tests / failures 0 / errors 0 / skipped 0**(직전 485 + 신규 5, 회귀 없음).
+- `git diff --check` — 이상 없음(기존 LF/CRLF 경고만).
+- diff 재검토 — `PostcardDraftStorage.kt`(fallback 함수 신설 + `deleteDraft` 3줄 수정)만 production 변경, Room/Postcard/Migration/저장 형식(직렬화 포맷) 전부 무변경. `PostcardDeletionManager`가 이 `deleteDraft()`를 postcard 삭제 시에도 재사용하지만 반환값 처리 로직은 그대로라 그쪽도 영향 없음(오히려 fallback이 성공하면 그동안 "정리 실패"로 보고되던 드문 케이스가 줄어드는 방향으로만 개선).
+
+**실기기 검증에 대해**: 이 fallback은 `File.delete()`가 파일이 존재하는데도 실패하는 드문 경우에만 실행되는데, 이는 실기기에서 의도적으로 재현할 방법이 없다(정상 기기에서 강제로 파일 삭제만 실패시키고 파일은 그대로 두는 상황을 만들 수 없음). 대신 TemporaryFolder 기반 실제 파일 I/O 단위 테스트로 fallback 자체와 `loadDraft()`의 상호작용을 직접 검증했다(위 5개 테스트, 모두 실제 파일시스템 사용, mock 아님). **정상 경로(삭제 성공) 회귀 확인만 실기기에서 가능**하고 필요하다.
+
+**실기기 검증 시나리오(사용자 확인 대기, 회귀 확인 목적)**
+
+1. 스티커/도장/마스킹테이프 등을 꾸민 뒤 "완료"로 확정 저장 → 화면을 나갔다가 재진입 → 확정한 최신 상태가 정상적으로 보이는지(초안이 아니라) 확인 — 이번 수정이 정상 경로에 영향 없음을 확인하는 목적.
+2. 확정 저장 없이 편집만 하다가(초안 자동저장이 몇 번 발생하도록 충분히 대기) 화면을 나갔다가 재진입 → 초안이 정상적으로 복원되는지 확인(정상 초안 복원 경로도 회귀 없어야 함).
+
+**남은 위험**: 낮음. 이번 수정은 이미 존재하는 "손상된 초안" 처리 경로를 재사용한 최소 fallback이라 새로운 실패 모드를 만들지 않는다. `AtomicFileReplace.replace()`가 REPLACE_EXISTING을 쓰므로 대상 파일이 이미 존재해도 안전하게 교체됨을 `saveDraftAtomically`가 기존에 이미 검증해 왔다. fallback마저 실패하는 경우(예: 파일시스템이 완전히 읽기 전용)에는 이전과 동일하게 아무 개선 없이 원래의 드문 위험이 그대로 남는다(허용된 잔여 위험).
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/utils/PostcardDraftStorage.kt`
+- `app/src/test/java/com/postcardmemory/utils/PostcardDraftStorageTest.kt`
+- `docs/ai/HANDOFF.md`
+
+**Git 상태**: `feature/photo-sticker`, HEAD `887c1cd`(무변경, 이번 작업은 아직 commit 안 함). 위 파일 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+
+**다음 작업**: 위 실기기 회귀 시나리오 확인 → 문제 없으면 사용자 승인 받아 commit/push. 승인·검증까지 닫힌 뒤의 다음 후보는 제5차(화면 이탈 시 pending save/autosave 보장).
