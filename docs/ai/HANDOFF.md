@@ -443,6 +443,8 @@
 
 **남은 위험**: 낮음 — 기존 검증된 mutex 패턴을 그대로 재사용한 최소 patch. 자동 테스트로는 실제 Room/코루틴 타이밍 경합까지는 재현하지 못하므로 위 실기기 시나리오 확인 전까지는 완전히 닫힌 것으로 보지 않는다.
 
-**Git 상태**: `feature/photo-sticker`, HEAD `8258503`(변경 전과 동일, 이번 작업은 아직 commit 안 함). `DetailViewModel.kt`/테스트 3개/`TemplateStyleSaveRollbackTest.kt` 삭제(선행 작업분) + 이번 `updateMessage()` 수정 + 신규 StructureTest + 이 HANDOFF 갱신까지 전부 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+**실기기 검증**: 완료 — 사용자가 위 시나리오를 확인함.
 
-**다음 작업**: 실기기 검증 → 문제 없으면 사용자 승인 받아 commit/push. 승인·검증까지 완전히 닫힌 뒤의 다음 독립 작업은 "사진 스티커 / 사진 마스킹테이프 URI 영속성 전수조사".
+**Git 상태**: `feature/photo-sticker`, commit `3d56616`("Fix updateMessage() save race and drop dead template runtime")로 push 완료. 이 commit에는 이번 `updateMessage()` 수정 + 신규 StructureTest뿐 아니라, 세션 시작 전부터 unstaged로 남아 있던 57일차 선행 IDE inspection cleanup/template dead runtime 정리분(`DetailViewModel.kt`의 다른 hunk들, 관련 테스트 3개, `TemplateStyleSaveRollbackTest.kt` 삭제)도 같은 파일 안에 섞여 있어 함께 포함됐다 — 그쪽은 이미 이전 HANDOFF 항목에서 compile/전체 테스트로 검증 완료된 상태였고 UI 변경이 없어 별도 실기기 확인이 필요하지 않았다. local == origin(`3d56616`), working tree clean(`.kotlin/` 기존 untracked만).
+
+**다음 작업**: "사진 스티커 / 사진 마스킹테이프 URI 영속성 전수조사".
