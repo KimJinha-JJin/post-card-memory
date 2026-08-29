@@ -643,6 +643,8 @@
 - `app/src/test/java/com/postcardmemory/ui/detail/BackgroundColorPickerEnabledStructureTest.kt`(신규)
 - `docs/ai/HANDOFF.md`
 
-**Git 상태**: `feature/photo-sticker`, HEAD `8893759`(무변경). `PostcardBackgroundPicker.kt`(제3차 첫 수정) + `DetailScreen.kt`(이번 회귀 수정) + 신규 테스트 2개 + HANDOFF 전부 unstaged. **commit/push 금지 — 사용자가 이번 턴에 명시적으로 지시함.**
+**실기기 검증**: 완료 — 사용자가 배경색 HSV 빠른 연속 드래그를 재확인함(깜빡임 해소 확인).
 
-**다음 작업**: 위 실기기 시나리오(특히 1·3번) 재확인 → 문제 없으면 사용자 승인 받아 그때 commit/push. Room write 폭주를 다룰지는 여전히 별도 판단 필요.
+**Git 상태**: `feature/photo-sticker`, commit `1549b8c`("Wire enabled into HSV custom color picker, fix background flicker regression")로 push 완료. 이 commit에 `PostcardBackgroundPicker.kt`(제3차 enabled wiring)와 `DetailScreen.kt`(배경색 깜빡임 회귀 수정) + 신규 테스트 2개가 함께 포함됐다(둘 다 같은 제3차 작업 단위 안에서 연속으로 발견·수정됨). local == origin(`1549b8c`), working tree clean(`.kotlin/` 기존 untracked만).
+
+**다음 작업**: Room write 폭주(제3차 첫 조사에서 발견, 데이터 손상 아닌 성능 문제)를 다룰지는 여전히 별도 판단 필요 — 다루기로 하면 같은 제3차 안에서 이어가고, 보류하면 제4차(draft 삭제 실패 처리)로 진행.
