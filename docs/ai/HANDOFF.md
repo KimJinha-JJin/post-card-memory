@@ -448,3 +448,111 @@
 **Git 상태**: `feature/photo-sticker`, commit `3d56616`("Fix updateMessage() save race and drop dead template runtime")로 push 완료. 이 commit에는 이번 `updateMessage()` 수정 + 신규 StructureTest뿐 아니라, 세션 시작 전부터 unstaged로 남아 있던 57일차 선행 IDE inspection cleanup/template dead runtime 정리분(`DetailViewModel.kt`의 다른 hunk들, 관련 테스트 3개, `TemplateStyleSaveRollbackTest.kt` 삭제)도 같은 파일 안에 섞여 있어 함께 포함됐다 — 그쪽은 이미 이전 HANDOFF 항목에서 compile/전체 테스트로 검증 완료된 상태였고 UI 변경이 없어 별도 실기기 확인이 필요하지 않았다. local == origin(`3d56616`), working tree clean(`.kotlin/` 기존 untracked만).
 
 **다음 작업**: "사진 스티커 / 사진 마스킹테이프 URI 영속성 전수조사".
+
+## 2026-08-29 — 57일차 저장·데이터 안전성 챕터 제1차: 사진 스티커/마스킹테이프 URI 영속성 전수조사 (코드 수정 없음, STOP)
+
+**목표**: 사진 스티커·사진 마스킹테이프의 외부 자산이 draft→confirmed→Room→앱 재실행→restore→preview→export→삭제 전 과정에서 실제로 안전하게 살아남는지 코드 기준으로 확정한다. 이번 차수는 조사 전용이며 production 코드는 수정하지 않았다.
+
+**핵심 발견 — 입력 경로 3종은 위험도가 서로 다르다(동일 취급 금지)**
+
+| 경로 | 대상 | 반환 URI | `takePersistableUriPermission` | 실제 장기 접근 |
+|---|---|---|---|---|
+| Photo Picker(`ActivityResultContracts.PickVisualMedia`) | 사진 스티커, 사진 마스킹테이프 둘 다 | `content://media/picker/...` | 시스템 자체가 persistable grant를 지원하지 않는 URI라 항상 `SecurityException` — `runCatching`으로 조용히 삼켜짐 | **불안전** — 앱 재실행/재부팅 후 접근 보장 없음 |
+| OpenDocument(SAF, `ActivityResultContracts.OpenDocument`) | 사진 스티커만(마스킹테이프엔 이 경로 자체가 없음) | `content://.../document/...` | `OpenDocument` contract가 생성하는 Intent에 `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`이 이미 포함돼 있어 SAF 표준대로 persistable grant가 실제로 성립 | **상대적으로 안전** — 단, 클라우드 전용 문서면 네트워크 필요할 수 있음(별개 이슈) |
+| Camera(`ActivityResultContracts.TakePicture`) | 사진 스티커만(마스킹테이프엔 카메라 경로 없음) | 앱 FileProvider cache 파일 | 해당 없음 — 캡처 직후 `PhotoStickerImageStorage.copyToStickerOriginalStorage()`로 `filesDir/sticker_originals/<postcardId>/`에 즉시 복사, 원본 cache 파일은 삭제 | **안전** — 이미 앱 소유 파일 |
+
+즉 "Photo Picker와 OpenDocument는 같은 `content://`니까 위험이 같다"는 전제는 틀렸다. **실제 위험은 Photo Picker 출처로 좁혀진다.**
+
+**경로별 전체 데이터 흐름**
+
+- **사진 스티커 — Photo Picker/OpenDocument 공통**: `PhotoStickerDetailScreen.kt`의 `onAddFromGallery`/`onAddFromFile` 콜백(`DetailScreen.kt:4546,4557`)이 `PhotoStickerItem(originalUri = uri, displayedUri = uri)`를 그대로 생성 — **복사 없이 원본 URI를 영구 참조**. draft(`PostcardEditDraft`/`PostcardDraftStorage`)와 confirmed(`filesDir/sticker_states/<postcardId>.txt`, `persistStickerEditState()` at `DetailViewModel.kt:948`) 양쪽 다 이 URI를 텍스트로 직렬화해 그대로 저장한다. **배경 제거를 한 스티커만** `persistStickerBackground()`가 별도로 앱 소유 파일(`filesDir/sticker_bgs/<postcardId>/<id>.png`)로 승격시키고, 그 경우엔 `displayedUri`/`removedBgUri`가 이 안전한 file URI로 교체된다 — 배경 제거를 안 한 스티커는 원본 URI가 영원히 유일한 참조로 남는다.
+- **사진 스티커 — Camera**: `addCameraPhotoSticker()`(`DetailViewModel.kt:3743`)가 캡처 직후 즉시 `sticker_originals/<postcardId>/`로 복사하고 원본 cache 파일을 지운다. 삭제 시 `PhotoStickerImageStorage.deleteOriginalIfUnreferenced()`가 다른 스티커가 같은 파일을 참조 중인지 확인 후에만 지운다. `PostcardDeletionManager.kt:189-193`이 postcard 삭제 시 이 디렉터리도 재귀 삭제 — 삭제 방어까지 이미 완비.
+- **사진 마스킹테이프 — Photo Picker만**: `MaskingTapeDetailScreen.kt:113-127`의 `photoPicker` 콜백이 `onAddPhotoMaskingTape(uri)`를 그대로 호출, `MaskingTapeItem(photoUri = uri)`로 저장 — **어떤 경로로도 앱 저장소 복사가 없다.** `duplicateMaskingTape()`(`DetailViewModel.kt:1176-1201`)의 주석은 *"persistable 권한을 받은 갤러리 Uri라 복사가 필요 없다"*고 적혀 있지만 위 표대로 **사실이 아니다** — 54일차에 이미 지적된 이 stale 주석이 그대로 남아 있음을 재확인했다. 마스킹테이프엔 OpenDocument/Camera 경로 자체가 코드에 없다(`MaskingTapeDetailScreen.kt`에 두 심볼 모두 0건).
+
+**복원·미리보기·export 시 실패 처리(대칭이 아님)**
+
+- 두 confirmed 상태 파일(`sticker_states/*.txt`, `masking_tape_states/*.txt`) 모두 로드 시(`readConfirmedStickerState`/`readConfirmedMaskingTapeState`) URI 접근 가능 여부를 전혀 검증하지 않고 그대로 복원한다.
+- **사진 마스킹테이프**: 미리보기(`MaskingTapeShapes.kt`)와 export(`PostcardImageExporter.drawMaskingTapeOverlay`, `:667-688`) 둘 다 `runCatching`으로 디코드하고 실패하면 **`baseColorArgb` 단색으로 폴백** — 사진이 안 보이지만 테이프 자체는 그대로 보인다(54일차에 이미 파악된 동작).
+- **사진 스티커**: export(`PostcardImageExporter.drawStickerOverlay`, `:472-498`)는 `decodedStickerBitmap ?: decodedOriginalBitmap ?: return`으로 **디코드 실패 시 스티커 전체를 그리지 않고 조용히 건너뛴다** — 폴백 색상조차 없이 결과물에서 완전히 사라진다. 화면 미리보기(`DetailScreen.kt:2371`)도 순수 `AsyncImage(model = sticker.displayedUri, ...)`라 Coil이 로드 실패 시 아무 것도 안 보이는 빈 상태가 된다(error/placeholder 미설정). **즉 스티커 쪽이 마스킹테이프보다 실패 시 사용자가 알아채기 더 어렵다** — 폴백 색조차 없이 통째로 안 보이거나 안 그려지기 때문.
+
+**기존 사용자 데이터 영향**: 코드만 조사했고 아무것도 수정하지 않았으므로 이번 조사 자체로 인한 영향은 없다. 다만 이미 저장된 엽서 중 Photo Picker로 추가하고 배경 제거를 하지 않은 스티커, 또는 어떤 방식으로든 추가된 마스킹테이프 사진은 **지금 이 순간에도** 위 위험에 노출된 상태다(이번 조사가 새로 만든 위험이 아니라 기존부터 있던 상태를 확인한 것).
+
+**검증**: 코드 읽기·grep 기반 조사만 수행. 빌드/테스트 대상 없음(코드 변경 없음).
+
+**변경 파일**: 없음(`docs/ai/HANDOFF.md`만 갱신).
+
+**STOP 사유**: 장기작업 지시서 제1차 규정대로, 조사 결과에 따라 "외부 URI를 장기 저장하지 않고 앱 내부 소유 파일로 복사할 것인가"라는 저장 정책 변경 여부를 임의로 확정하지 않고 사용자 보고 후 STOP한다.
+
+**제2차 진입 시 검토할 선택지(구현 안 함, 사용자 판단 필요)**
+
+1. **Photo Picker 출처만 앱 소유 파일로 복사**(사진 스티커의 배경-미제거 케이스 + 마스킹테이프 전체) — Camera 스티커에 이미 있는 `PhotoStickerImageStorage.copyToStickerOriginalStorage()` 선례를 그대로 재사용 가능한 범위. OpenDocument 출처는 이미 persistable이라 이번 범위에서 제외 가능.
+2. **OpenDocument 출처도 함께 앱 소유 파일로 복사**(더 보수적, 일관성 우선) — persistable grant 자체가 시스템 grant 테이블(앱당 개수 제한)에 의존하므로 장기적으로는 이 편이 더 안전하지만, 이번 조사에서 실제 실패 사례를 확인한 것은 아니라 필수는 아니다.
+3. **정책을 바꾸지 않고 현행 유지** — 확률은 낮지만(재부팅·앱 데이터 초기화 후 재진입 등) 사진 스티커/마스킹테이프 사진이 소리 없이 사라질 수 있는 위험을 그대로 안고 감.
+
+권장안: 1번(Photo Picker 출처만 우선 복사) — 위험이 실제로 있는 범위만 좁게 다루고, 기존 Camera owned-file 선례를 그대로 재사용할 수 있어 "새 파일 관리 시스템을 발명하지 않는다"는 제2차 원칙과도 맞는다. 다만 최종 정책 선택은 사용자 판단.
+
+**다음 작업**: 사용자가 위 선택지 중 방향을 확정하면 제2차(URI 영속성 수정) 진입.
+
+## 2026-08-29 — 57일차 저장·데이터 안전성 챕터 제2차: URI 영속성 수정 (선택지 1번 적용)
+
+**목표**: 제1차에서 확정한 선택지 1번 — Photo Picker 출처만 앱 소유 파일로 복사(사진 스티커의 배경-미제거 케이스 + 마스킹테이프 전체). OpenDocument/Camera 경로는 이미 안전해 손대지 않음. 사용자 승인 후 시작.
+
+**우선 원칙 적용**: 새 파일 관리 체계를 만들지 않고, Camera-owned 스티커 원본 흐름(`PhotoStickerImageStorage.copyToStickerOriginalStorage` + `deleteOriginalIfUnreferenced` + undo/redo-aware 지연 삭제)을 그대로 재사용/미러링했다.
+
+**변경 내용**
+
+1. **`PhotoStickerImageStorage.kt`**: 기존 `copyToStickerOriginalStorage(File)`(카메라용) 옆에 `copyToStickerOriginalStorage(Uri)` 오버로드 추가 — `PostcardImageStorage.copyToAppStorage`와 동일한 방식(ContentResolver로 읽어 `sticker_originals/<postcardId>/`에 복사 후 비트맵 디코드로 검증). `deleteOriginalIfUnreferenced`는 파일 경로 접두사만 확인하므로 수정 없이 그대로 재사용 가능함을 확인.
+2. **`MaskingTapePhotoStorage.kt`(신규)**: `PhotoStickerImageStorage`와 같은 모양의 독립 object. `copyToMaskingTapePhotoStorage(context, postcardId, sourceUri)`(→ `masking_tape_photos/<postcardId>/`)와 `deleteIfUnreferenced(context, deletedUri, remainingTapes)`.
+3. **`DetailViewModel.kt`**:
+   - `addGalleryPhotoSticker(postcardId, sourceUri)` 신규 — `addCameraPhotoSticker`와 동일한 정책(즉시 복사 후에만 `PhotoStickerItem` 생성, 실패 시 기존 `_textScaleSaveErrors` 채널로 스낵바 오류 표시).
+   - `addPhotoMaskingTape(postcardId, sourceUri)` 신규 — 위와 동일한 정책으로 `masking_tape_photos/`에 복사.
+   - 마스킹테이프용 undo/redo-aware 지연 삭제 미러링: `maskingTapePhotoCleanupCandidates`, `isMaskingTapePhotoStillReferenced`, `sweepMaskingTapePhotoCleanupCandidates`, `awaitMaskingTapePhotoCleanupSweep`, `deleteMaskingTapePhotoIfUnreferenced` — 각각 스티커 쪽 `stickerCleanupCandidates` 계열과 동일한 판정 로직(현재 목록 + undo스택 + redo스택 전체에서 참조 여부 확인, 아직 참조 중이면 삭제를 미루고 나중에 undo/redo 스택 밖으로 완전히 밀려났을 때만 실제로 지움). `awaitMaskingTapePhotoCleanupSweep()`을 `awaitPendingStyleSaves()`에서 `awaitStickerCleanupSweep()`과 함께 호출해 화면 이탈 직전에도 정리를 기다리게 함. `clearMaskingTapeHistory`/`recordMaskingTapeSnapshotForUndo`(history limit 초과 시)/`undoMaskingTapeChange`/`redoMaskingTapeChange`에 sweep 호출을 추가.
+   - `duplicateMaskingTape()`의 stale 주석(54일차부터 지적된, "persistable 권한 받은 갤러리 Uri라 복사 불필요") 수정 — 이제 `addPhotoMaskingTape`가 실제로 복사해 두므로 복제 시 파일을 공유해도 안전한 이유가 사실과 일치하게 바뀜.
+4. **`DetailScreen.kt`**: `onAddFromGallery`는 인라인 `PhotoStickerItem` 생성 대신 `viewModel.addGalleryPhotoSticker(postcardId, uri)` 호출로 교체(`onAddFromFile`은 OpenDocument라 그대로 둠). `onAddPhotoMaskingTape`는 `viewModel.addPhotoMaskingTape(postcardId, uri)` 호출로 교체. `onDeleteMaskingTape`는 `onDeleteSticker`와 동일한 모양으로 삭제 전 `photoUri`를 잡아뒀다가 `remaining` 확정 후 `viewModel.deleteMaskingTapePhotoIfUnreferenced(uri, remaining)`를 호출하도록 추가.
+5. **`PostcardDeletionManager.kt`**: postcard 전체 삭제 시 `masking_tape_photos/<id>/` 디렉터리도 재귀 삭제하도록 8번 항목 추가(`sticker_originals/<id>/` 라벨 `cameraStickerOriginals`는 기존 테스트 호환을 위해 이름을 바꾸지 않고 주석만 갱신).
+6. **`OrphanFileDiagnostics.kt`**: 파일 자체 문서화 규칙("삭제 쪽에 새 디렉터리가 추가되면 여기에도 함께 넣어야 한다")에 따라 `masking_tape_photos/<id>/`를 `maskingTapePhotoOriginal` 카테고리로 스캔 목록에 추가, 헤더 주석에도 디렉터리 나열 갱신.
+
+**의도적으로 손대지 않은 것**
+
+- OpenDocument(파일에서 추가)로 고른 사진 스티커 원본 — 제1차 조사에서 SAF persistable grant가 실제로 성립함을 확인해 범위에서 제외.
+- 카메라 촬영 사진 스티커 — 이미 안전(기존 코드 무변경).
+- **이미 저장된 기존 엽서의 과거 데이터** — 이번 수정은 앞으로 새로 추가되는 사진에만 적용된다. 이미 Photo Picker로 추가되어 raw `content://` URI를 그대로 참조 중인 기존 스티커/마스킹테이프는 이번 변경으로 소급 복사되지 않는다(사용자 파일 일괄 변환은 STOP 대상이라 범위에서 제외). 그 사진들은 여전히 권한 상실 위험에 노출된 상태로 남는다.
+- 배경 제거된 스티커의 캐시→영구 승격 흐름(`persistStickerBackground`, `draft_sticker_bgs/`) — 이번 작업과 무관, 무변경.
+
+**검증 방법과 결과**
+
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
+- `:app:testDebugUnitTest`(전체) — BUILD SUCCESSFUL, JUnit XML 52개 파일 집계 기준 **480 tests / failures 0 / errors 0 / skipped 0**(기존 개수와 동일 — 이번 작업은 자동 테스트를 추가하지 않음, 사유는 아래).
+- `git diff --check` — 이상 없음(기존 LF/CRLF 경고만).
+- 전체 diff 재검토 — `DetailScreen.kt`(콜백 3곳), `DetailViewModel.kt`(신규 함수 2개 + undo/redo-aware 지연 삭제 미러링 + 주석 수정), `PhotoStickerImageStorage.kt`(오버로드 추가만, 기존 함수 무변경), `MaskingTapePhotoStorage.kt`(신규), `PostcardDeletionManager.kt`/`OrphanFileDiagnostics.kt`(신규 디렉터리 등록) 외 예상 밖 변경 없음. Room Entity/DAO/Migration 무변경, 기존 저장 형식(직렬화 라인 포맷) 무변경.
+
+**자동 테스트를 추가하지 않은 이유(미검증 항목으로 명시)**: 이번에 추가한 함수(`copyToStickerOriginalStorage(Uri)`, `MaskingTapePhotoStorage`의 두 함수)는 모두 `android.net.Uri`와 `ContentResolver`/`BitmapFactory`에 의존한다. 이 프로젝트는 Robolectric 없이 순수 JUnit만 쓰고(`app/build.gradle.kts`에 `testOptions.unitTests.isReturnDefaultValues`도 없음) `Uri.parse`/`Uri.fromFile` 등은 순수 JVM 테스트에서 "not mocked" 예외를 던진다 — 기존에도 이미 있던 카메라용 `copyToStickerOriginalStorage(File)`과 `deleteOriginalIfUnreferenced`(둘 다 Uri 사용) 역시 지금까지 전용 자동 테스트가 없었다(54일차 `MaskingTapePhotoDecoder`도 동일한 이유로 테스트 없음). 새 코드도 같은 제약을 그대로 물려받아 자동 테스트를 추가하지 않았다 — 이는 이번 작업이 만든 제약이 아니라 기존 프로젝트 환경의 한계이며, 실기기 검증이 이 경로의 유일한 검증 수단이다.
+
+**실기기 검증 시나리오(사용자 확인 대기)**
+
+1. **사진 스티커 — 갤러리(Photo Picker)로 추가**: 갤러리에서 사진을 스티커로 추가 → 저장 → 앱을 완전히 종료(최근 앱에서 스와이프 제거) → 다시 열어 해당 엽서 진입 → 스티커 사진이 정상적으로 보이는지 확인.
+2. **사진 스티커 — 파일에서 추가(OpenDocument)**: 동일 시나리오를 "파일에서 추가"로 반복 — 이 경로는 원래도 안전해야 하므로(회귀 확인용) 기존과 동일하게 정상 복원되는지 확인.
+3. **마스킹테이프 사진**: 갤러리 사진으로 마스킹테이프 추가 → 저장 → 앱 재시작 → 재진입 → 정상 복원 확인.
+4. **삭제 정리**: 사진 스티커(갤러리 출처)와 사진 마스킹테이프를 각각 삭제 → 저장 → (선택) 기기 파일 탐색기나 로그로 `sticker_originals/`, `masking_tape_photos/` 아래 파일이 남지 않는지 확인(자동 확인이 어려우면 생략 가능).
+5. **복제 + Undo**: 사진 마스킹테이프를 복제한 뒤 원본을 삭제 → Undo로 복원 → 두 테이프(원본 복원본, 복제본) 모두 같은 사진이 정상적으로 보이는지 확인(지연 삭제 로직이 undo 참조를 안전하게 지켰는지 검증).
+6. **기존 카메라 스티커 회귀 없음 확인**: 카메라로 스티커 사진 추가 → 저장 → 재진입 → 기존과 동일하게 정상 동작하는지 확인(무변경 경로 회귀 점검).
+
+**남은 위험**
+
+- 이미 저장된 기존 엽서의 raw URI 스티커/마스킹테이프는 이번 수정으로 보호되지 않는다(위 "의도적으로 손대지 않은 것" 참고) — 필요하면 별도 마이그레이션 작업으로 판단할 사안.
+- Uri/ContentResolver 의존 코드 경로에 자동 테스트가 없어 회귀 안전망이 실기기 확인에 전적으로 의존한다.
+- OpenDocument 경로도 `takePersistableUriPermission` 실패를 `runCatching`으로 조용히 삼키는 기존 패턴은 그대로 남아 있다(제1차에서 실제 실패 사례를 확인한 것은 아니라 이번 범위에서 다루지 않음).
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`
+- `app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt`
+- `app/src/main/java/com/postcardmemory/utils/PhotoStickerImageStorage.kt`
+- `app/src/main/java/com/postcardmemory/utils/MaskingTapePhotoStorage.kt`(신규)
+- `app/src/main/java/com/postcardmemory/utils/PostcardDeletionManager.kt`
+- `app/src/main/java/com/postcardmemory/utils/OrphanFileDiagnostics.kt`
+- `docs/ai/HANDOFF.md`(이 항목 + 제1차 항목)
+
+**Git 상태**: `feature/photo-sticker`, HEAD `a8576e5`(무변경, 이번 작업은 아직 commit 안 함). 위 파일 전부 unstaged. commit/push **미실행**(사용자 실기기 확인 후 승인 대기).
+
+**다음 작업**: 위 실기기 시나리오 확인 → 문제 없으면 사용자 승인 받아 commit/push. 승인·검증까지 닫힌 뒤 장기작업 지시서의 제3차(HSV 배경색 저장 경로 안정화)로 진행 가능.

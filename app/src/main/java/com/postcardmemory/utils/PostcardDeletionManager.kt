@@ -186,11 +186,21 @@ internal fun cleanupPostcardOwnedAssets(
         File(filesDir, "sticker_bgs/${postcard.id}")
     )
 
-    // 7. 카메라 스티커 원본 디렉터리(sticker_originals/<id>/) — 마찬가지로
-    // postcardId 전용 하위 디렉터리.
+    // 7. 카메라 스티커 원본 디렉터리(sticker_originals/<id>/) — 57일차부터는
+    // Photo Picker(갤러리)로 고른 원본도 같은 디렉터리에 복사되지만, 라벨은
+    // 기존 테스트 호환을 위해 그대로 둔다. 마찬가지로 postcardId 전용
+    // 하위 디렉터리라 재귀 삭제가 안전하다.
     deleteDir(
         "cameraStickerOriginals",
         File(filesDir, "sticker_originals/${postcard.id}")
+    )
+
+    // 8. 마스킹테이프 사진 원본 디렉터리(masking_tape_photos/<id>/) —
+    // Photo Picker로 고른 마스킹테이프 사진을 복사해 두는 postcardId 전용
+    // 하위 디렉터리(57일차 URI 영속성 수정으로 신설).
+    deleteDir(
+        "maskingTapePhotoOriginals",
+        File(filesDir, "masking_tape_photos/${postcard.id}")
     )
 
     return PostcardDeletionResult(

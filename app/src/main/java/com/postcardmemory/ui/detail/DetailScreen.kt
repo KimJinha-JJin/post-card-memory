@@ -4544,15 +4544,12 @@ fun DetailScreen(
                                         viewModel.setSelectedStickerId(id)
                                     },
                                     onAddFromGallery = { uri ->
-                                        viewModel.recordStickerSnapshotForUndo()
-                                        val newSticker = PhotoStickerItem(
-                                            originalUri = uri,
-                                            displayedUri = uri
-                                        )
-                                        viewModel.setPhotoStickers(photoStickers + newSticker)
-                                        viewModel.setSelectedStickerId(newSticker.id)
                                         backgroundRemovalError = null
                                         viewModel.resetStickerBackgroundRemovalState()
+                                        viewModel.addGalleryPhotoSticker(
+                                            postcardId,
+                                            uri
+                                        )
                                     },
                                     onAddFromFile = { uri ->
                                         viewModel.recordStickerSnapshotForUndo()
@@ -4842,26 +4839,33 @@ fun DetailScreen(
                                         )
                                     },
                                     onAddPhotoMaskingTape = { uri ->
-                                        viewModel.recordMaskingTapeSnapshotForUndo()
-                                        val newTape =
-                                            MaskingTapeItem(
-                                                style = MaskingTapeStyle.PHOTO,
-                                                photoUri = uri
-                                            )
-                                        viewModel.setPhotoMaskingTapes(
-                                            photoMaskingTapes + newTape
-                                        )
-                                        viewModel.setSelectedMaskingTapeId(
-                                            newTape.id
+                                        viewModel.addPhotoMaskingTape(
+                                            postcardId,
+                                            uri
                                         )
                                     },
                                     onDeleteMaskingTape = { id ->
+                                        val tape =
+                                            photoMaskingTapes.find {
+                                                it.id == id
+                                            }
+                                        val photoUriToDelete =
+                                            tape?.photoUri
+
                                         viewModel.recordMaskingTapeSnapshotForUndo()
                                         val remaining =
                                             photoMaskingTapes.filter {
                                                 it.id != id
                                             }
                                         viewModel.setPhotoMaskingTapes(remaining)
+
+                                        photoUriToDelete?.let { uri ->
+                                            viewModel.deleteMaskingTapePhotoIfUnreferenced(
+                                                uri,
+                                                remaining
+                                            )
+                                        }
+
                                         maskingTapeSizes -= id
                                         if (selectedMaskingTapeId == id) {
                                             viewModel.setSelectedMaskingTapeId(

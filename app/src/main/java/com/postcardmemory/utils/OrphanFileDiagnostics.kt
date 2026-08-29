@@ -43,8 +43,8 @@ data class OrphanScanResult(
  * PostcardDeletionManager와 같은 filesDir 하위 경로 규칙(꾸미기 요소별
  * <디렉터리>/<id>.txt — sticker_states/, seal_states/, doodle_states/,
  * text_sticker_states/, masking_tape_states/, label_sticker_states/ —
- * 그리고 sticker_bgs/<id>/, sticker_originals/<id>/, draft_sticker_bgs/<id>/,
- * drafts/edit_state/<id>.draft.txt)을 그대로 따르되, 그 파일들을 지우는
+ * 그리고 sticker_bgs/<id>/, sticker_originals/<id>/, masking_tape_photos/<id>/,
+ * draft_sticker_bgs/<id>/, drafts/edit_state/<id>.draft.txt)을 그대로 따르되, 그 파일들을 지우는
  * 대신 목록만 만든다. 삭제 쪽에 새 디렉터리가 추가되면 여기에도 함께
  * 넣어야 그 요소의 고아 파일을 찾을 수 있다.
  */
@@ -102,6 +102,13 @@ object OrphanFileDiagnostics {
             scanPostcardIdDirectories(
                 type = "cameraStickerOriginal",
                 directory = File(rootDirectory, "sticker_originals"),
+                existingPostcardIds = existingPostcardIds,
+                unclassified = unclassified,
+                reason = "Room에 존재하지 않는 postcardId 디렉터리"
+            ),
+            scanPostcardIdDirectories(
+                type = "maskingTapePhotoOriginal",
+                directory = File(rootDirectory, "masking_tape_photos"),
                 existingPostcardIds = existingPostcardIds,
                 unclassified = unclassified,
                 reason = "Room에 존재하지 않는 postcardId 디렉터리"

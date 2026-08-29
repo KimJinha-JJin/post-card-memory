@@ -19,6 +19,7 @@ import com.postcardmemory.ui.components.BACK_MESSAGE_MAX_LENGTH
 import com.postcardmemory.ui.components.BACK_RECIPIENT_MODIFIER_MAX_LENGTH
 import com.postcardmemory.utils.ConfirmedEditStateStorage
 import com.postcardmemory.utils.DoodleStroke
+import com.postcardmemory.utils.MaskingTapePhotoStorage
 import com.postcardmemory.utils.PhotoColorExtractor
 import com.postcardmemory.utils.PhotoStickerImageStorage
 import com.postcardmemory.utils.PostcardDeletionManager
@@ -1174,10 +1175,57 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
+     * addCameraPhotoSticker와 동일한 정책 — Photo Picker로 고른 사진을 즉시
+     * 앱 소유 파일(masking_tape_photos/<postcardId>/)로 복사한 뒤에만
+     * MaskingTapeItem을 만든다. Photo Picker가 돌려주는 URI는 persistable
+     * grant를 지원하지 않아 그대로 오래 보관할 수 없기 때문이다.
+     */
+    fun addPhotoMaskingTape(
+        postcardId: Long,
+        sourceUri: Uri
+    ) {
+        recordMaskingTapeSnapshotForUndo()
+
+        viewModelScope.launch {
+            val photoUri =
+                withContext(Dispatchers.IO) {
+                    try {
+                        MaskingTapePhotoStorage
+                            .copyToMaskingTapePhotoStorage(
+                                context = context,
+                                postcardId = postcardId,
+                                sourceUri = sourceUri
+                            )
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+
+            if (photoUri != null) {
+                val newTape =
+                    MaskingTapeItem(
+                        style = MaskingTapeStyle.PHOTO,
+                        photoUri = photoUri
+                    )
+
+                _photoMaskingTapes.value += newTape
+                _selectedMaskingTapeId.value = newTape.id
+                scheduleDraftAutosave()
+            } else {
+                _textScaleSaveErrors.trySend(
+                    "마스킹테이프 사진을 저장하지 못했어."
+                )
+            }
+        }
+    }
+
+    /**
      * duplicateSticker와 동일한 정책 — 살짝 어긋난 위치(40,40 px)에 같은
-     * 디자인의 새 테이프를 추가한다. photoUri는 파일을 복사하지 않고
-     * 그대로 공유한다(사진 스티커의 originalUri와 달리 배경제거 캐시
-     * 파일이 아니라 persistable 권한을 받은 갤러리 Uri라 복사가 필요 없다).
+     * 디자인의 새 테이프를 추가한다. photoUri는 파일을 복사하지 않고 그대로
+     * 공유한다 — addPhotoMaskingTape()가 이미 앱 소유 파일(masking_tape_photos/)로
+     * 복사해 둔 뒤라 여러 테이프가 같은 파일을 공유해도 안전하고, 삭제 시
+     * deleteMaskingTapePhotoIfUnreferenced()가 참조 여부를 확인한 뒤에만 지운다
+     * (사진 스티커의 originalUri 공유와 동일한 이유).
      */
     fun duplicateMaskingTape(
         maskingTapeId: String
@@ -1529,10 +1577,103 @@ class DetailViewModel @Inject constructor(
         _canRedoMaskingTape.value = maskingTapeRedoStack.isNotEmpty()
     }
 
+    /*
+     * 삭제로 masking_tape_photos/ 파일이 지워질 뻔했지만 undo/redo 스택이
+     * 아직 참조 중이라 미룬 파일들. stickerCleanupCandidates와 동일한 이유
+     * (스택에서 완전히 밀려나야 실제로 지운다).
+     */
+    private val maskingTapePhotoCleanupCandidates =
+        mutableSetOf<Uri>()
+
+    private fun isMaskingTapePhotoStillReferenced(
+        uri: Uri
+    ): Boolean {
+        val allReachableTapes =
+            _photoMaskingTapes.value +
+                    maskingTapeUndoStack.flatMap { it.maskingTapes } +
+                    maskingTapeRedoStack.flatMap { it.maskingTapes }
+
+        return allReachableTapes.any {
+            it.photoUri == uri
+        }
+    }
+
+    private fun sweepMaskingTapePhotoCleanupCandidates() {
+        val stillPending =
+            maskingTapePhotoCleanupCandidates.toList()
+
+        stillPending.forEach { uri ->
+            if (!isMaskingTapePhotoStillReferenced(uri)) {
+                maskingTapePhotoCleanupCandidates.remove(uri)
+                deleteMaskingTapePhotoIfUnreferenced(
+                    uri = uri,
+                    remainingTapes = _photoMaskingTapes.value
+                )
+            }
+        }
+    }
+
+    /**
+     * sweepMaskingTapePhotoCleanupCandidates()와 같은 판정 로직을 쓰지만,
+     * awaitStickerCleanupSweep과 동일한 이유로 화면을 완전히 나가기 직전
+     * (awaitPendingStyleSaves) 실제 파일 삭제를 끝까지 기다리는 용도다.
+     */
+    private suspend fun awaitMaskingTapePhotoCleanupSweep() {
+        val stillPending =
+            maskingTapePhotoCleanupCandidates.toList()
+
+        stillPending.forEach { uri ->
+            if (!isMaskingTapePhotoStillReferenced(uri)) {
+                maskingTapePhotoCleanupCandidates.remove(uri)
+
+                withContext(Dispatchers.IO) {
+                    MaskingTapePhotoStorage
+                        .deleteIfUnreferenced(
+                            context = context,
+                            deletedUri = uri,
+                            remainingTapes = _photoMaskingTapes.value
+                        )
+                }
+            }
+        }
+    }
+
+    /** deleteStickerOriginalIfUnreferenced와 동일한 정책. */
+    fun deleteMaskingTapePhotoIfUnreferenced(
+        uri: Uri?,
+        remainingTapes: List<MaskingTapeItem>
+    ) {
+        if (uri != null && isMaskingTapePhotoStillReferenced(uri)) {
+            maskingTapePhotoCleanupCandidates.add(uri)
+            return
+        }
+
+        if (uri != null) {
+            maskingTapePhotoCleanupCandidates.remove(uri)
+        }
+
+        val reachableTapes =
+            (
+                remainingTapes +
+                        maskingTapeUndoStack.flatMap { it.maskingTapes } +
+                        maskingTapeRedoStack.flatMap { it.maskingTapes }
+                ).distinctBy { it.id }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            MaskingTapePhotoStorage
+                .deleteIfUnreferenced(
+                    context = context,
+                    deletedUri = uri,
+                    remainingTapes = reachableTapes
+                )
+        }
+    }
+
     private fun clearMaskingTapeHistory() {
         maskingTapeUndoStack.clear()
         maskingTapeRedoStack.clear()
         updateMaskingTapeHistoryAvailability()
+        sweepMaskingTapePhotoCleanupCandidates()
     }
 
     fun recordMaskingTapeSnapshotForUndo() {
@@ -1544,6 +1685,7 @@ class DetailViewModel @Inject constructor(
         )
         if (maskingTapeUndoStack.size > MASKING_TAPE_HISTORY_LIMIT) {
             maskingTapeUndoStack.removeFirst()
+            sweepMaskingTapePhotoCleanupCandidates()
         }
         maskingTapeRedoStack.clear()
         updateMaskingTapeHistoryAvailability()
@@ -1562,6 +1704,7 @@ class DetailViewModel @Inject constructor(
         _photoMaskingTapes.value = previous.maskingTapes
         _selectedMaskingTapeId.value = previous.selectedMaskingTapeId
         updateMaskingTapeHistoryAvailability()
+        sweepMaskingTapePhotoCleanupCandidates()
         scheduleDraftAutosave()
     }
 
@@ -1578,6 +1721,7 @@ class DetailViewModel @Inject constructor(
         _photoMaskingTapes.value = next.maskingTapes
         _selectedMaskingTapeId.value = next.selectedMaskingTapeId
         updateMaskingTapeHistoryAvailability()
+        sweepMaskingTapePhotoCleanupCandidates()
         scheduleDraftAutosave()
     }
 
@@ -3513,10 +3657,11 @@ class DetailViewModel @Inject constructor(
      * 여기서는 완료 여부만 기다리면 된다(join은 예외를 전파하지 않는다). 혹시
      * 모를 비정상적 지연으로 navigation이 무기한 멈추지 않도록 상한 시간을 둔다.
      *
-     * 마지막으로 stickerCleanupCandidates도 여기서 함께 정리한다(
-     * awaitStickerCleanupSweep) — onCleared()는 viewModelScope가 이미
-     * 취소된 뒤 호출되므로 그 안에서 정리를 시도하면 아무 파일도 지워지지
-     * 않는다.
+     * 마지막으로 stickerCleanupCandidates/maskingTapePhotoCleanupCandidates도
+     * 여기서 함께 정리한다(awaitStickerCleanupSweep/
+     * awaitMaskingTapePhotoCleanupSweep) — onCleared()는 viewModelScope가
+     * 이미 취소된 뒤 호출되므로 그 안에서 정리를 시도하면 아무 파일도
+     * 지워지지 않는다.
      *
      */
     suspend fun awaitPendingStyleSaves() {
@@ -3552,6 +3697,7 @@ class DetailViewModel @Inject constructor(
         }
 
         awaitStickerCleanupSweep()
+        awaitMaskingTapePhotoCleanupSweep()
     }
 
     fun resetFontUpdateState() {
@@ -3762,6 +3908,55 @@ class DetailViewModel @Inject constructor(
                         if (captureFile.exists()) {
                             captureFile.delete()
                         }
+                    }
+                }
+
+            if (originalUri != null) {
+                val newSticker =
+                    PhotoStickerItem(
+                        originalUri = originalUri,
+                        displayedUri = originalUri
+                    )
+
+                _photoStickers.value += newSticker
+                _selectedStickerId.value =
+                    newSticker.id
+                scheduleDraftAutosave()
+            } else {
+                _textScaleSaveErrors.trySend(
+                    "스티커 사진을 저장하지 못했어."
+                )
+            }
+        }
+    }
+
+    /**
+     * addCameraPhotoSticker와 동일한 정책 — Photo Picker(갤러리)로 고른
+     * 사진은 content://media/picker/... URI라 persistable grant를 지원하지
+     * 않으므로, onAddFromGallery 콜백에서 이 함수를 호출해 즉시 앱 소유
+     * 파일(sticker_originals/<postcardId>/)로 복사한 뒤에만 PhotoStickerItem을
+     * 만든다. OpenDocument(파일에서 추가, onAddFromFile)로 고른 URI는 SAF
+     * 표준상 persistable grant가 실제로 성립해 이 복사가 필요 없으므로
+     * 그 경로는 그대로 둔다.
+     */
+    fun addGalleryPhotoSticker(
+        postcardId: Long,
+        sourceUri: Uri
+    ) {
+        recordStickerSnapshotForUndo()
+
+        viewModelScope.launch {
+            val originalUri =
+                withContext(Dispatchers.IO) {
+                    try {
+                        PhotoStickerImageStorage
+                            .copyToStickerOriginalStorage(
+                                context = context,
+                                postcardId = postcardId,
+                                sourceUri = sourceUri
+                            )
+                    } catch (_: Exception) {
+                        null
                     }
                 }
 
