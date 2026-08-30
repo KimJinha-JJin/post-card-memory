@@ -196,19 +196,6 @@ sealed interface BackgroundUpdateState {
     ) : BackgroundUpdateState
 }
 
-sealed interface FontUpdateState {
-
-    data object Idle : FontUpdateState
-
-    data object Saving : FontUpdateState
-
-    data object Success : FontUpdateState
-
-    data class Error(
-        val message: String
-    ) : FontUpdateState
-}
-
 sealed interface LayoutUpdateState {
 
     data object Idle : LayoutUpdateState
@@ -220,19 +207,6 @@ sealed interface LayoutUpdateState {
     data class Error(
         val message: String
     ) : LayoutUpdateState
-}
-
-sealed interface DateFormatUpdateState {
-
-    data object Idle : DateFormatUpdateState
-
-    data object Saving : DateFormatUpdateState
-
-    data object Success : DateFormatUpdateState
-
-    data class Error(
-        val message: String
-    ) : DateFormatUpdateState
 }
 
 sealed interface StickerBackgroundRemovalState {
@@ -334,15 +308,6 @@ class DetailViewModel @Inject constructor(
             StateFlow<BackgroundUpdateState> =
         _backgroundUpdateState
 
-    private val _fontUpdateState =
-        MutableStateFlow<FontUpdateState>(
-            FontUpdateState.Idle
-        )
-
-    val fontUpdateState:
-            StateFlow<FontUpdateState> =
-        _fontUpdateState
-
     private val _layoutUpdateState =
         MutableStateFlow<LayoutUpdateState>(
             LayoutUpdateState.Idle
@@ -351,15 +316,6 @@ class DetailViewModel @Inject constructor(
     val layoutUpdateState:
             StateFlow<LayoutUpdateState> =
         _layoutUpdateState
-
-    private val _dateFormatUpdateState =
-        MutableStateFlow<DateFormatUpdateState>(
-            DateFormatUpdateState.Idle
-        )
-
-    val dateFormatUpdateState:
-            StateFlow<DateFormatUpdateState> =
-        _dateFormatUpdateState
 
     private val _stickerBackgroundRemovalState =
         MutableStateFlow<StickerBackgroundRemovalState>(
@@ -387,8 +343,6 @@ class DetailViewModel @Inject constructor(
 
     private var messageTextScaleSaveJob: Job? = null
 
-    private var dateTextScaleSaveJob: Job? = null
-
     private var backgroundPatternDensitySaveJob: Job? = null
 
     private var stampPhotoScaleSaveJob: Job? = null
@@ -413,11 +367,7 @@ class DetailViewModel @Inject constructor(
 
     private var backgroundPatternSaveJob: Job? = null
 
-    private var messageFontSaveJob: Job? = null
-
     private var layoutStyleSaveJob: Job? = null
-
-    private var dateFormatSaveJob: Job? = null
 
     private var messageUpdateJob: Job? = null
 
@@ -3675,7 +3625,6 @@ class DetailViewModel @Inject constructor(
         val pendingJobs =
             listOfNotNull(
                 messageTextScaleSaveJob,
-                dateTextScaleSaveJob,
                 backgroundPatternDensitySaveJob,
                 stampPhotoScaleSaveJob,
                 polaroidPhotoScaleSaveJob,
@@ -3688,9 +3637,7 @@ class DetailViewModel @Inject constructor(
                 tapedFilmPhotoZoomSaveJob,
                 backgroundColorSaveJob,
                 backgroundPatternSaveJob,
-                messageFontSaveJob,
                 layoutStyleSaveJob,
-                dateFormatSaveJob,
                 messageUpdateJob,
                 backRecipientModifierSaveJob,
                 backMessageSaveJob,
@@ -3714,19 +3661,9 @@ class DetailViewModel @Inject constructor(
         awaitMaskingTapePhotoCleanupSweep()
     }
 
-    fun resetFontUpdateState() {
-        _fontUpdateState.value =
-            FontUpdateState.Idle
-    }
-
     fun resetLayoutUpdateState() {
         _layoutUpdateState.value =
             LayoutUpdateState.Idle
-    }
-
-    fun resetDateFormatUpdateState() {
-        _dateFormatUpdateState.value =
-            DateFormatUpdateState.Idle
     }
 
     fun removeStickerBackground(

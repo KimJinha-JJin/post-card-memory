@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 저장 에러(및 내보내기 성공) 안내 다이얼로그 6종의 현재 구조를 소스 텍스트 기준으로
+ * 저장 에러(및 내보내기 성공) 안내 다이얼로그 4종의 현재 구조를 소스 텍스트 기준으로
  * 고정한다.
  *
  * 이 프로젝트는 Compose UI 테스트 인프라(androidx.compose.ui:ui-test)나
@@ -19,8 +19,11 @@ import org.junit.Test
  * 제3차(2026-08-07)에서 7개 다이얼로그의 AlertDialog UI를 공통 Composable
  * `SaveResultAlertDialog`(SaveResultAlertDialog.kt)로 추출했다. 56일차 사진
  * 탭 개편에서 "사진 바꾸기" 기능 자체가 제거되며 imageError 다이얼로그도 함께
- * 사라져 6개로 줄었다. 이 테스트가 고정하는 지점은 두 층으로 나뉜다:
- *  - DetailScreen.kt: 6개 호출부가 여전히 올바른 상태 조건에서, 올바른 제목·
+ * 사라져 6개로 줄었고, 58일차 제8차에서 폰트/날짜형식 업데이트 상태 자체가
+ * 항상 Idle로만 남는 dead runtime으로 확인돼 fontError/dateFormatError
+ * 다이얼로그까지 제거되며 4개로 줄었다. 이 테스트가 고정하는 지점은 두 층으로
+ * 나뉜다:
+ *  - DetailScreen.kt: 4개 호출부가 여전히 올바른 상태 조건에서, 올바른 제목·
  *    제목색·본문·reset 콜백으로 SaveResultAlertDialog를 호출하는지
  *  - SaveResultAlertDialog.kt: 공통 Composable 자체가 dismiss와 confirm 모두
  *    같은 onAcknowledge를 부르고, dismissButton이 없고, ViewModel을 직접
@@ -38,9 +41,7 @@ class SaveErrorDialogStructureTest {
             "exportSuccess" to "if (exportState is ExportState.Success)",
             "exportError" to "(exportState as? ExportState.Error)?.let",
             "backgroundError" to "as? BackgroundUpdateState.Error",
-            "fontError" to "as? FontUpdateState.Error",
-            "layoutError" to "as? LayoutUpdateState.Error",
-            "dateFormatError" to "as? DateFormatUpdateState.Error"
+            "layoutError" to "as? LayoutUpdateState.Error"
         )
         private const val TERMINAL_ANCHOR = "if (postcard != null && !isFocusPreviewMode)"
 
@@ -59,7 +60,7 @@ class SaveErrorDialogStructureTest {
             return file.readText()
         }
 
-        // 7개 앵커 + 종료 앵커를 코드에 실제로 등장하는 순서대로 찾아 각 구간을
+        // 4개 앵커 + 종료 앵커를 코드에 실제로 등장하는 순서대로 찾아 각 구간을
         // "이 앵커부터 다음 앵커 직전까지"로 잘라낸다. 앵커 하나라도 예상 순서로
         // 발견되지 않으면(다이얼로그가 삭제/이동/재배치됨) 여기서 즉시 실패한다.
         private fun sliceBlocks(): Map<String, String> {
@@ -130,12 +131,12 @@ class SaveErrorDialogStructureTest {
     }
 
     @Test
-    fun exactlySixDialogCallSitesExistInThisSectionInExpectedOrder() {
-        // CallSiteSource.blocks 초기화 자체가 6개 앵커 + 종료 앵커를 정확히 이
+    fun exactlyFourDialogCallSitesExistInThisSectionInExpectedOrder() {
+        // CallSiteSource.blocks 초기화 자체가 4개 앵커 + 종료 앵커를 정확히 이
         // 순서로 찾아야 성공한다(하나라도 순서가 어긋나거나 사라지면 위
         // sliceBlocks에서 즉시 예외 발생). 이 테스트는 그 결과를 명시적으로
         // 재확인한다.
-        assertEquals(6, CallSiteSource.blocks.size)
+        assertEquals(4, CallSiteSource.blocks.size)
     }
 
     @Test
@@ -178,19 +179,6 @@ class SaveErrorDialogStructureTest {
     }
 
     @Test
-    fun fontErrorDialog_confirmAndDismissBothResetFontUpdateState() {
-        val block = CallSiteSource.blocks.getValue("fontError")
-        assertSingleCallSite("fontError", block)
-        assertOnAcknowledgeCallsReset("fontError", block, "resetFontUpdateState")
-        assertTitle("fontError", block, "폰트를 저장하지 못했어")
-        assertTitleColor("fontError", block, "BrutalCoral")
-        assertTrue(
-            "[fontError] 본문이 fontError.message를 그대로 노출해야 함",
-            block.contains("body = fontError.message")
-        )
-    }
-
-    @Test
     fun layoutErrorDialog_confirmAndDismissBothResetLayoutUpdateState() {
         val block = CallSiteSource.blocks.getValue("layoutError")
         assertSingleCallSite("layoutError", block)
@@ -200,19 +188,6 @@ class SaveErrorDialogStructureTest {
         assertTrue(
             "[layoutError] 본문이 layoutError.message를 그대로 노출해야 함",
             block.contains("body = layoutError.message")
-        )
-    }
-
-    @Test
-    fun dateFormatErrorDialog_confirmAndDismissBothResetDateFormatUpdateState() {
-        val block = CallSiteSource.blocks.getValue("dateFormatError")
-        assertSingleCallSite("dateFormatError", block)
-        assertOnAcknowledgeCallsReset("dateFormatError", block, "resetDateFormatUpdateState")
-        assertTitle("dateFormatError", block, "날짜 형식을 저장하지 못했어")
-        assertTitleColor("dateFormatError", block, "BrutalCoral")
-        assertTrue(
-            "[dateFormatError] 본문이 dateFormatError.message를 그대로 노출해야 함",
-            block.contains("body = dateFormatError.message")
         )
     }
 

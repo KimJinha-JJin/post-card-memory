@@ -1198,9 +1198,7 @@ fun DetailScreen(
     val draftSaveStatus by viewModel.draftSaveStatus.collectAsState()
     val confirmSaveState by viewModel.confirmSaveState.collectAsState()
     val backgroundUpdateState by viewModel.backgroundUpdateState.collectAsState()
-    val fontUpdateState by viewModel.fontUpdateState.collectAsState()
     val layoutUpdateState by viewModel.layoutUpdateState.collectAsState()
-    val dateFormatUpdateState by viewModel.dateFormatUpdateState.collectAsState()
     val photoColorExtractionState by viewModel.photoColorExtractionState.collectAsState()
     val stickerBackgroundRemovalState by
         viewModel.stickerBackgroundRemovalState.collectAsState()
@@ -1655,21 +1653,9 @@ fun DetailScreen(
         }
     }
 
-    LaunchedEffect(fontUpdateState) {
-        if (fontUpdateState is FontUpdateState.Success) {
-            viewModel.resetFontUpdateState()
-        }
-    }
-
     LaunchedEffect(layoutUpdateState) {
         if (layoutUpdateState is LayoutUpdateState.Success) {
             viewModel.resetLayoutUpdateState()
-        }
-    }
-
-    LaunchedEffect(dateFormatUpdateState) {
-        if (dateFormatUpdateState is DateFormatUpdateState.Success) {
-            viewModel.resetDateFormatUpdateState()
         }
     }
 
@@ -1800,9 +1786,7 @@ fun DetailScreen(
         exportState !is ExportState.Exporting &&
                 shareState !is ShareState.Preparing &&
                 backgroundUpdateState !is BackgroundUpdateState.Saving &&
-                fontUpdateState !is FontUpdateState.Saving &&
                 layoutUpdateState !is LayoutUpdateState.Saving &&
-                dateFormatUpdateState !is DateFormatUpdateState.Saving &&
                 confirmSaveState !is ConfirmSaveState.Saving &&
                 deleteState !is PostcardDeleteState.Deleting &&
                 !isRemovingBackground
@@ -1825,9 +1809,7 @@ fun DetailScreen(
     val backgroundColorPickerEnabled =
         exportState !is ExportState.Exporting &&
                 shareState !is ShareState.Preparing &&
-                fontUpdateState !is FontUpdateState.Saving &&
                 layoutUpdateState !is LayoutUpdateState.Saving &&
-                dateFormatUpdateState !is DateFormatUpdateState.Saving &&
                 confirmSaveState !is ConfirmSaveState.Saving &&
                 deleteState !is PostcardDeleteState.Deleting &&
                 !isRemovingBackground
@@ -5091,34 +5073,6 @@ fun DetailScreen(
                     modifier = Modifier.height(14.dp)
                 )
                 if (
-                    dateFormatUpdateState
-                            is DateFormatUpdateState.Saving
-                ) {
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
-                    Row(
-                        verticalAlignment =
-                            Alignment.CenterVertically,
-                        horizontalArrangement =
-                            Arrangement.spacedBy(10.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            color = BrutalBlack,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(22.dp)
-                        )
-
-                        Text(
-                            text = "날짜 형식 저장 중...",
-                            color = BrutalBlack,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                if (
                     layoutUpdateState
                             is LayoutUpdateState.Saving
                 ) {
@@ -5140,34 +5094,6 @@ fun DetailScreen(
 
                         Text(
                             text = "레이아웃 저장 중...",
-                            color = BrutalBlack,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                if (
-                    fontUpdateState
-                            is FontUpdateState.Saving
-                ) {
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
-
-                    Row(
-                        verticalAlignment =
-                            Alignment.CenterVertically,
-                        horizontalArrangement =
-                            Arrangement.spacedBy(10.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            color = BrutalBlack,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(22.dp)
-                        )
-
-                        Text(
-                            text = "폰트 저장 중...",
                             color = BrutalBlack,
                             fontWeight = FontWeight.Bold
                         )
@@ -6035,19 +5961,6 @@ fun DetailScreen(
         }
 
     (
-            fontUpdateState
-                    as? FontUpdateState.Error
-            )?.let { fontError ->
-
-            SaveResultAlertDialog(
-                title = "폰트를 저장하지 못했어",
-                titleColor = BrutalCoral,
-                body = fontError.message,
-                onAcknowledge = { viewModel.resetFontUpdateState() }
-            )
-        }
-
-    (
             layoutUpdateState
                     as? LayoutUpdateState.Error
             )?.let { layoutError ->
@@ -6057,19 +5970,6 @@ fun DetailScreen(
                 titleColor = BrutalCoral,
                 body = layoutError.message,
                 onAcknowledge = { viewModel.resetLayoutUpdateState() }
-            )
-        }
-
-    (
-            dateFormatUpdateState
-                    as? DateFormatUpdateState.Error
-            )?.let { dateFormatError ->
-
-            SaveResultAlertDialog(
-                title = "날짜 형식을 저장하지 못했어",
-                titleColor = BrutalCoral,
-                body = dateFormatError.message,
-                onAcknowledge = { viewModel.resetDateFormatUpdateState() }
             )
         }
 
