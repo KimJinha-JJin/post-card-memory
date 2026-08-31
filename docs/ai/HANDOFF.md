@@ -936,3 +936,84 @@
 **변경 파일**: 없음(`docs/ai/HANDOFF.md`만 갱신, 프로세스 기록).
 
 **Git 상태**: 아래 commit 항목 참고.
+
+## 2026-08-31 — 59일차: Task/fork 운영 규칙 보강
+
+**목표**: 58일차 하위 fork 범위 이탈 사건에서 확정한 재발 방지 원칙이 일회성 HANDOFF 기록에만 머물지 않도록, 모든 작업 에이전트가 반복 적용하는 공용 운영 규칙에 최소 반영한다.
+
+**시작 상태 확인**
+
+- 브랜치 `feature/photo-sticker`, local HEAD와 `origin/feature/photo-sticker` 모두 `959fe08`, ahead/behind `0/0` 확인.
+- tracked·staged 변경은 없었다. 예상에 없던 기존 untracked `.claude/settings.local.json`과 기존 `.kotlin/errors/*.log` 2개가 있었으며, 모두 오늘 범위와 겹치지 않는 로컬 파일이라 수정·삭제하지 않고 보존했다.
+- `docs/ai/HANDOFF.md`의 58일차 제6~9차 결과와 background fork 범위 이탈 기록을 직접 확인했다.
+
+**조사 결과**
+
+- 기존 `AGENTS.md`에는 일반적인 범위 확대 금지와 메인 작업자의 STOP 조건은 있었지만, 메인 권한의 비상속, read-only 조사와 수정의 분리, per-call 위임 우선, 연쇄 호출 제한, 범위 이탈 결과의 절차 판정을 명시한 공용 규칙은 없었다.
+- `CLAUDE.md`의 `내장 Task 운영`은 진행 상태·완료 조건 관리 규칙이며 하위 agent/fork 위임 권한 경계를 대신하지 않는다.
+- 기존 HANDOFF에는 58일차 사건과 일부 향후 원칙이 기록돼 있었지만, 장기간 반복 적용할 규칙의 기준 문서는 `AGENTS.md`이므로 공용 규칙 보강이 필요하다고 판정했다.
+
+**적용한 수정**
+
+- `AGENTS.md` 6장에 `하위 agent와 Task/fork 위임 경계` subsection을 추가했다.
+- 권한 비상속, 조사 권한과 수정 권한 분리, 한 차수 위임의 경계, 상속 컨텍스트보다 per-call 범위 우선, bounded read-only Task 활용과 단순 작업 과잉 위임 금지, 무허가 연쇄 agent 호출 금지, 메인 재검증, 범위 이탈을 성공 선례로 보지 않는 원칙을 기존 규칙과 충돌하지 않게 한 곳에 모았다.
+- 특정 도구나 58일차 행위자를 비난하는 문구는 넣지 않았고, `CLAUDE.md`의 도구 전용 Task·세션 규칙은 수정하지 않았다.
+
+**하위 agent 사용 여부**: 사용하지 않음. 59일차 사용자의 직접 지시에 따라 Codex 본체가 문서 조사·수정·검증을 수행했다.
+
+**검증**
+
+- A~H 각 핵심 문구가 `AGENTS.md`에 정확히 1회씩 존재하는지 `Select-String`으로 확인했다.
+- `git diff -- AGENTS.md`를 직접 재검토해 새 subsection 외 변경이 없음을 확인했다.
+- `git diff --check -- AGENTS.md` 이상 없음. Windows line-ending 안내만 있었고 whitespace 오류는 없었다.
+- 문서 전용 변경이며 앱 코드·Room·Migration·Gradle 변경이 없어 build·unit test는 실행하지 않았다.
+
+**변경 파일**
+
+- `AGENTS.md`
+- `docs/ai/HANDOFF.md`
+
+**Git 상태**: 아직 commit·push하지 않은 unstaged 문서 변경 2개가 있다. 사용자의 앱 결과 확인 및 명시적 요청 전까지 commit·push하지 않는다. 기존 untracked `.claude/`, `.kotlin/`은 그대로 보존했다.
+
+**이 작업 단위 최종 판정**: 완료. 장기 공용 규칙 보강과 즉시 HANDOFF 기록이 끝났으며, 다음 독립 작업인 제10차 도장 preview/export drift 조사로 진행한다.
+
+## 2026-08-31 — 59일차 제10차: 도장 preview/export drift 조사 (production 수정 없음)
+
+**목표**: 같은 도장 데이터가 편집 화면 미리보기와 저장·공유 export에서 크기, stroke, alpha, scale, padding, spacing, rotation, offset, 좌표 변환 또는 compositing 차이로 서로 다른 의미로 렌더링될 가능성이 있는지 실제 production 경로를 따라 확인한다.
+
+**하위 agent 사용 여부**: 사용하지 않음. 조사·판정·검증은 Codex 본체가 직접 수행했다.
+
+**실제 경로**
+
+1. `PostcardSealItem`이 `type`, `offset`, `scale`, `rotationDegrees`, `colorArgb`를 보유한다. 새 도장은 `SealType.defaultScale`을 적용하고, 편집 제스처는 같은 item의 offset/scale/rotation을 갱신한다.
+2. `DetailViewModel.setPhotoSeals()`가 in-memory 편집 상태를 갱신하고 draft autosave를 예약한다. 확정 저장은 `persistSealEditState()`가 각 item의 `serialize()` 결과를 원자적으로 `seal_states/<postcardId>.txt`에 쓰며, 복원은 같은 필드를 `deserializePostcardSealItem()`으로 읽는다. 저장 과정에서 렌더 의미를 변환하는 별도 값은 없다.
+3. 화면은 정사각형 preview에서 `SEAL_BASE_SIZE * seal.scale` 크기의 `SealPreviewContent`를 그리고 item의 offset과 rotation을 적용한다.
+4. 저장·공유 두 호출부 모두 `createSealOverlaysForExport()`를 사용한다. 측정된 화면 크기를 우선 사용하고, 미측정 상태에서는 화면과 같은 `baseSealPx * scale` 공식으로 fallback한다. 위치는 화면과 같은 `correctSealOffsetForMinimumVisibility()`를 재사용해 정규화하고, exporter가 2048 정사각형 bitmap에 같은 비율·회전·색을 적용한다.
+
+**항목별 판정**
+
+- 크기·scale: 일치. 화면 측정 크기 또는 같은 fallback 공식을 정사각형 preview 폭 대비 비율로 넘기며 export도 정사각형이다.
+- offset·좌표 변환·rotation: 일치. 화면과 export가 같은 최소 가시 영역 보정 함수를 사용하고 exporter가 임의로 `[0,1]` 재클램프하지 않는다.
+- 코드 도장 4종(`CIRCLE_POSTMARK`, `WAVE_CANCEL`, `AIR_MAIL`, `STAR`): preview와 exporter의 현재 구현을 줄 단위로 대조했다. stroke `0.035`, 원 반경·내부선·눈금·날짜·물결·모서리·AIR MAIL 글자·별 반경 비율과 개수가 모두 동일하다.
+- 이미지 도장 4종(`DOG_PAW`, `PIGEON_TRACK`, `HEART`, `STAR_STAMP`): 양쪽이 동일한 PNG 리소스를 사용한다. preview의 `ContentScale.Fit`/중앙 배치/`SrcIn` 색 틴트와 exporter의 비율 유지 중앙 배치/`PorterDuff.Mode.SRC_IN` 틴트가 같은 의미이며, 원본 PNG의 비정사각형 비율도 양쪽에서 유지된다.
+- alpha·compositing: 별도 seal alpha 필드는 없다. 양쪽 모두 `colorArgb`의 alpha를 그대로 사용하고 이미지 틴트도 `SRC_IN` 계열이라 현재 의미 차이가 없다.
+- padding·선택 border·최소 hit/gesture 영역: 화면의 선택 테두리와 터치 여유 영역은 편집 조작용 UI이며 실제 `sealVisualSize` 및 export 내용에 포함되지 않는다. 의도된 차이다.
+- dead/unused path: 없음. `SealPreviewContent`와 `PostcardImageExporter.drawSealOverlay()` 모두 현재 production 호출 경로에서 사용된다.
+
+**최종 판정**: 현재 실제 preview/export drift는 확인되지 않았다. 좌표·크기 정책은 이미 공용 계산을 사용하고, 모양 표현도 현재 상수와 알고리즘이 일치한다. 따라서 저장 데이터 의미 변경이나 production 수정은 하지 않았다.
+
+**남은 구조적 위험(수정하지 않음)**: 코드 도장 4종의 도형 그리기 함수는 `SealShapes.kt`와 `PostcardImageExporter.kt`에 각각 구현돼 있어, 앞으로 한쪽만 바꾸면 drift가 생길 수 있는 유지보수 위험은 남는다. 그러나 현재 불일치가 없고 이를 공용 renderer로 합치는 일은 이번 안정화 목표보다 큰 구조 변경이므로, “문제가 하나 확인됐을 때 하나만 고친다”는 범위 원칙에 따라 리팩터링하지 않았다. 이 위험을 실제 결함이나 다음 작업 확정 목표로 과장하지 않는다.
+
+**검증**
+
+- reference 재검색: 도장 모델, preview, 저장·복원, 저장·공유 overlay 생성, exporter, 리소스 호출부를 직접 대조했다.
+- 첫 `PostcardOverlayExportLogicTest` 실행은 저장소에 `gradlew.bat`이 없어 명령을 찾지 못해 실패했다. 앱 코드 실패가 아닌 실행 경로 문제로 분류했다.
+- 로컬 Gradle을 사용한 sandbox 실행은 Foojay plugin을 해석하지 못해 코드 검증 전에 실패했다. 네트워크 허용 재실행에서는 plugin 해석 후 정상 완료했다.
+- `:app:testDebugUnitTest --tests 'com.postcardmemory.ui.detail.PostcardOverlayExportLogicTest'` — BUILD SUCCESSFUL. 결과 XML 기준 **52 tests / failures 0 / errors 0 / skipped 0**. 기존 테스트가 최소 가시 영역, 회전, mini/large 크기, 측정값 fallback과 누락 방지를 검증한다.
+- compile 단계도 같은 실행에서 `compileDebugKotlin UP-TO-DATE`로 성공 상태를 확인했다. production code를 수정하지 않았으므로 별도 전체 compile·전체 unit test는 실행하지 않았다.
+
+**변경 파일**: production code 없음. `docs/ai/HANDOFF.md`만 이번 조사 결과로 갱신했다(앞선 독립 작업의 `AGENTS.md` 변경은 유지).
+
+**데이터 안전성**: Room, schema, Migration, serializer 형식, 기존 `seal_states` 데이터, export 제품 의미를 변경하지 않았다. 기존 엽서 데이터에 영향 없음.
+
+**제10차 최종 마감**: 완료. 실제 drift가 없어 production 수정 없이 조사·관련 자동 검증·HANDOFF 기록으로 닫았다. STOP 대상이나 사용자 제품 판단이 필요한 항목은 새로 발생하지 않았다.
