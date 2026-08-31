@@ -1178,3 +1178,11 @@
 - 기존 untracked `.claude/`, `.kotlin/`은 수정·삭제·stage하지 않고 보존했다.
 
 **최종 자동 검증 판정**: 통과. 실기기 검증이 새 DB 변환이나 새 UI의 완료 조건인 변경은 없으며, 작업지시서가 사전 승인한 정상 Git commit/push 단계로 이동한다.
+
+## 2026-08-31 — 59일차 후속 안정화 구현 commit/push 완료
+
+- commit `3150daa` — `Add migration baseline and coalesce color saves`
+- 포함 파일: `app/build.gradle.kts`, Room v18 schema JSON, `PostcardDatabase.kt`, `DetailViewModel.kt`, 신규 구조 테스트 2개, 이번 후속 조사·검증을 담은 `docs/ai/HANDOFF.md`까지 총 7개다.
+- push 완료: `feature/photo-sticker` local HEAD와 `origin/feature/photo-sticker`가 `3150daa`로 일치하고 ahead/behind는 `0/0`이었다.
+- 기존 untracked `.claude/`, `.kotlin/`은 commit에서 제외했고 그대로 보존했다.
+- 이 기록 자체는 구현 commit 뒤에 작성했으므로 문서 전용 마감 commit으로 별도 반영한다.
