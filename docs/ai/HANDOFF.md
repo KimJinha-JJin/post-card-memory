@@ -1186,3 +1186,42 @@
 - push 완료: `feature/photo-sticker` local HEAD와 `origin/feature/photo-sticker`가 `3150daa`로 일치하고 ahead/behind는 `0/0`이었다.
 - 기존 untracked `.claude/`, `.kotlin/`은 commit에서 제외했고 그대로 보존했다.
 - 이 기록 자체는 구현 commit 뒤에 작성했으므로 문서 전용 마감 commit으로 별도 반영한다.
+
+## 2026-08-31 — 59일차 후속: Codex `postcards_temp/` 7일 cleanup 인수 검수 마감
+
+**배경**: 직전 조사(위 "`postcards_temp/` orphan diagnostics 조사")가 STOP으로 끝난 뒤, Codex가 별도 세션에서 "7일 이상 지난 stale 파일만 삭제"라는 사용자 정책으로 `PostcardTempCleanup` 구현까지 진행했다. 다만 Codex 세션이 Windows sandbox에서 Gradle 빌드를 정상 통과시키지 못해(`foojay-resolver` 플러그인 해석 실패로 추정 — repo에 `.codex-foojay-resolution.init.gradle` 우회 스크립트와 외부 임시 경로 `%TEMP%/codex-postcard-gradle-9.4.1`에 gradle 배포판 사본을 남김) compile/test 검증 없이 코드만 인계됐다. 이번 작업은 그 미검증 구현을 Claude Code가 독립적으로 검수·수정·검증하는 것이다.
+
+**검수 결과 — 구현 자체는 대체로 정확함**
+
+- 7일 임계값 계산(`POSTCARD_TEMP_FILE_MAX_AGE_MILLIS = 7L * 24L * 60L * 60L * 1_000L`)과 `lastModified() <= (now - 임계값)` 경계 판정이 정확히 "7일 이상 경과 시 삭제, 그 미만은 보존"과 일치함을 신규 테스트(`cleanup_deletesOnlyFilesAtLeastSevenDaysOld`)의 boundary/recent 케이스로 재확인.
+- `filesDir/postcards_temp/` 디렉터리만 나열하고(`entry.isFile` 필터로 하위 디렉터리 재귀 없음), `postcards_temp/` 밖 사용자 파일(`postcards/postcard_1.jpg` 등)에는 전혀 접근하지 않음을 별도 테스트로 확인 — 탐색 범위가 과도하지 않음.
+- 삭제 실패는 `runCatching`으로 감싸 `failedFiles`에만 기록하고 예외를 던지지 않음 — 앱 startup을 깨뜨리지 않는다는 요구와 일치.
+- active crop 파일 안전성은 "onCreate가 카메라 화면보다 먼저 실행된다"는 순서 가정 하나에만 기대지 않는다 — 설령 그 가정이 깨져도 방금 생성된 crop 원본은 7일 미만이라 삭제 대상 필터를 통과하지 못하므로, 이중으로 안전하다는 점을 코드로 확인함.
+- 예외 처리가 과도하게 삼켜지는 문제는 없음: `listFiles()` 실패와 개별 `delete()` 실패만 각각 `runCatching`으로 감싸며, 실패를 숨기지 않고 `failedFiles`로 상위에 보고한다.
+
+**발견한 결함 1건과 수정**
+
+- Codex 구현은 `PostcardTempCleanup.cleanup()`을 `Application.onCreate()`에서 동기 호출했다 — 메인 스레드에서 디렉터리 나열 + 파일 삭제 I/O를 블로킹으로 수행하는 구조라 콜드 스타트 지연 위험이 있었다. `CameraViewModel.kt`가 이미 같은 종류의 파일 I/O(`File(cropState.sourcePath).delete()`)를 `viewModelScope.launch(Dispatchers.IO)`로 오프로드하는 선례가 있어, 저장 의미·DB·새 UX 변경 없이 `AGENTS.md` 6장의 "작은 결함·명확한 원인·기존 선례 존재" 조건을 충족한다고 판단해 사용자 재확인 없이 직접 수정했다.
+- 수정: `PostCardMemoryApp.kt`의 cleanup 호출을 `CoroutineScope(Dispatchers.IO).launch { ... }`로 감싸 메인 스레드 블로킹을 제거함. `filesDir`·삭제 로직·로그 내용은 그대로 유지.
+
+**검증**
+
+- `gradle compileDebugKotlin` — BUILD SUCCESSFUL.
+- `gradle testDebugUnitTest --tests "com.postcardmemory.utils.PostcardTempCleanupTest"` — 결과 XML 기준 **4 tests / failures 0 / errors 0 / skipped 0** (경계/최근 파일 보존/삭제 실패 보고/없는·빈 디렉터리 4케이스 전부 통과).
+- 이어서 필터 없이 `gradle testDebugUnitTest` 전체 실행 — 결과 XML 합계 **57 suites / 499 tests / failures 0 / errors 0 / skipped 0**. 기존 스위트에 회귀 없음을 확인.
+- `git diff --check` — 오류 없음(Windows LF→CRLF 안내만 있음, 기존 관행).
+- Codex의 sandbox 빌드 실패는 앱 코드 결함이 아니라 Codex 세션의 Gradle/네트워크 환경 문제였음을 확인 — Claude Code의 정상 로컬 Gradle(9.4.1, Android Studio JBR)로는 별도 조치 없이 compile/test 모두 통과했다.
+
+**Codex 임시 산출물 정리**
+
+- 저장소 내 `.codex-foojay-resolution.init.gradle`(어떤 `.gradle`/`.properties`/`.kts`에서도 참조되지 않음을 grep으로 확인) 삭제.
+- 외부 임시 경로 `%TEMP%/codex-postcard-gradle-9.4.1`(148MB, gradle 9.4.1 배포판 사본)도 production과 무관한 sandbox 우회 산출물임을 확인 후 삭제.
+- 기존 untracked `.claude/`, `.kotlin/`은 건드리지 않음.
+
+**사용자 제품 결정 기록 — export는 항상 앞면**
+
+- 엽서 export(저장/공유/파일 내보내기)는 화면이 뒷면을 보고 있어도 항상 앞면을 출력하는 것이 의도된 정책이라는 확정을 이번 세션에서 받음. 이 결정은 위 "58일차 export 앞/뒷면 STOP" 항목이 열어둔 판단 대기를 닫는다. 현재 면 export, 뒷면 export, 선택 UI는 모두 추가하지 않으며 현재 동작은 버그가 아니다. 상세 정책 근거와 영향은 `docs/ai/DECISIONS.md`의 같은 날짜 항목에 기록.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/PostCardMemoryApp.kt`(Dispatchers.IO 오프로드 수정), `app/src/main/java/com/postcardmemory/utils/PostcardTempCleanup.kt`(신규, Codex 원본 그대로 채택), `app/src/test/java/com/postcardmemory/utils/PostcardTempCleanupTest.kt`(신규, Codex 원본 그대로 채택), `docs/ai/HANDOFF.md`, `docs/ai/DECISIONS.md`. 삭제: `.codex-foojay-resolution.init.gradle`(저장소), `%TEMP%/codex-postcard-gradle-9.4.1`(외부).
+
+**작업 단위 판정**: 완료. Room/Migration/데이터 구조 변경 없음, 새 UX 없음, 저장 의미 변경 없음. 실기기 검증은 아직 없음 — **사용자 검증 대기**: 실기기에서 7일 미만 임시 파일이 앱 재시작 후에도 남아 있는지, 오래된 임시 파일이 다음 실행 시 정리되는지는 자동 테스트로만 확인했고 실기기 확인은 하지 않았다(재현하려면 파일 mtime을 인위적으로 7일 이전으로 돌려야 해서 일반 사용 흐름에서 자연 관찰은 어려움 — 필요하면 후속 세션에서 ADB로 mtime 조작 후 확인 가능).
