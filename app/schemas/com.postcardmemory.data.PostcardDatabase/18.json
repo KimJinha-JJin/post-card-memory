@@ -1,0 +1,243 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 18,
+    "identityHash": "bfe939cc4e096112a8b67acaea76ffd5",
+    "entities": [
+      {
+        "tableName": "postcards",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `imagePath` TEXT NOT NULL, `title` TEXT NOT NULL, `capturedAt` INTEGER NOT NULL, `location` TEXT, `message` TEXT NOT NULL DEFAULT '', `backgroundColorArgb` INTEGER NOT NULL, `backgroundImagePath` TEXT, `backgroundPattern` TEXT NOT NULL DEFAULT 'NONE', `messageFont` TEXT NOT NULL DEFAULT 'SERIF', `layoutStyle` TEXT NOT NULL DEFAULT 'STANDARD', `dateFormat` TEXT NOT NULL DEFAULT 'DOT', `messageTextScale` REAL NOT NULL DEFAULT 1.0, `dateTextScale` REAL NOT NULL DEFAULT 1.0, `backgroundPatternDensity` REAL NOT NULL DEFAULT 1.0, `stampPhotoScale` REAL NOT NULL DEFAULT 1.0, `polaroidPhotoScale` REAL NOT NULL DEFAULT 1.0, `photoEdgeBlur` REAL NOT NULL DEFAULT 0.0, `stampPhotoOffsetX` REAL NOT NULL DEFAULT 0.0, `stampPhotoOffsetY` REAL NOT NULL DEFAULT 0.0, `polaroidPhotoOffsetX` REAL NOT NULL DEFAULT 0.0, `polaroidPhotoOffsetY` REAL NOT NULL DEFAULT 0.0, `tapedFilmPhotoOffsetX` REAL NOT NULL DEFAULT 0.0, `tapedFilmPhotoOffsetY` REAL NOT NULL DEFAULT 0.0, `stampPhotoZoom` REAL NOT NULL DEFAULT 1.0, `polaroidPhotoZoom` REAL NOT NULL DEFAULT 1.0, `tapedFilmPhotoZoom` REAL NOT NULL DEFAULT 1.0, `futureMailState` TEXT NOT NULL DEFAULT 'NONE', `futureMailDeliverAt` INTEGER, `envelopeStyle` TEXT, `envelopePostmarked` INTEGER NOT NULL DEFAULT 0, `backRecipientModifier` TEXT NOT NULL DEFAULT '', `backMessage` TEXT NOT NULL DEFAULT '')",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imagePath",
+            "columnName": "imagePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAt",
+            "columnName": "capturedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "location",
+            "columnName": "location",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "backgroundColorArgb",
+            "columnName": "backgroundColorArgb",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backgroundImagePath",
+            "columnName": "backgroundImagePath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "backgroundPattern",
+            "columnName": "backgroundPattern",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'NONE'"
+          },
+          {
+            "fieldPath": "messageFont",
+            "columnName": "messageFont",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'SERIF'"
+          },
+          {
+            "fieldPath": "layoutStyle",
+            "columnName": "layoutStyle",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'STANDARD'"
+          },
+          {
+            "fieldPath": "dateFormat",
+            "columnName": "dateFormat",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'DOT'"
+          },
+          {
+            "fieldPath": "messageTextScale",
+            "columnName": "messageTextScale",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "dateTextScale",
+            "columnName": "dateTextScale",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "backgroundPatternDensity",
+            "columnName": "backgroundPatternDensity",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "stampPhotoScale",
+            "columnName": "stampPhotoScale",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "polaroidPhotoScale",
+            "columnName": "polaroidPhotoScale",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "photoEdgeBlur",
+            "columnName": "photoEdgeBlur",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.0"
+          },
+          {
+            "fieldPath": "stampPhotoOffsetX",
+            "columnName": "stampPhotoOffsetX",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.0"
+          },
+          {
+            "fieldPath": "stampPhotoOffsetY",
+            "columnName": "stampPhotoOffsetY",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.0"
+          },
+          {
+            "fieldPath": "polaroidPhotoOffsetX",
+            "columnName": "polaroidPhotoOffsetX",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.0"
+          },
+          {
+            "fieldPath": "polaroidPhotoOffsetY",
+            "columnName": "polaroidPhotoOffsetY",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.0"
+          },
+          {
+            "fieldPath": "tapedFilmPhotoOffsetX",
+            "columnName": "tapedFilmPhotoOffsetX",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.0"
+          },
+          {
+            "fieldPath": "tapedFilmPhotoOffsetY",
+            "columnName": "tapedFilmPhotoOffsetY",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.0"
+          },
+          {
+            "fieldPath": "stampPhotoZoom",
+            "columnName": "stampPhotoZoom",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "polaroidPhotoZoom",
+            "columnName": "polaroidPhotoZoom",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "tapedFilmPhotoZoom",
+            "columnName": "tapedFilmPhotoZoom",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "futureMailState",
+            "columnName": "futureMailState",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'NONE'"
+          },
+          {
+            "fieldPath": "futureMailDeliverAt",
+            "columnName": "futureMailDeliverAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "envelopeStyle",
+            "columnName": "envelopeStyle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "envelopePostmarked",
+            "columnName": "envelopePostmarked",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "backRecipientModifier",
+            "columnName": "backRecipientModifier",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "backMessage",
+            "columnName": "backMessage",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bfe939cc4e096112a8b67acaea76ffd5')"
+    ]
+  }
+}

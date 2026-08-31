@@ -389,12 +389,10 @@ class DetailViewModel @Inject constructor(
      * 시간차 때문에 오래된 읽기가 나중에 커밋되며 다시 역전될 수 있어 두
      * 가지를 함께 써야 한다.
      *
-     * backgroundColorSaveJob 등 5개는 다른 것과 달리 새 저장이 이전 Job을
-     * cancel()하지 않는다 — 재읽기+직렬화만으로 이미 최종 상태로 수렴하므로
-     * cancel 없이도 안전하며(da80596), 여러 개가 겹쳐 있어도 그중 어느
-     * 것이든 완료되면 그 시점의 화면 상태가 커밋된다. awaitPendingStyleSaves()가
-     * 필드에 보관된(=가장 나중에 launch된) Job 하나만 join해도 충분한 이유가
-     * 이것이다.
+     * 새 저장이 이전 Job을 cancel()하지 않는 저장도 재읽기+직렬화만으로
+     * 최종 상태에 수렴한다(da80596). backgroundColorSaveJob은 HSV drag에서
+     * 유일하게 연속 호출되므로 이전 Job을 취소해 불필요한 Room 쓰기를 줄이고,
+     * 나머지 단발성 저장은 이 수렴 보장을 그대로 사용한다.
      */
     private val styleWriteMutex = Mutex()
 
@@ -3418,6 +3416,7 @@ class DetailViewModel @Inject constructor(
         _backgroundUpdateState.value =
             BackgroundUpdateState.Saving
 
+        backgroundColorSaveJob?.cancel()
         backgroundColorSaveJob = viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {

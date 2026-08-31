@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [Postcard::class],
     version = 18,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class PostcardDatabase : RoomDatabase() {
 

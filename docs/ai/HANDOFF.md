@@ -1017,3 +1017,164 @@
 **데이터 안전성**: Room, schema, Migration, serializer 형식, 기존 `seal_states` 데이터, export 제품 의미를 변경하지 않았다. 기존 엽서 데이터에 영향 없음.
 
 **제10차 최종 마감**: 완료. 실제 drift가 없어 production 수정 없이 조사·관련 자동 검증·HANDOFF 기록으로 닫았다. STOP 대상이나 사용자 제품 판단이 필요한 항목은 새로 발생하지 않았다.
+
+## 2026-08-31 — 59일차 운영 규칙·제10차 commit/push 완료
+
+- commit `36e08ba` — `Define task fork boundaries and record seal export audit`
+- 포함 파일: `AGENTS.md`, `docs/ai/HANDOFF.md` 두 개만 stage·commit했다. 기존 untracked `.claude/`, `.kotlin/`은 제외하고 그대로 보존했다.
+- push 완료: `feature/photo-sticker` local HEAD와 `origin/feature/photo-sticker`가 `36e08ba`로 일치한다.
+- 이 반영은 운영 규칙과 조사 기록뿐이며 production code·Room·Migration·기존 엽서 데이터에는 변화가 없다.
+
+## 2026-08-31 — 59일차 후속 안정화: Migration 안전망
+
+**조사 대상**: 현재 Room DB version, Migration 선언·등록, schema export 설정, schema JSON, Migration 테스트 구조와 기존 데이터 호환 영향을 확인했다.
+
+**하위 agent 사용 여부**: 사용하지 않음. 조사·수정·검증은 Codex 본체가 직접 수행했다.
+
+**확인한 현재 상태**
+
+- `PostcardDatabase`는 version 18이며 `MIGRATION_1_2`부터 `MIGRATION_17_18`까지 연속 선언돼 있다.
+- `DatabaseModule`은 위 17개 Migration을 같은 순서로 모두 등록하며 destructive fallback은 사용하지 않는다.
+- 조사 전에는 `exportSchema = false`였고 schema JSON과 Migration 검증 테스트가 없었다. 따라서 다음 DB version 작업에서 구조 기준선을 자동 대조할 수 없는 상태였다.
+- 과거 version 1~17의 schema JSON은 저장소에 남아 있지 않아, 현시점에 과거 구조를 추측해 복원하는 것은 데이터 안전상 하지 않았다.
+
+**최소 보강**
+
+- `PostcardDatabase`의 `exportSchema`를 `true`로 바꾸고 KSP에 `room.schemaLocation`을 지정했다.
+- 현재 version 18 schema를 `app/schemas/com.postcardmemory.data.PostcardDatabase/18.json`에 생성했다.
+- 순수 JUnit 구조 테스트를 추가해 현재 DB version까지 Migration 선언과 `DatabaseModule` 등록이 1단계씩 빠짐없이 같은 순서인지, schema export와 현재 version JSON이 유지되는지 검증한다.
+- Entity, DAO, Migration SQL, DB version, runtime DB builder와 저장 의미는 변경하지 않았다. 기존 설치 DB나 기존 엽서 데이터에 실행 시 변환이 발생하지 않는다.
+
+**검증**
+
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL.
+- `:app:testDebugUnitTest --tests 'com.postcardmemory.data.PostcardMigrationRegistrationStructureTest'` — BUILD SUCCESSFUL. 결과 XML 기준 **3 tests / failures 0 / errors 0 / skipped 0**.
+- `git diff --check` — 오류 없음. 표시된 LF→CRLF 안내와 기존 Android Gradle 설정 경고는 이번 변경의 코드 실패가 아니다.
+- 초기 설정 검토 중 향후 계측 Migration 테스트용 schema assets 연결을 잠시 추가했으나 현재 계측 테스트가 없어 새 deprecated 경고만 만들었으므로 최종 diff에서 제거했다.
+
+**남은 한계·보류**: 이 변경은 version 18부터의 신뢰 가능한 기준선을 만든 것이다. 과거 1~17 실제 DB를 각 Migration SQL로 올려 검증하는 `MigrationTestHelper` 테스트는 당시 schema가 없어 이번 범위에서 만들지 않았다. 다음 18→19 Migration을 추가할 때 version 18 JSON을 입력 기준으로 계측 검증을 붙일 수 있다. DB schema나 Migration 정책을 새로 결정한 항목은 없다.
+
+**변경 파일**: `app/build.gradle.kts`, `app/src/main/java/com/postcardmemory/data/PostcardDatabase.kt`, `app/schemas/com.postcardmemory.data.PostcardDatabase/18.json`, `app/src/test/java/com/postcardmemory/data/PostcardMigrationRegistrationStructureTest.kt`, `docs/ai/HANDOFF.md`.
+
+**작업 단위 판정**: 완료. 다음 독립 후보는 Undo 비대칭 제품 검토이며, UX 의미를 임의로 통합하지 않고 현재 차이와 저장 구조만 조사한다.
+
+## 2026-08-31 — 59일차 후속 안정화: Undo 비대칭 제품 검토
+
+**조사 대상**: 편집 요소별 Undo 노출, snapshot 생성 시점, Undo 후 저장 경로, 확정 저장과 history 정리 관계를 현재 production 호출부 기준으로 비교했다.
+
+**하위 agent 사용 여부**: 사용하지 않음. Codex 본체가 ViewModel과 각 편집 화면 호출부를 직접 대조했다.
+
+**확인한 실제 구조**
+
+- 스티커·도장·낙서·텍스트 스티커·마스킹테이프·라벨 스티커 6종은 독립 undo/redo stack과 화면 버튼을 모두 갖는다. 추가·삭제·이동·회전 또는 상세 편집 직전에 snapshot을 만들고, undo/redo 결과는 `scheduleDraftAutosave()`로 초안에 반영된다.
+- 이 6종은 완료 버튼의 `saveEditsAndClearDraft()`가 여섯 확정 파일을 모두 성공적으로 저장한 뒤에만 history를 함께 지운다. 하나라도 실패하면 history와 초안을 유지한다. 제9차의 `ConfirmSaveHistoryClearStructureTest`가 이 목록의 대칭성을 이미 보호한다.
+- 사진 크기·위치·줌·블러는 별도의 `PhotoTransformSnapshot` 한 묶음으로 undo/redo를 제공한다. 슬라이더 drag당 최초 1회 또는 제스처 시작 직전에 snapshot을 만들며, undo/redo 적용은 각 `save*` 함수를 호출해 화면 상태뿐 아니라 Room에도 즉시 저장한다.
+- 레이아웃, 배경색·패턴·밀도·이미지, 앞면 글 스타일, 뒷면 수신 문구·편지 등 다른 즉시 저장 필드는 undo/redo 버튼과 history가 없다. 실패 시에는 각 저장 함수의 낙관적 변경 rollback 또는 오류 상태로 현재 조작을 보호하지만, 사용자가 성공한 이전 조작을 단계별로 되돌리는 기능은 아니다.
+
+**판정**: 비대칭은 존재하지만 현재 코드 결함으로 단정할 수 없다. 6종은 완료 전 초안 편집, 사진 transform은 즉시 저장되는 한 편집 묶음, 나머지는 선택·입력 즉시 저장이라는 서로 다른 제품 경계를 갖는다. 특히 즉시 저장 필드까지 하나의 Undo 범위로 만들려면 history 수명, 화면 전환 후 유지 여부, 연속 HSV·텍스트 입력을 몇 단계로 볼지, Undo 실패 표시를 새로 결정해야 한다.
+
+**production 수정 여부**: 없음. 기존 Undo가 저장 결과와 어긋나거나 특정 6종만 history 정리에서 누락된 실제 결함은 확인되지 않았다. 임의로 전역 Undo를 추가하거나 현재 저장 의미를 통합하는 것은 `Undo 제품 의미 변경` STOP 대상이라 보류했다.
+
+**사용자 체감과 향후 선택지**
+
+- 현행 유지: 스티커류와 사진 transform처럼 명시적으로 설계된 영역에서만 Undo를 제공한다. 변경 위험이 가장 작다.
+- 범위 확대: 배경·레이아웃·글·뒷면에도 Undo를 제공할 수 있지만, 어떤 조작을 한 단계로 묶는지와 즉시 저장 실패 정책부터 제품 결정이 필요하다.
+- 전체 편집 세션 Undo: 가장 일관돼 보일 수 있으나 저장 구조와 lifecycle을 크게 바꾸므로 현재 안정화 범위를 벗어난다.
+
+**검증**: 이번 단위는 read-only 코드·reference 조사만 수행했다. production·test 코드를 바꾸지 않아 별도 빌드나 테스트를 추가 실행하지 않았다. 앞 단위의 Migration 변경 검증 결과는 그대로 유지된다.
+
+**작업 단위 판정**: 조사 완료, 제품 판단 대기 후보로 보류. 다음 독립 후보는 뒷면 export 실제 경로 조사다.
+
+## 2026-08-31 — 59일차 후속 안정화: 뒷면 export 제품 결정 조사
+
+**조사 대상**: 화면의 앞·뒷면 상태, 공유·파일 내보내기 진입점, ViewModel, bitmap renderer와 테스트 reference를 추적했다.
+
+**하위 agent 사용 여부**: 사용하지 않음. Codex 본체가 production 경로를 직접 확인했다.
+
+**확인한 실제 동작**
+
+- `DetailScreen`의 `isBackFace`는 DB에 저장하지 않는 화면 로컬 상태이며 진입 시 항상 앞면이다. 플립 애니메이션이 90도를 넘으면 `PostcardBackFaceContent`로 화면 내용만 바뀐다.
+- 공유와 파일 내보내기 메뉴는 앞·뒷면 어느 상태에서도 같은 `sharePostcard()` / `exportPostcardToGallery()`를 호출한다. 두 함수에는 현재 면 인자가 없고 `isBackFace`도 전달되지 않는다.
+- ViewModel은 현재 `Postcard`와 앞면 꾸미기 overlay들을 `PostcardImageExporter`에 전달한다.
+- exporter의 `createPostcardBitmap()`은 원본 사진을 열고 `PostcardRenderSpec.drawBaseContent()`로 앞면을 그린 뒤 마스킹테이프·스티커·도장·텍스트·낙서·라벨을 합성한다. `backRecipientModifier`, `backMessage` 또는 뒷면 renderer를 참조하지 않는다.
+- 따라서 사용자가 화면에서 뒷면을 보고 공유·파일 내보내기를 눌러도 현재 결과는 항상 앞면이다. 이는 가능성이 아니라 현재 코드로 확정되는 동작이다.
+
+**판정과 STOP 이유**: 현재 화면 면과 export 결과가 다를 수 있다는 UX 불일치는 확인됐다. 다만 어떤 결과가 맞는지는 코드 사실만으로 하나로 수렴하지 않는다. `항상 앞면 유지`, `현재 보고 있는 면`, `앞·뒤 선택`, `두 장 함께 출력`은 각각 제품 의미와 파일·공유 UX가 다르다. 사용자 지시의 `export 기능의 제품 의미 변경` STOP 조건에 해당하므로 renderer나 버튼 동작을 임의로 수정하지 않았다.
+
+**선택지 영향**
+
+- 항상 앞면: 기존 파일 호환과 사용 흐름을 그대로 유지하지만, 뒷면을 보고 눌러도 앞면이 나오는 혼동이 남는다. 필요하면 문구로 앞면임을 명시하는 별도 UX 결정이 필요하다.
+- 현재 면: 눈에 보이는 결과와 가장 직접적으로 맞지만, 뒷면의 실제 출력 디자인·해상도 renderer와 관련 테스트를 새로 확정해야 한다.
+- 선택 또는 앞·뒤 동시 출력: 기능은 명확하지만 새 UI와 복수 파일/공유 정책이 필요해 범위가 가장 크다.
+
+**production 수정·검증**: 수정 없음. read-only 호출 경로 조사만 수행했으며 별도 build/test는 실행하지 않았다. 현재 exporter에 뒷면 경로가 없다는 사실을 테스트로 고정하면 오히려 미결정 제품 의미를 선례로 만들 수 있어 새 테스트도 추가하지 않았다.
+
+**작업 단위 판정**: 조사 완료, 사용자 제품 판단 대기 후보로 보류. 이 문제 때문에 전체 작업을 멈추지 않고 다음 독립 후보인 `backgroundColorSaveJob` 재검토로 이동한다.
+
+## 2026-08-31 — 59일차 후속 안정화: `backgroundColorSaveJob` 연속 쓰기 보강
+
+**조사 대상**: 57~58일차 결론을 기준으로 현재 HSV 호출 빈도, `styleWriteMutex`와 최신 state 재읽기, 자기취소 선례, 화면 이탈 대기와 기존 race 테스트를 재확인했다.
+
+**하위 agent 사용 여부**: 사용하지 않음. Codex 본체가 조사·production 수정·테스트를 직접 수행했다.
+
+**확인한 상태와 판정**
+
+- 기존 구현은 정확성 면에서는 안전했다. 모든 배경색 저장이 `styleWriteMutex`를 통과하고 획득 시점의 최신 색·이미지 경로를 다시 읽으므로 오래된 값이 최종 Room 상태를 덮지 않는다.
+- 그러나 커스텀 HSV picker는 drag 중 `updateBackgroundColor()`를 프레임 단위로 연속 호출하며, 이 함수만 이전 `backgroundColorSaveJob`을 취소하지 않아 Mutex 대기열에 불필요한 쓰기가 누적될 수 있었다.
+- 같은 ViewModel의 슬라이더 저장 11종은 `이전 Job 취소 → 최신 Job 보관 → Mutex 안에서 최신 state 재읽기` 선례를 이미 사용한다. 배경색도 최종 최신 값을 즉시 저장한다는 의미를 유지한 채 이 선례를 적용할 수 있고, debounce 시간·Apply 버튼·drag 종료 저장 같은 새 제품 정책은 필요하지 않았다.
+
+**최소 production 수정**
+
+- 새 배경색 Job을 launch하기 직전에 `backgroundColorSaveJob?.cancel()`을 추가했다.
+- 화면 상태는 이전과 똑같이 매 입력 즉시 바뀌고, 새 Job은 Mutex 안에서 최신 색과 이미지 경로를 다시 읽는다. 따라서 중간 Room write만 생략되며 최종 저장 의미와 기존 이미지 경로 보존 정책은 바뀌지 않는다.
+- 연속 취소 정책과 최신 Job 필드 보관·최신 state 재읽기 순서를 고정하는 `BackgroundColorSaveJobStructureTest`를 추가했다.
+- `styleWriteMutex` 설명은 배경색이 연속 입력이라 자기취소하고 나머지 단발성 저장은 기존 수렴 보장을 유지한다는 현재 구조로 바로잡았다.
+
+**검증**
+
+- 관련 4개 suite 실행 — BUILD SUCCESSFUL.
+- 결과 XML 합계 **21 tests / failures 0 / errors 0 / skipped 0**: `BackgroundColorSaveJobStructureTest` 1, `BackgroundColorSaveRaceTest` 9, `DetailScreenExitSaveGuaranteeTest` 8, `DetailScreenExitSaveLossTest` 3.
+- 같은 실행에서 `compileDebugKotlin`도 성공했다.
+- `git diff --check` — 오류 없음. LF→CRLF 안내는 기존 Windows line-ending 안내다.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt`, `app/src/test/java/com/postcardmemory/ui/detail/BackgroundColorSaveJobStructureTest.kt`, `docs/ai/HANDOFF.md`.
+
+**작업 단위 판정**: 완료. DB schema·저장 형식·UX 의미를 바꾸지 않는 작은 성능·lifecycle 보강으로 닫았다. 다음 독립 후보는 `postcards_temp/` orphan diagnostics다.
+
+## 2026-08-31 — 59일차 후속 안정화: `postcards_temp/` orphan diagnostics 조사
+
+**조사 대상**: 카메라 임시 파일 생성·성공·실패·취소·`onCleared()` 정리 경로, `OrphanFileDiagnostics`의 분류 기준·호출 여부·기존 테스트를 확인했다.
+
+**하위 agent 사용 여부**: 사용하지 않음. Codex 본체가 read-only로 조사했다.
+
+**확인한 현재 상태**
+
+- 카메라 원본 임시 파일은 `filesDir/postcards_temp/temp_<millis>.jpg`로 생성된다. 정상 크롭 저장의 `finally`, 촬영 폐기, 화면 정리의 `onCleared()`에서 현재 `pendingSourcePath`를 삭제한다.
+- 프로세스 강제 종료처럼 위 정리 코드가 실행되지 않는 경우 파일이 남을 수 있다는 기존 후보는 유효하다.
+- `OrphanFileDiagnostics`는 Room 참조 경로나 파일명·디렉터리의 postcardId로 소유 여부를 판정하는 read-only 도구다. 현재 production 호출자는 없고 파일을 삭제하지 않으며, 테스트에서만 직접 실행한다.
+- `postcards_temp/` 파일에는 postcardId나 Room 참조가 없고, 실제 카메라 편집 중인 활성 파일도 오래 남은 파일과 같은 이름 규칙을 사용한다. `OrphanFileDiagnostics`에는 CameraViewModel의 `pendingSourcePath`가 전달되지 않는다.
+
+**판정과 보류 이유**: 디렉터리의 모든 파일을 곧바로 orphan category에 넣으면 활성 crop 파일까지 고아로 오표시할 수 있다. 안전하게 구분하려면 `마지막 수정 시각 임계값`, `앱 시작 시점 정리`, `현재 활성 경로 전달/등록` 중 적어도 하나의 새 lifecycle 정책이 필요하다. 시간 기준과 삭제 정책을 임의로 만들지 말라는 이번 지시 경계에 해당한다.
+
+**production 수정 여부**: 없음. 진단이 현재 read-only라는 이유만으로 오탐 분류를 허용하지 않았고, 자동 삭제나 디렉터리 청소도 추가하지 않았다.
+
+**향후 선택지**
+
+- 보수적 진단: 충분히 오래된 파일만 후보로 보고하되 임계 시간을 제품·운영 기준으로 확정한다.
+- 활성 경로 인지: 진단 호출자가 현재 `pendingSourcePath` 집합을 넘기고 나머지를 후보로 보지만, 프로세스 간 상태와 호출 구조를 새로 설계해야 한다.
+- 시작 시 정리: 앱/카메라 시작 시 이전 프로세스의 파일을 청소할 수 있으나, 실행 시점·유예 시간·실패 처리 정책이 필요하다.
+
+**검증**: read-only 코드·reference 조사만 수행했다. 이 단위 자체의 코드 변경이 없어 별도 테스트를 추가 실행하지 않았다.
+
+**작업 단위 판정**: 조사 완료, 파일 lifecycle 정책 결정 대기로 보류. 현재 HANDOFF와 작업지시서에 남은 독립 안정화 후보를 모두 소진했으며, 최종 전체 diff·compile·unit test·Git 검증으로 이동한다.
+
+## 2026-08-31 — 59일차 후속 안정화 최종 자동 검증
+
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL. 결과 XML 기준 **56 suites / 495 tests / failures 0 / errors 0 / skipped 0**.
+- 같은 최종 실행에서 `compileDebugKotlin UP-TO-DATE`로 성공 상태를 다시 확인했다. 앞선 production 변경 직후 관련 테스트 실행에서는 실제 compile task도 성공했다.
+- `git diff --check` — 오류 없음. Windows LF→CRLF 안내와 기존 Android Gradle 설정 deprecation 안내만 있었으며 새 compile/test 오류는 없다.
+- 전체 diff를 재검토해 Migration 기준선·등록 안전망, 배경색 연속 Job 자기취소, 두 신규 테스트, 각 조사 HANDOFF 외 unrelated tracked 변경이 없음을 확인했다.
+- 하위 Task/fork나 다른 coding agent는 이번 연속 후속 작업 전체에서 사용하지 않았다. 모든 조사·판정·production 수정·검증은 Codex 본체가 수행했다.
+- 기존 untracked `.claude/`, `.kotlin/`은 수정·삭제·stage하지 않고 보존했다.
+
+**최종 자동 검증 판정**: 통과. 실기기 검증이 새 DB 변환이나 새 UI의 완료 조건인 변경은 없으며, 작업지시서가 사전 승인한 정상 Git commit/push 단계로 이동한다.
