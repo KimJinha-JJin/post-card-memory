@@ -1225,3 +1225,124 @@
 **변경 파일**: `app/src/main/java/com/postcardmemory/PostCardMemoryApp.kt`(Dispatchers.IO 오프로드 수정), `app/src/main/java/com/postcardmemory/utils/PostcardTempCleanup.kt`(신규, Codex 원본 그대로 채택), `app/src/test/java/com/postcardmemory/utils/PostcardTempCleanupTest.kt`(신규, Codex 원본 그대로 채택), `docs/ai/HANDOFF.md`, `docs/ai/DECISIONS.md`. 삭제: `.codex-foojay-resolution.init.gradle`(저장소), `%TEMP%/codex-postcard-gradle-9.4.1`(외부).
 
 **작업 단위 판정**: 완료. Room/Migration/데이터 구조 변경 없음, 새 UX 없음, 저장 의미 변경 없음. 실기기 검증은 아직 없음 — **사용자 검증 대기**: 실기기에서 7일 미만 임시 파일이 앱 재시작 후에도 남아 있는지, 오래된 임시 파일이 다음 실행 시 정리되는지는 자동 테스트로만 확인했고 실기기 확인은 하지 않았다(재현하려면 파일 mtime을 인위적으로 7일 이전으로 돌려야 해서 일반 사용 흐름에서 자연 관찰은 어려움 — 필요하면 후속 세션에서 ADB로 mtime 조작 후 확인 가능).
+
+## 2026-09-01 — 60일차: 상세 설정 대화창 UI 전수조사
+
+**사용자 관점 요약**: 상세 화면 위에 뜨는 실제 설정창을 호출부까지 전수조사했다. 설정값을 저장하는 시점, 취소 의미, Undo, Canvas 반영 방식은 바꾸지 않고, 결과 확인용 큰 둥근 배경 중 기능이 없는 것만 걷어내는 방향으로 구현할 수 있음을 확인했다.
+
+**시작 Git 상태**
+
+- 브랜치 `feature/photo-sticker`, HEAD `ed8fe88` (`Adopt Codex postcards_temp cleanup with IO-dispatcher fix`).
+- local/origin HEAD 일치, ahead/behind `0/0`, staged·unstaged tracked 변경 없음.
+- 기존 untracked: `.claude/settings.local.json`, `.codex-config.candidate.toml`, `.kotlin/errors/*.log`. 이번 작업에서 수정·삭제·stage하지 않는다.
+- Git 조회는 성공했으나 사용자 홈의 global ignore(`C:\Users\estel\.config\git\ignore`) 접근에는 permission 경고가 있었다. 저장소 상태 판정에는 영향이 없었다.
+
+**설정용 Dialog / modal 비교**
+
+| Dialog / UI | 신규 / 편집 | 현재 Preview | Canvas 실시간 반영 | 장식성 Box | Preview 필요성 | UI 수정 후보 |
+|---|---|---|---|---|---|---|
+| 글귀 남기기 | 기존 글귀 편집 | 없음 | 저장 때 반영 | 삭제 의미 안내 배경 1 | 불필요 | 기능적 경고 배경이라 유지 |
+| 배경 기타 색상 | 단순 설정 | 없음 | 있음 | 없음 | Canvas가 Preview 역할 | 유지 |
+| 텍스트 스티커 추가 | 신규 | 없음 | 없음 | 없음 | 문구+테두리색 결과가 단순해 별도 Preview 실익이 낮음 | 유지 |
+| 텍스트 스티커 수정 | 편집 | 없음 | 없음 | 없음 | 문구+테두리색 결과가 단순해 별도 Preview 실익이 낮음 | 유지 |
+| 라벨 뽑기 | 신규 | 있음 | 없음 | 큰 둥근 Preview 배경 1 | 필요—폭·문구·테이프색 조합을 추가 전에 볼 유일한 곳 | Preview 배경만 제거 후보 |
+| 라벨 수정 | 편집 | 있음 | 없음 | 큰 둥근 Preview 배경 1 | 필요—Dialog local draft라 Canvas 객체가 바뀌지 않음 | Preview 배경만 제거 후보 |
+| 기본 테이프 생성 | 신규 | 있음 | 없음 | 큰 둥근 Preview 배경 1 | 필요—프리셋 선택 뒤 추가 결과 확인 | 파일럿: Preview 배경만 제거 |
+| 커스텀 테이프 생성 | 신규 | 있음 | 없음 | 없음 | 필요—무늬·두 색 조합 확인 | 현행 평면 Preview 유지 |
+| 테이프 편집 | 편집 | 있음 | 없음 | 큰 둥근 Preview 배경 1 | 필요—Dialog local draft라 Canvas 객체가 바뀌지 않음 | Preview 배경만 제거 후보 |
+| 도장 디자인 | 신규·편집 공용 | 있음 | 없음 | Preview 배경 1 | 필요—종류·잉크 조합 확인, 저장된 흰 잉크 대비 보호 | 기능적 대비 배경이라 유지 |
+
+삭제 확인, 미래우편 확인, 저장 결과 안내는 상세 속성 설정창이 아니어서 제외했다. 미래우편 DatePicker는 발송 흐름, 사진 소스 Bottom Sheet는 소스 선택, 공유 Bottom Sheet는 export 흐름이므로 이번 꾸미기 설정 UI 범위에 넣지 않았다.
+
+**행동·Preview 판정**
+
+- 글귀·텍스트 스티커·라벨·테이프·도장 Dialog의 draft는 확인 버튼 전까지 실제 객체에 반영되지 않는다. 취소·Back·바깥 dismiss는 기존 객체와 저장값을 바꾸지 않는다.
+- 배경 기타 색상만 `PostcardCustomColorPicker`의 변경이 Canvas와 ViewModel에 즉시 반영되고 `닫기`는 편집 종료 의미다. Dialog 내부 Preview를 추가할 이유가 없다.
+- 라벨·테이프·도장은 여러 시각 속성의 조합을 확인해야 하고 Canvas가 local draft를 보여주지 않으므로 Preview 자체는 유지한다.
+- 새 Preview, 새 state, renderer, persistence 연결은 필요하지 않다.
+
+**UI/UX 문법 사전 판정**
+
+| 항목 | 결정 |
+|---|---|
+| 기능 또는 변경 | 상세 설정창의 기능 없는 큰 둥근 Preview 배경 제거 |
+| 사용자 행동 | preset 선택, color 선택, 속성 조절, 고급 편집, 완료·저장 |
+| UI 역할 | Preset Selection, Color Selection, Property Row, Advanced / Custom Editor, Completion / Save |
+| 확인한 기존 화면·컴포넌트 | `MaskingTapeCustomCreateDialog`의 배경 없는 직접 Preview, `EditorFlatPresetTile`, 53~55일차 평면형 UI 선례 |
+| 기존 문법 상태 | 승인·유지—실기기 검증을 거친 평면형 선택/정보 위계와 54일차 커스텀 테이프 생성 Dialog |
+| 진입·선택·속성·완료 문법 | 모두 현행 유지 |
+| 재사용할 토큰·컴포넌트 | `PaperSurface`, `InkPrimary`, `InkSecondary`, `SunsetGold`, 기존 Preview renderer와 control |
+| Variant 판정 | 기존 variant—역할·정보 계층·interaction·selection/action 위치는 유지하고 장식 배경만 제거 |
+| 신규 UI 문법 / 예외 | 없음 |
+| STOP 여부 | 진행 가능 |
+
+**공통 문법과 파일럿**
+
+- Dialog 외곽, TextField, swatch, preset tile, chip, slider, 버튼은 실제 조작 affordance라 유지한다.
+- 제목 → Preview 또는 입력 → 옵션 라벨 → control → spacing → 다음 옵션 순서를 유지한다.
+- 대표 파일럿은 같은 파일의 `MaskingTapeCustomCreateDialog`에 이미 평면 Preview 선례가 있고 동작 위험이 낮은 `MaskingTapePresetCreateDialog`다.
+- 파일럿이 컴파일과 정적 diff 검토에서 문제가 없으면 같은 역할의 `MaskingTapeEditDialog`, `LabelStickerCreateDialog`, `LabelStickerEditDialog`로만 확장한다. 도장 Preview 배경과 글귀 삭제 안내 배경은 기능적 이유가 있어 유지한다.
+
+**파일럿과 실제 구현**
+
+- 파일럿: `MaskingTapePresetCreateDialog`의 Preview 정렬·크기·상하 20dp 여백은 유지하고 `PaperField` + 14dp 둥근 배경만 제거했다. 이 한 변경 상태에서 `compileDebugKotlin` 성공과 diff 단독 검토를 마쳤다.
+- 동일 계열 확장: `MaskingTapeEditDialog`, `LabelStickerCreateDialog`, `LabelStickerEditDialog`에도 같은 방식으로 장식 배경만 제거했다.
+- 총 제거: 큰 둥근 Preview 배경 4개. Kotlin `Box`는 중앙 정렬·가로 스크롤·터치와 무관한 layout 역할 때문에 남겼지만 화면에는 별도 카드처럼 보이지 않는다.
+- 유지: 라벨의 긴 문구 가로 스크롤, 모든 Preview renderer, 각 Dialog의 local draft, 입력창·swatch·chip·slider·확인/취소 버튼, spacing과 제목 위계.
+- 기능적 container 유지: `SealDesignDialog`의 조건부 Preview 배경은 저장된 흰 잉크 도장의 선을 밝은 Dialog 위에서도 보이게 하므로 유지했다. 글귀 저장 시 빈 값이 기존 글귀를 삭제한다는 안내 배경도 손실 의미를 구분하므로 유지했다.
+- 신규 Preview, state, 공통 Dialog framework, renderer, 저장·Undo·취소·navigation 변경은 없다.
+
+**변경 파일**
+
+- `app/src/main/java/com/postcardmemory/ui/detail/MaskingTapeDetailScreen.kt`
+- `app/src/main/java/com/postcardmemory/ui/detail/LabelStickerDetailScreen.kt`
+- `app/src/test/java/com/postcardmemory/ui/detail/DialogPreviewFlatContainerStructureTest.kt` (신규)
+- `docs/ai/HANDOFF.md`
+
+**자동 검증**
+
+- 파일럿 `:app:compileDebugKotlin` — 성공.
+- `DialogPreviewFlatContainerStructureTest` — 3 tests / failures 0 / errors 0 / skipped 0. 네 평면 Preview의 content·여백/스크롤 유지와 장식 배경 제거, 흰 잉크 도장의 기능적 대비 배경 유지를 고정한다.
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL. XML 합계 **58 suites / 502 tests / failures 0 / errors 0 / skipped 0**. 같은 실행에서 `compileDebugKotlin`도 성공 상태를 확인했다.
+- `git diff --check` — 오류 없음. Windows LF→CRLF 안내만 있었다.
+- 전체 production diff는 두 파일에서 `.background(color = PaperField, shape = RoundedCornerShape(14.dp))` 네 블록만 삭제됐다. 데이터·저장·Undo·취소·renderer 코드는 변경되지 않았다.
+
+**실기기 검증**
+
+- 상태: 사용자 확인 대기. 자동 검증은 기술 상태만 확인하며 시각적 밀도와 앱 감성 승인을 대신하지 않는다.
+- 대표 확인 순서: `마스킹테이프 > 기본 디자인 > + 추가`(파일럿) → 기존 테이프 `편집` → `스티커 > 라벨 > 추가/수정`.
+- 확인할 점: Preview 주변 큰 둥근 카드가 사라졌는지, Preview와 옵션이 섞이지 않는지, 여백·Dialog 높이·작은 화면 밀도가 자연스러운지, 라벨 긴 문구 가로 스크롤·IME·버튼이 정상인지, 취소/Back/바깥 dismiss와 저장 동작이 기존과 같은지.
+
+**Codex 권한 / sandbox 실전 결과**
+
+| 항목 | 결과 |
+|---|---|
+| production 파일 읽기 | 성공, 별도 승인 없음 |
+| production 파일 수정 | 성공, 별도 승인 없음 |
+| Gradle compile | 성공, 별도 승인 없음 |
+| 관련 unit test | sandbox 내부 실행 2회는 모두 `foojay-resolver` plugin 해석 실패. 정상 로컬 Gradle 실행 승인 1회 후 성공 |
+| 전체 unit test | 성공, 추가 승인 없음 |
+| Git 조회·diff | 성공, 별도 승인 없음. 사용자 홈 global ignore 접근 warning만 발생 |
+| 반복 permission 요청 | 없음 |
+| 코드/환경 구분 | plugin 해석 실패는 실행환경 문제로 분류했고 production 코드를 우회 수정하지 않음 |
+
+**범위 밖 발견 / 제외**
+
+- 미래우편 DatePicker와 확인창은 발송 UX, 사진 소스 Bottom Sheet는 소스 선택, 공유 Bottom Sheet는 export 흐름이다. 이번 꾸미기 상세 설정창 문법을 자동 전파하지 않았다.
+- 저장 architecture, Undo 비대칭, pending save, DB/Room/Migration에는 진입하지 않았다.
+
+**작업 단위 판정**: 구현과 자동 검증 완료, 제품 상태는 실기기 확인 대기. 현재 방향으로 계속 진행할 가치가 있으며, 처음부터 다시 해도 기능 없는 Preview 배경만 제거하는 같은 최소 구조를 선택한다. 핵심 상호작용 수정 회차는 0회이고 STOP 조건·과주행 신호는 발동하지 않았다. commit/push는 하지 않았다.
+
+## 2026-09-01 — 60일차 실기기 후속: 도장 Preview 배경 최소 보정
+
+- 일반 검정·빨강·남색·세피아·초록 잉크의 도장 Preview 배경을 `PaperField`에서 `Color.Transparent`로 바꿨다. 전폭 Box, 72dp Preview 크기, 중앙 정렬, 상하 20dp padding은 그대로 유지했다.
+- 과거 저장된 흰색 잉크는 밝은 Dialog 위에서 선이 사라지지 않도록 기존 `NeutralLight` 대비 배경을 그대로 유지했다.
+- `DialogPreviewFlatContainerStructureTest`의 도장 검증을 보강해 일반 잉크는 투명 배경이고 legacy 흰색만 `NeutralLight`를 쓰는 조건을 고정했다.
+- 관련 구조 테스트 — BUILD SUCCESSFUL. 같은 실행에서 변경된 production의 `compileDebugKotlin`도 실제 실행되어 성공했다.
+- 독립 `:app:compileDebugKotlin` — BUILD SUCCESSFUL.
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL. XML 합계 **58 suites / 502 tests / failures 0 / errors 0 / skipped 0**.
+- `git diff --check` — 오류 없음. Windows LF→CRLF 안내만 있었다.
+- 첫 관련 테스트의 sandbox 내부 실행은 `foojay-resolver` plugin 해석 실패로 코드 검증 전에 중단됐다. 동일 명령을 기존 로컬 Gradle 캐시에 접근 가능한 승인 경로로 재실행해 성공했으며, production 코드 문제가 아닌 실행환경 문제로 분리했다. permission 요청은 1회였고 반복 요청은 없었다.
+- 실기기 확인 대기: 일반 잉크 Preview의 연한 네모 제거, 중앙 정렬·옵션과의 구분, 기존 흰색 잉크 대비 배경, 저장·취소 동작을 확인해야 한다. 실기기 확인 전에는 제품 완료로 판정하지 않는다.
+- 색상 팔레트·프리셋·HEX·공통 색상 문법 변경은 **후속 제품 논의로 보류**했다. 이번 production 변경에는 포함하지 않았다.
+- commit/push는 하지 않았다.

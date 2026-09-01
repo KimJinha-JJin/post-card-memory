@@ -328,10 +328,6 @@ private fun MaskingTapePresetCreateDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            color = PaperField,
-                            shape = RoundedCornerShape(14.dp)
-                        )
                         .padding(vertical = 20.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -661,10 +657,6 @@ private fun MaskingTapeEditDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            color = PaperField,
-                            shape = RoundedCornerShape(14.dp)
-                        )
                         .padding(vertical = 20.dp),
                     contentAlignment = Alignment.Center
                 ) {

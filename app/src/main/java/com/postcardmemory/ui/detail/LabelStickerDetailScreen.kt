@@ -446,10 +446,6 @@ private fun LabelStickerCreateDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            color = PaperField,
-                            shape = RoundedCornerShape(14.dp)
-                        )
                         .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 12.dp, vertical = 18.dp),
                     contentAlignment = Alignment.Center
@@ -607,10 +603,6 @@ private fun LabelStickerEditDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            color = PaperField,
-                            shape = RoundedCornerShape(14.dp)
-                        )
                         .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 12.dp, vertical = 18.dp),
                     contentAlignment = Alignment.Center

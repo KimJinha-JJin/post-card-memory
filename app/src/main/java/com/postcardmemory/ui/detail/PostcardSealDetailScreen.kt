@@ -302,7 +302,7 @@ private fun SealDesignDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            color = if (isDraftWhiteInk) NeutralLight else PaperField,
+                            color = if (isDraftWhiteInk) NeutralLight else Color.Transparent,
                             shape = RoundedCornerShape(14.dp)
                         )
                         .padding(vertical = 20.dp),
