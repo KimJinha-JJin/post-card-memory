@@ -1346,3 +1346,12 @@
 - 실기기 확인 대기: 일반 잉크 Preview의 연한 네모 제거, 중앙 정렬·옵션과의 구분, 기존 흰색 잉크 대비 배경, 저장·취소 동작을 확인해야 한다. 실기기 확인 전에는 제품 완료로 판정하지 않는다.
 - 색상 팔레트·프리셋·HEX·공통 색상 문법 변경은 **후속 제품 논의로 보류**했다. 이번 production 변경에는 포함하지 않았다.
 - commit/push는 하지 않았다.
+
+## 2026-09-01 — 60일차 상세 설정창 UI commit/push 완료
+
+- 구현 commit `03a91da` — `Flatten decoration dialog previews`.
+- 포함 파일: 라벨·마스킹테이프·도장 상세 설정 UI 3개, `DialogPreviewFlatContainerStructureTest.kt`, `docs/ai/HANDOFF.md`까지 총 5개다.
+- `origin/feature/photo-sticker` push 완료. 구현 push 직후 local/origin HEAD가 `03a91da`로 일치했다.
+- `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`은 stage·commit하지 않고 로컬에 그대로 보존했다.
+- 색상 팔레트 변경은 구현하지 않았으며 후속 제품 논의로 계속 보류한다.
+- 이 완료 기록은 구현 commit 뒤 작성했으므로 문서 전용 마감 commit으로 별도 반영한다.
