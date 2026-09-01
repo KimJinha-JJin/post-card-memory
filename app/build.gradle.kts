@@ -46,6 +46,10 @@ android {
     }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -83,6 +87,8 @@ dependencies {
         libs.androidx.lifecycle.viewmodel.compose
     )
     implementation(libs.androidx.exifinterface)
+    implementation(libs.mlkit.subject.segmentation)
+    implementation(libs.androidx.palette)
 
     testImplementation(libs.junit)
 

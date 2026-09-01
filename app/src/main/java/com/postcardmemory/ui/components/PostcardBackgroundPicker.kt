@@ -14,28 +14,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -46,9 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalDeepViolet
-import com.postcardmemory.ui.theme.BrutalViolet
-import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.SunsetGold
 
 val postcardBackgroundPalette =
     listOf(
@@ -73,31 +68,126 @@ enum class PostcardBackgroundPattern(
 ) {
     NONE("없음", "×"),
     DOTS("땡땡이", "●"),
-    STARS("별", "★"),
-    HEARTS("하트", "♥"),
     CHECKER("체크", "▦"),
-    CHERRY_BLOSSOMS("벚꽃", "✿"),
-    TRIANGLES("세모", "▲"),
-    SQUARES("사각형", "■")
+    STRIPES("사선무늬", "╱"),
+    WAVES("물결무늬", "〜"),
+    GRID("격자무늬", "#"),
+    CROSSHATCH("교차무늬", "▨"),
+    SPECKLE("은은한 입자", "░"),
+    HEISEI("잔꽃무늬", "❀")
 }
 
-@Suppress("UNUSED_PARAMETER")
+/**
+ * 배경 색상 스와치 하나(프리셋·사진 추출색 공용). 원형 미리보기 + 아래
+ * 선택 점만으로 선택 상태를 전달한다 — 카드 배경 없음.
+ */
 @Composable
-fun PostcardBackgroundPicker(
+fun BackgroundColorSwatch(
+    colorArgb: Long,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+            .clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .background(
+                    color = Color(colorArgb),
+                    shape = CircleShape
+                )
+                .border(
+                    width = 1.dp,
+                    color = BrutalBlack.copy(alpha = 0.35f),
+                    shape = CircleShape
+                )
+        )
+
+        Spacer(
+            modifier = Modifier.height(4.dp)
+        )
+
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .background(
+                    color =
+                        if (selected) {
+                            SunsetGold
+                        } else {
+                            Color.Transparent
+                        },
+                    shape = CircleShape
+                )
+        )
+    }
+}
+
+@Composable
+fun PostcardBackgroundColorPicker(
     selectedColorArgb: Long,
-    hasBackgroundImage: Boolean,
     enabled: Boolean = true,
     onColorSelected: (Long) -> Unit,
-    onPickImage: () -> Unit,
-    onRemoveImage: () -> Unit,
-    modifier: Modifier = Modifier,
-    selectedPattern: PostcardBackgroundPattern = PostcardBackgroundPattern.NONE,
-    onPatternSelected: (PostcardBackgroundPattern) -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
-    var showCustomColorPicker by rememberSaveable {
-        mutableStateOf(false)
-    }
+    Column(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = "배경 색상",
+            color = BrutalBlack,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
+        )
 
+        Spacer(
+            modifier = Modifier.height(12.dp)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(
+                    rememberScrollState()
+                ),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            postcardBackgroundPalette.forEach { colorArgb ->
+                BackgroundColorSwatch(
+                    colorArgb = colorArgb,
+                    selected = selectedColorArgb == colorArgb,
+                    enabled = enabled,
+                    onClick = {
+                        onColorSelected(colorArgb)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 배경 패턴 선택. 56일차 카드 제거 개편: 패턴 기호를 감싸던 카드형
+ * `DecorationPresetTile` 대신 평면형 `EditorFlatPresetTile`(스티커/텍스트/
+ * 라벨 목록과 같은 문법)을 써서 기호+이름+선택 밑줄만 남긴다. 선택된
+ * 패턴은 기호 색을 SunsetGold로 강조해 카드 배경(색상+패턴 조합 미리보기)이
+ * 없어도 어떤 패턴인지, 무엇이 선택됐는지 구분되게 한다.
+ */
+@Composable
+fun PostcardBackgroundPatternPicker(
+    selectedPattern: PostcardBackgroundPattern = PostcardBackgroundPattern.NONE,
+    enabled: Boolean = true,
+    onPatternSelected: (PostcardBackgroundPattern) -> Unit,
+    modifier: Modifier = Modifier
+) {
     var localSelectedPatternName by rememberSaveable {
         mutableStateOf(selectedPattern.name)
     }
@@ -111,183 +201,14 @@ fun PostcardBackgroundPicker(
             pattern.name == localSelectedPatternName
         } ?: PostcardBackgroundPattern.NONE
 
-    val selectedIsCustomColor =
-        postcardBackgroundPalette.none { colorArgb ->
-            colorArgb == selectedColorArgb
-        }
-
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                color = BrutalWhite,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .border(
-                width = 2.dp,
-                color = BrutalBlack,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
         Text(
-            text = "엽서 배경 꾸미기",
-            color = BrutalDeepViolet,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-
-        Spacer(
-            modifier = Modifier.height(6.dp)
-        )
-
-        Text(
-            text = "기본 색상이나 기타 색상에서 원하는 배경색을 골라봐.",
-            color = BrutalDeepViolet,
-            fontSize = 13.sp
-        )
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(
-                    rememberScrollState()
-                ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            postcardBackgroundPalette.forEach { colorArgb ->
-                val selected =
-                    selectedColorArgb == colorArgb
-
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            color = Color(colorArgb),
-                            shape = CircleShape
-                        )
-                        .border(
-                            width =
-                                if (selected) {
-                                    4.dp
-                                } else {
-                                    2.dp
-                                },
-                            color =
-                                if (selected) {
-                                    BrutalViolet
-                                } else {
-                                    BrutalBlack
-                                },
-                            shape = CircleShape
-                        )
-                        .clickable(
-                            enabled = enabled
-                        ) {
-                            onColorSelected(colorArgb)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (selected) {
-                        Box(
-                            modifier = Modifier
-                                .size(14.dp)
-                                .background(
-                                    color = BrutalWhite,
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 2.dp,
-                                    color = BrutalBlack,
-                                    shape = CircleShape
-                                )
-                        )
-                    }
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .width(86.dp)
-                    .height(48.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.Red,
-                                Color.Yellow,
-                                Color.Green,
-                                Color.Cyan,
-                                Color.Blue,
-                                Color.Magenta,
-                                Color.Red
-                            )
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .border(
-                        width =
-                            if (selectedIsCustomColor) {
-                                4.dp
-                            } else {
-                                2.dp
-                            },
-                        color =
-                            if (selectedIsCustomColor) {
-                                BrutalViolet
-                            } else {
-                                BrutalBlack
-                            },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .clickable(
-                        enabled = enabled
-                    ) {
-                        showCustomColorPicker = true
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "기타 색상",
-                    modifier = Modifier
-                        .background(
-                            color = BrutalWhite.copy(alpha = 0.88f),
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .padding(
-                            horizontal = 8.dp,
-                            vertical = 5.dp
-                        ),
-                    color = BrutalDeepViolet,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(20.dp)
-        )
-
-        Text(
             text = "배경 패턴",
-            color = BrutalDeepViolet,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-
-        Spacer(
-            modifier = Modifier.height(5.dp)
-        )
-
-        Text(
-            text = "색상 위에 얹을 무늬를 골라봐. 패턴 없음도 언제든 선택할 수 있어.",
-            color = BrutalDeepViolet,
-            fontSize = 12.sp
+            color = BrutalBlack,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
         )
 
         Spacer(
@@ -300,129 +221,119 @@ fun PostcardBackgroundPicker(
                 .horizontalScroll(
                     rememberScrollState()
                 ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.Top
         ) {
             PostcardBackgroundPattern.entries.forEach { pattern ->
                 val selected =
                     visibleSelectedPattern == pattern
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                EditorFlatPresetTile(
+                    onClick = {
+                        localSelectedPatternName = pattern.name
+                        onPatternSelected(pattern)
+                    },
+                    enabled = enabled,
+                    previewModifier = Modifier.size(40.dp),
+                    label = pattern.label,
+                    selected = selected
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .background(
-                                color =
-                                    if (selected) {
-                                        Color(selectedColorArgb)
-                                    } else {
-                                        Color(0xFFF7F2FF)
-                                    },
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .border(
-                                width =
-                                    if (selected) {
-                                        4.dp
-                                    } else {
-                                        2.dp
-                                    },
-                                color =
-                                    if (selected) {
-                                        BrutalViolet
-                                    } else {
-                                        BrutalBlack
-                                    },
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .clickable(
-                                enabled = enabled
-                            ) {
-                                localSelectedPatternName = pattern.name
-                                onPatternSelected(pattern)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = pattern.symbol,
-                            color =
-                                if (selected) {
-                                    BrutalWhite
-                                } else {
-                                    BrutalDeepViolet
-                                },
-                            fontSize =
-                                if (pattern == PostcardBackgroundPattern.NONE) {
-                                    25.sp
-                                } else {
-                                    22.sp
-                                },
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-
-                    Spacer(
-                        modifier = Modifier.height(5.dp)
-                    )
-
                     Text(
-                        text = pattern.label,
-                        color = BrutalDeepViolet,
-                        fontSize = 11.sp,
-                        fontWeight =
+                        text = pattern.symbol,
+                        color =
                             if (selected) {
-                                FontWeight.ExtraBold
+                                SunsetGold
                             } else {
-                                FontWeight.Medium
-                            }
+                                BrutalBlack
+                            },
+                        fontSize =
+                            if (pattern == PostcardBackgroundPattern.NONE) {
+                                25.sp
+                            } else {
+                                22.sp
+                            },
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
     }
-
-    if (showCustomColorPicker) {
-        CustomColorPickerDialog(
-            initialColorArgb = selectedColorArgb,
-            onDismiss = {
-                showCustomColorPicker = false
-            },
-            onColorConfirmed = { colorArgb ->
-                showCustomColorPicker = false
-                onColorSelected(colorArgb)
-            }
-        )
-    }
 }
 
+/**
+ * selectedColorArgb가 바뀔 때마다 색상판/색상계열 HSV 상태를 무조건
+ * 다시 만들면, 그 상태를 읽고 쓰는 pointerInput 제스처는 캔버스 크기가
+ * 바뀔 때만 재시작되므로 명도 조절과 색상 선택이 서로 다른 세대의
+ * HSV 상태를 가리키게 된다. 이 색이 이 컴포저블 자신이 방금 emit한
+ * 값과 같다면(자기 반향) 재동기화하지 말고, 프리셋 스와치처럼 외부에서
+ * 바뀐 값일 때만 재동기화해야 두 상태가 항상 같은 것을 가리킨다.
+ */
+internal fun shouldResyncCustomColorHsv(
+    externalColorArgb: Long,
+    lastEmittedColorArgb: Long
+): Boolean =
+    externalColorArgb != lastEmittedColorArgb
+
+/**
+ * HSVToColor는 RGB를 0~255 정수로 반올림하므로, 드래그 중 인접한 여러
+ * 포인터 이동이 같은 ARGB로 수렴하는 경우가 흔하다. 실제로 색이 바뀌지
+ * 않았다면 ViewModel 저장·미리보기 재렌더로 이어지는 onColorSelected
+ * 호출을 생략해도 사용자가 보는 최종 색은 달라지지 않는다.
+ */
+internal fun shouldEmitCustomColor(
+    newColorArgb: Long,
+    lastEmittedColorArgb: Long
+): Boolean =
+    newColorArgb != lastEmittedColorArgb
+
+private fun colorArgbToHsv(
+    colorArgb: Long
+): FloatArray =
+    FloatArray(3).also { hsv ->
+        AndroidColor.colorToHSV(
+            colorArgb.toInt(),
+            hsv
+        )
+    }
+
 @Composable
-private fun CustomColorPickerDialog(
-    initialColorArgb: Long,
-    onDismiss: () -> Unit,
-    onColorConfirmed: (Long) -> Unit
+fun PostcardCustomColorPicker(
+    selectedColorArgb: Long,
+    enabled: Boolean = true,
+    onColorSelected: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val latestEnabled by rememberUpdatedState(enabled)
+
     val initialHsv =
-        remember(initialColorArgb) {
-            FloatArray(3).also { hsv ->
-                AndroidColor.colorToHSV(
-                    initialColorArgb.toInt(),
-                    hsv
-                )
-            }
+        remember {
+            colorArgbToHsv(selectedColorArgb)
         }
 
-    var hue by remember(initialColorArgb) {
+    var hue by remember {
         mutableStateOf(initialHsv[0])
     }
 
-    var saturation by remember(initialColorArgb) {
+    var saturation by remember {
         mutableStateOf(initialHsv[1])
     }
 
-    var value by remember(initialColorArgb) {
+    var value by remember {
         mutableStateOf(initialHsv[2])
+    }
+
+    var lastEmittedColorArgb by remember {
+        mutableStateOf(selectedColorArgb)
+    }
+
+    LaunchedEffect(selectedColorArgb) {
+        if (shouldResyncCustomColorHsv(selectedColorArgb, lastEmittedColorArgb)) {
+            val hsv = colorArgbToHsv(selectedColorArgb)
+            hue = hsv[0]
+            saturation = hsv[1]
+            value = hsv[2]
+            lastEmittedColorArgb = selectedColorArgb
+        }
     }
 
     var colorAreaWidth by remember {
@@ -437,7 +348,7 @@ private fun CustomColorPickerDialog(
         mutableIntStateOf(1)
     }
 
-    val selectedColorInt =
+    val previewColorInt =
         AndroidColor.HSVToColor(
             floatArrayOf(
                 hue,
@@ -446,11 +357,11 @@ private fun CustomColorPickerDialog(
             )
         )
 
-    val selectedColorArgb =
-        selectedColorInt.toLong() and 0xFFFFFFFFL
+    val previewColorArgb =
+        previewColorInt.toLong() and 0xFFFFFFFFL
 
-    val selectedColor =
-        Color(selectedColorArgb)
+    val previewColor =
+        Color(previewColorArgb)
 
     val hueColor =
         Color(
@@ -463,9 +374,30 @@ private fun CustomColorPickerDialog(
             )
         )
 
+    fun emitColor() {
+        val colorInt =
+            AndroidColor.HSVToColor(
+                floatArrayOf(hue, saturation, value)
+            )
+
+        val argb = colorInt.toLong() and 0xFFFFFFFFL
+
+        if (!shouldEmitCustomColor(argb, lastEmittedColorArgb)) {
+            return
+        }
+
+        lastEmittedColorArgb = argb
+
+        onColorSelected(argb)
+    }
+
     fun updateSaturationAndValue(
         offset: Offset
     ) {
+        if (!latestEnabled) {
+            return
+        }
+
         saturation =
             (offset.x / colorAreaWidth.toFloat())
                 .coerceIn(0f, 1f)
@@ -474,286 +406,270 @@ private fun CustomColorPickerDialog(
             1f -
                     (offset.y / colorAreaHeight.toFloat())
                         .coerceIn(0f, 1f)
+
+        emitColor()
     }
 
     fun updateHue(
         offset: Offset
     ) {
+        if (!latestEnabled) {
+            return
+        }
+
         hue =
             (
                     offset.x /
                             hueBarWidth.toFloat() *
                             360f
                     ).coerceIn(0f, 359.999f)
+
+        emitColor()
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "기타 색상 선택",
-                color = BrutalDeepViolet,
-                fontWeight = FontWeight.ExtraBold
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "큰 색상판을 눌러 원하는 색의 밝기와 선명도를 골라봐.",
-                    color = BrutalDeepViolet,
-                    fontSize = 13.sp
-                )
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.55f)
+    ) {
+        Text(
+            text = "기타 색상",
+            color = BrutalBlack,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
+        )
 
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
+        Spacer(
+            modifier = Modifier.height(6.dp)
+        )
 
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1.35f)
-                        .onSizeChanged { size ->
-                            colorAreaWidth =
-                                size.width.coerceAtLeast(1)
+        Text(
+            text = "색상판을 눌러서 원하는 색을 골라봐.",
+            color = BrutalBlack,
+            fontSize = 13.sp
+        )
 
-                            colorAreaHeight =
-                                size.height.coerceAtLeast(1)
-                        }
-                        .pointerInput(
-                            colorAreaWidth,
-                            colorAreaHeight
-                        ) {
-                            detectTapGestures { offset ->
-                                updateSaturationAndValue(
-                                    offset
-                                )
-                            }
-                        }
-                        .pointerInput(
-                            colorAreaWidth,
-                            colorAreaHeight
-                        ) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    updateSaturationAndValue(
-                                        offset
-                                    )
-                                },
-                                onDrag = { change, _ ->
-                                    updateSaturationAndValue(
-                                        change.position
-                                    )
-                                }
-                            )
-                        }
-                ) {
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.White,
-                                hueColor
-                            )
-                        )
-                    )
+        Spacer(
+            modifier = Modifier.height(12.dp)
+        )
 
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black
-                            )
-                        )
-                    )
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.35f)
+                .onSizeChanged { size ->
+                    colorAreaWidth =
+                        size.width.coerceAtLeast(1)
 
-                    val indicatorCenter =
-                        Offset(
-                            x =
-                                saturation *
-                                        size.width,
-                            y =
-                                (1f - value) *
-                                        size.height
-                        )
-
-                    drawCircle(
-                        color = Color.White,
-                        radius = 10.dp.toPx(),
-                        center = indicatorCenter,
-                        style = Stroke(
-                            width = 3.dp.toPx()
-                        )
-                    )
-
-                    drawCircle(
-                        color = Color.Black,
-                        radius = 13.dp.toPx(),
-                        center = indicatorCenter,
-                        style = Stroke(
-                            width = 2.dp.toPx()
-                        )
-                    )
+                    colorAreaHeight =
+                        size.height.coerceAtLeast(1)
                 }
-
-                Spacer(
-                    modifier = Modifier.height(14.dp)
-                )
-
-                Text(
-                    text = "색상 계열",
-                    color = BrutalDeepViolet,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(
-                    modifier = Modifier.height(6.dp)
-                )
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(30.dp)
-                        .onSizeChanged { size ->
-                            hueBarWidth =
-                                size.width.coerceAtLeast(1)
-                        }
-                        .pointerInput(hueBarWidth) {
-                            detectTapGestures { offset ->
-                                updateHue(offset)
-                            }
-                        }
-                        .pointerInput(hueBarWidth) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    updateHue(offset)
-                                },
-                                onDrag = { change, _ ->
-                                    updateHue(
-                                        change.position
-                                    )
-                                }
-                            )
-                        }
+                .pointerInput(
+                    colorAreaWidth,
+                    colorAreaHeight
                 ) {
-                    drawRoundRect(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.Red,
-                                Color.Yellow,
-                                Color.Green,
-                                Color.Cyan,
-                                Color.Blue,
-                                Color.Magenta,
-                                Color.Red
-                            )
-                        ),
-                        cornerRadius =
-                            androidx.compose.ui.geometry.CornerRadius(
-                                12.dp.toPx(),
-                                12.dp.toPx()
-                            )
-                    )
-
-                    val indicatorX =
-                        hue / 360f * size.width
-
-                    drawLine(
-                        color = Color.White,
-                        start = Offset(
-                            indicatorX,
-                            0f
-                        ),
-                        end = Offset(
-                            indicatorX,
-                            size.height
-                        ),
-                        strokeWidth = 5.dp.toPx()
-                    )
-
-                    drawLine(
-                        color = Color.Black,
-                        start = Offset(
-                            indicatorX,
-                            0f
-                        ),
-                        end = Offset(
-                            indicatorX,
-                            size.height
-                        ),
-                        strokeWidth = 2.dp.toPx()
-                    )
-                }
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(
-                                color = selectedColor,
-                                shape = CircleShape
-                            )
-                            .border(
-                                width = 2.dp,
-                                color = BrutalBlack,
-                                shape = CircleShape
-                            )
-                    )
-
-                    Column {
-                        Text(
-                            text = "선택한 색상",
-                            color = BrutalDeepViolet,
-                            fontSize = 12.sp
-                        )
-
-                        Text(
-                            text =
-                                "#" +
-                                        selectedColorArgb
-                                            .toString(16)
-                                            .uppercase()
-                                            .padStart(8, '0'),
-                            color = BrutalDeepViolet,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold
+                    detectTapGestures { offset ->
+                        updateSaturationAndValue(
+                            offset
                         )
                     }
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onColorConfirmed(
-                        selectedColorArgb
+                .pointerInput(
+                    colorAreaWidth,
+                    colorAreaHeight
+                ) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            updateSaturationAndValue(
+                                offset
+                            )
+                        },
+                        onDrag = { change, _ ->
+                            updateSaturationAndValue(
+                                change.position
+                            )
+                        }
                     )
                 }
-            ) {
-                Text(
-                    text = "적용",
-                    fontWeight = FontWeight.ExtraBold
+        ) {
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.White,
+                        hueColor
+                    )
                 )
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss
-            ) {
+            )
+
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color.Black
+                    )
+                )
+            )
+
+            val indicatorCenter =
+                Offset(
+                    x =
+                        saturation *
+                                size.width,
+                    y =
+                        (1f - value) *
+                                size.height
+                )
+
+            drawCircle(
+                color = Color.White,
+                radius = 10.dp.toPx(),
+                center = indicatorCenter,
+                style = Stroke(
+                    width = 3.dp.toPx()
+                )
+            )
+
+            drawCircle(
+                color = Color.Black,
+                radius = 13.dp.toPx(),
+                center = indicatorCenter,
+                style = Stroke(
+                    width = 2.dp.toPx()
+                )
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
+
+        Text(
+            text = "색상 계열",
+            color = BrutalBlack,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(
+            modifier = Modifier.height(6.dp)
+        )
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp)
+                .onSizeChanged { size ->
+                    hueBarWidth =
+                        size.width.coerceAtLeast(1)
+                }
+                .pointerInput(hueBarWidth) {
+                    detectTapGestures { offset ->
+                        updateHue(offset)
+                    }
+                }
+                .pointerInput(hueBarWidth) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            updateHue(offset)
+                        },
+                        onDrag = { change, _ ->
+                            updateHue(
+                                change.position
+                            )
+                        }
+                    )
+                }
+        ) {
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Red,
+                        Color.Yellow,
+                        Color.Green,
+                        Color.Cyan,
+                        Color.Blue,
+                        Color.Magenta,
+                        Color.Red
+                    )
+                ),
+                cornerRadius =
+                    androidx.compose.ui.geometry.CornerRadius(
+                        12.dp.toPx(),
+                        12.dp.toPx()
+                    )
+            )
+
+            val indicatorX =
+                hue / 360f * size.width
+
+            drawLine(
+                color = Color.White,
+                start = Offset(
+                    indicatorX,
+                    0f
+                ),
+                end = Offset(
+                    indicatorX,
+                    size.height
+                ),
+                strokeWidth = 5.dp.toPx()
+            )
+
+            drawLine(
+                color = Color.Black,
+                start = Offset(
+                    indicatorX,
+                    0f
+                ),
+                end = Offset(
+                    indicatorX,
+                    size.height
+                ),
+                strokeWidth = 2.dp.toPx()
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = previewColor,
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 2.dp,
+                        color = BrutalBlack,
+                        shape = CircleShape
+                    )
+            )
+
+            Column {
                 Text(
-                    text = "취소",
-                    color = BrutalDeepViolet,
-                    fontWeight = FontWeight.Bold
+                    text = "선택한 색상",
+                    color = BrutalBlack,
+                    fontSize = 12.sp
+                )
+
+                Text(
+                    text =
+                        "#" +
+                                previewColorArgb
+                                    .toString(16)
+                                    .uppercase()
+                                    .takeLast(6),
+                    color = BrutalBlack,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
-    )
+    }
 }

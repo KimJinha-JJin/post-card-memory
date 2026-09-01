@@ -4,53 +4,173 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.text.Layout
-import android.text.StaticLayout
-import android.text.TextPaint
-import android.text.TextUtils
+import androidx.core.graphics.createBitmap
+import androidx.exifinterface.media.ExifInterface
+import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
+import com.postcardmemory.ui.components.PostcardDateFormat
+import com.postcardmemory.ui.detail.DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB
+import com.postcardmemory.ui.detail.MASKING_TAPE_DOT_RADIUS_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_GRID_LINE_WIDTH_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_HEART_SIZE_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_PATTERN_ALPHA
+import com.postcardmemory.ui.detail.MASKING_TAPE_PATTERN_PITCH_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_PLAIN_FIBER_ALPHA
+import com.postcardmemory.ui.detail.MASKING_TAPE_STAR_SIZE_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_PITCH_RATIO
+import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_WIDTH_RATIO
+import com.postcardmemory.ui.detail.MaskingTapeEdgeStyle
+import com.postcardmemory.ui.detail.MaskingTapePatternKind
+import com.postcardmemory.ui.detail.LabelTapeStyle
+import com.postcardmemory.ui.detail.labelTapePalette
+import com.postcardmemory.ui.detail.maskingTapeOutlinePoints
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.UUID
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
 object PostcardImageExporter {
 
     private const val OUTPUT_SIZE = 2048
-    private const val STAMP_BORDER_WIDTH = 18f
+    private const val SHARE_CACHE_DIR_NAME = "shared_postcards"
 
-    private enum class ExportLayoutStyle {
-        STANDARD,
-        PHOTO_FOCUS,
-        AIRY,
-        MAGAZINE
-    }
+    /**
+     * 공유 캐시 보관 정책. 엽서 PNG는 몇 MB 수준이라 24시간·20개면 기기
+     * 저장공간에 부담이 거의 없으면서도, chooser에서 오래 머물거나 곧바로
+     * 재공유하는 정상적인 사용 패턴에서 파일이 사라지는 일은 없을 만큼
+     * 충분히 넉넉하다.
+     */
+    private const val SHARE_CACHE_TTL_MILLIS = 24 * 60 * 60 * 1000L
+    private const val SHARE_CACHE_MAX_FILES = 20
+    private const val STICKER_CORNER_RADIUS_RATIO =
+        16f / 120f
+    /** TextStickerContent와 같은 두 겹(흰 STROKE → 컬러 FILL) 그리기 기법에서 쓰는 외곽선 두께 비율. */
+    private const val TEXT_STICKER_OUTLINE_WIDTH_RATIO = 0.14f
+    private const val STICKER_BORDER_WIDTH_RATIO =
+        3f / 120f
+
+    data class StickerOverlay(
+        val uri: Uri,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val sizeRatio: Float,
+        val originalUri: Uri? = null,
+        val isBackgroundRemoved: Boolean = false,
+        val rotationDegrees: Float = 0f,
+        val flipHorizontal: Boolean = false,
+        val flipVertical: Boolean = false
+    )
+
+    data class SealOverlay(
+        val type: String,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val sizeRatio: Float,
+        val rotationDegrees: Float = 0f,
+        val colorArgb: Long,
+        val capturedAtMillis: Long? = null
+    )
+
+    /**
+     * fontSizeRatio는 다른 오버레이의 sizeRatio(박스 너비 비율)와 달리
+     * "글자 크기"의 postcard 너비 대비 비율이다 — 텍스트 스티커는 문자열
+     * 길이에 따라 박스 가로세로 비율이 제각각이라 박스 너비만으로는 export
+     * 해상도에서 같은 글자 크기를 재현할 수 없다. 대신 화면과 export가
+     * 동일한 fontSizePx로 각자 Paint.getTextBounds를 다시 측정해 그리므로
+     * (TextStickerContent와 drawTextStickerOverlay), 두 렌더 경로가 항상
+     * 같은 측정 결과를 얻는다.
+     */
+    data class TextStickerOverlay(
+        val text: String,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val fontSizeRatio: Float,
+        val rotationDegrees: Float = 0f,
+        val colorArgb: Long,
+        val outlineColorArgb: Long = DEFAULT_TEXT_STICKER_OUTLINE_COLOR_ARGB
+    )
+
+    /**
+     * widthRatio/heightRatio는 다른 오버레이의 sizeRatio와 달리 가로·세로를
+     * 따로 갖는다 — 마스킹테이프는 도장·스티커와 달리 정사각형이 아닌
+     * 가로로 긴 형태라 하나의 비율만으로는 원래 모양을 재현할 수 없다.
+     */
+    data class MaskingTapeOverlay(
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val widthRatio: Float,
+        val heightRatio: Float,
+        val rotationDegrees: Float = 0f,
+        val edgeStyle: MaskingTapeEdgeStyle,
+        val baseColorArgb: Long,
+        val patternColorArgb: Long,
+        val patternKind: MaskingTapePatternKind,
+        val alpha: Float,
+        val isPhoto: Boolean = false,
+        val photoUri: Uri? = null
+    )
+
+    /**
+     * fontSizeRatio는 TextStickerOverlay와 같은 뜻(글자 크기의 postcard 너비
+     * 대비 비율)이다. 라벨은 폭·높이를 여기서 넘기지 않는다 — text와
+     * fontSizePx만 있으면 LabelStickerRenderer가 화면에서와 똑같이 폭을
+     * 다시 계산하므로, 미리 계산한 크기를 실어 보내면 오히려 두 값이
+     * 어긋날 여지만 생긴다.
+     */
+    data class LabelStickerOverlay(
+        val text: String,
+        val style: LabelTapeStyle,
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val fontSizeRatio: Float,
+        val rotationDegrees: Float = 0f,
+        /** style == CUSTOM일 때만 쓰는 바탕색. 문자색은 여기서 자동으로 파생된다. */
+        val customTapeColorArgb: Long? = null
+    )
 
     fun exportToGallery(
         context: Context,
-        postcard: Postcard
+        postcard: Postcard,
+        stickerOverlays: List<StickerOverlay> = emptyList(),
+        sealOverlays: List<SealOverlay> = emptyList(),
+        doodleStrokes: List<DoodleStroke> = emptyList(),
+        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
+        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
     ): Result<Uri> {
         return runCatching {
             val outputBitmap =
-                createPostcardBitmap(postcard)
+                createPostcardBitmap(
+                    context = context,
+                    postcard = postcard,
+                    stickerOverlays = stickerOverlays,
+                    sealOverlays = sealOverlays,
+                    doodleStrokes = doodleStrokes,
+                    textStickerOverlays = textStickerOverlays,
+                    maskingTapeOverlays = maskingTapeOverlays,
+                    labelStickerOverlays = labelStickerOverlays
+                )
 
             try {
                 saveBitmapToGallery(
@@ -65,8 +185,167 @@ object PostcardImageExporter {
         }
     }
 
+    fun exportForSharing(
+        context: Context,
+        postcard: Postcard,
+        stickerOverlays: List<StickerOverlay> = emptyList(),
+        sealOverlays: List<SealOverlay> = emptyList(),
+        doodleStrokes: List<DoodleStroke> = emptyList(),
+        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
+        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
+    ): Result<File> {
+        return runCatching {
+            val outputBitmap =
+                createPostcardBitmap(
+                    context = context,
+                    postcard = postcard,
+                    stickerOverlays = stickerOverlays,
+                    sealOverlays = sealOverlays,
+                    doodleStrokes = doodleStrokes,
+                    textStickerOverlays = textStickerOverlays,
+                    maskingTapeOverlays = maskingTapeOverlays,
+                    labelStickerOverlays = labelStickerOverlays
+                )
+
+            try {
+                saveBitmapForSharing(
+                    context = context,
+                    postcardId = postcard.id,
+                    bitmap = outputBitmap
+                )
+            } finally {
+                if (!outputBitmap.isRecycled) {
+                    outputBitmap.recycle()
+                }
+            }
+        }
+    }
+
+    /**
+     * 초 단위 timestamp만 쓰면 같은 초에 두 번 공유할 때 파일명이 완전히
+     * 같아져 두 번째 공유가 첫 번째 공유 파일을 덮어써 버린다. postcardId +
+     * 밀리초 + UUID 조합이라 같은 밀리초에 호출돼도 사실상 충돌하지 않는다.
+     */
+    internal fun shareFileNameFor(
+        postcardId: Long,
+        timestampMillis: Long = System.currentTimeMillis(),
+        uuid: String = UUID.randomUUID().toString()
+    ): String = "postcard_${postcardId}_${timestampMillis}_$uuid.png"
+
+    private fun saveBitmapForSharing(
+        context: Context,
+        postcardId: Long,
+        bitmap: Bitmap
+    ): File {
+        val shareDir =
+            File(context.cacheDir, SHARE_CACHE_DIR_NAME)
+
+        if (
+            !shareDir.exists() &&
+            !shareDir.mkdirs()
+        ) {
+            throw IOException(
+                "공유 폴더를 만들지 못했습니다."
+            )
+        }
+
+        val shareFileName =
+            shareFileNameFor(postcardId = postcardId)
+        val shareFile =
+            File(shareDir, shareFileName)
+
+        try {
+            FileOutputStream(shareFile).use { outputStream ->
+                val saved =
+                    bitmap.compress(
+                        Bitmap.CompressFormat.PNG,
+                        100,
+                        outputStream
+                    )
+
+                if (!saved) {
+                    throw IOException(
+                        "공유용 이미지 파일 저장에 실패했습니다."
+                    )
+                }
+            }
+
+            if (
+                !shareFile.exists() ||
+                shareFile.length() == 0L
+            ) {
+                throw IOException(
+                    "공유용 이미지 파일이 비어 있습니다."
+                )
+            }
+        } catch (exception: Exception) {
+            // 실패한 빈/부분 파일을 캐시에 남기지 않는다.
+            if (shareFile.exists()) {
+                shareFile.delete()
+            }
+            throw exception
+        }
+
+        // 방금 만든 파일은 절대 정리 대상에 포함하지 않는다. chooser가 아직
+        // 열려 있거나 외부 앱이 방금 넘긴 직전 공유 파일을 읽는 중일 수
+        // 있으므로, 여기서 "현재 파일 이름과 다르면 전부 삭제" 같은 즉시
+        // 전체 삭제는 하지 않고 TTL·최대 보관 개수 정책으로만 제한적으로
+        // 정리한다. 정리 실패는 이번 공유 성공 여부에 영향을 주지 않는다.
+        runCatching {
+            cleanupOldShareFiles(
+                shareDir = shareDir,
+                currentFileName = shareFileName
+            )
+        }
+
+        return shareFile
+    }
+
+    /**
+     * TTL을 넘긴 공유 캐시 파일을 지우고, TTL 이내라도 개수가 너무 많으면
+     * 오래된 파일부터 최대 보관 개수만큼만 남긴다. currentFileName(이번
+     * 공유로 방금 생성한 파일)은 항상 제외한다. internal은 순수 JUnit
+     * 테스트를 위함(같은 패키지에서 TemporaryFolder로 검증).
+     */
+    internal fun cleanupOldShareFiles(
+        shareDir: File,
+        currentFileName: String,
+        ttlMillis: Long = SHARE_CACHE_TTL_MILLIS,
+        maxFiles: Int = SHARE_CACHE_MAX_FILES,
+        nowMillis: Long = System.currentTimeMillis()
+    ) {
+        val otherFiles =
+            shareDir.listFiles { file ->
+                file.isFile && file.name != currentFileName
+            } ?: return
+
+        val (expired, fresh) =
+            otherFiles.partition { file ->
+                nowMillis - file.lastModified() > ttlMillis
+            }
+
+        expired.forEach { file ->
+            runCatching { file.delete() }
+        }
+
+        fresh
+            .sortedByDescending { file -> file.lastModified() }
+            .drop(maxFiles)
+            .forEach { file ->
+                runCatching { file.delete() }
+            }
+    }
+
     private fun createPostcardBitmap(
-        postcard: Postcard
+        context: Context,
+        postcard: Postcard,
+        stickerOverlays: List<StickerOverlay>,
+        sealOverlays: List<SealOverlay> = emptyList(),
+        doodleStrokes: List<DoodleStroke> = emptyList(),
+        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
+        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
+        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
     ): Bitmap {
         val sourceFile =
             File(postcard.imagePath)
@@ -78,11 +357,13 @@ object PostcardImageExporter {
         }
 
         val sourceBitmap =
-            decodeBitmap(sourceFile)
+            PostcardRenderSpec.decodeSourceBitmap(
+                sourceFile
+            )
 
         try {
             val outputBitmap =
-                Bitmap.createBitmap(
+                createBitmap(
                     OUTPUT_SIZE,
                     OUTPUT_SIZE,
                     Bitmap.Config.ARGB_8888
@@ -91,166 +372,88 @@ object PostcardImageExporter {
             val canvas =
                 Canvas(outputBitmap)
 
-            drawBackground(
+            PostcardRenderSpec.drawBaseContent(
                 canvas = canvas,
-                postcard = postcard
+                sourceBitmap = sourceBitmap,
+                backgroundColorArgb =
+                    postcard.backgroundColorArgb,
+                backgroundPattern =
+                    postcard.backgroundPattern,
+                message = postcard.message,
+                messageFont = postcard.messageFont,
+                layoutStyle = postcard.layoutStyle,
+                capturedAt = postcard.capturedAt,
+                dateFormat = postcard.dateFormat,
+                targetSize = OUTPUT_SIZE.toFloat(),
+                messageTextScale = postcard.messageTextScale,
+                dateTextScale = postcard.dateTextScale,
+                backgroundPatternDensity = postcard.backgroundPatternDensity,
+                stampPhotoScale = postcard.stampPhotoScale,
+                polaroidPhotoScale = postcard.polaroidPhotoScale,
+                photoEdgeBlur = postcard.photoEdgeBlur,
+                stampPhotoOffsetX = postcard.stampPhotoOffsetX,
+                stampPhotoOffsetY = postcard.stampPhotoOffsetY,
+                polaroidPhotoOffsetX = postcard.polaroidPhotoOffsetX,
+                polaroidPhotoOffsetY = postcard.polaroidPhotoOffsetY,
+                tapedFilmPhotoOffsetX = postcard.tapedFilmPhotoOffsetX,
+                tapedFilmPhotoOffsetY = postcard.tapedFilmPhotoOffsetY,
+                stampPhotoZoom = postcard.stampPhotoZoom,
+                polaroidPhotoZoom = postcard.polaroidPhotoZoom,
+                tapedFilmPhotoZoom = postcard.tapedFilmPhotoZoom
             )
 
-            when (
-                resolveLayoutStyle(
-                    postcard.layoutStyle
+            // 마스킹테이프는 "사진 위에 붙이는 얇은 다꾸 재료"라는 제품
+            // 의미상 사진 바로 위, 스티커·도장·텍스트 스티커보다는 아래에
+            // 그린다 — 미리보기(DetailScreen)도 photoMaskingTapes.forEach를
+            // photoStickers.forEach보다 먼저 호출해 같은 순서를 유지한다.
+            for (overlay in maskingTapeOverlays) {
+                drawMaskingTapeOverlay(
+                    context = context,
+                    canvas = canvas,
+                    tapeOverlay = overlay
                 )
-            ) {
-                ExportLayoutStyle.STANDARD -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            394f,
-                            180f,
-                            1654f,
-                            1440f
-                        )
-                    )
+            }
 
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            220f,
-                            1535f,
-                            1828f,
-                            1815f
-                        )
-                    )
+            for (overlay in stickerOverlays) {
+                drawStickerOverlay(
+                    context = context,
+                    canvas = canvas,
+                    stickerOverlay = overlay
+                )
+            }
 
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            730f,
-                            1870f,
-                            1318f,
-                            1960f
-                        )
-                    )
-                }
+            for (overlay in sealOverlays) {
+                drawSealOverlay(
+                    context = context,
+                    canvas = canvas,
+                    sealOverlay = overlay
+                )
+            }
 
-                ExportLayoutStyle.PHOTO_FOCUS -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            264f,
-                            110f,
-                            1784f,
-                            1630f
-                        )
-                    )
+            for (overlay in textStickerOverlays) {
+                drawTextStickerOverlay(
+                    canvas = canvas,
+                    textStickerOverlay = overlay
+                )
+            }
 
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            250f,
-                            1685f,
-                            1798f,
-                            1880f
-                        ),
-                        compact = true
-                    )
+            // 낙서는 사진·스티커·도장보다 항상 위에 그린다 — 미리보기(DetailScreen의
+            // Canvas)와 동일하게 PostcardRenderSpec.drawDoodleStrokes 하나만 공유해서
+            // 호출하므로 좌표·굵기 계산이 두 경로에서 갈라지지 않는다.
+            PostcardRenderSpec.drawDoodleStrokes(
+                canvas = canvas,
+                strokes = doodleStrokes,
+                targetSize = OUTPUT_SIZE.toFloat()
+            )
 
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            760f,
-                            1910f,
-                            1288f,
-                            1984f
-                        ),
-                        compact = true
-                    )
-                }
-
-                ExportLayoutStyle.AIRY -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            534f,
-                            250f,
-                            1514f,
-                            1230f
-                        )
-                    )
-
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            320f,
-                            1390f,
-                            1728f,
-                            1690f
-                        )
-                    )
-
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            730f,
-                            1800f,
-                            1318f,
-                            1890f
-                        )
-                    )
-                }
-
-                ExportLayoutStyle.MAGAZINE -> {
-                    drawStampPhoto(
-                        canvas = canvas,
-                        sourceBitmap = sourceBitmap,
-                        stampBounds = RectF(
-                            194f,
-                            120f,
-                            1854f,
-                            1780f
-                        )
-                    )
-
-                    drawMessage(
-                        canvas = canvas,
-                        message = postcard.message,
-                        messageFont = postcard.messageFont,
-                        messagePanel = RectF(
-                            270f,
-                            1370f,
-                            1778f,
-                            1660f
-                        ),
-                        darkOverlay = true
-                    )
-
-                    drawDate(
-                        canvas = canvas,
-                        capturedAt = postcard.capturedAt,
-                        dateFormat = postcard.dateFormat,
-                        datePanel = RectF(
-                            730f,
-                            1840f,
-                            1318f,
-                            1930f
-                        )
-                    )
-                }
+            // 라벨은 "이미 꾸며놓은 종이 위에 나중에 붙이는 물리적인 스티커"라
+            // 낙서까지 전부 그린 뒤 맨 위에 올린다 — 미리보기(DetailScreen)도
+            // 낙서 Canvas 다음에 labelStickers.forEach를 두어 같은 순서를 지킨다.
+            for (overlay in labelStickerOverlays) {
+                drawLabelStickerOverlay(
+                    canvas = canvas,
+                    labelStickerOverlay = overlay
+                )
             }
 
             return outputBitmap
@@ -261,1029 +464,960 @@ object PostcardImageExporter {
         }
     }
 
-    private fun resolveLayoutStyle(
-        layoutStyle: String
-    ): ExportLayoutStyle {
-        return when (layoutStyle) {
-            "PHOTO_FOCUS" ->
-                ExportLayoutStyle.PHOTO_FOCUS
-
-            "AIRY" ->
-                ExportLayoutStyle.AIRY
-
-            "MAGAZINE" ->
-                ExportLayoutStyle.MAGAZINE
-
-            else ->
-                ExportLayoutStyle.STANDARD
-        }
-    }
-
-    private fun resolveMessageTypeface(
-        messageFont: String
-    ): Typeface {
-        return when (messageFont) {
-            "DEFAULT" ->
-                Typeface.create(
-                    Typeface.DEFAULT,
-                    Typeface.NORMAL
-                )
-
-            "SANS_SERIF" ->
-                Typeface.create(
-                    Typeface.SANS_SERIF,
-                    Typeface.NORMAL
-                )
-
-            "SERIF" ->
-                Typeface.create(
-                    Typeface.SERIF,
-                    Typeface.NORMAL
-                )
-
-            "MONOSPACE" ->
-                Typeface.create(
-                    Typeface.MONOSPACE,
-                    Typeface.NORMAL
-                )
-
-            "CURSIVE" ->
-                Typeface.create(
-                    "cursive",
-                    Typeface.NORMAL
-                )
-
-            else ->
-                Typeface.create(
-                    Typeface.SERIF,
-                    Typeface.NORMAL
-                )
-        }
-    }
-
-    private fun drawBackground(
+    private fun drawStickerOverlay(
+        context: Context,
         canvas: Canvas,
-        postcard: Postcard
+        stickerOverlay: StickerOverlay
     ) {
-        canvas.drawColor(
-            postcard.backgroundColorArgb.toInt()
-        )
-
-        drawBackgroundPattern(
-            canvas = canvas,
-            backgroundPattern = postcard.backgroundPattern,
-            backgroundColorArgb = postcard.backgroundColorArgb
-        )
-
-        val innerBorderPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color =
-                    Color.argb(
-                        115,
-                        255,
-                        255,
-                        255
+        val decodedStickerBitmap =
+            runCatching {
+                decodeStickerBitmap(
+                    context = context,
+                    stickerUri = stickerOverlay.uri
+                )
+            }.getOrNull()
+        val decodedOriginalBitmap =
+            if (
+                decodedStickerBitmap == null &&
+                stickerOverlay.isBackgroundRemoved &&
+                stickerOverlay.originalUri != null
+            ) {
+                runCatching {
+                    decodeStickerBitmap(
+                        context = context,
+                        stickerUri =
+                            stickerOverlay.originalUri
                     )
+                }.getOrNull()
+            } else {
+                null
+            }
+        val stickerBitmap =
+            decodedStickerBitmap
+                ?: decodedOriginalBitmap
+                ?: return
+        val drawAsBackgroundRemoved =
+            stickerOverlay.isBackgroundRemoved &&
+                    decodedStickerBitmap != null
 
-                style =
-                    Paint.Style.STROKE
+        try {
+            val stickerSide =
+                (stickerOverlay.sizeRatio * OUTPUT_SIZE)
+                    .coerceIn(
+                        1f,
+                        OUTPUT_SIZE.toFloat()
+                    )
+            val left =
+                stickerOverlay.normalizedX
+                    .coerceIn(0f, 1f) *
+                        OUTPUT_SIZE
+            val top =
+                stickerOverlay.normalizedY
+                    .coerceIn(0f, 1f) *
+                        OUTPUT_SIZE
+            val stickerBounds =
+                RectF(
+                    left.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ),
+                    top.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ),
+                    left.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ) + stickerSide,
+                    top.coerceIn(
+                        0f,
+                        OUTPUT_SIZE - stickerSide
+                    ) + stickerSide
+                )
 
-                strokeWidth = 8f
+            if (
+                stickerBounds.width() <= 0f ||
+                stickerBounds.height() <= 0f
+            ) {
+                return
             }
 
-        canvas.drawRect(
-            32f,
-            32f,
-            OUTPUT_SIZE - 32f,
-            OUTPUT_SIZE - 32f,
-            innerBorderPaint
-        )
-    }
+            val stickerSize =
+                min(
+                    stickerBounds.width(),
+                    stickerBounds.height()
+                )
+            val cornerRadius =
+                stickerSize *
+                        STICKER_CORNER_RADIUS_RATIO
 
-    private fun drawBackgroundPattern(
-        canvas: Canvas,
-        backgroundPattern: String,
-        backgroundColorArgb: Long
-    ) {
-        if (backgroundPattern == "NONE") {
-            return
-        }
-
-        val patternColor =
-            getPatternColor(
-                backgroundColorArgb
+            canvas.save()
+            canvas.rotate(
+                stickerOverlay.rotationDegrees,
+                stickerBounds.centerX(),
+                stickerBounds.centerY()
+            )
+            canvas.scale(
+                if (stickerOverlay.flipHorizontal) -1f else 1f,
+                if (stickerOverlay.flipVertical) -1f else 1f,
+                stickerBounds.centerX(),
+                stickerBounds.centerY()
             )
 
-        if (backgroundPattern == "CHECKER") {
-            drawCheckerPattern(
-                canvas = canvas,
-                color = patternColor
-            )
-            return
-        }
-
-        val cellSize = 290f
-        val horizontalCount =
-            (OUTPUT_SIZE / cellSize).toInt() + 3
-        val verticalCount =
-            (OUTPUT_SIZE / cellSize).toInt() + 3
-
-        for (row in -1..verticalCount) {
-            val staggerOffset =
-                if (row % 2 == 0) {
-                    0f
+            try {
+                if (drawAsBackgroundRemoved) {
+                    drawFitCenteredBitmap(
+                        canvas = canvas,
+                        bitmap = stickerBitmap,
+                        destinationRect = stickerBounds
+                    )
                 } else {
-                    cellSize / 2f
-                }
-
-            for (column in -1..horizontalCount) {
-                val centerX =
-                    column * cellSize + staggerOffset
-                val centerY =
-                    row * cellSize
-
-                when (backgroundPattern) {
-                    "DOTS" -> {
-                        val radius =
-                            if ((row + column) % 2 == 0) {
-                                34f
-                            } else {
-                                22f
-                            }
-
-                        canvas.drawCircle(
-                            centerX,
-                            centerY,
-                            radius,
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.FILL
-                            }
-                        )
-                    }
-
-                    "STARS" -> {
-                        canvas.drawPath(
-                            createStarPath(
-                                centerX = centerX,
-                                centerY = centerY,
-                                outerRadius = 62f,
-                                innerRadius = 27f
-                            ),
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.FILL
-                            }
-                        )
-                    }
-
-                    "HEARTS" -> {
-                        canvas.drawPath(
-                            createHeartPath(
-                                centerX = centerX,
-                                centerY = centerY,
-                                radius = 56f
-                            ),
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.FILL
-                            }
-                        )
-                    }
-
-                    "CHERRY_BLOSSOMS" -> {
-                        drawCherryBlossomPattern(
-                            canvas = canvas,
-                            centerX = centerX,
-                            centerY = centerY,
-                            radius = 52f,
-                            color = patternColor
-                        )
-                    }
-
-                    "TRIANGLES" -> {
-                        val trianglePath =
-                            Path().apply {
-                                moveTo(
-                                    centerX,
-                                    centerY - 56f
-                                )
-                                lineTo(
-                                    centerX - 51f,
-                                    centerY + 42f
-                                )
-                                lineTo(
-                                    centerX + 51f,
-                                    centerY + 42f
-                                )
-                                close()
-                            }
-
-                        canvas.drawPath(
-                            trianglePath,
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.STROKE
-                                strokeWidth = 13f
-                                strokeJoin = Paint.Join.ROUND
-                            }
-                        )
-                    }
-
-                    "SQUARES" -> {
-                        canvas.save()
-
-                        if ((row + column) % 2 != 0) {
-                            canvas.rotate(
-                                45f,
-                                centerX,
-                                centerY
+                    val stickerPath =
+                        Path().apply {
+                            addRoundRect(
+                                stickerBounds,
+                                cornerRadius,
+                                cornerRadius,
+                                Path.Direction.CW
                             )
                         }
 
-                        canvas.drawRoundRect(
-                            RectF(
-                                centerX - 48f,
-                                centerY - 48f,
-                                centerX + 48f,
-                                centerY + 48f
-                            ),
-                            14f,
-                            14f,
-                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = patternColor
-                                style = Paint.Style.STROKE
-                                strokeWidth = 12f
-                                strokeJoin = Paint.Join.ROUND
-                            }
-                        )
+                    canvas.save()
+                    try {
+                        canvas.clipPath(stickerPath)
 
+                        drawCenterCroppedBitmap(
+                            canvas = canvas,
+                            bitmap = stickerBitmap,
+                            destinationRect = stickerBounds
+                        )
+                    } finally {
                         canvas.restore()
                     }
+
+                    val borderWidth =
+                        stickerSize *
+                                STICKER_BORDER_WIDTH_RATIO
+                    val borderBounds =
+                        RectF(stickerBounds).apply {
+                            inset(
+                                borderWidth / 2f,
+                                borderWidth / 2f
+                            )
+                        }
+                    val borderRadius =
+                        (cornerRadius - borderWidth / 2f)
+                            .coerceAtLeast(0f)
+                    val borderPaint =
+                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = Color.BLACK
+                            style = Paint.Style.STROKE
+                            strokeWidth = borderWidth
+                        }
+
+                    canvas.drawRoundRect(
+                        borderBounds,
+                        borderRadius,
+                        borderRadius,
+                        borderPaint
+                    )
                 }
+            } finally {
+                canvas.restore()
+            }
+        } finally {
+            if (!stickerBitmap.isRecycled) {
+                stickerBitmap.recycle()
             }
         }
     }
 
-    private fun drawCheckerPattern(
+    /**
+     * 화면(MaskingTapeContent, ui/components/MaskingTapeShapes.kt)과 같은
+     * 비율 상수(MASKING_TAPE_* in ui/detail/MaskingTapeItem.kt)로 모양·패턴을
+     * 다시 계산해 그린다 — 두 렌더 경로가 같은 값을 참조하므로 화면과 저장
+     * 이미지에서 테이프 모양·패턴이 어긋나지 않는다.
+     */
+    private fun drawMaskingTapeOverlay(
+        context: Context,
         canvas: Canvas,
-        color: Int
+        tapeOverlay: MaskingTapeOverlay
     ) {
-        val tileSize = 175f
-        val horizontalCount =
-            (OUTPUT_SIZE / tileSize).toInt() + 2
-        val verticalCount =
-            (OUTPUT_SIZE / tileSize).toInt() + 2
+        val widthPx =
+            (tapeOverlay.widthRatio * OUTPUT_SIZE).coerceAtLeast(1f)
+        val heightPx =
+            (tapeOverlay.heightRatio * OUTPUT_SIZE).coerceAtLeast(1f)
+        val left = tapeOverlay.normalizedX * OUTPUT_SIZE
+        val top = tapeOverlay.normalizedY * OUTPUT_SIZE
+        val bounds = RectF(left, top, left + widthPx, top + heightPx)
+
+        if (bounds.width() <= 0f || bounds.height() <= 0f) return
+
+        canvas.save()
+        try {
+            canvas.rotate(
+                tapeOverlay.rotationDegrees,
+                bounds.centerX(),
+                bounds.centerY()
+            )
+            canvas.clipPath(maskingTapeCutPath(bounds, tapeOverlay.edgeStyle))
+
+            if (tapeOverlay.isPhoto) {
+                val photoBitmap =
+                    tapeOverlay.photoUri?.let {
+                        runCatching {
+                            MaskingTapePhotoDecoder.decodeSampledBitmap(context, it)
+                        }.getOrNull()
+                    }
+
+                if (photoBitmap != null) {
+                    try {
+                        drawTiledPhotoOverlay(canvas, bounds, photoBitmap, tapeOverlay.alpha)
+                    } finally {
+                        if (!photoBitmap.isRecycled) {
+                            photoBitmap.recycle()
+                        }
+                    }
+                } else {
+                    val fallbackPaint =
+                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            style = Paint.Style.FILL
+                            color = colorWithAlpha(tapeOverlay.baseColorArgb, tapeOverlay.alpha)
+                        }
+                    canvas.drawRect(bounds, fallbackPaint)
+                }
+            } else {
+                val basePaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        style = Paint.Style.FILL
+                        color = colorWithAlpha(tapeOverlay.baseColorArgb, tapeOverlay.alpha)
+                    }
+                canvas.drawRect(bounds, basePaint)
+                drawMaskingTapePatternOverlay(canvas, bounds, tapeOverlay.patternColorArgb, tapeOverlay.patternKind)
+            }
+        } finally {
+            canvas.restore()
+        }
+    }
+
+    /**
+     * Compose(MaskingTapeShapes.kt의 maskingTapeClipPath)와 같은 좌표 함수
+     * (maskingTapeOutlinePoints)를 그대로 옮겨 그린다 — 두 렌더 경로가 항상
+     * 같은 외곽선을 얻는다.
+     */
+    private fun maskingTapeCutPath(bounds: RectF, edgeStyle: MaskingTapeEdgeStyle): Path {
+        val points =
+            maskingTapeOutlinePoints(bounds.width(), bounds.height(), edgeStyle)
+
+        if (points.isEmpty()) {
+            return Path().apply { addRect(bounds, Path.Direction.CW) }
+        }
+
+        return Path().apply {
+            moveTo(bounds.left + points[0].first, bounds.top + points[0].second)
+            for (i in 1 until points.size) {
+                lineTo(bounds.left + points[i].first, bounds.top + points[i].second)
+            }
+            close()
+        }
+    }
+
+    private fun drawTiledPhotoOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        bitmap: Bitmap,
+        alpha: Float
+    ) {
+        val tileSize = bounds.height()
+
+        if (tileSize <= 0f || bitmap.width <= 0 || bitmap.height <= 0) return
+
+        val matrix =
+            Matrix().apply {
+                setScale(tileSize / bitmap.width, tileSize / bitmap.height)
+                postTranslate(bounds.left, bounds.top)
+            }
+
+        val shader =
+            BitmapShader(
+                bitmap,
+                Shader.TileMode.REPEAT,
+                Shader.TileMode.REPEAT
+            ).apply { setLocalMatrix(matrix) }
 
         val paint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.color = color
+                this.shader = shader
+                this.alpha = (alpha.coerceIn(0f, 1f) * 255f).toInt()
+            }
+
+        canvas.drawRect(bounds, paint)
+    }
+
+    private fun drawMaskingTapePatternOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        patternColorArgb: Long,
+        patternKind: MaskingTapePatternKind
+    ) {
+        when (patternKind) {
+            MaskingTapePatternKind.GRID -> drawTapeGridOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.DOT -> drawTapeDotsOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.STAR -> drawTapeStarsOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.HEART -> drawTapeHeartsOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.STRIPE -> drawTapeStripesOverlay(canvas, bounds, patternColorArgb)
+            MaskingTapePatternKind.PLAIN -> drawTapeFiberOverlay(canvas, bounds, patternColorArgb)
+        }
+    }
+
+    private fun drawTapeGridOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                strokeWidth = height * MASKING_TAPE_GRID_LINE_WIDTH_RATIO
+            }
+
+        var x = bounds.left + pitch / 2f
+        while (x < bounds.right) {
+            canvas.drawLine(x, bounds.top, x, bounds.bottom, paint)
+            x += pitch
+        }
+
+        var y = bounds.top + pitch / 2f
+        while (y < bounds.bottom) {
+            canvas.drawLine(bounds.left, y, bounds.right, y, paint)
+            y += pitch
+        }
+    }
+
+    private fun drawTapeDotsOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val radius = height * MASKING_TAPE_DOT_RADIUS_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
                 style = Paint.Style.FILL
             }
 
-        for (row in 0..verticalCount) {
-            for (column in 0..horizontalCount) {
-                if ((row + column) % 2 == 0) {
-                    canvas.drawRect(
-                        column * tileSize,
-                        row * tileSize,
-                        (column + 1) * tileSize,
-                        (row + 1) * tileSize,
-                        paint
-                    )
-                }
-            }
+        forEachTapeGridPointOverlay(bounds, pitch) { x, y ->
+            canvas.drawCircle(x, y, radius, paint)
         }
     }
 
-    private fun drawCherryBlossomPattern(
-        canvas: Canvas,
-        centerX: Float,
-        centerY: Float,
-        radius: Float,
-        color: Int
-    ) {
-        val petalPaint =
+    private fun drawTapeStarsOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val starSize = height * MASKING_TAPE_STAR_SIZE_RATIO
+        val half = starSize / 2f
+        val diag = half * 0.6f
+        val strokeWidth = starSize * 0.16f
+        val thickPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.color = color
-                style = Paint.Style.FILL
-            }
-
-        repeat(5) { index ->
-            canvas.save()
-            canvas.rotate(
-                index * 72f,
-                centerX,
-                centerY
-            )
-            canvas.drawOval(
-                RectF(
-                    centerX - radius * 0.42f,
-                    centerY - radius * 1.08f,
-                    centerX + radius * 0.42f,
-                    centerY + radius * 0.12f
-                ),
-                petalPaint
-            )
-            canvas.restore()
-        }
-
-        canvas.drawCircle(
-            centerX,
-            centerY,
-            radius * 0.27f,
-            petalPaint
-        )
-    }
-
-    private fun createStarPath(
-        centerX: Float,
-        centerY: Float,
-        outerRadius: Float,
-        innerRadius: Float
-    ): Path {
-        return Path().apply {
-            repeat(10) { index ->
-                val radius =
-                    if (index % 2 == 0) {
-                        outerRadius
-                    } else {
-                        innerRadius
-                    }
-
-                val angle =
-                    -PI / 2.0 + index * PI / 5.0
-
-                val pointX =
-                    centerX +
-                            cos(angle).toFloat() * radius
-
-                val pointY =
-                    centerY +
-                            sin(angle).toFloat() * radius
-
-                if (index == 0) {
-                    moveTo(pointX, pointY)
-                } else {
-                    lineTo(pointX, pointY)
-                }
-            }
-
-            close()
-        }
-    }
-
-    private fun createHeartPath(
-        centerX: Float,
-        centerY: Float,
-        radius: Float
-    ): Path {
-        return Path().apply {
-            moveTo(
-                centerX,
-                centerY + radius
-            )
-
-            cubicTo(
-                centerX - radius * 1.35f,
-                centerY + radius * 0.2f,
-                centerX - radius,
-                centerY - radius * 0.95f,
-                centerX,
-                centerY - radius * 0.28f
-            )
-
-            cubicTo(
-                centerX + radius,
-                centerY - radius * 0.95f,
-                centerX + radius * 1.35f,
-                centerY + radius * 0.2f,
-                centerX,
-                centerY + radius
-            )
-
-            close()
-        }
-    }
-
-    private fun getPatternColor(
-        backgroundColorArgb: Long
-    ): Int {
-        val color =
-            backgroundColorArgb.toInt()
-
-        val red =
-            Color.red(color)
-
-        val green =
-            Color.green(color)
-
-        val blue =
-            Color.blue(color)
-
-        val brightness =
-            (
-                    red * 0.299f +
-                            green * 0.587f +
-                            blue * 0.114f
-                    ) / 255f
-
-        return if (brightness < 0.48f) {
-            Color.argb(
-                87,
-                255,
-                255,
-                255
-            )
-        } else {
-            Color.argb(
-                46,
-                61,
-                41,
-                88
-            )
-        }
-    }
-
-    private fun drawStampPhoto(
-        canvas: Canvas,
-        sourceBitmap: Bitmap,
-        stampBounds: RectF
-    ) {
-        val stampPath =
-            createPinkingPath(
-                bounds = stampBounds,
-                inset = STAMP_BORDER_WIDTH / 2f
-            )
-
-        val shadowBounds =
-            RectF(
-                stampBounds.left + 22f,
-                stampBounds.top + 26f,
-                stampBounds.right + 22f,
-                stampBounds.bottom + 26f
-            )
-
-        val shadowPath =
-            createPinkingPath(
-                bounds = shadowBounds,
-                inset = STAMP_BORDER_WIDTH / 2f
-            )
-
-        val shadowPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color =
-                    Color.argb(
-                        85,
-                        18,
-                        12,
-                        28
-                    )
-
-                style =
-                    Paint.Style.FILL
-            }
-
-        canvas.drawPath(
-            shadowPath,
-            shadowPaint
-        )
-
-        canvas.save()
-
-        canvas.clipPath(
-            stampPath
-        )
-
-        drawCenterCroppedBitmap(
-            canvas = canvas,
-            bitmap = sourceBitmap,
-            destinationRect = stampBounds
-        )
-
-        canvas.restore()
-
-        val whiteBorderPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.WHITE
-                style = Paint.Style.STROKE
-                strokeWidth = STAMP_BORDER_WIDTH
-                strokeJoin = Paint.Join.ROUND
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                this.strokeWidth = strokeWidth
                 strokeCap = Paint.Cap.ROUND
             }
+        val thinPaint =
+            Paint(thickPaint).apply {
+                this.strokeWidth = strokeWidth * 0.7f
+            }
 
-        canvas.drawPath(
-            stampPath,
-            whiteBorderPaint
-        )
+        forEachTapeGridPointOverlay(bounds, pitch) { x, y ->
+            canvas.drawLine(x - half, y, x + half, y, thickPaint)
+            canvas.drawLine(x, y - half, x, y + half, thickPaint)
+            canvas.drawLine(x - diag, y - diag, x + diag, y + diag, thinPaint)
+            canvas.drawLine(x - diag, y + diag, x + diag, y - diag, thinPaint)
+        }
     }
 
+    private fun drawTapeHeartsOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_PATTERN_PITCH_RATIO
+        val heartSize = height * MASKING_TAPE_HEART_SIZE_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                style = Paint.Style.FILL
+            }
 
-    private fun drawMessage(
-        canvas: Canvas,
-        message: String,
-        messageFont: String,
-        messagePanel: RectF,
-        darkOverlay: Boolean = false,
-        compact: Boolean = false
+        forEachTapeGridPointOverlay(bounds, pitch) { x, y ->
+            canvas.drawPath(tapeHeartPathOverlay(x, y, heartSize), paint)
+        }
+    }
+
+    private fun tapeHeartPathOverlay(
+        centerX: Float,
+        centerY: Float,
+        heartSize: Float
+    ): Path {
+        val half = heartSize / 2f
+        val top = centerY - half * 0.5f
+
+        return Path().apply {
+            moveTo(centerX, centerY + half)
+            cubicTo(
+                centerX - half * 1.3f, centerY,
+                centerX - half * 0.6f, top - half * 0.6f,
+                centerX, top
+            )
+            cubicTo(
+                centerX + half * 0.6f, top - half * 0.6f,
+                centerX + half * 1.3f, centerY,
+                centerX, centerY + half
+            )
+            close()
+        }
+    }
+
+    private fun drawTapeStripesOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val height = bounds.height()
+        val pitch = height * MASKING_TAPE_STRIPE_PITCH_RATIO
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PATTERN_ALPHA)
+                strokeWidth = height * MASKING_TAPE_STRIPE_WIDTH_RATIO
+            }
+        val diagonalSpan = bounds.width() + height
+
+        var offset = -height
+        while (offset < diagonalSpan) {
+            canvas.drawLine(
+                bounds.left + offset,
+                bounds.top,
+                bounds.left + offset + height,
+                bounds.bottom,
+                paint
+            )
+            offset += pitch
+        }
+    }
+
+    /** 반투명 아이보리처럼 도안 없이 은은한 종이 결만 살짝 비치게 한다. */
+    private fun drawTapeFiberOverlay(canvas: Canvas, bounds: RectF, patternColorArgb: Long) {
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWithAlpha(patternColorArgb, MASKING_TAPE_PLAIN_FIBER_ALPHA)
+                strokeWidth = bounds.height() * 0.03f
+            }
+
+        listOf(0.32f, 0.68f).forEach { yRatio ->
+            val y = bounds.top + bounds.height() * yRatio
+            canvas.drawLine(
+                bounds.left + bounds.width() * 0.08f,
+                y,
+                bounds.left + bounds.width() * 0.92f,
+                y,
+                paint
+            )
+        }
+    }
+
+    /** 테이프 영역 안에서 격자 형태로 촘촘히 엇갈린 도안 반복 위치를 순회한다(체크무늬 배치). */
+    private inline fun forEachTapeGridPointOverlay(
+        bounds: RectF,
+        pitch: Float,
+        action: (x: Float, y: Float) -> Unit
     ) {
-        val normalizedMessage =
-            message.trim()
+        var row = 0
+        var y = bounds.top + pitch / 2f
+        while (y < bounds.bottom) {
+            val rowOffset = if (row % 2 == 0) 0f else pitch / 2f
+            var x = bounds.left + pitch / 2f + rowOffset
+            while (x < bounds.right) {
+                action(x, y)
+                x += pitch
+            }
+            y += pitch
+            row++
+        }
+    }
 
-        if (normalizedMessage.isBlank()) {
+    private fun colorWithAlpha(argb: Long, alphaFraction: Float): Int {
+        val rgb = argb.toInt() and 0x00FFFFFF
+        val alphaByte = (alphaFraction.coerceIn(0f, 1f) * 255f).toInt()
+        return (alphaByte shl 24) or rgb
+    }
+
+    private fun drawSealOverlay(
+        context: Context,
+        canvas: Canvas,
+        sealOverlay: SealOverlay
+    ) {
+        val sealSide =
+            (sealOverlay.sizeRatio * OUTPUT_SIZE)
+                .coerceIn(1f, OUTPUT_SIZE.toFloat())
+
+        // 도장은 미리보기에서 가장자리 걸침이 허용되므로(최소 가시 영역
+        // 정책, DetailScreen.correctSealOffsetForMinimumVisibility 참고)
+        // 여기서 [0,1]/[0, OUTPUT_SIZE-side]로 다시 완전히 안쪽으로 밀어
+        // 넣지 않는다 — normalizedX/Y는 이미 그 정책으로 안전하게 보정된
+        // 값이며, 이 함수가 임의로 재클램프하면 화면에서 허용된 위치가
+        // Export에서 다시 이동해버린다.
+        val left = sealOverlay.normalizedX * OUTPUT_SIZE
+        val top = sealOverlay.normalizedY * OUTPUT_SIZE
+
+        val sealBounds =
+            RectF(left, top, left + sealSide, top + sealSide)
+
+        if (
+            sealBounds.width() <= 0f ||
+            sealBounds.height() <= 0f
+        ) {
             return
         }
 
-        if (!darkOverlay) {
-            val panelShadowPaint =
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color =
-                        Color.argb(
-                            55,
-                            20,
-                            14,
-                            26
-                        )
-
-                    style =
-                        Paint.Style.FILL
-                }
-
-            canvas.drawRoundRect(
-                RectF(
-                    messagePanel.left + 12f,
-                    messagePanel.top + 14f,
-                    messagePanel.right + 12f,
-                    messagePanel.bottom + 14f
-                ),
-                34f,
-                34f,
-                panelShadowPaint
-            )
-        }
-
-        val panelPaint =
+        val paint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color =
-                    if (darkOverlay) {
-                        Color.argb(
-                            188,
-                            24,
-                            18,
-                            30
-                        )
-                    } else {
-                        Color.argb(
-                            222,
-                            255,
-                            252,
-                            247
-                        )
-                    }
-
-                style =
-                    Paint.Style.FILL
+                color = sealOverlay.colorArgb.toInt()
+                style = Paint.Style.STROKE
             }
-
-        canvas.drawRoundRect(
-            messagePanel,
-            34f,
-            34f,
-            panelPaint
-        )
-
-        val textSize =
-            when {
-                compact &&
-                        normalizedMessage.length <= 20 ->
-                    58f
-
-                compact &&
-                        normalizedMessage.length <= 45 ->
-                    50f
-
-                compact ->
-                    43f
-
-                normalizedMessage.length <= 20 ->
-                    72f
-
-                normalizedMessage.length <= 45 ->
-                    62f
-
-                normalizedMessage.length <= 75 ->
-                    54f
-
-                else ->
-                    47f
-            }
-
-        val textPaint =
-            TextPaint(
-                Paint.ANTI_ALIAS_FLAG
-            ).apply {
-                color =
-                    if (darkOverlay) {
-                        Color.WHITE
-                    } else {
-                        Color.rgb(
-                            47,
-                            37,
-                            43
-                        )
-                    }
-
-                this.textSize =
-                    textSize
-
-                typeface =
-                    resolveMessageTypeface(
-                        messageFont
-                    )
-            }
-
-        val horizontalPadding =
-            if (compact) {
-                100f
-            } else {
-                130f
-            }
-
-        val textWidth =
-            (
-                    messagePanel.width() -
-                            horizontalPadding
-                    )
-                .toInt()
-                .coerceAtLeast(1)
-
-        val textLayout =
-            StaticLayout.Builder
-                .obtain(
-                    normalizedMessage,
-                    0,
-                    normalizedMessage.length,
-                    textPaint,
-                    textWidth
-                )
-                .setAlignment(
-                    Layout.Alignment.ALIGN_CENTER
-                )
-                .setIncludePad(false)
-                .setLineSpacing(
-                    if (compact) {
-                        8f
-                    } else {
-                        12f
-                    },
-                    1.08f
-                )
-                .setMaxLines(
-                    if (compact) {
-                        3
-                    } else {
-                        4
-                    }
-                )
-                .setEllipsize(
-                    TextUtils.TruncateAt.END
-                )
-                .setEllipsizedWidth(
-                    textWidth
-                )
-                .build()
-
-        val textX =
-            messagePanel.centerX() -
-                    textWidth / 2f
-
-        val textY =
-            messagePanel.centerY() -
-                    textLayout.height / 2f
 
         canvas.save()
-
-        canvas.translate(
-            textX,
-            textY
+        canvas.rotate(
+            sealOverlay.rotationDegrees,
+            sealBounds.centerX(),
+            sealBounds.centerY()
         )
 
-        textLayout.draw(
-            canvas
-        )
+        when (sealOverlay.type) {
+            "CIRCLE_POSTMARK" ->
+                drawCirclePostmarkOverlay(
+                    canvas,
+                    sealBounds,
+                    paint,
+                    sealOverlay.capturedAtMillis
+                )
+
+            "WAVE_CANCEL" ->
+                drawWaveCancelOverlay(canvas, sealBounds, paint)
+
+            "AIR_MAIL" ->
+                drawAirMailOverlay(canvas, sealBounds, paint)
+
+            "STAR" ->
+                drawSealStarOverlay(canvas, sealBounds, paint)
+
+            "DOG_PAW",
+            "PIGEON_TRACK",
+            "HEART",
+            "STAR_STAMP" ->
+                drawImageSealOverlay(
+                    context,
+                    canvas,
+                    sealBounds,
+                    sealOverlay
+                )
+        }
 
         canvas.restore()
     }
 
-
-    private fun formatDateForExport(
-        capturedAt: Long,
-        dateFormat: String
-    ): String {
-        val pattern: String
-        val locale: Locale
-        val uppercase: Boolean
-
-        when (dateFormat) {
-            "KOREAN" -> {
-                pattern = "yyyy년 M월 d일"
-                locale = Locale.KOREAN
-                uppercase = false
-            }
-
-            "ENGLISH_LONG" -> {
-                pattern = "MMMM d, yyyy"
-                locale = Locale.ENGLISH
-                uppercase = true
-            }
-
-            "ENGLISH_SHORT" -> {
-                pattern = "dd MMM yyyy"
-                locale = Locale.ENGLISH
-                uppercase = true
-            }
-
-            else -> {
-                pattern = "yyyy.MM.dd"
-                locale = Locale.KOREAN
-                uppercase = false
-            }
+    private fun sealImageDrawableRes(type: String): Int? =
+        when (type) {
+            "DOG_PAW" -> R.drawable.seal_dog_paw
+            "PIGEON_TRACK" -> R.drawable.seal_pigeon_track
+            "HEART" -> R.drawable.seal_heart
+            "STAR_STAMP" -> R.drawable.seal_star
+            else -> null
         }
 
-        val formattedDate =
-            SimpleDateFormat(
-                pattern,
-                locale
-            ).format(
-                Date(capturedAt)
-            )
+    /** 미니 스탬프(강아지·비둘기·하트·별)는 코드로 그리지 않고 res/drawable 실루엣 이미지를 잉크색으로 틴트해서 그린다. */
+    private fun drawImageSealOverlay(
+        context: Context,
+        canvas: Canvas,
+        bounds: RectF,
+        sealOverlay: SealOverlay
+    ) {
+        val resId =
+            sealImageDrawableRes(sealOverlay.type)
+                ?: return
 
-        return if (uppercase) {
-            formattedDate.uppercase(locale)
-        } else {
-            formattedDate
+        val bitmap =
+            runCatching {
+                BitmapFactory.decodeResource(
+                    context.resources,
+                    resId
+                )
+            }.getOrNull() ?: return
+
+        try {
+            val paint =
+                Paint(
+                    Paint.ANTI_ALIAS_FLAG or
+                            Paint.FILTER_BITMAP_FLAG
+                ).apply {
+                    colorFilter =
+                        PorterDuffColorFilter(
+                            sealOverlay.colorArgb.toInt(),
+                            PorterDuff.Mode.SRC_IN
+                        )
+                }
+
+            drawFitCenteredBitmap(
+                canvas = canvas,
+                bitmap = bitmap,
+                destinationRect = bounds,
+                paint = paint
+            )
+        } finally {
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
         }
     }
 
-
-    private fun drawDate(
+    /**
+     * 화면(TextStickerContent)과 동일하게 Paint.getTextBounds로 이 함수
+     * 안에서 직접 측정해 그린다 — 미리 계산된 폭을 받아 맞춰 그리지 않고
+     * 똑같은 절차를 다시 밟으므로, 화면과 export의 외곽선 두께·글자 위치가
+     * 항상 같은 방식으로 계산된다.
+     */
+    private fun drawTextStickerOverlay(
         canvas: Canvas,
-        capturedAt: Long,
-        dateFormat: String,
-        datePanel: RectF,
-        compact: Boolean = false
+        textStickerOverlay: TextStickerOverlay
     ) {
-        val dateText =
-            formatDateForExport(
-                capturedAt = capturedAt,
-                dateFormat = dateFormat
-            )
+        val fontSizePx =
+            textStickerOverlay.fontSizeRatio * OUTPUT_SIZE
 
-        val panelPaint =
+        if (fontSizePx <= 0f) return
+
+        val fillPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color =
-                    Color.argb(
-                        205,
-                        255,
-                        252,
-                        247
-                    )
-
-                style =
-                    Paint.Style.FILL
+                style = Paint.Style.FILL
+                color = textStickerOverlay.colorArgb.toInt()
+                textSize = fontSizePx
+                typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
             }
 
-        canvas.drawRoundRect(
-            datePanel,
-            if (compact) {
-                22f
-            } else {
-                28f
-            },
-            if (compact) {
-                22f
-            } else {
-                28f
-            },
-            panelPaint
+        val strokeWidthPx = fontSizePx * TEXT_STICKER_OUTLINE_WIDTH_RATIO
+
+        val textBounds = Rect()
+        fillPaint.getTextBounds(
+            textStickerOverlay.text,
+            0,
+            textStickerOverlay.text.length,
+            textBounds
         )
 
-        val datePaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color =
-                    Color.rgb(
-                        70,
-                        58,
-                        68
-                    )
+        val left = textStickerOverlay.normalizedX * OUTPUT_SIZE
+        val top = textStickerOverlay.normalizedY * OUTPUT_SIZE
+        val boxWidth = textBounds.width() + strokeWidthPx
+        val boxHeight = textBounds.height() + strokeWidthPx
 
-                textSize =
-                    if (compact) {
-                        32f
-                    } else {
-                        38f
-                    }
+        if (boxWidth <= 0f || boxHeight <= 0f) return
 
-                textAlign = Paint.Align.CENTER
-
-                typeface =
-                    Typeface.create(
-                        Typeface.SERIF,
-                        Typeface.NORMAL
-                    )
+        val strokePaint =
+            Paint(fillPaint).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = strokeWidthPx
+                strokeJoin = Paint.Join.ROUND
+                strokeMiter = 2f
+                color = textStickerOverlay.outlineColorArgb.toInt()
             }
 
-        val metrics =
-            datePaint.fontMetrics
+        val originX = left - textBounds.left + strokeWidthPx / 2f
+        val originY = top - textBounds.top + strokeWidthPx / 2f
 
-        val baseline =
-            datePanel.centerY() -
-                    (
-                            metrics.ascent +
-                                    metrics.descent
-                            ) / 2f
+        canvas.save()
+        canvas.rotate(
+            textStickerOverlay.rotationDegrees,
+            left + boxWidth / 2f,
+            top + boxHeight / 2f
+        )
+        canvas.drawText(textStickerOverlay.text, originX, originY, strokePaint)
+        canvas.drawText(textStickerOverlay.text, originX, originY, fillPaint)
+        canvas.restore()
+    }
+
+    /**
+     * 라벨은 화면 미리보기(LabelStickerContent)와 완전히 같은
+     * LabelStickerRenderer를 호출한다 — 폭 계산·물성 표현·엠보싱이 두 렌더
+     * 경로에 각각 적혀 있지 않고 한 곳에만 있으므로 drift가 생길 수 없다.
+     * 여기서 하는 일은 회전 중심을 잡아 canvas를 돌려주는 것뿐이다.
+     */
+    private fun drawLabelStickerOverlay(
+        canvas: Canvas,
+        labelStickerOverlay: LabelStickerOverlay
+    ) {
+        val fontSizePx =
+            labelStickerOverlay.fontSizeRatio * OUTPUT_SIZE
+
+        if (fontSizePx <= 0f) return
+
+        val textPaint = LabelStickerRenderer.createTextPaint(fontSizePx)
+        val labelWidth =
+            LabelStickerRenderer.labelWidthPx(
+                text = labelStickerOverlay.text,
+                fontSizePx = fontSizePx,
+                textPaint = textPaint
+            )
+        val labelHeight = LabelStickerRenderer.labelHeightPx(fontSizePx)
+
+        val left = labelStickerOverlay.normalizedX * OUTPUT_SIZE
+        val top = labelStickerOverlay.normalizedY * OUTPUT_SIZE
+
+        // 화면(LabelStickerContent)과 같은 labelTapePalette를 부른다 — 커스텀
+        // 테이프의 바탕색·단면색·문자색 결정이 export 전용으로 갈라지지 않는다.
+        val palette =
+            labelTapePalette(
+                style = labelStickerOverlay.style,
+                customTapeColorArgb = labelStickerOverlay.customTapeColorArgb
+            )
+
+        canvas.save()
+        canvas.rotate(
+            labelStickerOverlay.rotationDegrees,
+            left + labelWidth / 2f,
+            top + labelHeight / 2f
+        )
+        LabelStickerRenderer.draw(
+            canvas = canvas,
+            text = labelStickerOverlay.text,
+            palette = palette,
+            fontSizePx = fontSizePx,
+            left = left,
+            top = top,
+            textPaint = textPaint
+        )
+        canvas.restore()
+    }
+
+    private fun drawCirclePostmarkOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        paint: Paint,
+        capturedAtMillis: Long?
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
+
+        val outerRadius =
+            min(bounds.width(), bounds.height()) / 2f - strokeWidth
+        val innerRadius = outerRadius * 0.72f
+        val cx = bounds.centerX()
+        val cy = bounds.centerY()
+
+        canvas.drawCircle(cx, cy, outerRadius, paint)
+
+        val innerPaint =
+            Paint(paint).apply { this.strokeWidth = strokeWidth * 0.7f }
+        canvas.drawCircle(cx, cy, innerRadius, innerPaint)
+
+        val tickPaint =
+            Paint(paint).apply { this.strokeWidth = strokeWidth * 0.6f }
+        val tickCount = 16
+
+        for (i in 0 until tickCount) {
+            val angle = (2 * PI * i / tickCount).toFloat()
+            val fromRadius = outerRadius * 0.86f
+            val toRadius = outerRadius * 0.96f
+
+            canvas.drawLine(
+                cx + fromRadius * cos(angle),
+                cy + fromRadius * sin(angle),
+                cx + toRadius * cos(angle),
+                cy + toRadius * sin(angle),
+                tickPaint
+            )
+        }
+
+        if (capturedAtMillis != null) {
+            val textPaint =
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = paint.color
+                    typeface = Typeface.create(
+                        Typeface.SANS_SERIF,
+                        Typeface.BOLD
+                    )
+                    textSize = innerRadius * 0.42f
+                    textAlign = Paint.Align.CENTER
+                }
+
+            val dateText =
+                PostcardDateFormat.formatIso(capturedAtMillis)
+
+            val textY =
+                cy - (textPaint.descent() + textPaint.ascent()) / 2f
+
+            canvas.drawText(dateText, cx, textY, textPaint)
+        }
+    }
+
+    private fun drawWaveCancelOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        paint: Paint
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
+
+        val lineCount = 4
+        val waveHeight = bounds.height() * 0.08f
+        val waveWidth = bounds.width() * 0.22f
+        val spacing = bounds.height() / (lineCount + 1)
+
+        for (lineIndex in 1..lineCount) {
+            val y = bounds.top + spacing * lineIndex
+            val path = Path()
+            path.moveTo(bounds.left, y)
+
+            var x = bounds.left
+            var up = true
+            while (x < bounds.right) {
+                val nextX = (x + waveWidth).coerceAtMost(bounds.right)
+                path.quadTo(
+                    x + waveWidth / 2f,
+                    y + if (up) -waveHeight else waveHeight,
+                    nextX,
+                    y
+                )
+                x = nextX
+                up = !up
+            }
+
+            canvas.drawPath(path, paint)
+        }
+    }
+
+    private fun drawAirMailOverlay(
+        canvas: Canvas,
+        bounds: RectF,
+        paint: Paint
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
+
+        val cornerRadius =
+            min(bounds.width(), bounds.height()) * 0.12f
+        val inset = strokeWidth
+        val rect =
+            RectF(
+                bounds.left + inset,
+                bounds.top + inset,
+                bounds.right - inset,
+                bounds.bottom - inset
+            )
+
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
+
+        val textPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = paint.color
+                typeface = Typeface.create(
+                    Typeface.SANS_SERIF,
+                    Typeface.BOLD
+                )
+                textSize = bounds.height() * 0.24f
+                textAlign = Paint.Align.CENTER
+            }
+
+        val textY =
+            bounds.centerY() -
+                    (textPaint.descent() + textPaint.ascent()) / 2f
 
         canvas.drawText(
-            dateText,
-            datePanel.centerX(),
-            baseline,
-            datePaint
+            "AIR MAIL",
+            bounds.centerX(),
+            textY,
+            textPaint
         )
     }
 
-
-    private fun createPinkingPath(
+    private fun drawSealStarOverlay(
+        canvas: Canvas,
         bounds: RectF,
-        inset: Float = 0f
-    ): Path {
-        val left =
-            bounds.left + inset
+        paint: Paint
+    ) {
+        val strokeWidth = min(bounds.width(), bounds.height()) * 0.035f
+        paint.strokeWidth = strokeWidth
 
-        val top =
-            bounds.top + inset
+        val outerRadius =
+            min(bounds.width(), bounds.height()) / 2f - strokeWidth
+        val cx = bounds.centerX()
+        val cy = bounds.centerY()
 
-        val right =
-            bounds.right - inset
+        canvas.drawCircle(cx, cy, outerRadius, paint)
 
-        val bottom =
-            bounds.bottom - inset
+        val starOuterRadius = outerRadius * 0.72f
+        val starInnerRadius = starOuterRadius * 0.42f
+        val points = 5
+        val path = Path()
 
-        val width =
-            (right - left)
-                .coerceAtLeast(1f)
+        for (i in 0 until points * 2) {
+            val radius =
+                if (i % 2 == 0) starOuterRadius else starInnerRadius
+            val angle = (PI / points * i - PI / 2).toFloat()
+            val x = cx + radius * cos(angle)
+            val y = cy + radius * sin(angle)
 
-        val height =
-            (bottom - top)
-                .coerceAtLeast(1f)
-
-        val shortestSide =
-            min(
-                width,
-                height
-            )
-
-        val toothDepth =
-            (
-                    shortestSide *
-                            0.032f
-                    ).coerceAtLeast(2f)
-
-        val cornerCut =
-            toothDepth * 1.5f
-
-        val horizontalLength =
-            (
-                    width -
-                            cornerCut * 2f
-                    ).coerceAtLeast(1f)
-
-        val verticalLength =
-            (
-                    height -
-                            cornerCut * 2f
-                    ).coerceAtLeast(1f)
-
-        val horizontalTeeth =
-            max(
-                8,
-                (
-                        horizontalLength /
-                                (toothDepth * 2.3f)
-                        ).toInt()
-            )
-
-        val verticalTeeth =
-            max(
-                8,
-                (
-                        verticalLength /
-                                (toothDepth * 2.3f)
-                        ).toInt()
-            )
-
-        val horizontalStep =
-            horizontalLength /
-                    horizontalTeeth
-
-        val verticalStep =
-            verticalLength /
-                    verticalTeeth
-
-        return Path().apply {
-            moveTo(
-                left + cornerCut,
-                top
-            )
-
-            repeat(horizontalTeeth) { index ->
-                val startX =
-                    left +
-                            cornerCut +
-                            index * horizontalStep
-
-                lineTo(
-                    startX +
-                            horizontalStep / 2f,
-                    top + toothDepth
-                )
-
-                lineTo(
-                    startX + horizontalStep,
-                    top
-                )
+            if (i == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
             }
-
-            lineTo(
-                right,
-                top + cornerCut
-            )
-
-            repeat(verticalTeeth) { index ->
-                val startY =
-                    top +
-                            cornerCut +
-                            index * verticalStep
-
-                lineTo(
-                    right - toothDepth,
-                    startY +
-                            verticalStep / 2f
-                )
-
-                lineTo(
-                    right,
-                    startY + verticalStep
-                )
-            }
-
-            lineTo(
-                right - cornerCut,
-                bottom
-            )
-
-            repeat(horizontalTeeth) { index ->
-                val startX =
-                    right -
-                            cornerCut -
-                            index * horizontalStep
-
-                lineTo(
-                    startX -
-                            horizontalStep / 2f,
-                    bottom - toothDepth
-                )
-
-                lineTo(
-                    startX - horizontalStep,
-                    bottom
-                )
-            }
-
-            lineTo(
-                left,
-                bottom - cornerCut
-            )
-
-            repeat(verticalTeeth) { index ->
-                val startY =
-                    bottom -
-                            cornerCut -
-                            index * verticalStep
-
-                lineTo(
-                    left + toothDepth,
-                    startY -
-                            verticalStep / 2f
-                )
-
-                lineTo(
-                    left,
-                    startY - verticalStep
-                )
-            }
-
-            close()
         }
+        path.close()
+
+        val starPaint =
+            Paint(paint).apply { this.strokeWidth = strokeWidth * 0.8f }
+        canvas.drawPath(path, starPaint)
+    }
+
+    private fun drawFitCenteredBitmap(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        destinationRect: RectF,
+        paint: Paint = Paint(
+            Paint.ANTI_ALIAS_FLAG or
+                    Paint.FILTER_BITMAP_FLAG
+        )
+    ) {
+        val sourceWidth =
+            bitmap.width.toFloat()
+        val sourceHeight =
+            bitmap.height.toFloat()
+
+        if (
+            sourceWidth <= 0f ||
+            sourceHeight <= 0f
+        ) {
+            throw IOException(
+                "비트맵 크기를 확인할 수 없어."
+            )
+        }
+
+        val scale =
+            min(
+                destinationRect.width() / sourceWidth,
+                destinationRect.height() / sourceHeight
+            )
+        val fittedWidth =
+            sourceWidth * scale
+        val fittedHeight =
+            sourceHeight * scale
+        val left =
+            destinationRect.left +
+                    (destinationRect.width() - fittedWidth) /
+                    2f
+        val top =
+            destinationRect.top +
+                    (destinationRect.height() - fittedHeight) /
+                    2f
+
+        canvas.drawBitmap(
+            bitmap,
+            null,
+            RectF(
+                left,
+                top,
+                left + fittedWidth,
+                top + fittedHeight
+            ),
+            paint
+        )
     }
 
     private fun drawCenterCroppedBitmap(
@@ -1393,6 +1527,182 @@ object PostcardImageExporter {
                 "사진을 불러오지 못했습니다."
             )
         }
+    }
+
+    private fun decodeStickerBitmap(
+        context: Context,
+        stickerUri: Uri
+    ): Bitmap {
+        val resolver =
+            context.contentResolver
+
+        return if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.P
+        ) {
+            val source =
+                if (stickerUri.scheme == "file") {
+                    ImageDecoder.createSource(
+                        File(
+                            stickerUri.path
+                                ?: throw IOException(
+                                    "스티커 파일 경로를 찾지 못했습니다."
+                                )
+                        )
+                    )
+                } else {
+                    ImageDecoder.createSource(
+                        resolver,
+                        stickerUri
+                    )
+                }
+
+            ImageDecoder.decodeBitmap(
+                source
+            ) { decoder, _, _ ->
+                decoder.allocator =
+                    ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        } else {
+            val decodedBitmap =
+                if (stickerUri.scheme == "file") {
+                    BitmapFactory.decodeFile(
+                        stickerUri.path
+                            ?: throw IOException(
+                                "스티커 파일 경로를 찾지 못했습니다."
+                            )
+                    )
+                } else {
+                    resolver
+                        .openInputStream(stickerUri)
+                        ?.use { inputStream ->
+                            BitmapFactory.decodeStream(
+                                inputStream
+                            )
+                        }
+                }
+                    ?: throw IOException(
+                        "스티커 사진을 불러오지 못했습니다."
+                    )
+
+            val orientation =
+                if (stickerUri.scheme == "file") {
+                    stickerUri.path
+                        ?.let { path ->
+                            ExifInterface(path)
+                                .getAttributeInt(
+                                    ExifInterface
+                                        .TAG_ORIENTATION,
+                                    ExifInterface
+                                        .ORIENTATION_NORMAL
+                                )
+                        }
+                } else {
+                    resolver
+                        .openInputStream(stickerUri)
+                        ?.use { inputStream ->
+                            ExifInterface(inputStream)
+                                .getAttributeInt(
+                                    ExifInterface
+                                        .TAG_ORIENTATION,
+                                    ExifInterface
+                                        .ORIENTATION_NORMAL
+                                )
+                        }
+                }
+                    ?: ExifInterface.ORIENTATION_NORMAL
+
+            rotateBitmapUsingExif(
+                bitmap = decodedBitmap,
+                orientation = orientation
+            )
+        }
+    }
+
+    private fun rotateBitmapUsingExif(
+        bitmap: Bitmap,
+        orientation: Int
+    ): Bitmap {
+        val matrix =
+            Matrix()
+
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
+                matrix.setScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_ROTATE_180 -> {
+                matrix.setRotate(
+                    180f
+                )
+            }
+
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
+                matrix.setRotate(
+                    180f
+                )
+                matrix.postScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.setRotate(
+                    90f
+                )
+                matrix.postScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_ROTATE_90 -> {
+                matrix.setRotate(
+                    90f
+                )
+            }
+
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.setRotate(
+                    270f
+                )
+                matrix.postScale(
+                    -1f,
+                    1f
+                )
+            }
+
+            ExifInterface.ORIENTATION_ROTATE_270 -> {
+                matrix.setRotate(
+                    270f
+                )
+            }
+
+            else -> {
+                return bitmap
+            }
+        }
+
+        val rotatedBitmap =
+            Bitmap.createBitmap(
+                bitmap,
+                0,
+                0,
+                bitmap.width,
+                bitmap.height,
+                matrix,
+                true
+            )
+
+        if (rotatedBitmap != bitmap) {
+            bitmap.recycle()
+        }
+
+        return rotatedBitmap
     }
 
     private fun saveBitmapToGallery(

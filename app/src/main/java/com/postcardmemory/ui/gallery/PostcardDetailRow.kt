@@ -1,0 +1,97 @@
+package com.postcardmemory.ui.gallery
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MailOutline
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.postcardmemory.data.Postcard
+import com.postcardmemory.ui.components.PostcardDateFormat
+import com.postcardmemory.ui.components.postcardHasBackContent
+import com.postcardmemory.ui.theme.BrutalBlack
+import com.postcardmemory.ui.theme.BrutalCoral
+import com.postcardmemory.ui.theme.BrutalWhite
+import com.postcardmemory.ui.theme.SunsetGold
+
+@Composable
+fun PostcardDetailRow(
+    postcard: Postcard,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dateText = remember(postcard.capturedAt) {
+        PostcardDateFormat.formatIso(postcard.capturedAt)
+    }
+
+    val contentText =
+        if (postcard.message.isBlank()) {
+            "내용 없음"
+        } else {
+            postcard.message
+        }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                color = if (isSelected) {
+                    BrutalCoral.copy(alpha = 0.22f)
+                } else {
+                    BrutalWhite
+                }
+            )
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(
+                horizontal = 16.dp,
+                vertical = 14.dp
+            )
+    ) {
+        Text(
+            text = dateText,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = BrutalBlack,
+            modifier = Modifier.width(96.dp)
+        )
+
+        if (postcardHasBackContent(postcard.backRecipientModifier, postcard.backMessage)) {
+            Icon(
+                imageVector = Icons.Filled.MailOutline,
+                contentDescription = "뒷면 편지 있음",
+                tint = SunsetGold,
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(14.dp)
+            )
+        }
+
+        Text(
+            text = contentText,
+            fontSize = 14.sp,
+            color = BrutalBlack,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
