@@ -10,6 +10,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3.10-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Compose%20BOM-2026.04-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Room](https://img.shields.io/badge/Room-2.8.4-FF6F00?style=flat-square)](https://developer.android.com/training/data-storage/room)
+[![Last Commit](https://img.shields.io/github/last-commit/KimJinha-JJin/post-card-memory/feature%2Fphoto-sticker?style=flat-square&label=last%20commit&logo=github)](https://github.com/KimJinha-JJin/post-card-memory/commits/feature/photo-sticker)
 
 </div>
 
