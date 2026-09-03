@@ -1354,4 +1354,40 @@
 - `origin/feature/photo-sticker` push 완료. 구현 push 직후 local/origin HEAD가 `03a91da`로 일치했다.
 - `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`은 stage·commit하지 않고 로컬에 그대로 보존했다.
 - 색상 팔레트 변경은 구현하지 않았으며 후속 제품 논의로 계속 보류한다.
+
+## 2026-09-03 — 62일차: 상세 편집 대화창 자유 색상 선택 UI 문법 통합
+
+**시작 Git 상태**: 브랜치 `feature/photo-sticker`, HEAD `247d395`, local/origin 일치(ahead/behind 0/0), tracked 변경 없음. 기존 untracked `.codex-config.candidate.toml`, `.kotlin/`은 그대로 둠.
+
+**61일차 확정 제품 판단(오늘 재논의하지 않음)**: 배경/도장/낙서는 프리셋(자유색은 배경만) 유지. 마스킹테이프·텍스트 스티커·라벨 스티커는 사용자 노출 preset UI를 제거하고 자유색(`PostcardCustomColorPicker`) 중심으로 전환.
+
+**조사 결과 — 셋 다 이미 `PostcardCustomColorPicker`를 도입해 두었고, 남은 것은 preset UI 제거뿐이었다**:
+- **마스킹테이프**(`MaskingTapeCustomCreateDialog`): base/pattern target 토글(`MaskingTapeColorTargetToggle`)과 자유색 picker가 이미 있었고, 그 사이에 `postcardBackgroundPalette` 12색 quick swatch Row만 남아 있었다. 이 Row는 신규 생성 다이얼로그에만 존재 — 기존 CUSTOM 테이프는 애초에 색을 다시 편집하는 UI 자체가 없어(`MaskingTapeEditDialog`는 edge/length/thickness/rotation만 다룸) "기존 편집 시 색 복원" 시나리오가 없다.
+- **텍스트 스티커**(`TextStickerColorPickerSection`): color target은 테두리색 하나뿐(글자색은 `labelStickerTextColorArgbFor`로 자동 계산, 61일차 이전 확정 유지). preset Row + "기타" 토글 스와치 뒤에 조건부로 `PostcardCustomColorPicker`가 숨어 있었다.
+- **라벨 스티커**(`LabelTapeStyleRow`): `LabelTapeStyle` enum(6 프리셋 + `CUSTOM` 마커)과 `labelTapePalette()`(CUSTOM일 때 edge/문자색 자동 계산, 화면·exporter 공용 단일 지점)는 이미 legacy 보존 구조로 설계돼 있었다. UI는 프리셋 스와치(`LabelTapeSwatch`) 6개 + "🎨 기타" 토글 스와치 뒤에 조건부 `PostcardCustomColorPicker`.
+
+**확정한 공통 자유색 UI 문법**: 세 다이얼로그 모두 "프리셋 Row/토글 스와치를 없애고, `PostcardCustomColorPicker`를 즉시(조건 없이) 펼친다"로 통일. 피커 자신의 원형 스와치+HEX 텍스트가 "현재색" 표시를 겸하므로 별도 current-color UI를 새로 만들 필요가 없었다. 새 preview container, 새 공용 `UniversalColorPicker`는 만들지 않았다.
+
+**실제 수정**:
+- `MaskingTapeDetailScreen.kt` — `MaskingTapeCustomCreateDialog`에서 `postcardBackgroundPalette.forEach` 12색 swatch Row 삭제, 앞뒤 Spacer를 12dp 하나로 정리. `postcardBackgroundPalette`/`defaultMinSize` import 삭제.
+- `TextStickerDetailScreen.kt` — `TextStickerColorPickerSection`에서 `presetColors`/`onPresetSelected`/`customPickerExpanded`/`onToggleCustomPicker`/`isCustomColorActive` 전부 제거하고 `PostcardCustomColorPicker`를 무조건 렌더링. Add/Edit 두 Dialog의 `outlineColorCustomExpanded` local state 삭제, 호출부를 `onColorSelected` 하나로 단순화. `background`/`border`/`clickable`/`defaultMinSize`/`CircleShape`/`Icons.Default.Palette` import 삭제(전부 삭제된 블록에서만 쓰였음을 grep으로 확인).
+- `LabelStickerDetailScreen.kt` — `LabelTapeStyleRow`에서 `presetLabelTapeStyles.forEach` 프리셋 Row와 "🎨 기타" 토글 스와치를 삭제하고 `PostcardCustomColorPicker` 무조건 렌더링으로 교체(현재색은 `labelTapePalette(selectedStyle, customTapeColorArgb)`로 계산해 프리셋이든 CUSTOM이든 항상 정확히 표시). 이제 완전히 unreachable해진 `LabelTapeSwatch` 컴포저블 삭제. Create/Edit 두 Dialog의 `customTapeColorExpanded` local state와 `onStyleSelected`/`onToggleCustomPicker` 인자 삭제. `border` import 삭제(유일한 사용처가 `LabelTapeSwatch`였음을 grep으로 확인).
+- `LabelTapeStyleRow`/`TextStickerColorPickerSection` 함수 이름은 역할이 바뀌었지만 불필요한 rename 금지 원칙에 따라 그대로 유지 — 기존 구조 테스트(`TextLabelStickerPropertyEditStructureTest`)가 이 이름의 호출 횟수(선언 1 + 호출 2 = 3)를 그대로 고정하고 있어 무변경으로 통과한다.
+
+**보존**: `LabelTapeStyle` enum 6종·`CUSTOM` 마커·HEX·`presetLabelTapeStyles` 리스트는 전혀 건드리지 않음(테스트에서도 여전히 참조돼 완전한 dead code가 아님). `MaskingTapeStyle.CUSTOM` 기본색(#F4ECDE/#8C5F00), `textStickerOutlineColors`(신규 텍스트 스티커 기본 테두리색으로만 계속 사용) 무변경. `labelStickerTextColorArgbFor` 자동 대비 규칙, `labelTapePalette()`(화면·exporter 공용 단일 계산 지점) 무변경 — 새 text color target, contrast slider 추가하지 않음. 화면/exporter 렌더 로직·저장 필드·Room·Migration 전혀 변경 없음.
+
+**신규 생성/기존 편집 경로**: 라벨·마스킹테이프 모두 기존 프리셋 스타일로 저장된 항목을 편집 다이얼로그로 다시 열면 `labelTapePalette`/`when(colorTarget)`이 계산한 실제 현재색이 피커 시작값으로 들어간다 — 색을 건드리지 않고 저장하면 기존 프리셋/CUSTOM 값 그대로 유지되고, 피커를 조작한 순간에만(라벨은 CUSTOM으로 전환하며) 값이 바뀐다. 취소/바깥 dismiss는 기존과 동일하게 local draft만 버리고 실제 객체를 바꾸지 않는다.
+
+**검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL, 기존 무관 경고(Migration 파라미터명, LocalLifecycleOwner deprecation)만 남고 신규 경고 없음.
+- 관련 테스트 개별 실행(`MaskingTapeCreationGrammarStructureTest`, `TextLabelStickerPropertyEditStructureTest`, `LabelStickerItemTest`, `TextStickerItemTest`, `DialogPreviewFlatContainerStructureTest`, `PostcardCustomColorPickerTest`, `PostcardCustomColorPickerEnabledStructureTest`) — 전부 BUILD SUCCESSFUL, 개별 XML 기준 failures/errors 0.
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL. XML 합계 **58 suites / 502 tests / failures 0 / errors 0 / skipped 0** — 60일차 기준과 스위트·테스트 수 동일(추가·삭제된 테스트 없음, 회귀 없음).
+- `git diff --check` — LF→CRLF 안내만 있고 오류 없음.
+- 전체 diff 재검토 — 3개 production 파일(`MaskingTapeDetailScreen.kt`, `TextStickerDetailScreen.kt`, `LabelStickerDetailScreen.kt`)만 변경, 34 insertions / 350 deletions. enum·데이터 필드·저장 형식·화면-exporter 공용 계산 함수는 diff에 등장하지 않음.
+
+**실기기 검증**: 완료 — 사용자가 마스킹테이프·텍스트 스티커·라벨 스티커 세 화면 모두 정상 확인함(프리셋 지운 자리, base/pattern 전환, 저장·재진입·취소, 기존 프리셋 라벨 재진입 시 현재색 복원, 밝은/어두운 문자 대비 포함).
+
+**Git 상태**: `feature/photo-sticker`, 실기기 확인 완료 후 사용자가 commit/push를 명시적으로 요청함. 이번 HANDOFF 갱신을 포함해 3개 production 파일과 함께 commit한다.
+
+**다음 작업**: 없음 — 62일차 범위 종료. 색상 팔레트 자체 변경(HEX 조정, enum 재설계 등)은 여전히 후속 제품 논의로 보류.
 - 이 완료 기록은 구현 commit 뒤 작성했으므로 문서 전용 마감 commit으로 별도 반영한다.

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -51,7 +50,6 @@ import com.postcardmemory.ui.components.EditorTextAction
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.MaskingTapeContent
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
-import com.postcardmemory.ui.components.postcardBackgroundPalette
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GraphiteAccent
@@ -528,44 +526,7 @@ private fun MaskingTapeCustomCreateDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    postcardBackgroundPalette.forEach { swatchArgb ->
-                        Box(
-                            modifier = Modifier
-                                .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
-                                .clickable(enabled = enabled) {
-                                    when (colorTarget) {
-                                        MaskingTapeCustomColorTarget.BASE ->
-                                            baseColorArgb = swatchArgb
-                                        MaskingTapeCustomColorTarget.PATTERN ->
-                                            patternColorArgb = swatchArgb
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(color = Color(swatchArgb))
-                                    .border(
-                                        width = 1.dp,
-                                        color = BrutalBlack.copy(alpha = 0.35f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 PostcardCustomColorPicker(
                     selectedColorArgb = when (colorTarget) {

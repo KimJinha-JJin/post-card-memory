@@ -1,7 +1,6 @@
 package com.postcardmemory.ui.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -251,152 +250,30 @@ fun LabelStickerPickerPanel(
 }
 
 /**
- * 테이프 종류 선택 줄. 색상환이 아니라 실제 테이프 조각을 늘어놓은 모양이라,
- * "색을 고른다"기보다 "기계에 넣을 테이프를 고른다"에 가깝게 읽힌다.
- *
- * 맨 끝의 "기타" 칸은 기존 배경색·텍스트 스티커 자유색에서 쓰던
- * PostcardCustomColorPicker를 그대로 펼친다(새 피커를 만들지 않는다).
- * onToggleCustomPicker가 null이면 기타 색상 없이 프리셋만 보여주는
- * 모드로, 생성 다이얼로그처럼 좁은 곳에서 쓴다.
+ * 62일차: 프리셋 테이프 조각 나열을 없애고, 기존 배경색·텍스트 스티커
+ * 자유색에서 쓰던 PostcardCustomColorPicker를 바로 펼쳐서 테이프 색을
+ * 고르게 한다(새 피커를 만들지 않는다). 아직 CUSTOM으로 바꾸기 전이라면
+ * 지금 붙어 있는 프리셋 색에서 출발해, 피커를 열자마자 엉뚱한 색이 잡혀
+ * 있지 않게 한다 — 프리셋으로 저장된 기존 라벨을 다시 열었을 때도 동일하게
+ * 적용돼 current color가 항상 정확히 복원된다.
  */
 @Composable
 private fun LabelTapeStyleRow(
     selectedStyle: LabelTapeStyle,
+    customTapeColorArgb: Long?,
     enabled: Boolean,
-    onStyleSelected: (LabelTapeStyle) -> Unit,
-    customTapeColorArgb: Long? = null,
-    customPickerExpanded: Boolean = false,
-    onToggleCustomPicker: (() -> Unit)? = null,
-    onCustomColorSelected: ((Long) -> Unit)? = null
+    onCustomColorSelected: (Long) -> Unit
 ) {
-    val isCustomSelected = selectedStyle == LabelTapeStyle.CUSTOM
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        presetLabelTapeStyles.forEach { style ->
-            LabelTapeSwatch(
-                label = style.label,
-                tapeColor = Color(style.baseColorArgb),
-                edgeColor = Color(style.edgeColorArgb),
-                isSelected = !isCustomSelected && style == selectedStyle,
-                enabled = enabled,
-                onClick = { onStyleSelected(style) }
-            )
-        }
-
-        if (onToggleCustomPicker != null) {
-            val customPalette =
-                labelTapePalette(
-                    style = LabelTapeStyle.CUSTOM,
-                    customTapeColorArgb = customTapeColorArgb
-                )
-
-            LabelTapeSwatch(
-                label = "🎨 기타",
-                // 이미 기타 색상이 적용 중이면 진입 칸 자체가 그 색을 보여줘서
-                // 지금 어떤 색이 쓰이는지 알 수 있게 한다.
-                tapeColor =
-                    if (isCustomSelected) {
-                        Color(customPalette.baseColorArgb)
-                    } else {
-                        PaperField
-                    },
-                edgeColor =
-                    if (isCustomSelected) {
-                        Color(customPalette.edgeColorArgb)
-                    } else {
-                        PaperDivider
-                    },
-                isSelected = isCustomSelected,
-                enabled = enabled,
-                onClick = onToggleCustomPicker
-            )
-        }
-    }
-
-    // AlertDialog 안에서는 Dialog 자체가 별도 Window라 AnimatedVisibility로
-    // 높이를 애니메이션하면 매 프레임 Window relayout이 걸려 버벅인다(실기기
-    // 확인됨). 이 줄은 이제 Create/Edit Dialog 안에서만 쓰이므로 애니메이션
-    // 없이 즉시 표시/숨김으로 바꾼다.
-    if (onToggleCustomPicker != null && onCustomColorSelected != null) {
-        if (customPickerExpanded) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-            ) {
-                PostcardCustomColorPicker(
-                    // 아직 기타 색상으로 바꾸기 전이라면 지금 붙어 있는
-                    // 프리셋 색에서 출발한다 — 피커를 열자마자 엉뚱한 색이
-                    // 잡혀 있지 않게.
-                    selectedColorArgb =
-                        labelTapePalette(
-                            style = selectedStyle,
-                            customTapeColorArgb = customTapeColorArgb
-                        ).baseColorArgb,
-                    enabled = enabled,
-                    onColorSelected = onCustomColorSelected,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
-}
-
-/** 테이프 조각 하나를 나타내는 작은 스와치. 프리셋과 "기타" 진입 칸이 같은 모양을 쓴다. */
-@Composable
-private fun LabelTapeSwatch(
-    label: String,
-    tapeColor: Color,
-    edgeColor: Color,
-    isSelected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(enabled = enabled) { onClick() }
-    ) {
-        Box(
-            modifier = Modifier
-                .width(40.dp)
-                .height(18.dp)
-                .background(
-                    color = tapeColor,
-                    shape = RoundedCornerShape(2.dp)
-                )
-                .border(
-                    width = 1.dp,
-                    color = edgeColor,
-                    shape = RoundedCornerShape(2.dp)
-                )
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = label,
-            color = BrutalBlack,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Box(
-            modifier = Modifier
-                .height(2.dp)
-                .width(24.dp)
-                .background(
-                    color = if (isSelected) SunsetGold else Color.Transparent,
-                    shape = RoundedCornerShape(1.dp)
-                )
-        )
-    }
+    PostcardCustomColorPicker(
+        selectedColorArgb =
+            labelTapePalette(
+                style = selectedStyle,
+                customTapeColorArgb = customTapeColorArgb
+            ).baseColorArgb,
+        enabled = enabled,
+        onColorSelected = onCustomColorSelected,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 /**
@@ -423,7 +300,6 @@ private fun LabelStickerCreateDialog(
     var textDraft by remember { mutableStateOf("") }
     var selectedStyle by remember { mutableStateOf(LabelTapeStyle.BLACK) }
     var customTapeColorArgb by remember { mutableStateOf<Long?>(null) }
-    var customTapeColorExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -516,14 +392,6 @@ private fun LabelStickerCreateDialog(
                     selectedStyle = selectedStyle,
                     customTapeColorArgb = customTapeColorArgb,
                     enabled = true,
-                    customPickerExpanded = customTapeColorExpanded,
-                    onStyleSelected = { style ->
-                        customTapeColorExpanded = false
-                        selectedStyle = style
-                    },
-                    onToggleCustomPicker = {
-                        customTapeColorExpanded = !customTapeColorExpanded
-                    },
                     onCustomColorSelected = { colorArgb ->
                         selectedStyle = LabelTapeStyle.CUSTOM
                         customTapeColorArgb = colorArgb
@@ -582,7 +450,6 @@ private fun LabelStickerEditDialog(
     var customTapeColorArgbDraft by remember {
         mutableStateOf(initialCustomTapeColorArgb)
     }
-    var customTapeColorExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -672,14 +539,6 @@ private fun LabelStickerEditDialog(
                     selectedStyle = styleDraft,
                     customTapeColorArgb = customTapeColorArgbDraft,
                     enabled = enabled,
-                    customPickerExpanded = customTapeColorExpanded,
-                    onStyleSelected = { style ->
-                        customTapeColorExpanded = false
-                        styleDraft = style
-                    },
-                    onToggleCustomPicker = {
-                        customTapeColorExpanded = !customTapeColorExpanded
-                    },
                     onCustomColorSelected = { colorArgb ->
                         styleDraft = LabelTapeStyle.CUSTOM
                         customTapeColorArgbDraft = colorArgb
