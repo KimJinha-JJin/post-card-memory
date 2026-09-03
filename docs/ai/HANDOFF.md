@@ -1391,3 +1391,334 @@
 
 **다음 작업**: 없음 — 62일차 범위 종료. 색상 팔레트 자체 변경(HEX 조정, enum 재설계 등)은 여전히 후속 제품 논의로 보류.
 - 이 완료 기록은 구현 commit 뒤 작성했으므로 문서 전용 마감 commit으로 별도 반영한다.
+
+## 2026-09-03 — 62일차 1차: 메인 갤러리 보기 시스템 기반 + 3단 보기 편입
+
+**목표**: 메인 갤러리에 좌우 스와이프로 넘겨보는 "보기 형식" 시스템의 기반을 만들고, 기존 3단 갤러리(그리드/세부 기록 토글 포함)를 그 첫 페이지로 편입한다. 6차 장기 작업의 1차 — 나머지 5개 보기(월별/타임라인/캘린더/우표/기억 밀도)는 최소 placeholder만 두고 다음 차수에서 구현한다.
+
+**시작 Git 상태**: `feature/photo-sticker`, HEAD `982c34a`, local/origin 일치(0/0), tracked 변경 없음.
+
+**조사(본체 직접 확인 + Task)**:
+- 본체가 먼저 `GalleryViewModel.kt`(102줄), `GalleryViewMode`/`GallerySortOrder`/`GalleryPlayMode` 세 enum을 직접 읽음.
+- Task(Explore, read-only) 1회 호출해 `GalleryScreen.kt`(1549줄) 구조 전수조사 — 진입 composable 시그니처, 3단 grid 구현, 그리드/세부 기록 토글과 그 state가 화면 로컬(`rememberSaveable`)인지, 스크롤 state가 hoist되지 않고 각 하위 composable 안에서 매번 새로 만들어진다는 점, 클릭/선택/삭제 흐름, 빈 상태 2종, `DetailScreen.kt`에 이미 있는 유일한 `HorizontalPager` 선례(단순 tab pager, 세로 스크롤 충돌 해소 로직 없음), `MainActivity.kt`의 유일한 호출부까지 보고받음.
+- 본체가 보고 내용 중 핵심 항목(진입 composable, 3단 grid, 클릭 핸들러, 빈 상태, 기본 top bar 아이콘 구성)을 실제 코드에서 라인 단위로 재확인 — 보고와 일치함을 확인. 이 과정에서 Task 보고에는 없던 중요한 사실을 직접 발견함: `GalleryScreen.kt` 안에 이미 `GalleryMonthSection`/`monthSectionsFor()`/`GalleryMonthHeader`라는 완성된 월별 그룹핑 코드가 있고, 이것이 현재 "세부 기록 보기"(`DETAIL_LIST`)의 날짜 헤더로 실제 사용되고 있음 — 2차(월별 보기) 착수 시 반드시 참고할 선례.
+- 앱 전체에 DataStore/SharedPreferences 등 lightweight 설정 저장 메커니즘이 전혀 없음을 확인(작업지시서 28절 대상) → 새 persistence layer를 만들지 않고 기존 `viewMode`/`sortOrder`와 동일하게 `rememberSaveable` 기반으로 결정(구성 변경/프로세스 재생성에는 살아남고, 완전한 콜드 재시작에는 초기화됨 — 기존 문법과 동일).
+
+**확정한 설계**:
+- 신규 enum `GalleryPageFormat`(THREE_COLUMN/MONTHLY/TIMELINE/CALENDAR/STAMP/DENSITY, 선언 순서 = 27절 기본 표시 순서).
+- 기존 3단 갤러리 콘텐츠 영역(그리드/세부 기록 토글, 검색, 정렬, 빈 상태, Pond 장식 포함) 전체를 내부 로직 변경 없이 `GalleryThreeColumnPage`로 추출해 THREE_COLUMN 페이지로 그대로 사용. 기본 상태(3단 보기 1개만 활성)에서는 `HorizontalPager`의 페이지가 1개뿐이라 사실상 아무것도 바뀌지 않는 얇은 래퍼.
+- `GalleryPlayMode`(연못/양떼목장/쫑쫑컵) 우선순위는 그대로 유지 — 이 보기 시스템과 무관하게 먼저 분기되어 전체 화면을 차지한다.
+- 활성 보기 선택 UI는 새 카드/Dialog를 만들지 않고 기존 드로어(`GalleryFeatureDrawer`)의 "특별한 갤러리"(재생모드 토글) 문법을 그대로 재사용 — `NavigationDrawerItem` + 선택 시 체크 배지, 새 컴포넌트 문법 없음(5절). THREE_COLUMN 행은 `locked=true`로 탭해도 아무 일도 일어나지 않는 안전 보기(45절).
+- 점 indicator(`GalleryPageIndicator`)는 활성 보기 2개 이상일 때만 그리고, pill/카드 없이 점만(6절) — 콘텐츠 위에 뜨는 게 아니라 각 페이지의 top padding에 그 높이(28dp)만큼을 더해 실제로 겹치지 않게 함.
+- 그리드/세부 기록 `LazyGridState`/`LazyListState`를 `GalleryScreen`으로 hoist(기존엔 각 하위 composable이 매번 새로 생성) — 여러 페이지가 활성화된 상태에서 페이지를 멀리 넘겼다 돌아와도 스크롤 위치가 초기화되지 않게 하는 방어적 최소 수정.
+- 검색/그리드-세부기록 전환/정렬 아이콘은 3단 보기를 보고 있을 때만 top bar에 노출(다른 보기에서는 의미가 없어 혼란을 줄 수 있음). 3단 보기를 벗어나면 `isSearchActive`/`viewMenuExpanded`/`sortMenuExpanded`를 정리해 되돌아왔을 때 저절로 열려 보이지 않게 함.
+- 활성 보기가 바뀌어 지금 보던 페이지가 사라졌을 때(44절) pager가 이동할 새 index는 순수 함수 `resolveGalleryPagerTargetIndex`로 계산 — "보기 자체"를 기준으로 새 위치를 찾아, 인덱스 clamp만으로는 틀리는 경우(꺼진 페이지가 지금 보던 페이지보다 앞일 때)를 올바르게 처리.
+
+**구현 후 재검증(2번째 Task + 본체 수정)**:
+- 구현 직후 diff를 파일로 저장해 2번째 Task(general-purpose, read-only) 호출 — 기존 동작 보존 여부, 선택/삭제, play mode 우선순위, top bar 게이팅, pager index 안전성, state hoisting, Saver 정확성, 드로어 변경, 범위 밖 변경 여부를 전수 검토받음.
+- Task가 **실제 버그 1건**을 찾음: pager 동기화 `LaunchedEffect(pagerState.currentPage, orderedActiveFormats)`가 `orderedActiveFormats`까지 key에 포함하고 있어, 활성 목록이 바뀐 직후(아직 실제로 페이지가 이동하기 전) 옛 index를 새 목록에 대입해 `currentPageFormat`을 잘못된 값으로 덮어쓰고, 바로 다음에 실행되는 44절 보정 effect(`resolveGalleryPagerTargetIndex` 호출부)가 그 오염된 값을 `lastKnownFormat`으로 받아 엉뚱한 페이지에 머무는 경합 조건. `resolveGalleryPagerTargetIndex` 자체(순수 함수, 단위 테스트 통과)는 정확했지만 호출부 wiring이 그 정확성을 무력화하는 문제였음.
+- 본체가 코드를 직접 재확인해 버그를 확정하고, 동기화 effect의 key를 `pagerState.currentPage` 하나로만 좁혀 수정(활성 목록이 바뀐 순간에는 이 effect가 재실행되지 않고, 보정 effect가 `scrollToPage`로 실제 페이지를 옮긴 "결과"로만 재실행되어 항상 올바른 값을 반영하게 됨).
+- Task가 추가로 지적한 minor 2건도 함께 반영: (1) `PageFormatSaver.restore`가 `ActivePageFormatsSaver`와 달리 방어적 파싱이 없던 것을 `runCatching` + THREE_COLUMN 기본값으로 통일, (2) 3단 보기를 벗어날 때 검색/드롭다운 상태를 정리하지 않던 것을 위 LaunchedEffect로 정리(둘 다 이번 세션에서 함께 수정).
+- Task가 확인한 "이상 없음" 항목(본체가 diff로 교차 확인함): `GalleryThreeColumnPage`가 기존 인라인 로직과 완전히 동일, 선택/삭제/BackHandler는 pager와 무관하게 화면 최상위 상태 그대로, play mode 우선순위와 Pond 연결 정상, index 범위를 벗어나는 crash 경로 없음, gridState/detailListState 중복 없음, 드로어 신규 섹션이 기존 섹션을 깨뜨리지 않음, `StampCard`/`PostcardDetailRow`/`Postcard`/Room 등 범위 밖 파일 변경 없음.
+
+**변경 파일**:
+- `app/src/main/java/com/postcardmemory/ui/gallery/GalleryPageFormat.kt`(신규)
+- `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`(수정 — 574 insertions / 207 deletions)
+- `app/src/test/java/com/postcardmemory/ui/gallery/GalleryPagerTargetIndexTest.kt`(신규, 5 tests)
+
+**보존**: Room/DB/저장 형식 변경 없음. 새 의존성 추가 없음(`HorizontalPager`는 `DetailScreen.kt`에 이미 있던 것과 같은 `androidx.compose.foundation.pager` API 재사용). 기존 3단 갤러리(그리드/세부 기록/검색/정렬/선택/삭제/Pond/양떼목장/쫑쫑컵) 내부 로직 전부 무변경 — 그대로 옮겨 담기만 함.
+
+**자동 검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(기존 무관 경고만 남음, 신규 경고 없음).
+- `:app:testDebugUnitTest --tests "com.postcardmemory.ui.gallery.*"` — 3 suites(DeletionMessageLogicTest 3 + GalleryPagerTargetIndexTest 5(신규) + GallerySearchFilterTest 13) 전부 통과.
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL. XML 합계 **59 suites / 507 tests / failures 0 / errors 0 / skipped 0**(62일차 기준 58/502에서 +1 suite/+5 tests, 회귀 없음).
+- `git diff --check` — 오류 없음(Windows LF→CRLF 안내만).
+- `git status --short` 기준 변경 파일이 위 3개로 한정됨을 확인 — 범위 밖 변경 없음.
+- **미실행/미검증**: 이번에 고친 effect 경합 버그는 Compose 실제 실행 타이밍에 관한 문제라 이 프로젝트의 순수 JUnit 환경(Robolectric/Compose UI 테스트 미사용)으로는 자동 재현·회귀 테스트를 작성할 수 없다. 코드 추론과 2번째 Task의 교차 확인으로 수정했고, 최종 확인은 아래 실기기 검증에서 다중 보기 활성화 시나리오로 한다.
+
+**실기기 검증**: 아직 없음(1차 구현 직후, 사용자 확인 대기). 확인 포인트(37절):
+- 기본 상태(3단 보기만 켜짐)에서 기존 3단 갤러리 전체 기능(그리드/세부 기록 전환, 검색, 정렬, 다중 선택, 삭제, 연못/양떼목장/쫑쫑컵)이 정말 하나도 안 바뀌었는지.
+- 드로어를 열어 "보기 형식"에서 아무 보기나 하나 켜면(예: 월별 보기) dot indicator가 나타나고, 좌우로 자연스럽게 넘어가는지, 세로 스크롤 중 실수로 페이지가 안 넘어가는지.
+- 3단 보기가 아닌 페이지에서는 검색/그리드/정렬 아이콘이 사라지는지, 3단 보기로 돌아왔을 때 검색창/드롭다운이 저절로 열려있지 않은지.
+- 3개 이상 보기를 켜고 중간 보기를 끄는 조합으로 지금 보던 보기가 유지되는지(44절 버그 수정 확인 포인트).
+
+**남은 위험**:
+- 다중 페이지 활성 시 스크롤 위치 보존(gridState/detailListState hoist)은 코드상 안전하지만 실기기에서 "2페이지 이상 떨어진 곳까지 스와이프했다가 돌아오는" 케이스는 아직 직접 확인 안 됨.
+- placeholder 5개 보기("~는 곧 만나볼 수 있어요")는 구조 확인용 최소 문구일 뿐 실제 기능이 아님 — 2~6차에서 순서대로 교체 예정.
+
+**다음 작업**: 2차 — 월별 보기 착수. `GalleryDetailList`에 이미 있는 `monthSectionsFor()`/`GalleryMonthHeader` 선례를 우선 검토(그대로 재사용할지, 독립 페이지 문법이 다르게 필요한지는 2차 조사에서 판단).
+
+## 2026-09-03 — 62일차 2차: 월별 보기
+
+**목표**: `GalleryPageFormat.MONTHLY` 페이지를 실제로 구현한다. 월별로 묶은 3열 grid — 월 섹션마다 둥근 카드로 감싸지 않고, 각 사진 아래에는 전체 날짜 대신 일(day)만 표시한다(22절).
+
+**조사(본체 직접 확인 + Task)**:
+- 본체가 `Postcard.kt`를 직접 읽어 `capturedAt: Long`이 유일한 그룹핑 기준 필드임을 확인(새 날짜 필드 불필요, 22절 충족).
+- Task(Explore, read-only) 1회 호출 — `StampCard.kt`(613줄), `PostcardDetailRow.kt`(97줄), 3단 grid의 셀 크기 결정 방식, day-only 라벨 선례 유무, `LazyVerticalGrid` 안에서 전체 폭 헤더를 섞어 넣는 방법(`item(span = { GridItemSpan(maxLineSpan) })`), 관련 기존 테스트 유무를 조사받음.
+- 본체가 `StampCard.kt` 534~613줄(`StampCardContent`)을 직접 읽어 보고 내용을 재확인 — `StampCard`(바깥 wrapper)는 연못 모드 물리·흔들림·둥둥 뜨기 애니메이션이 붙은 무거운 컴포저블이지만, 실제 시각 요소만 그리는 `StampCardContent`는 가볍고 재사용하기 좋다는 판단을 코드로 확정. 다만 `StampCardContent`가 `PostcardDateFormat.formatIso`(전체 `yyyy-MM-dd`)를 하드코딩하고 있어 day-only 표시를 위한 매개변수가 없다는 사실도 직접 확인.
+- 앱 전체에 day-only 날짜 포맷 선례가 없음을 확인 — 새로 만들어야 하는 것이 맞음(작업지시서가 새 문법 발명을 금지하는 것은 "동등하게 타당한 대안이 여럿"인 경우이지, 존재하지 않는 최소 유틸리티 포맷터까지 막는 것은 아니라고 판단).
+
+**확정한 설계**:
+- `StampCardContent`(components/StampCard.kt)에 `dateLabelOverride: String? = null` 파라미터 추가 — null이면(전체 호출부 중 유일한 기존 호출부인 `StampCard` 내부는 그대로) 기존과 동일한 전체 날짜, 값이 있으면 그 문자열을 대신 보여줌. 기존 3단 그리드 시각/동작 완전 무변경.
+- `GalleryMonthlyGridPage`: 기존 `monthSectionsFor()`/`GalleryMonthHeader`(이미 "세부 기록 보기"가 쓰던 것, 무변경)를 그대로 재사용해 **하나의** `LazyVerticalGrid`(`GridCells.Fixed(3)`) 안에서 `item(span = { GridItemSpan(maxLineSpan) })`로 월 헤더에 전체 폭을, `items(...)`로 그 달의 사진들에 기본 span(1)을 줘서 번갈아 그림 — `LazyColumn` 안에 `LazyVerticalGrid`를 중첩하지 않고 스크롤 컨테이너를 하나로 유지(이 프로젝트에 처음 쓰는 Compose 표준 API, 새 의존성 아님).
+- `GalleryMonthlyGridItem`: 무거운 `StampCard`가 아니라 `StampCardContent`를 직접 가져와 `dateLabelOverride`에 `dd` 포맷(일만) 대입. 클릭/롱클릭은 3단 grid와 동일한 `handleItemClick`/`handleItemLongClick`을 그대로 넘겨받아 다중 선택·삭제가 두 보기에서 완전히 동일하게 동작.
+- **30절(공통 빈 상태) 반영을 위한 1차 구조 정리**: "엽서가 진짜 하나도 없음" 판정을 `GalleryThreeColumnPage` 내부에서 pager 호출부(어떤 보기든 진입하기 전)로 끌어올림 — 앞으로 추가될 타임라인/캘린더/우표/기억 밀도도 자동으로 같은 공용 빈 상태를 쓰게 됨. 검색+정렬 결과(`displayedPostcards`)도 pager 레벨에서 한 번만 계산해 3단 보기·월별 보기에 동일하게 내려줌(10절 "정렬된 postcard 데이터"는 공통화 대상). `GalleryThreeColumnPage`는 이제 "검색 결과 없음" 분기만 자기 몫으로 남기고 단순해짐.
+- 월별 grid 전용 `monthlyGridState`(LazyGridState)를 별도로 hoist — 3단 grid의 `gridState`와 서로 다른 `LazyVerticalGrid` 인스턴스라 공유하면 안 됨.
+
+**구현 후 재검증(Task + 본체 수정)**:
+- 구현 직후 diff(phase1+2 누적, StampCard.kt+GalleryScreen.kt)를 저장해 별도 Task(general-purpose, read-only) 호출 — 이번엔 phase1 회귀 여부 + phase2 신규 로직에 집중해 검토받음.
+- 결과: **블로커/버그 없음**. 1차에서 고친 pager 동기화 effect 경합 수정이 그대로 유지됨을 확인, `displayedPostcards` 단일 계산·공유, `monthSectionsFor`가 `sortOrder`(NEWEST/OLDEST) 어느 쪽으로 들어와도 첫 등장 순서를 그대로 보존해 월 순서가 뒤집히지 않음, `GridItemSpan` 사용법이 표준 패턴과 일치, 선택/클릭 경로 공유, `monthlyGridState` 격리, `StampCardContent` 기존 호출부 무변경, 범위 밖 변경 없음을 모두 확인.
+- Task가 지적한 **minor 1건**을 반영: `GalleryMonthlyGridItem`의 `combinedClickable`이 `indication = null`을 빠뜨려 이 부분만 기본 Material 리플이 뜨는 문제 — `StampCard.kt`의 동일 패턴(`interactionSource = remember { MutableInteractionSource() }, indication = null`)을 그대로 맞춰 수정.
+- Task가 참고로 남긴 **사소한 경합**(고치지 않음): 3단 보기에서 검색어를 입력한 채로 월별 보기로 스와이프하면, 검색 초기화 effect가 실행되기 전 한두 프레임 동안 월별 grid가 "검색 결과 0건" 상태로 잠깐 비어 보일 수 있음 — 다음 프레임에 자동 복구되는 순수 시각적 찰나 현상이라 이번 범위에서 손대지 않음(19절 과속 방지 — 실제 문제로 확인되지 않은 것에 미리 대응하지 않음). 실기기에서 체감되면 후속 후보로 기록.
+- 이 minor 수정 직후 새로 만든 구조 테스트 1개가 실패했다가(내 자신의 한국어 주석에 우연히 "StampCard(" 문자열이 포함돼 "무거운 StampCard를 재사용하면 안 됨" assertion과 충돌) 즉시 원인 파악 후 주석 문구만 수정해 해결 — 테스트 자체나 production 로직 결함은 아니었음.
+
+**변경 파일**:
+- `app/src/main/java/com/postcardmemory/ui/components/StampCard.kt`(수정 — `dateLabelOverride` 파라미터 추가)
+- `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`(수정 — 월별 grid 페이지 + 위 구조 정리)
+- `app/src/test/java/com/postcardmemory/ui/gallery/GalleryMonthlyGridStructureTest.kt`(신규, 3 tests)
+
+**보존**: Room/DB 무변경. `monthSectionsFor`/`GalleryMonthHeader`는 "세부 기록 보기"가 쓰던 것 그대로(코드 수정 없음) — 재사용이지 복제가 아님. `StampCardContent`의 기존 호출부(3단 grid) 시각·동작 완전 무변경(새 파라미터 기본값 null). 새 의존성 추가 없음.
+
+**자동 검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL, 신규 경고 없음.
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL. XML 합계 **60 suites / 510 tests / failures 0 / errors 0 / skipped 0**(1차 완료 시점 59/507에서 +1 suite/+3 tests, 회귀 없음).
+- `git status --short` 기준 변경 파일이 위 3개 production/test 파일로 한정됨을 확인.
+
+**실기기 검증**: 아직 없음(1차와 함께 사용자 확인 대기). 확인 포인트(38절):
+- 월 구분(헤더)이 즉시 이해되는지, 둥근 박스 없이도 section이 명확한지.
+- 날짜가 지나치게 반복되지 않는지(일자만 보이는지), 사진이 주인공으로 남아있는지.
+- 월별 보기에서도 다중 선택·삭제가 3단 보기와 동일하게 동작하는지.
+- 3단 보기에서 검색 중 월별 보기로 넘어갈 때 위에서 언급한 찰나의 빈 화면이 실제로 거슬리는 수준인지.
+
+**남은 위험**: 검색-스와이프 경합 시 찰나의 빈 화면(위 서술) — 실기기 확인 후 거슬리면 후속으로 처리.
+
+**다음 작업**: 3차 — 타임라인 보기 착수.
+
+## 2026-09-03 — 62일차 3차: 타임라인 보기
+
+**목표**: `GalleryPageFormat.TIMELINE` 페이지 구현. 날짜 + 점 + 연결선 + 사진만으로 기억이 흘러온 순서를 보여준다(23절). 항목마다 새 Card 금지, 같은 날 여러 postcard는 DB 변경 없이 자연스럽게 한 항목으로 묶는다.
+
+**조사**: 본체가 앱 전체에 "타임라인"/세로 연결선 UI 선례가 있는지 grep으로 직접 확인 — 없음(신규 문법이 불가피함을 확인). 이번 차수는 조사 범위가 좁고(기존 파일 구조는 1~2차에서 이미 충분히 조사됨) Task 호출 없이 본체가 직접 설계·구현하고, 구현 후 review Task로 검증하는 방식으로 진행.
+
+**확정한 설계**:
+- `GalleryDaySection`/`daySectionsFor()`: `monthSectionsFor()`와 완전히 같은 원칙(`LinkedHashMap` + 입력 순서 보존, `ZoneId.systemDefault()`로 `capturedAt` → `LocalDate` 변환)으로 날짜별로 묶는다. 새 DB 필드 없음.
+- `GalleryTimelinePage`: 단일 `LazyColumn`(`itemsIndexed`)으로 날짜 그룹마다 `GalleryTimelineEntry` 하나씩 렌더링, 마지막 항목만 `isLast=true`로 표시.
+- `GalleryTimelineEntry`: `Row(height=IntrinsicSize.Min)` 안에 (마커 열: 점 + 연결선) + (내용 열: 날짜 라벨 + 그 날 사진들을 가로 스크롤 Row로). 사진은 월별 보기와 동일하게 `StampCardContent` 재사용, 이번엔 `dateLabelOverride = ""`(빈 문자열)로 날짜 줄 자체를 아예 숨김(날짜는 이미 항목 라벨에 한 번 표시).
+- `StampCardContent` 추가 수정: `dateLabelOverride`로 계산된 최종 라벨이 빈 문자열이면 날짜 `Text`와 그 padding을 아예 그리지 않도록 조건부 렌더링 추가(기존 3단 grid·월별 보기 호출부는 항상 비어있지 않은 라벨을 쓰므로 무영향).
+- 날짜 라벨 포맷은 22절 목업의 "9월 3일"(연도 생략)이 아니라 월별 보기 헤더와 동일하게 "yyyy년 M월 d일"(연도 항상 포함)로 통일 — 연도 경계 혼동 방지 + "같은 앱의 문법" 일관성(59절 제품 질문에 대한 의도적 선택).
+- 타임라인 전용 `timelineListState`(LazyListState)를 별도 hoist — 세부 기록 보기의 `detailListState`와 다른 `LazyColumn` 인스턴스라 공유 불가.
+
+**구현 후 재검증(Task + 본체 수정)**:
+- 구현 직후 diff(1~3차 누적)를 저장해 별도 Task(general-purpose, read-only) 호출. 특히 자동 테스트로 확인 불가능한 `IntrinsicSize.Min` + 연결선 높이 계산의 실제 Compose 측정 동작을 집중 검토 요청.
+- Task가 **실제 레이아웃 버그 1건**을 찾음: 연결선 Box가 `fillMaxHeight()`를 썼는데, `Column`의 비-weight 자식은 서로 높이 예산을 나눠 쓰지 않아 `fillMaxHeight()`는 "Column에 들어온 전체 높이"에 맞추려 하고, 그 결과 앞선 점(dot)의 높이(~14~18dp)만큼 Column 경계 밖으로 넘친다 — Compose는 Column 크기를 제약에 맞게 보고하지만 자식을 clip하지는 않아 실제로 잘려 보이진 않되 구조적으로 틀리고, 상수를 조금만 바꿔도(여백 축소, dot 확대 등) 다음 항목과 겹쳐 보일 수 있는 취약한 상태. 기존 구조 테스트·JUnit로는 잡을 수 없는 종류의 버그였음(실기기 시각 확인 필요 항목으로 Task가 명시).
+- 본체가 코드를 직접 재확인해 버그를 확정하고, 연결선 Box를 `fillMaxHeight()` → `weight(1f)`로 수정(Column의 weight 자식은 비-weight 형제가 쓰고 남은 공간만 정확히 분배받음 — 세로 타임라인 UI의 표준적인 해법). 같은 회귀를 막기 위해 `GalleryTimelineStructureTest`에 `.weight(1f)` 존재 + `.fillMaxHeight()` 부재를 고정하는 assertion 2개를 추가.
+- Task가 확인한 "이상 없음" 항목: `StampCardContent`의 빈 문자열 날짜 숨김 로직이 기존 3단/월별 호출부에 영향 없음, `daySectionsFor`의 타임존 처리가 `monthSectionsFor`와 일치, `sortOrder`(NEWEST/OLDEST) 어느 쪽이든 날짜 그룹 순서 정상, 선택/클릭 경로가 1~2차와 동일한 `handleItemClick`/`handleItemLongClick` 공유, `timelineListState` 격리, 1~2차 수정 사항(pager 동기화 effect, `displayedPostcards`/빈 상태 hoisting) 전부 무손상, 범위 밖 변경 없음.
+- 가로 스크롤 Row가 `IntrinsicSize.Min` 측정 경로에서 crash를 일으킬 가능성도 Task가 별도로 검토 — 스크롤 축(가로)에 무한 제약이 걸리는 경우가 아니라 크래시 위험 없음으로 확인.
+
+**변경 파일**:
+- `app/src/main/java/com/postcardmemory/ui/components/StampCard.kt`(수정 — 빈 문자열 날짜 숨김)
+- `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`(수정 — 타임라인 페이지 + 연결선 버그 수정)
+- `app/src/test/java/com/postcardmemory/ui/gallery/GalleryTimelineStructureTest.kt`(신규, 3 tests)
+
+**보존**: Room/DB 무변경. 새 의존성 없음. `monthSectionsFor`/`GalleryMonthHeader`(2차) 무변경. 3단·월별 보기 시각/동작 무변경(StampCardContent 기본 동작은 그대로).
+
+**자동 검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL, 신규 경고 없음.
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL. XML 합계 **61 suites / 513 tests / failures 0 / errors 0 / skipped 0**(2차 완료 시점 60/510에서 +1 suite/+3 tests, 회귀 없음).
+- `git status --short` 기준 변경 파일이 위 3개로 한정됨을 확인.
+
+**실기기 검증**: 아직 없음(1~2차와 함께 사용자 확인 대기). 확인 포인트(39절):
+- 시간의 흐름이 느껴지는지, line이 장식처럼 과하지 않은지.
+- 항목마다 또 카드가 생기지 않았는지.
+- 긴 scroll이 피곤하지 않은지.
+- **연결선이 다음 항목과 겹치거나 짧게 끊겨 보이지 않는지**(이번에 고친 버그의 실제 화면 확인 — 사진이 여러 장인 날짜 항목에서 특히 확인).
+- 같은 날짜 여러 postcard가 가로 스크롤로 자연스럽게 묶여 보이는지.
+
+**남은 위험**: 없음(발견된 버그는 구현 단계에서 수정 완료). 2차에서 넘어온 검색-스와이프 경합 항목은 여전히 실기기 확인 대기.
+
+## 2026-09-03 — 62일차 4차: 캘린더 보기
+
+**목표**: `GalleryPageFormat.CALENDAR` 페이지 구현. 날짜를 먼저 보고 해당 날짜의 기억으로 들어간다(24절). 날짜 칸 안에 사진을 억지로 넣지 않고, 새 modal/bottom sheet 없이 기존 클릭 경로로 상세 화면과 연결한다.
+
+**확정한 설계**:
+- `calendarCellsFor(yearMonth): List<LocalDate?>` — 일요일 시작 기준으로 앞뒤 빈 칸을 채우고 항상 7의 배수로 끝나는 순수 함수. `firstOfMonth.dayOfWeek.value % 7`로 일(0)~토(6) 변환.
+- `GalleryCalendarPage`: Lazy 없이 일반 `Column` + `verticalScroll`(월 grid가 고정 높이라 가상화 불필요). 월 이동 헤더(이전/다음 화살표 + "yyyy년 M월") + 요일 행 + `cells.chunked(7)`로 그린 주 단위 grid + 선택한 날짜가 있으면 그 날 사진을 grid 아래 가로 스크롤 Row로(기존 `StampCardContent`, `dateLabelOverride=""` 재사용 — 2~3차와 동일 패턴).
+- `GalleryCalendarDayCell`: 날짜 숫자 + (기록이 있으면) 작은 점만. 사진/thumbnail을 셀 안에 넣지 않음(24절). 선택 시 원형 배경, 오늘은 굵게.
+- `postcardsByDate`는 3차의 `daySectionsFor()`를 그대로 재사용(새 grouping 로직 없음).
+- 날짜 클릭은 기존 `handleItemClick`/`handleItemLongClick`을 그대로 재사용 — 새 navigation 경로 없음.
+
+**구현 후 재검증(Task + 본체 수정)**: 구현 직후 diff(1~4차 누적)를 저장해 Task(general-purpose, read-only) 호출, 특히 요일 계산(`calendarCellsFor`)의 7가지 경우를 손으로 직접 대조하도록 요청.
+- Task 결과: **블로커/실제 버그 없음**. `firstOfMonth.dayOfWeek.value % 7` 공식을 월~일 7가지 전부 수기 대조해 모두 정확함을 확인(수학적으로 옳음, 특정 요일에서만 틀리는 off-by-one 없음). 윤년 2월은 `YearMonth.lengthOfMonth()`(java.time 표준)에 위임되어 있어 자체 버그 없음. `LocalDate.now()`(무인자)와 `daySectionsFor`의 `ZoneId.systemDefault()`가 동일한 타임존을 쓰는지도 확인 — 일치함(오늘 표시와 날짜 그룹핑 기준이 어긋나지 않음). 선택/클릭 경로, `postcardsByDate` 키 중복 없음, 1~3차 수정 사항(pager 동기화, `displayedPostcards`/빈 상태 hoisting, 타임라인 `weight(1f)`) 전부 무손상 확인.
+- Task가 남긴 **minor 3건**:
+  1. `calendarCellsFor` 테스트가 7가지 요일 시작 중 2가지(화요일·일요일)만 직접 검증하고 윤년 2월도 별도 검증이 없음 — 공식 자체는 옳지만 커버리지 공백.
+  2. `visibleMonth`/`selectedDate`가 `GalleryCalendarPage` 내부 지역 `rememberSaveable`이라(1~3차처럼 `GalleryScreen`으로 hoist하지 않음), pager에서 2페이지 이상 멀리 스와이프했다가 돌아오면 월 이동/선택이 초기화될 가능성 있음(1~3차가 스크롤 상태를 hoist한 이유와 같은 종류의 문제) — 다만 명세에 "스와이프 간 캘린더 상태 보존" 요구가 없고, 초기화돼도 안전한 기본값(이번 달, 미선택)으로 돌아갈 뿐이라 데이터 손실은 아님.
+  3. `fillMaxHeight` import가 실제 코드가 아니라 3차 주석 안에서만 언급돼 미사용 상태로 남아있었음.
+- 본체가 **3번(미사용 import)만 이번 세션에서 수정**(`import androidx.compose.foundation.layout.fillMaxHeight` 삭제). **1·2번은 세션 중단으로 미수정** — 다음 세션 후속 후보로 아래에 명시.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`(캘린더 페이지 추가 + 미사용 import 정리), `app/src/test/java/com/postcardmemory/ui/gallery/GalleryCalendarCellsTest.kt`(신규, 5 tests), `app/src/test/java/com/postcardmemory/ui/gallery/GalleryCalendarStructureTest.kt`(신규, 2 tests).
+
+**보존**: Room/DB 무변경. `daySectionsFor`(3차) 무변경·재사용. 새 modal/bottom sheet/Dialog 없음. 1~3차 시각/동작 무변경.
+
+**자동 검증(이 세션에서 실제로 실행함)**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL, 경고 없음(미사용 import 제거 후 기준).
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL. XML 합계 **63 suites / 520 tests / failures 0 / errors 0 / skipped 0**(3차 완료 시점 61/513에서 +2 suites/+7 tests, 회귀 없음). 이 숫자는 세션 종료 직전 재확인한 최종 값이다.
+- `git diff --check` — 오류 없음(LF→CRLF 안내만).
+
+**실기기 검증**: **미실행**. 1~4차 전체(3단/월별/타임라인/캘린더) 어느 것도 아직 실기기에서 확인하지 않았다. "실기기 검증 완료"로 표현된 항목은 이 문서 전체에서 62일차 관련해서는 없다.
+
+**남은 위험(후속 세션 인계)**:
+1. `calendarCellsFor` 테스트 커버리지 공백(월/수/목/금/토 시작 및 윤년 2월 미검증) — 공식은 수기 검증으로 정확함이 확인됐으나 회귀 방지용 테스트 보강 후보.
+2. `GalleryCalendarPage`의 `visibleMonth`/`selectedDate`를 `GalleryScreen` 레벨로 hoist할지 결정 필요(1~3차 스크롤 상태 hoist와 같은 패턴 일관성 문제, 데이터 손실 아님).
+3. 2차에서 넘어온 검색-스와이프 경합 시 월별 보기가 찰나간 비어 보이는 현상(여전히 실기기 미확인, 여전히 미수정).
+
+**다음 작업**: 5차 — 우표 보기. **이번 세션에서는 5차 조사를 전혀 시작하지 않았다** — Task 호출 없음, production 코드 변경 없음. 다음 세션이 25절(우표 보기)부터 A단계(조사)로 새로 시작해야 한다.
+
+### 5차 착수를 위해 다음 세션이 참고할 것
+
+- 25절 요구: 우표 형태(perforation/톱니 가장자리, 얇은 종이 여백, 내부 postcard 이미지), 우표 바깥에 카드/그림자 패널 금지, 원본 이미지 파일 변경 금지(표현 방식일 뿐), 반복 perforation 렌더링 성능 고려.
+- 예상 수정 위치: `GalleryScreen.kt`의 `GalleryPageFormat.STAMP` 분기(현재 `GalleryComingSoonPage`로 placeholder 처리 중, 1~4차와 같은 위치에 새 `GalleryStampPage`/`GalleryStampGridItem` 추가 예상)와 `GalleryPageFormat.entries`의 `when` 절.
+- 재사용 후보: 지금까지 2~4차 모두 사진 렌더링을 `StampCardContent`(`components/StampCard.kt`)로 통일해왔다 — 우표 모양(perforation)은 이 컴포넌트를 감싸는 별도 Shape/Modifier(예: `PinkingPhotoShape`류)로 표현할 수 있는지 먼저 확인. `StampPhoto.kt`에 이미 `PinkingPhotoShape`(우표/도장 가장자리 모양으로 추정)가 존재한다는 사실이 1차 조사에서 언급됐으니 재사용 가능성부터 확인할 것.
+- 선택 상태 표시는 1~4차처럼 `selectedIds`/`handleItemClick`/`handleItemLongClick`을 그대로 재사용.
+- Grid state 하나를 새로 hoist해야 함(`stampGridState` 등, 1~4차와 동일 패턴).
+- perforation을 Canvas로 직접 그릴지, 기존 Shape/border 조합으로 흉내낼지는 5차 조사에서 실제 성능·시각 결과를 보고 결정 — 임의로 미리 정하지 않는다.
+
+**Git 상태(세션 종료 시점)**: `feature/photo-sticker`, HEAD `982c34a`(변경 없음 — 1~4차 전부 미commit), local/origin ahead/behind 0/0. Working tree: `app/src/main/java/com/postcardmemory/ui/components/StampCard.kt`, `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, `docs/ai/HANDOFF.md` 수정됨(M), `GalleryPageFormat.kt` + 신규 테스트 5개 파일 untracked(??). 기존 untracked `.codex-config.candidate.toml`, `.kotlin/`은 그대로. **사용자 승인 없이는 commit/push하지 않음** — 이번 세션은 5시간 사용량 한도(약 93% 소진)에 따른 의도적 중단이며 작업 실패가 아니다.
+
+**다음 세션 시작 절차**: `AGENTS.md`/`CLAUDE.md` 시작 순서대로 Git 상태 재확인 → 이 HANDOFF 항목 확인 → 사용자에게 1~4차 실기기 확인 여부 질의 → (승인 시) 1~4차 commit/push 여부 결정 → 5차(우표 보기) A단계 조사부터 시작.
+
+## 2026-09-03 — 62일차 5차: 우표 보기
+
+**사용자 관점 요약**: 메인 Gallery에서 저장된 기억을 2열의 큰 기념우표 형태로 감상할 수 있게 했다. 원본 사진과 저장 데이터는 바꾸지 않고 화면 표현만 추가했으며, 우표를 길게 눌러 선택하거나 눌러 상세로 들어가는 기존 행동을 그대로 유지했다.
+
+**조사와 Task**: `GalleryScreen.kt`, `GalleryPageFormat.kt`, `StampCard.kt`, `StampPhoto.kt`와 기존 Gallery 구조 테스트를 본체와 read-only Task가 각각 확인했다. `PinkingPhotoShape`는 크기 비율로 Path를 만드는 stateless singleton이라 Gallery 크기에서도 재사용 가능하다. 반면 `StampPhoto`/`StampCardContent`를 다시 종이 외곽으로 감싸면 이중 톱니가 되므로 우표 셀은 기존 shape와 같은 Coil 이미지 로딩 경로만 직접 재사용했다.
+
+**구현**:
+- STAMP placeholder를 `GalleryStampPage`로 교체하고 전용 `stampGridState`를 hoist했다.
+- 단일 2열 `LazyVerticalGrid`에 우표 자체만 배치했다. `PinkingPhotoShape` + `PaperSurface` + 8dp 종이 여백 + 내부 원본 thumbnail + 작은 날짜로 구성하며, 바깥 Card/rounded panel/그림자는 추가하지 않았다.
+- `selectedIds`, `handleItemClick`, `handleItemLongClick` 경로를 그대로 연결하고 선택 표시는 우표 우상단의 작은 coral 점으로만 표시했다.
+- 원본 이미지, thumbnail 파일, crop 저장, DB/Room/Migration, export, 꾸미기 editor는 변경하지 않았다.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, `app/src/test/java/com/postcardmemory/ui/gallery/GalleryStampStructureTest.kt`, `docs/ai/HANDOFF.md`. 1~4차 기록과 코드 주석의 잘못된 작업일차 표기는 실제 작업 맥락에 맞춰 `62일차`로 바로잡았다.
+
+**자동 검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL.
+- `GalleryStampStructureTest` + `GalleryPagerTargetIndexTest` — BUILD SUCCESSFUL.
+- `git diff --check` — 오류 없음(LF→CRLF 안내만).
+
+**실기기 검증**: 미실행. 첫눈에 우표처럼 보이는지, 사진 크기와 톱니 비율, 카드 안의 카드처럼 보이지 않는지, 세로 scroll과 가로 pager의 충돌은 사용자 확인 대기다.
+
+**다음 작업**: 62일차 6차 — 기억 밀도 보기 조사부터 시작.
+
+## 2026-09-03 — 62일차 6차: 기억 밀도 보기
+
+**사용자 관점 요약**: 저장된 기억이 어느 달에 몰렸고 어느 달이 비어 있었는지 연도별로 한눈에 볼 수 있게 했다. 초록 사각형 잔디가 아니라 Warm Paper 위의 원형 기억 점 크기와 농도로 표현하며, 월을 누르면 같은 화면에서 그 달 엽서를 보고 기존 상세 진입·선택을 사용할 수 있다.
+
+**날짜 의미 조사와 Task**: `Postcard`에는 별도 생성·수정 날짜가 없고, Gallery 정렬·월별·타임라인·캘린더·표시 날짜가 모두 `capturedAt`을 `ZoneId.systemDefault()`로 변환해 사용한다. 본체와 read-only Task가 `Postcard.kt`, `CameraViewModel`, DAO, Gallery helper를 대조해 기억 밀도도 같은 기준을 써야 함을 확인했다.
+
+**구현**:
+- DENSITY placeholder를 `GalleryDensityPage`로 교체하고 전용 `densityListState`와 선택 월 key를 `GalleryScreen`에 hoist했다.
+- `memoryDensityMonthsFor`가 첫 기록 연도부터 마지막 기록 연도까지 매년 12개월을 만들고, 같은 달 postcard를 묶으며 빈 달은 0건으로 유지한다. 시간축은 정렬 메뉴와 무관하게 과거→현재로 고정한다.
+- 연도별 12개월을 6개씩 두 줄의 원형 기억 점으로 표시한다. 기록 수에 따라 크기와 SunsetGold 농도가 달라지고 빈 달은 작은 PaperDivider 점, 선택 달은 BrutalCoral로 표시한다. count는 화면에 크게 적지 않고 접근성 설명에만 포함한다.
+- 월 점을 누르면 같은 연도 아래에 해당 월의 `StampCardContent` 가로 strip을 보여준다. 새 화면/modal/sheet 없이 기존 `handleItemClick`/`handleItemLongClick`을 재사용한다.
+- review에서 선택한 달의 마지막 postcard가 삭제되면 0건 bucket이 선택 색으로 남고 해제할 수 없는 실제 상태 버그를 발견했다. `selectedMemoryDensityMonth`가 1건 이상인 달만 선택으로 인정하고 `LaunchedEffect`로 stale key를 정리하도록 수정했다.
+- DB/Room/Migration, repository, 원본 이미지, export, 꾸미기 editor는 변경하지 않았다.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, `app/src/test/java/com/postcardmemory/ui/gallery/GalleryMemoryDensityTest.kt`, `app/src/test/java/com/postcardmemory/ui/gallery/GalleryMemoryDensityStructureTest.kt`, `docs/ai/HANDOFF.md`.
+
+**자동 검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL.
+- `GalleryMemoryDensityTest` + `GalleryMemoryDensityStructureTest` + `GalleryStampStructureTest` + `GalleryPagerTargetIndexTest` — 첫 실행에서 production이 아닌 제5차 구조 테스트의 함수 경계 오류 1건을 발견해 경계만 정확히 수정한 뒤 재실행 BUILD SUCCESSFUL.
+- `git diff --check` — 오류 없음(LF→CRLF 안내만).
+
+**실기기 검증**: 미실행. 기억이 몰린/드문/빈 기간이 자연스럽게 읽히는지, GitHub 잔디처럼 보이지 않는지, 월 점과 thumbnail strip의 터치·가로 스크롤이 pager/세로 스크롤과 충돌하지 않는지는 사용자 확인 대기다.
+
+**다음 작업**: 제1~6차 전체 통합 자동 검증과 전체 diff review.
+
+## 2026-09-03 — 62일차 메인 갤러리 보기 시스템 제1~6차 통합 검증
+
+**사용자 관점 최종 상태**: 3단·월별·타임라인·캘린더·우표·기억 밀도 여섯 보기가 하나의 Gallery pager와 보기 설정 안에서 동작하도록 구현됐다. 기존 엽서와 원본 사진, 저장 구조는 바뀌지 않았다. 자동 검증은 완료됐고 실제 기기에서의 swipe 감도와 각 보기의 시각 만족은 아직 사용자 확인이 필요하다.
+
+**보기별 역할과 상태**:
+1. 3단 보기 — 기존 빠른 탐색/선택/상세 진입 유지, 자동검증 완료.
+2. 월별 보기 — 월 section + 3열 thumbnail, 자동검증 완료.
+3. 타임라인 보기 — 날짜별 연결선과 같은 날 묶음, 자동검증 완료.
+4. 캘린더 보기 — 월 이동·날짜 mapping·선택 날짜 엽서 표시, 자동검증 완료.
+5. 우표 보기 — 2열 기념우표 감상 배치, 자동검증 완료.
+6. 기억 밀도 보기 — 월별 기록 분포와 선택 월 엽서 표시, 자동검증 완료.
+
+**활성 조합 검증**: `orderedGalleryPageFormats` 순수 함수를 production pager가 사용하도록 분리하고 다음 네 조합의 page count/order를 테스트했다: A(3단만), B(3단+월별), C(3단+월별+우표), D(6개 전부). enum 고정 순서는 `3단 → 월별 → 타임라인 → 캘린더 → 우표 → 기억 밀도`다. 현재 보기 비활성화 시 같은 format 유지 또는 유효 index 보정은 기존 `resolveGalleryPagerTargetIndex` 테스트가 함께 검증한다.
+
+**전체 자동 검증(최종 상태에서 실제 실행)**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL.
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL, XML 합계 **66 suites / 535 tests / failures 0 / errors 0 / skipped 0**. 직전 baseline 63 suites / 520 tests에서 신규 3 suites / 15 tests가 추가됐다.
+- `git diff --check` — 오류 없음(LF→CRLF 안내만).
+
+**전체 diff review**:
+- 제1~4차 pager 동기화, 월 grouping, 타임라인 `weight(1f)`, 캘린더 mapping을 보존했다.
+- 제5~6차 production 변경은 `GalleryScreen.kt`에 한정되고 `StampPhoto.kt`는 수정하지 않았다. `StampCard.kt` 변경은 제2~3차에서 인계된 날짜 label override뿐이다.
+- Room entity/DAO/database/schema/Migration, serialization, export, crop, 꾸미기 editor, 원본 이미지 저장은 변경하지 않았다.
+- 새 의존성, 대량 formatting, unrelated rename은 없다.
+
+**실기기 검증**: **미실행 — 사용자 확인 대기**. 상태 표기는 `제1~6차 구현 및 자동검증 완료 / 실기기 검증 대기`다. 확인할 항목은 전체 swipe 민감도·세로 scroll 충돌·indicator·보기 차별성, 타임라인 연결선, 캘린더 가독성, 우표 인식성/사진 크기/톱니, 기억 밀도 분포 가독성과 thumbnail strip 제스처다.
+
+**남은 알려진 위험**:
+1. 캘린더 요일 계산은 수기 대조와 현재 테스트가 통과했지만 월/수/목/금/토 시작 및 윤년 2월의 전용 회귀 테스트 공백이 남아 있다.
+2. 캘린더 `visibleMonth`/`selectedDate`는 페이지 내부 상태라 멀리 스와이프했다 돌아올 때 초기화될 가능성이 있다. 데이터 손실은 아니다.
+3. 검색 중 다른 보기로 전환할 때 검색 초기화 effect 전 한두 프레임 동안 월별 화면이 비어 보일 가능성이 남아 있다. 실기기에서 재현 여부 미확인이다.
+4. pager와 각 보기의 세로/가로 scroll 제스처 조합은 자동 테스트만으로 판정할 수 없어 실기기 확인이 필요하다.
+
+**Git 상태**: `feature/photo-sticker`, HEAD `982c34a`, local/origin ahead 0 / behind 0. 제1~6차 전체 변경은 working tree에 미커밋 상태다. 기존 untracked `.codex-config.candidate.toml`, `.kotlin/`과 이번 인계에서 새로 확인된 범위 밖 `.claude/`는 건드리지 않았다. commit/push는 사용자 앱 확인과 명시적 요청 전까지 금지한다.
+
+**다음 작업**: 사용자가 실기기에서 제1~6차 통합 확인 항목을 검증하고 결과를 전달한다. 그 전에는 commit/push하지 않는다.
+
+## 2026-09-03 — 62일차 추가 작업: 메인 갤러리 보기 선택 UI 통합
+
+**사용자 관점 요약**: Gallery에서 사용할 보기는 이제 우측 상단 보기 아이콘 한 곳에서 고른다. 체크한 보기들은 기존과 같이 좌우 swipe로 이동하며, 좌측 사이드바에는 더 이상 같은 역할의 보기 설정이 나오지 않는다. `3단 보기`는 이름 그대로 항상 3열 Gallery를 보여주고, 과거의 `3열 그리드/세부 기록` 이중 전환은 production 사용자 경로에서 내렸다.
+
+**중복 조사 결론과 제품 결정**:
+- 좌측 사이드바는 `activePageFormats`를 조작해 pager에 포함할 여러 보기를 관리하고, 기존 우측 상단 메뉴는 별도 `viewMode`로 3단 페이지 안의 grid/list를 단일 전환하고 있었다. 기술 state는 달랐지만 둘 다 사용자에게 "Gallery 보기 선택"으로 읽히고, 체크된 `3단 보기`가 실제로 세부 목록을 보여줄 수 있어 **부분 중복 및 제품 의미 충돌**로 판정했다.
+- 최종 문법은 "보기 형식은 우측 상단에서 고른다 / 선택한 보기 형식들은 좌우 swipe로 이동한다"로 확정했다. 새 진입점이나 설정 화면은 만들지 않고 기존 우측 상단 Grid 아이콘 위치를 승계했다.
+
+**실제 구현**:
+- 우측 상단 보기 메뉴가 `GalleryPageFormat.entries` 여섯 개를 기존 선언 순서대로 보여주고 `activePageFormats`를 직접 체크/해제하도록 연결했다. 메뉴는 3단·월별·타임라인·캘린더·우표·기억 밀도 어느 페이지에서도 접근할 수 있다.
+- 여러 보기를 연속해서 설정할 수 있도록 항목을 체크해도 메뉴를 즉시 닫지 않는다. 새로 체크한 페이지로 자동 이동하지 않으며, 기존 `resolveGalleryPagerTargetIndex`가 현재 보기 유지 또는 유효 index 보정을 그대로 담당한다.
+- `THREE_COLUMN`은 체크된 상태의 잠금 항목으로 표시하고, 기존 toggle 차단과 `ActivePageFormatsSaver` 복원 보장도 그대로 유지했다. pager가 0개가 되는 경로는 없다.
+- 좌측 `GalleryFeatureDrawer`에서는 `보기 형식` 제목·6개 항목·관련 인자를 제거했다. 미래 우체통과 특별한 갤러리 세 기능 및 그 사이 구분선은 유지했다.
+- 우측 legacy `3열 그리드 보기/세부 기록 보기` 항목, `viewMode` 화면 state와 saver, play mode 연결, 3단 페이지의 list 분기와 전용 scroll state wiring을 제거했다. `GalleryThreeColumnPage`는 이제 빈 검색 결과가 아니면 항상 `GalleryGrid`만 렌더링한다.
+- 검색과 날짜 정렬은 기존처럼 3단 보기에서만 나타나며, 보기 관리 아이콘은 그 사이의 기존 위치를 유지하면서 모든 페이지에 공통 노출된다.
+- 새 Card·Dialog·floating panel·별도 persistence·제3의 view state는 추가하지 않았다. Room/DB/Migration, export, 꾸미기 editor, 원본 이미지에는 변화가 없다.
+
+**DETAIL_LIST 보존 및 cleanup 후보**:
+- 사용자에게 도달하는 legacy detail-list 경로만 이번 범위에서 제거했다. 파일 단위 대청소 금지에 따라 `GalleryViewMode.kt`, `PostcardDetailRow.kt`, 현재 도달 불가능한 `GalleryDetailList` helper는 삭제하지 않았다.
+- 위 셋은 날짜·뒷면 표시·메시지 한 줄 목록 구현을 보존하는 dead-code cleanup 후보다. 후속 명시 작업 없이 삭제하거나 7번째 보기로 승격하지 않는다.
+
+**변경 파일**:
+- `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`
+- `app/src/test/java/com/postcardmemory/ui/gallery/GalleryViewSelectionStructureTest.kt` (신규, 5 tests)
+- `docs/ai/HANDOFF.md`
+
+**자동 검증**:
+- 관련 `GalleryViewSelectionStructureTest` + `GalleryPagerTargetIndexTest` — BUILD SUCCESSFUL. 우측 단일 진입점, 좌측 설정 제거, 3단 grid 고정, legacy state/분기 제거, 3단 최소 체크와 기존 page order/index 보정을 검증했다.
+- 관련 테스트의 첫 sandbox 실행은 production compile 전에 `foojay-resolver` plugin 해석 실패로 중단됐다. 같은 명령을 정상 로컬 Gradle 환경에서 재실행해 성공했으며 앱 코드 실패가 아닌 실행환경 제한으로 분류했다.
+- 독립 `:app:compileDebugKotlin` — BUILD SUCCESSFUL.
+- 전체 `:app:testDebugUnitTest` — BUILD SUCCESSFUL, XML 합계 **67 suites / 540 tests / failures 0 / errors 0 / skipped 0**. 직전 66 suites / 535 tests baseline에서 신규 1 suite / 5 tests가 추가됐다.
+- `git diff --check` — 오류 없음(LF→CRLF 안내만).
+
+**실기기 검증**: **미실행 — 사용자 확인 대기**. 상태는 `제1~6차 및 보기 선택 UI 통합 구현·자동검증 완료 / 실기기 검증 대기`다. 우측 메뉴 발견성, 여섯 항목 체크/해제와 잠긴 3단 표시, 메뉴 높이·여백, 좌측 영역 제거 후 정렬, 선택된 페이지만 swipe/indicator에 나타나는지, 현재 페이지 해제 시 자연스러운 보정을 확인해야 한다. 기존 제1~6차 swipe 감도·세로 scroll 충돌·각 보기 시각 만족 검증도 함께 남아 있다.
+
+**남은 알려진 위험**:
+1. 기존 통합 검증의 캘린더 전용 테스트 공백, 캘린더 내부 상태 초기화 가능성, 검색↔swipe 순간 빈 화면 가능성, 실제 기기 gesture 조합 미검증은 이번 범위 밖이라 그대로 남겼다.
+2. `activePageFormats`는 기존과 같은 `rememberSaveable`이며 별도 영구 설정 저장소는 없다. 구성/저장 상태 복원은 지원하지만 완전한 cold relaunch 뒤에는 기본 3단 보기만 활성화될 수 있다. 이번 제품 결정은 기존 persistence 구조 재사용이므로 변경하지 않았다.
+3. 보존한 `GalleryViewMode.kt`, `PostcardDetailRow.kt`, `GalleryDetailList`는 현재 Gallery production에서 도달 불가능하다. 기능 오류는 아니지만 별도 cleanup 후보다.
+
+**Git 반영**: 제1~6차와 이번 통합 변경은 working tree에 미커밋 상태로 유지한다. 사용자 실기기 확인과 명시적 요청 전에는 commit/push하지 않는다.
+
+## 2026-09-03 — 62일차 메인 갤러리 보기 시스템 실기기 확인 및 Git 반영 승인
+
+**사용자 확인**: 사용자가 제1~6차 Gallery 보기 시스템과 우측 상단 보기 선택 UI 통합 결과의 실기기 확인을 완료했다고 보고했다. 자동검증만으로 대신한 결과가 아니라 사용자 직접 확인에 따른 제품 상태 통과다.
+
+**최종 상태**: 3단·월별·타임라인·캘린더·우표·기억 밀도 여섯 보기와 우측 상단 단일 보기 관리 문법은 구현·자동검증·사용자 실기기 검증까지 완료됐다. 기존 엽서 데이터, Room/DB/Migration, export와 꾸미기 editor는 변경하지 않았다.
+
+**자동검증 기준**: `:app:compileDebugKotlin` BUILD SUCCESSFUL, 전체 `:app:testDebugUnitTest` BUILD SUCCESSFUL(**67 suites / 540 tests / failures 0 / errors 0 / skipped 0**), `git diff --check` 오류 없음.
+
+**Git 승인**: 사용자가 이번 제1~6차 및 보기 선택 통합 변경의 commit/push를 명시적으로 요청했다. Gallery 관련 production·test·HANDOFF 파일만 명시적으로 stage하며 `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`은 포함하지 않는다. 최종 commit hash와 origin 동기화 상태는 실제 Git 결과를 기준으로 확인한다.

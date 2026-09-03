@@ -535,7 +535,12 @@ fun StampCardContent(
     postcard: Postcard,
     isSelected: Boolean,
     modifier: Modifier = Modifier,
-    dateTextSizeSp: Int = 11
+    dateTextSizeSp: Int = 11,
+    // 62일차 2차(월별 보기): 월 헤더가 이미 연/월을 보여주므로, 그 grid에서는
+    // 전체 날짜 대신 일(day)만 넘겨 중복 표기를 피한다. null이면(기본값)
+    // 기존 3단 그리드와 동일하게 전체 날짜를 그대로 보여준다 — 기존 호출부
+    // 무변경.
+    dateLabelOverride: String? = null
 ) {
     Column(
         modifier = modifier,
@@ -600,14 +605,21 @@ fun StampCardContent(
             }
         }
 
-        Text(
-            text = PostcardDateFormat.formatIso(postcard.capturedAt),
-            fontSize = dateTextSizeSp.sp,
-            fontWeight = FontWeight.Medium,
-            color = GraphiteAccent,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp)
-        )
+        val dateLabel = dateLabelOverride ?: PostcardDateFormat.formatIso(postcard.capturedAt)
+
+        // 빈 문자열을 넘기면(예: 타임라인 보기처럼 날짜를 이미 다른 곳에
+        // 표시하는 호출부) 날짜 줄 자체를 그리지 않는다 — 빈 Text가 불필요한
+        // 여백만 남기지 않게.
+        if (dateLabel.isNotEmpty()) {
+            Text(
+                text = dateLabel,
+                fontSize = dateTextSizeSp.sp,
+                fontWeight = FontWeight.Medium,
+                color = GraphiteAccent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
     }
 }
