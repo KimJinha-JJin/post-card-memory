@@ -7,6 +7,13 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -18,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +35,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +58,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
@@ -56,27 +67,21 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MailOutline
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -86,11 +91,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -117,6 +122,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -148,7 +154,6 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.io.File
-import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import kotlin.math.sqrt
 
@@ -399,9 +404,7 @@ fun GalleryScreen(
         }
     }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val drawerScope = rememberCoroutineScope()
-    var isDrawerActionPending by remember {
+    var fabMenuExpanded by remember {
         mutableStateOf(false)
     }
 
@@ -429,19 +432,6 @@ fun GalleryScreen(
         toggleSelection(id)
     }
 
-    fun runDrawerActionAfterClose(action: () -> Unit) {
-        if (isDrawerActionPending) {
-            return
-        }
-
-        isDrawerActionPending = true
-        drawerScope.launch {
-            drawerState.close()
-            action()
-            isDrawerActionPending = false
-        }
-    }
-
     BackHandler(enabled = selectionMode) {
         selectedIds = emptySet()
     }
@@ -451,10 +441,8 @@ fun GalleryScreen(
         searchQuery = ""
     }
 
-    BackHandler(enabled = drawerState.isOpen) {
-        drawerScope.launch {
-            drawerState.close()
-        }
+    BackHandler(enabled = fabMenuExpanded) {
+        fabMenuExpanded = false
     }
 
     val searchFocusRequester = remember { FocusRequester() }
@@ -466,30 +454,7 @@ fun GalleryScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = !selectionMode && !isSearchActive,
-        drawerContent = {
-            GalleryFeatureDrawer(
-                playMode = playMode,
-                onNavigateToFutureMailbox = {
-                    runDrawerActionAfterClose {
-                        onNavigateToFutureMailbox()
-                    }
-                },
-                onPlayModeSelected = { selectedMode ->
-                    runDrawerActionAfterClose {
-                        selectedIds = emptySet()
-                        playMode = if (playMode == selectedMode) {
-                            GalleryPlayMode.NONE
-                        } else {
-                            selectedMode
-                        }
-                    }
-                }
-            )
-        }
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
         containerColor = GalleryPaperWhite,
 
@@ -644,21 +609,6 @@ fun GalleryScreen(
                             ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = {
-                                drawerScope.launch {
-                                    drawerState.open()
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "기능 메뉴 열기",
-                                tint = InkSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
                         Text(
                             text = "포스트카드 메모리",
                             fontSize = 18.sp,
@@ -798,29 +748,6 @@ fun GalleryScreen(
                     }
 
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
-                }
-            }
-        },
-
-        floatingActionButton = {
-            if (!selectionMode) {
-                FloatingActionButton(
-                    onClick = onNavigateToCamera,
-                    containerColor = BrutalWhite,
-                    shape = CircleShape,
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 3.dp,
-                        pressedElevation = 6.dp
-                    ),
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_camera_button),
-                        contentDescription = "카메라",
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                    )
                 }
             }
         }
@@ -1054,6 +981,55 @@ fun GalleryScreen(
             }
         }
     }
+
+        AnimatedVisibility(
+            visible = fabMenuExpanded,
+            enter = fadeIn(tween(160)),
+            exit = fadeOut(tween(120)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.32f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        fabMenuExpanded = false
+                    }
+            )
+        }
+
+        GalleryFabCluster(
+            expanded = fabMenuExpanded,
+            visible = !selectionMode,
+            playMode = playMode,
+            onToggle = {
+                fabMenuExpanded = !fabMenuExpanded
+            },
+            onNavigateToCamera = {
+                fabMenuExpanded = false
+                onNavigateToCamera()
+            },
+            onNavigateToFutureMailbox = {
+                fabMenuExpanded = false
+                onNavigateToFutureMailbox()
+            },
+            onPlayModeSelected = { selectedMode ->
+                fabMenuExpanded = false
+                selectedIds = emptySet()
+                playMode = if (playMode == selectedMode) {
+                    GalleryPlayMode.NONE
+                } else {
+                    selectedMode
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(16.dp)
+        )
     }
 
     if (showDeleteDialog) {
@@ -1110,101 +1086,179 @@ fun GalleryScreen(
     }
 }
 
+// 63일차 추가 구현: 기존 카메라 FAB 단일 진입점을 + 확장 클러스터로
+// 개편해 엽서 생성·미래 우체통·특별한 갤러리(연못/양떼목장/쫑쫑컵) 3종을
+// 우측 하단 한 곳에서 바로 펼쳐 접근하게 한다. 좌측 패널
+// (구 [GalleryFeatureDrawer])이 담당하던 두 진입 기능은 전부 이 클러스터로
+// 흡수되어 좌측 패널 자체는 제거됐다 — 아이콘은 새로 만들지 않고 각 기능이
+// 이미 쓰던 것([PondDrawerIcon] 등)을 그대로 재사용한다.
+private val GalleryFabAnchorSize = 56.dp
+private val GalleryFabPrimarySize = 52.dp
+private val GalleryFabMiniSize = 40.dp
+
 @Composable
-private fun GalleryFeatureDrawer(
+private fun GalleryFabCluster(
+    expanded: Boolean,
+    visible: Boolean,
     playMode: GalleryPlayMode,
+    onToggle: () -> Unit,
+    onNavigateToCamera: () -> Unit,
     onNavigateToFutureMailbox: () -> Unit,
-    onPlayModeSelected: (GalleryPlayMode) -> Unit
+    onPlayModeSelected: (GalleryPlayMode) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    ModalDrawerSheet(
-        modifier = Modifier.width(304.dp),
-        drawerContainerColor = PaperSurface
-    ) {
-        Text(
-            text = "post-card-memory",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = InkPrimary,
-            modifier = Modifier
-                .padding(
-                    start = 24.dp,
-                    top = 24.dp,
-                    end = 24.dp,
-                    bottom = 18.dp
-                )
-                .semantics {
-                    heading()
-                }
-        )
+    if (!visible) {
+        return
+    }
 
-        NavigationDrawerItem(
-            label = {
-                Text(
-                    text = "미래 우체통",
-                    color = InkPrimary
-                )
-            },
-            selected = false,
-            onClick = onNavigateToFutureMailbox,
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.MailOutline,
-                    contentDescription = null,
-                    tint = InkSecondary
-                )
-            },
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
+    val anchorRotation by animateFloatAsState(
+        targetValue = if (expanded) 45f else 0f,
+        label = "galleryFabAnchorRotation"
+    )
 
-        HorizontalDivider(
-            color = PaperDivider,
-            modifier = Modifier.padding(
-                horizontal = 24.dp,
-                vertical = 18.dp
+    Box(modifier = modifier) {
+        // 특별한 갤러리 3종 — 서로 가까이 묶어 하나의 작은 하위 군집으로
+        // 읽히게 하되, 이를 감싸는 Card/box/capsule은 두지 않는다(거리와
+        // 배치만으로 그룹을 표현).
+        GalleryFabShortcut(
+            expanded = expanded,
+            offsetX = (-52).dp,
+            offsetY = (-148).dp,
+            size = GalleryFabMiniSize,
+            backgroundColor = if (playMode == GalleryPlayMode.POND) SunsetGold else BrutalWhite,
+            onClick = { onPlayModeSelected(GalleryPlayMode.POND) }
+        ) {
+            Icon(
+                imageVector = PondDrawerIcon,
+                contentDescription = "엽서의 연못",
+                tint = InkSecondary,
+                modifier = Modifier.size(20.dp)
             )
-        )
+        }
 
-        Text(
-            text = "특별한 갤러리",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = InkSecondary,
+        GalleryFabShortcut(
+            expanded = expanded,
+            offsetX = (-100).dp,
+            offsetY = (-128).dp,
+            size = GalleryFabMiniSize,
+            backgroundColor = if (playMode == GalleryPlayMode.SHEEP_RANCH) SunsetGold else BrutalWhite,
+            onClick = { onPlayModeSelected(GalleryPlayMode.SHEEP_RANCH) }
+        ) {
+            Icon(
+                imageVector = SheepDrawerIcon,
+                contentDescription = "양떼목장",
+                tint = InkSecondary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        GalleryFabShortcut(
+            expanded = expanded,
+            offsetX = (-136).dp,
+            offsetY = (-88).dp,
+            size = GalleryFabMiniSize,
+            backgroundColor = if (playMode == GalleryPlayMode.RACE) SunsetGold else BrutalWhite,
+            onClick = { onPlayModeSelected(GalleryPlayMode.RACE) }
+        ) {
+            Icon(
+                imageVector = CheckFlagDrawerIcon,
+                contentDescription = "엽서 쫑쫑컵",
+                tint = InkSecondary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        // 엽서 생성 / 미래 우체통 — 주요 바로가기, 작은 군집보다 크고
+        // anchor에 더 가깝게 배치해 위계를 준다.
+        GalleryFabShortcut(
+            expanded = expanded,
+            offsetX = (-72).dp,
+            offsetY = (-56).dp,
+            size = GalleryFabPrimarySize,
+            backgroundColor = BrutalWhite,
+            onClick = onNavigateToFutureMailbox
+        ) {
+            Icon(
+                imageVector = Icons.Default.MailOutline,
+                contentDescription = "미래 우체통",
+                tint = InkSecondary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        GalleryFabShortcut(
+            expanded = expanded,
+            offsetX = 0.dp,
+            offsetY = (-76).dp,
+            size = GalleryFabPrimarySize,
+            backgroundColor = BrutalWhite,
+            onClick = onNavigateToCamera
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_camera_button),
+                contentDescription = "카메라",
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+            )
+        }
+
+        // + anchor — 전체 펼침/접힘의 기준점. 펼쳐지면 45도 회전해 자연스럽게
+        // 닫기(×) 표시로 읽히게 한다(새 아이콘을 추가하지 않는다).
+        FloatingActionButton(
+            onClick = onToggle,
+            containerColor = BrutalWhite,
+            shape = CircleShape,
+            elevation = FloatingActionButtonDefaults.elevation(
+                defaultElevation = 3.dp,
+                pressedElevation = 6.dp
+            ),
             modifier = Modifier
-                .padding(
-                    horizontal = 24.dp,
-                    vertical = 8.dp
-                )
-                .semantics {
-                    heading()
-                }
-        )
+                .align(Alignment.BottomEnd)
+                .size(GalleryFabAnchorSize)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = if (expanded) "바로가기 닫기" else "바로가기 열기",
+                tint = InkPrimary,
+                modifier = Modifier
+                    .size(28.dp)
+                    .rotate(anchorRotation)
+            )
+        }
+    }
+}
 
-        GalleryPlayModeDrawerItem(
-            icon = PondDrawerIcon,
-            label = "엽서의 연못",
-            selected = playMode == GalleryPlayMode.POND,
-            onClick = {
-                onPlayModeSelected(GalleryPlayMode.POND)
-            }
-        )
-
-        GalleryPlayModeDrawerItem(
-            icon = SheepDrawerIcon,
-            label = "양떼목장",
-            selected = playMode == GalleryPlayMode.SHEEP_RANCH,
-            onClick = {
-                onPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)
-            }
-        )
-
-        GalleryPlayModeDrawerItem(
-            icon = CheckFlagDrawerIcon,
-            label = "엽서 쫑쫑컵",
-            selected = playMode == GalleryPlayMode.RACE,
-            onClick = {
-                onPlayModeSelected(GalleryPlayMode.RACE)
-            }
-        )
+@Composable
+private fun BoxScope.GalleryFabShortcut(
+    expanded: Boolean,
+    offsetX: Dp,
+    offsetY: Dp,
+    size: Dp,
+    backgroundColor: Color,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    AnimatedVisibility(
+        visible = expanded,
+        enter = fadeIn(tween(160)) + scaleIn(tween(160), initialScale = 0.6f),
+        exit = fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.6f),
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .offset(x = offsetX, y = offsetY)
+    ) {
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = backgroundColor,
+            shape = CircleShape,
+            elevation = FloatingActionButtonDefaults.elevation(
+                defaultElevation = 2.dp,
+                pressedElevation = 4.dp
+            ),
+            modifier = Modifier.size(size)
+        ) {
+            content()
+        }
     }
 }
 
@@ -1238,48 +1292,6 @@ private fun GalleryPageFormatMenuItem(
         },
         enabled = !locked,
         onClick = onToggle
-    )
-}
-
-@Composable
-private fun GalleryPlayModeDrawerItem(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    NavigationDrawerItem(
-        label = {
-            Text(
-                text = label,
-                color = InkPrimary,
-                fontWeight = if (selected) {
-                    FontWeight.Bold
-                } else {
-                    FontWeight.Normal
-                }
-            )
-        },
-        selected = selected,
-        onClick = onClick,
-        icon = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = InkSecondary,
-                modifier = Modifier.size(20.dp)
-            )
-        },
-        badge = {
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = SunsetGold
-                )
-            }
-        },
-        modifier = Modifier.padding(horizontal = 12.dp)
     )
 }
 

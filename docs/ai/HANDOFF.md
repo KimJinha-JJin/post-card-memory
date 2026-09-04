@@ -1817,3 +1817,24 @@
 **Git 상태**: `feature/photo-sticker`, HEAD `d4ad944`, local == origin(ahead/behind 0/0), working tree clean(`.codex-config.candidate.toml`, `.kotlin/`만 기존 untracked).
 
 **다음 작업**: 63일차 목표(우측 상단 Action 전수조사 + 정렬 노출 개편) 완전히 닫힘. 다음 후보는 이전 조사에서 남겨둔 항목들(예: 배경 Undo/Redo, `backgroundImagePath` 처리, `GalleryViewMode.kt`/`PostcardDetailRow.kt`/`GalleryDetailList` cleanup 등) — 사용자 확정 필요.
+
+## 2026-09-04 — 64일차: 노트북 강제 종료 복구 — 갤러리 + 확장 클러스터 (좌측 패널 대체)
+
+**상황**: 위 63일차 마감 이후 시작된 세션에서 채팅상 직접 지시(수동 표준 모드, 공용 작업판 미사용)로 진행되던 작업 도중 노트북이 강제 종료되어 세션이 끊겼다. `CURRENT_TASK.md`/`WORK_CONTEXT.md`는 이 작업을 전혀 기록하지 못한 채였고, 이 문서(`HANDOFF.md`)도 갱신 전이었다. 다음 세션이 Git 상태·diff만으로 구현 완료 여부를 판정했다.
+
+**목표(복구된 지시 내용)**: 메인 Gallery 우측 하단의 기존 카메라 FAB을 `+` 확장 진입점으로 바꾸고, 엽서 생성/미래 우체통/특별한 갤러리(연못·양떼목장·쫑쫑컵) 3개 세부 기능을 기존 아이콘 문법 그대로 노출하며, 이 기능들을 담당하던 기존 좌측 Drawer(`GalleryFeatureDrawer`)를 제거한다.
+
+**복구 판정**: 코드·테스트 모두 완성된 상태로 중단돼 있었다(재구현 불필요). `GalleryScreen.kt`에서 `ModalNavigationDrawer`/`ModalDrawerSheet`/`NavigationDrawerItem`/`rememberDrawerState`/햄버거 메뉴 아이콘을 전부 제거하고, 우측 하단에 `GalleryFabCluster`(+ anchor, 펼치면 45도 회전해 × 표시로 읽힘)를 추가해 엽서 생성(카메라, 기존 `ic_camera_button`)·미래 우체통(`MailOutline`)·특별한 갤러리 3종(`PondDrawerIcon`/`SheepDrawerIcon`/`CheckFlagDrawerIcon`, 전부 기존 아이콘 재사용, 신규 아이콘 없음)을 노출한다. `GalleryScreen` 공개 시그니처는 변경 없어 NavHost 등 호출부 수정 불필요. 앱 전체 grep으로 제거된 Drawer 심볼의 잔여 참조가 테스트의 "없어야 한다" assertion 외에는 없음을 확인.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, `app/src/test/java/com/postcardmemory/ui/gallery/GalleryViewSelectionStructureTest.kt`, 이 문서.
+
+**검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(신규 경고 없음, 남은 경고는 전부 무관 기존 항목).
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL, **67 suites / 542 tests / failures 0 / errors 0 / skipped 0**. `GalleryViewSelectionStructureTest` 7개(`leftPanelDrawer_isCompletelyRemoved`, `fabCluster_reusesExistingIconsForCameraFutureMailboxAndPlayModes`, `fabCluster_hasNoEmojiOrTextLabelDecoration` 포함) 전부 통과 확인.
+- **실기기 검증 완료** — 사용자가 확인함.
+
+**Git 반영**: production·테스트·문서 파일 3개만 명시적으로 stage(`GalleryScreen.kt`, `GalleryViewSelectionStructureTest.kt`, `docs/ai/HANDOFF.md`) — `.codex-config.candidate.toml`, `.kotlin/`은 기존 untracked 그대로 제외.
+
+**남은 위험 또는 미검증 항목**: 없음(구조 변경, 저장/Room 영향 없음, 실기기 확인까지 끝남).
+
+**다음 작업**: 사용자 확정 필요 항목 없음. 다음 후보는 이전 조사에서 남겨둔 것들(배경 Undo/Redo, `backgroundImagePath` 처리 등).
