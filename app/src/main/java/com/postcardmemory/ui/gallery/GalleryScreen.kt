@@ -48,7 +48,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
@@ -59,6 +58,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -95,6 +95,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -708,7 +709,7 @@ fun GalleryScreen(
                                 onDismissRequest = {
                                     viewMenuExpanded = false
                                 },
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RectangleShape,
                                 containerColor = PaperSurface
                             ) {
                                 GalleryPageFormat.entries.forEach { format ->
@@ -724,7 +725,7 @@ fun GalleryScreen(
                             }
                         }
 
-                        if (currentPageFormat == GalleryPageFormat.THREE_COLUMN) {
+                        if (currentPageFormat.sortAffectsOrder) {
                             Box {
                                 IconButton(
                                     onClick = {
@@ -732,7 +733,7 @@ fun GalleryScreen(
                                     }
                                 ) {
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                                        imageVector = Icons.Filled.SwapVert,
                                         contentDescription = "정렬 방식 변경",
                                         tint = InkSecondary,
                                         modifier = Modifier.size(20.dp)
@@ -744,7 +745,7 @@ fun GalleryScreen(
                                     onDismissRequest = {
                                         sortMenuExpanded = false
                                     },
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = RectangleShape,
                                     containerColor = PaperSurface
                                 ) {
                                     DropdownMenuItem(

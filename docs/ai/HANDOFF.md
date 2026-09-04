@@ -1722,3 +1722,86 @@
 **자동검증 기준**: `:app:compileDebugKotlin` BUILD SUCCESSFUL, 전체 `:app:testDebugUnitTest` BUILD SUCCESSFUL(**67 suites / 540 tests / failures 0 / errors 0 / skipped 0**), `git diff --check` 오류 없음.
 
 **Git 승인**: 사용자가 이번 제1~6차 및 보기 선택 통합 변경의 commit/push를 명시적으로 요청했다. Gallery 관련 production·test·HANDOFF 파일만 명시적으로 stage하며 `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`은 포함하지 않는다. 최종 commit hash와 origin 동기화 상태는 실제 Git 결과를 기준으로 확인한다.
+
+## 2026-09-04 — 63일차: 메인 갤러리 우측 상단 Action 전수조사 + 정렬 노출 범위 개편
+
+**운영 확인(Task 0)**: 이 세션에는 사용자 가시적 진행상황 UI(`TaskCreate`/`TaskUpdate`/`TaskList`, `TodoWrite` 계열 전부)가 로드돼 있지 않다 — ToolSearch로 두 차례 확인, 매칭 없음. 지침 오해가 아니라 **환경 제한**으로 판정하고, Task UI 대체용으로 Subagent를 만들지 않은 채 각 단계 전환을 텍스트로 보고하며 진행했다.
+
+**목표**: 신규 6개 보기 체계 이후 메인 Gallery 우측 상단 Action이 여전히 적절한지 production 코드 기준으로 전수조사하고, 확정된 판정만 최소 범위로 개편한다.
+
+**조사 결과(변경 전)**:
+- 우측 상단 상시 Action은 `보기 형식 관리`(GridView, 6개 보기 전부) + `엽서 검색`/`정렬 방식 변경`(3단 보기에서만) 세 개, 좌측엔 햄버거 메뉴(Drawer: 미래 우체통 + 놀이모드 3종)뿐이었다. 좌측 사이드바와의 중복은 62일차에 이미 해소되어 이번 재조사에서도 없음을 재확인.
+- 선택모드(삭제)는 `handleItemLongClick`이 6개 페이지 컴포저블 전부에 연결돼 있어 어떤 보기에서도 진입 가능함을 코드로 확인 — legacy 아님.
+- **핵심 발견**: `displayedPostcards`(검색+정렬 적용 결과)는 pager 레벨에서 한 번만 계산돼 6개 보기 전부에 전달된다. `monthSectionsFor`/`daySectionsFor`가 `LinkedHashMap`으로 입력 순서를 그대로 보존하므로, 정렬값(최신순/오래된순)은 실제로 **3단·월별·타임라인·우표 4개 보기**에 그대로 반영된다. 반면 캘린더는 날짜 grid라 순서가 무의미하고, 기억 밀도는 코드상 항상 과거→현재로 고정돼 정렬과 무관하다. 그런데 정렬을 바꾸는 아이콘은 3단 보기에서만 노출되고 있었다 — 노출 범위가 실제 적용 범위보다 좁은 상태.
+- 검색은 3단을 벗어나면 항상 초기화되는 기존 구조(`LaunchedEffect`)를 그대로 재확인, 3단 전용 유지가 타당하다고 판단해 변경하지 않았다.
+
+**제품 판단(사용자 확정)**: 정렬 아이콘을 눈 모양(`Icons.Filled.Visibility`)으로 바꾸고, 노출 범위를 정렬이 실제로 적용되는 4개 보기(3단/월별/타임라인/우표)로 넓힌다. 캘린더·기억 밀도는 정렬을 바꿔도 화면이 반응하지 않으므로 제외.
+
+**구현**:
+- `GalleryPageFormat.kt` — enum에 `sortAffectsOrder: Boolean` 프로퍼티 추가(3단/월별/타임라인/우표=true, 캘린더/기억 밀도=기본값 false). 어떤 보기가 정렬값의 영향을 받는지가 코드 한 곳(enum 선언)에 명시적으로 남도록 했다.
+- `GalleryScreen.kt` — 정렬 아이콘 노출 조건을 `currentPageFormat == GalleryPageFormat.THREE_COLUMN`에서 `currentPageFormat.sortAffectsOrder`로 변경, 아이콘을 `Icons.AutoMirrored.Filled.Sort` → `Icons.Filled.Visibility`로 교체(`contentDescription`은 "정렬 방식 변경" 그대로 유지). 미사용 `Sort` import 제거.
+- `sortOrder`/`displayedPostcards` 계산 로직, 검색 3단 전용 구조, DB/Room/RenderSpec, 다른 5개 판정(유지)은 손대지 않았다.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryPageFormat.kt`, `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, 이 문서.
+
+**자동 검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
+- `:app:testDebugUnitTest`(Gallery만 우선 실행 후 전체) — 둘 다 BUILD SUCCESSFUL. 전체 실행 XML 합계 **67 suites / 540 tests / failures 0 / errors 0 / skipped 0** — 62일차 baseline과 정확히 동일(신규 테스트 없음, 조건/아이콘 변경만이라 기존 구조 테스트가 이미 커버).
+- `git diff --check` — 오류 없음(LF→CRLF 안내만). `git status` — 위 2개 production 파일만 unstaged, 기존 untracked(`.codex-config.candidate.toml`, `.kotlin/`)는 무관.
+- 전체 diff 재검토 — 의도한 조건/아이콘/enum 프로퍼티 외 예상 밖 변경 없음.
+
+**남은 위험 또는 미검증 항목**:
+- **실기기 검증 대기**: 4개 보기(3단/월별/타임라인/우표)에서 눈 아이콘이 실제로 나타나고 정렬 메뉴가 정상 동작하는지, 캘린더/기억 밀도에서는 나타나지 않는지, 아이콘 의미(눈 모양=정렬)가 실사용에서 헷갈리지 않는지는 사용자 확인이 필요하다.
+- 우측 상단 과밀 여부는 이번 변경으로 늘지 않았다(기존 3개 아이콘 중 하나가 노출 조건만 넓어짐, 아이콘 개수 자체는 페이지당 그대로).
+
+**Git 상태**: `feature/photo-sticker`, 위 2개 production 파일 unstaged 수정 상태, 아직 commit 안 함(실기기 확인 전).
+
+**다음 작업**: 실기기 검증 → 문제 없으면 commit/push 승인 요청.
+
+## 2026-09-04 — 63일차 추가 수정: 정렬 아이콘 의미 정정 + 하단 선택창 rounded box 제거
+
+**목표**: 위 개편의 실기기 검토에서 나온 사용자 지적 두 가지만 최소 범위로 고친다 — ①정렬 기능인데 눈(가시성) 아이콘이라 의미가 안 맞음 ②정렬 선택 드롭다운이 둥근 모서리 floating card로 보여 최근 정돈 문법과 어긋남. 정렬 로직, 검색, Gallery 보기 구조, `sortAffectsOrder`, navigation, 정렬 방식 종류는 손대지 않았다.
+
+**변경**:
+- `GalleryScreen.kt` — 정렬 아이콘을 `Icons.Filled.Visibility`(눈)에서 `Icons.Filled.SwapVert`(위·아래 화살표, 오름/내림차순을 나타내는 표준 Material 아이콘)로 교체. `contentDescription`("정렬 방식 변경")은 그대로 유지.
+- 정렬 `DropdownMenu`의 `shape`를 `RoundedCornerShape(16.dp)`에서 `RectangleShape`로 변경해 각진 테두리로 바꿨다. 항목 내부 선택 표시(굵은 글씨 + `SunsetGold` 옅은 배경)와 클릭 동작은 그대로 유지 — 이미 pill/카드 형태가 아니라 평면 배경 하이라이트였으므로 항목 자체는 손대지 않고 바깥 팝업 모양만 정돈했다. `보기 형식 관리` 드롭다운 등 이번 지시 범위 밖의 다른 메뉴는 변경하지 않았다.
+- import 정리: 미사용 `Visibility` 제거, `SwapVert`/`RectangleShape` 추가.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, 이 문서.
+
+**검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL, **67 suites / 540 tests / failures 0 / errors 0 / skipped 0**(직전과 동일, 신규 테스트 없음).
+- `git diff --check` 오류 없음. `git status` — production 파일은 `GalleryScreen.kt`만(이번 건은 `GalleryPageFormat.kt` 변경 없음), 기존 untracked 항목 무관.
+
+**남은 위험 또는 미검증 항목**: 실기기에서 화살표 아이콘 의미 전달, 각진 드롭다운의 실제 시각 결과, 선택 항목 하이라이트가 여전히 자연스러운지 확인 필요.
+
+**Git 상태**: `feature/photo-sticker`, `GalleryPageFormat.kt`/`GalleryScreen.kt`/`HANDOFF.md` unstaged 수정 상태, 아직 commit 안 함(실기기 확인 전).
+
+**다음 작업**: 실기기 검증 → 문제 없으면 이번 63일차 전체(전수조사 개편 + 추가 수정) commit/push 승인 요청.
+
+## 2026-09-04 — 63일차 추가 수정 2차: 앱 전체 DropdownMenu 각진 테두리로 통일
+
+**목표**: 사용자가 "나머지 드롭다운 목록도 무조건 테두리가 직선인 직사각형으로 수정"을 요청함에 따라, Gallery 정렬 메뉴에만 적용했던 각진 테두리 정돈을 앱 전체 DropdownMenu로 확대한다.
+
+**조사**: `DropdownMenu(` 사용처를 앱 전체(`app/src/main/java/com/postcardmemory`)에서 전수 grep — 3개 파일, 총 4곳뿐임을 확인. 전부 `shape = RoundedCornerShape(16.dp)`였다.
+1. `GalleryScreen.kt` — 보기 형식 관리(GridView) 메뉴
+2. `GalleryScreen.kt` — 정렬 메뉴(직전 항목에서 이미 처리)
+3. `DetailScreen.kt` — 편집 화면 "더보기"(`moreMenuExpanded`) 메뉴
+4. `PostcardTemplateRow.kt` — 템플릿 행 관리 메뉴
+
+**변경**: 위 4곳 전부 `shape`를 `RectangleShape`로 통일. 메뉴 항목 내부 텍스트/아이콘/클릭 동작, `containerColor`, 다른 rounded 요소(썸네일 clip, 카드 등)는 손대지 않았다 — 이번 지시가 "드롭다운 목록"으로 명시적으로 범위를 좁혔기 때문. `PostcardTemplateRow.kt`에는 `RectangleShape` import를 새로 추가했고, `RoundedCornerShape` import는 같은 파일의 다른 rounded 요소(썸네일 clip 10dp 등)가 계속 써서 그대로 남겼다.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`, `app/src/main/java/com/postcardmemory/ui/detail/PostcardTemplateRow.kt`, 이 문서.
+
+**검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(무관한 기존 경고만 남음).
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL, **67 suites / 540 tests / failures 0 / errors 0 / skipped 0**(직전과 동일).
+- `git diff --check` 오류 없음. 전체 diff 재검토 — 4곳의 `shape` 값과 1개 import 추가 외 예상 밖 변경 없음.
+- grep 재확인 — 앱 전체에서 `DropdownMenu(` 4곳 모두 `RectangleShape`로 전환 완료, 잔여 `RoundedCornerShape` 붙은 DropdownMenu 없음.
+
+**남은 위험 또는 미검증 항목**: 실기기에서 "더보기"·템플릿 관리 메뉴가 각진 형태로 잘 보이는지, 다른 화면과 시각적으로 어색하지 않은지 확인 필요.
+
+**Git 상태**: `feature/photo-sticker`, `GalleryPageFormat.kt`/`GalleryScreen.kt`/`DetailScreen.kt`/`PostcardTemplateRow.kt`/`HANDOFF.md` unstaged 수정 상태, 아직 commit 안 함(실기기 확인 전).
+
+**다음 작업**: 실기기 검증 → 문제 없으면 63일차 전체(전수조사 개편 + 추가 수정 1·2차) commit/push 승인 요청.
