@@ -1838,3 +1838,100 @@
 **남은 위험 또는 미검증 항목**: 없음(구조 변경, 저장/Room 영향 없음, 실기기 확인까지 끝남).
 
 **다음 작업**: 사용자 확정 필요 항목 없음. 다음 후보는 이전 조사에서 남겨둔 것들(배경 Undo/Redo, `backgroundImagePath` 처리 등).
+
+## 2026-09-05 — 64일차 클러스터 폴리시: 조사 STOP
+
+- 요청: 기존 기능을 유지하며 anchor 1개 + 주요 기능 3개 + 특별한 갤러리 하위 3개의 7버튼 크기·배치·애니메이션 폴리시.
+- 실제 Git: `feature/photo-sticker`, HEAD `cacbc4c7b405edaa6f86b902e01e1faab19278ff`, 로컬에 기록된 origin 대비 ahead/behind 0/0. 원격 fetch는 수행하지 않음. 시작 시 tracked 변경 없음. 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/` 보존.
+- 전제 차이: 실제 `GalleryFabCluster`는 anchor 1개, 주요 기능 2개(카메라·미래 우체통), 작은 기능 3개(연못·양떼목장·쫑쫑컵)의 총 6버튼. 특별한 갤러리 부모 버튼·전용 클릭 handler가 없음. 기존 HANDOFF는 선행 구현을 2026-09-04의 64일차로 표기하고 있으나 이번 지시서는 선행 작업을 63일차로 부름. 과거 기록은 변경하지 않음.
+- 기존 동작: 작은 3개는 `onPlayModeSelected`로 해당 모드를 선택하고, 같은 모드 재선택 시 NONE으로 전환. 클릭 시 클러스터를 닫음. 카메라·미래 우체통은 기존 navigation callback 실행. Back과 dim 입력은 `fabMenuExpanded = false`로 닫음.
+- 기존 표현: anchor 56dp/아이콘 28dp, 주요 버튼 52dp, 작은 버튼 40dp/아이콘 20dp. 모든 shortcut이 동일한 fade+scale(열기 160ms, 닫기 120ms), stagger 없음. anchor는 animateFloatAsState 기본 spec으로 45도 회전. dim alpha 0.32, 열기 160ms/닫기 120ms. 카메라는 `ic_camera_button` 이미지 42dp.
+- STOP 근거: 이번 지시서 9·36절. 부모 버튼을 실제 버튼으로 추가하려면 기존에 없던 클릭 의미를 정의해야 함. 단순 크기·거리 폴리시만으로 7버튼 전제를 충족할 수 없음.
+- 최소 대안(사용자 판단 대기): 부모를 작은 3개의 펼침/접힘 버튼으로 정의하고, + 최초 펼침에서는 지시서대로 작은 3개까지 자동 등장하게 함. 별도 destination을 추가하지 않지만 부모의 새 동작과 하위 표시 상태가 필요하므로 승인 전 구현하지 않음. 기존 6버튼을 유지하는 대안은 7버튼 완료 조건과 충돌함.
+- 변경: 이 조사 기록만 추가. production/test/아이콘/애니메이션 변경 없음. 실제 적용한 새 크기·timing·아이콘 없음.
+- 검증: 코드 수정이 없어 compile/unit test는 실행하지 않음. 이번 폴리시 실기기 검증 미실행. 기존 문서의 실기기 성공을 이번 작업 결과로 간주하지 않음.
+- 남은 작업 하나: 특별한 갤러리 부모 버튼의 클릭 의미 확정 후 폴리시 구현 재개. commit/push 미수행.
+
+## 2026-09-05 — 64일차 클러스터 폴리시: 구현·자동검증 완료, 실기기 확인 대기
+
+**최신 사용자 확정**: 바로 위 조사 STOP은 해제됨. 현재 6버튼에 특별한 갤러리 부모 버튼을 추가하는 것이 명시적으로 승인된 작업이다. 최종 구조는 + 1개 / 주요 3개(카메라·미래 우체통·특별한 갤러리) / 작은 3개(연못·양떼목장·쫑쫑컵). 중간에 나온 6버튼 유지 정정은 최종 지시로 대체됐다.
+
+**앱에서의 의미**: 기존 5개 기능 진입은 유지하면서 작은 3개를 부모 주변에 모았다. 부모는 새 화면으로 이동하지 않고 작은 3개의 표시만 접고 펼친다. +를 다시 열면 작은 3개도 자동 등장한다. 저장·엽서 데이터·navigation destination·pager·정렬·Back handler는 변경하지 않았다.
+
+**UI 문법 사전 판단**: 역할은 기능 이동 및 하위 기능 표시 제어. 새 부모 계층은 이번 사용자 직접 지시로 승인된 문법이다. 기존 Gallery 색상과 하위 아이콘을 유지하고 Card/label/연결선/새 에셋은 추가하지 않았다. 카메라와 부모는 `PhotoSourceMenu.kt`의 CameraAlt/PhotoLibrary를 재사용한다. 최신 실기기 화면은 이번 세션에서 확보하지 못했으며, 시각적 승인을 자동검증으로 대신하지 않는다.
+
+**변경 파일**:
+- `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`
+- `app/src/test/java/com/postcardmemory/ui/gallery/GalleryViewSelectionStructureTest.kt`
+- `docs/ai/HANDOFF.md`
+
+**크기·배치**:
+- anchor 52dp / 아이콘 24dp, 주요 3개 48dp / 아이콘 24dp, 작은 3개 36dp / 기존 아이콘 20dp.
+- shortcut 터치 영역은 각각 48dp. 클러스터 layout 228×216dp 안에 터치 영역까지 포함한다. 배경판이나 전체 클릭 영역을 추가한 것이 아니며 빈 공간은 입력을 소비하지 않는다.
+- 우측 하단 기준 offset(dp): 카메라 (0,-76), 미래 우체통 (-68,-56), 부모 (-128,-108), 연못 (-180,-112), 양떼목장 (-156,-164), 쫑쫑컵 (-104,-168).
+- 외곽 padding 16dp와 기존 navigationBarsPadding 유지. 전체 너비 요구량은 외곽 여백 포함 260dp. 실제 작은 화면/가로모드 겹침은 실기기 미확인.
+
+**실제 애니메이션**:
+- 각 shortcut은 기존 Compose `updateTransition(Boolean)` + `animateFloat`의 단일 진행률로 offset/fade/scale을 함께 제어한다. 별도 프레임워크·대기 coroutine·navigation 상태를 추가하지 않았다.
+- 큰 3개: 지연 없이 동시에 180ms, LinearOutSlowInEasing. anchor 방향에서 최종 위치로 이동, alpha 0→1, scale 0.82→1.
+- 작은 3개: 부모 위치에서 등장, 각각 120/160/200ms 지연 뒤 140ms, 40ms stagger. 정상 열기 전체 340ms.
+- 닫기: 작은 3개 90ms, 큰 3개 70ms 지연 뒤 110ms. FastOutSlowInEasing, bounce 없음.
+- anchor press: scale 0.94↔1, 90ms. + 회전: 열기 0→45도 160ms, 닫기 150ms 지연 뒤 90ms.
+- dim: alpha 0.20, 열기 160ms, 닫기 70ms 지연 뒤 110ms.
+- 등장 진행률 0.5 미만 및 닫는 중 입력 비활성. 진행 중 전환도 유지하고 종료 시 shortcut과 터치 영역을 composition에서 제거한다. 빠른 반복 입력의 실기기 결과는 아직 미확인.
+
+**아이콘**: 카메라의 `ic_camera_button` 이미지 42dp를 앱에서 이미 사용하는 단색 Material `CameraAlt` 24dp로 교체. 부모는 기존 `PhotoLibrary` 24dp. 하위 `PondDrawerIcon`/`SheepDrawerIcon`/`CheckFlagDrawerIcon` 유지. 신규 이모지·아이콘 디자인·에셋 없음.
+
+**자동검증 결과**: 첫 Gradle 호출은 실행 파일 부재(`gradlew.bat` 없음), 이후 로컬 Gradle 실행은 플러그인 의존성 해석 단계에서 실패. 프로젝트 설정과 일치하는 로컬 Gradle 9.4.1 + Android Studio JBR로 권한 확장 후 정상 실행했다. 코드 오류로 인한 실패는 없었다.
+- `:app:compileDebugKotlin`: BUILD SUCCESSFUL.
+- `:app:testDebugUnitTest --tests 'com.postcardmemory.ui.gallery.*'`: BUILD SUCCESSFUL.
+- `:app:testDebugUnitTest`: BUILD SUCCESSFUL. XML 합계 67 suites / 542 tests / failures 0 / errors 0 / skipped 0. GalleryViewSelectionStructureTest 7개 통과.
+- 기존 아이콘 기대값을 새 재사용 문법에 맞추고 총 7버튼 및 기존 callback 존재 검증을 보강했다. 애니메이션 감각을 unit test로 강제하지 않았다.
+- `git diff --check`: 통과(LF/CRLF 안내만 있음). production·test·문서 전체 diff 검토 완료. 변경은 클러스터·dim·관련 구조 테스트·인수인계 범위에 한정된다.
+
+**실기기**: `adb devices` 연결 목록이 비어 있어 실행 검증 미실행. 사용자 확인 필요: 7버튼 계층/크기, 큰 3개 동시 등장, 작은 3개 stagger, 부모 접기·다시 펼치기, dim/Back/+ 닫기, 빠른 반복 입력, 기존 5개 기능, Gallery 스크롤/pager/보기/정렬.
+
+**Git**: `feature/photo-sticker`, HEAD `cacbc4c7b405edaa6f86b902e01e1faab19278ff`, 기록된 origin 대비 ahead/behind 0/0(원격 fetch 미실행). 위 3파일만 unstaged 수정, 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/` 보존. commit/push 하지 않음. 다음 작업 하나는 사용자 실기기 확인이다. 시각적 만족·빠른 입력·실제 기능 회귀를 확인하기 전 전체 작업 완료로 판정하지 않는다.
+
+## 2026-09-05 — 64일차 배치 후속 수정: 응집된 개구리 발바닥형
+
+**사용자 정정**: 대각선 사슬 형태 대신 + 주변에 큰 3개가 모이고, 작은 3개가 부모의 왼쪽·왼쪽 위·위에 붙는 군집형 배치로 수정. 이번 후속 변경은 위치·간격에 한정한다.
+
+**변경**: `GalleryScreen.kt`의 클러스터 폭 228→160dp(높이 216dp 유지), 버튼 offset 및 하위 이동 출발점만 변경. 관련 위치 주석 수정. anchor/큰/작은 버튼 크기 52/48/36dp, 아이콘·dim·애니메이션 API/시간값·클릭 동작·부모 자식 상태는 직전 구현 그대로 유지. 테스트 코드는 이번 후속 수정에서 추가 변경하지 않음.
+
+**현재 최종 offset(dp, 우측 하단 기준)**: 카메라 (0,-68), 미래 우체통 (-64,-44), 특별한 갤러리 (-60,-112), 연못 (-112,-104), 양떼목장 (-104,-156), 쫑쫑컵 (-52,-168). 작은 3개의 이동 출발점도 부모의 새 위치 (-60,-112)로 맞춤. 외곽 여백 포함 요구 너비 192dp. 정지 상태 원형 터치 영역의 최소 간격은 좌표 계산상 약 4.61dp로 겹침 없음. 계산 확인은 실기기 터치 검증을 대신하지 않음.
+
+**자동검증**: 로컬 Gradle 9.4.1/JBR로 `:app:compileDebugKotlin :app:testDebugUnitTest` BUILD SUCCESSFUL. XML 67 suites / 542 tests / failures 0 / errors 0 / skipped 0. `git diff --check` 통과. 기존 다른 파일의 deprecation/Migration 파라미터 경고는 수정하지 않음.
+
+**실기기 결과(부분 확인)**: 연결된 SM-S936N(Android 16)에 `:app:installDebug` BUILD SUCCESSFUL, Installed on 1 device. 기존 앱을 업데이트 설치했으며 데이터 삭제 명령은 실행하지 않음. 앱 실행 후 기본 Gallery 및 + 단독 상태, 큰 3개가 삼각형으로 모인 펼침 화면을 캡처로 확인. 작은 3개까지 모두 펼쳐진 안정 상태를 확보하기 전에 화면이 잠금 상태로 전환돼 전체 7버튼 배치·작은 군집·터치·빠른 반복 입력 검증은 완료하지 못함. 잠금 해제나 추가 입력은 진행하지 않음. 사용자 실기기 확인 대기이며 시각적 만족을 확정하지 않는다.
+
+**Git**: 시작·현재 `feature/photo-sticker`, HEAD `cacbc4c`, 기록된 origin 대비 0/0. 앞선 폴리시의 미커밋 변경 위에 위치만 수정. 전체 누적 수정은 GalleryScreen.kt / GalleryViewSelectionStructureTest.kt / HANDOFF.md 3개. 기존 untracked 보존. commit/push 미수행. 다음 작업은 실기기 배치 확인.
+
+## 2026-09-05 — 64일차 색상 계층 보강
+
+**목표·범위**: 사용자 승인에 따라 기능별 랜덤 색 대신 단계와 소속을 배경 톤으로 보강. 이번 후속 변경은 `GalleryScreen.kt`의 클러스터 색과 아이콘 tint, 관련 색상 상수/import에 한정. 크기·offset·애니메이션·dim·클릭 handler·navigation·데이터는 직전 상태 유지. 공통 Color.kt와 테스트 코드는 이번 후속 수정에서 변경하지 않음.
+
+**최종 색상 문법**:
+- + anchor: InkPrimary 배경 / PaperSurface 아이콘. 가장 강한 기준점.
+- 카메라·미래 우체통: `lerp(InkSecondary, PaperTray, 0.18f)` 공통 갈색 배경 / PaperSurface 아이콘.
+- 특별한 갤러리 부모: InkSecondary 배경 / PaperSurface 아이콘. 같은 갈색 계열에서 조금 더 진한 대표 톤.
+- 작은 3개: PaperTray 배경 / InkPrimary 아이콘. 부모와 같은 웜 뉴트럴 계열의 연한 하위 톤.
+- 활성 하위 기능: `lerp(PaperTray, SunsetGold, 0.24f)` 연한 금색 배경 / InkPrimary 아이콘. 기존 선택 색 계열을 유지하면서 선택돼도 부모보다 밝게 처리. 선택 조건 자체는 동일.
+- 아이콘 모양/기존 resource 유지. 새 hex·콘텐츠 팔레트·에셋·장식 색 추가 없음.
+
+**검증**: `:app:compileDebugKotlin :app:testDebugUnitTest :app:installDebug` BUILD SUCCESSFUL. 전체 XML 67 suites / 542 tests / failures 0 / errors 0 / skipped 0. 연결된 SM-S936N(Android 16) 1대 업데이트 설치 성공. `git diff --check` 통과, 전체 누적 diff와 이번 색상 변경 범위 검토.
+
+**실제 화면·대비 확인**: Gallery의 + 단독 상태와 총 7버튼이 펼쳐진 정지 화면을 캡처·UI hierarchy로 확인. 실제 배경 픽셀은 anchor #1A1324, 큰 공통 #73675B, 부모 #5B5046, 하위 #E8DCC6, 빈 Gallery dim 영역 #C3BDB2. 아이콘/컨테이너 명도 대비 계산은 각각 약 17.50:1 / 5.33:1 / 7.59:1 / 13.32:1. 하위 컨테이너와 dim 배경의 차이는 약 1.38:1로 부드럽고, 진한 아이콘 대비가 버튼 식별을 돕는다. 모든 경계가 높은 대비라고 과장하지 않는다. 전체 7버튼의 겹침 없이 큰 갈색 패드와 작은 밝은 군집이 확인됐다.
+
+**남은 실기기 확인**: 활성 하위 버튼의 연한 금색을 확인하려고 연못 입력과 재열기 입력을 시도했지만 캡처 시 잠금 화면으로 전환되어 선택 변경 여부와 활성 색을 확인하지 못함. 잠금 해제나 추가 입력은 진행하지 않음. 실제 선택 상태·빠른 반복 입력·전체 기능 회귀와 사용자 시각적 만족은 확인 대기. 캡처의 정지 화면 확인을 전체 상호작용 검증으로 취급하지 않는다.
+
+**Git**: `feature/photo-sticker`, HEAD `cacbc4c`, 기록된 origin 대비 0/0. 누적 미커밋 3파일(GalleryScreen.kt, GalleryViewSelectionStructureTest.kt, HANDOFF.md), 기존 untracked 보존. commit/push 미수행. 다음 작업 하나: 사용자가 설치본의 색상 계층과 선택 상태 가독성 확인.
+
+## 2026-09-05 — 64일차 마감: 사용자 실기기 확인 완료·커밋/푸시 승인
+
+- 사용자가 최종 설치본에 대해 "좋아 실기기 확인 완료 커밋, 푸시 진행해"라고 보고하고 명시적으로 승인함. 위 기록들의 사용자 실기기 확인 대기는 이 보고로 해제됨. 에이전트의 부분 확인과 사용자의 최종 확인을 구분함.
+- 최종 결과: 7버튼 개구리 발바닥형 클러스터, 크기·거리·색상 계층, 동시 등장과 하위 stagger, 기존 앱 아이콘 재사용. 기존 기능 연결·navigation destination·저장·DB 구조 유지.
+- 최종 코드 검증은 직전 색상 보강 이후 compile / 전체 542 tests(실패·오류·skip 0) / installDebug 성공. 이후 production/test 추가 변경 없음. 커밋 전 전체 diff 및 diff --check 재확인.
+- 반영 대상은 GalleryScreen.kt, GalleryViewSelectionStructureTest.kt, 이 HANDOFF.md의 3파일. 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/` 제외.
+- 기준 브랜치 `feature/photo-sticker`, 작업 시작 HEAD `cacbc4c`. 이 기록을 포함하는 커밋이 64일차 폴리시 결과이며, 최종 해시는 Git log로 확인한다.
+- 다음 작업: 이번 작업은 사용자 확인까지 완료. 다음 독립 목표는 사용자 지정 후 시작.

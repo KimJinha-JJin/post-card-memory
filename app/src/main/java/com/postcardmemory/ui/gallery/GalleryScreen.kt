@@ -9,18 +9,20 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +61,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
@@ -100,6 +104,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -114,10 +120,11 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -128,7 +135,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.components.StampCardContent
@@ -985,13 +991,13 @@ fun GalleryScreen(
         AnimatedVisibility(
             visible = fabMenuExpanded,
             enter = fadeIn(tween(160)),
-            exit = fadeOut(tween(120)),
+            exit = fadeOut(tween(110, delayMillis = 70)),
             modifier = Modifier.fillMaxSize()
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.32f))
+                    .background(Color.Black.copy(alpha = 0.20f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -1092,9 +1098,12 @@ fun GalleryScreen(
 // (구 [GalleryFeatureDrawer])이 담당하던 두 진입 기능은 전부 이 클러스터로
 // 흡수되어 좌측 패널 자체는 제거됐다 — 아이콘은 새로 만들지 않고 각 기능이
 // 이미 쓰던 것([PondDrawerIcon] 등)을 그대로 재사용한다.
-private val GalleryFabAnchorSize = 56.dp
-private val GalleryFabPrimarySize = 52.dp
-private val GalleryFabMiniSize = 40.dp
+private val GalleryFabAnchorSize = 52.dp
+private val GalleryFabPrimarySize = 48.dp
+private val GalleryFabMiniSize = 36.dp
+// 같은 웜 뉴트럴 계열 안에서 단계와 소속만 구분한다.
+private val GalleryFabPrimaryColor = lerp(InkSecondary, PaperTray, 0.18f)
+private val GalleryFabChildSelectedColor = lerp(PaperTray, SunsetGold, 0.24f)
 
 @Composable
 private fun GalleryFabCluster(
@@ -1111,77 +1120,117 @@ private fun GalleryFabCluster(
         return
     }
 
+    // 펼침 상태가 바뀌면 자식의 수동 접힘도 초기화한다. 별도 navigation 상태는 없다.
+    var childrenExpanded by remember(expanded) { mutableStateOf(true) }
+    val anchorInteraction = remember { MutableInteractionSource() }
+    val anchorPressed by anchorInteraction.collectIsPressedAsState()
+    val anchorScale by animateFloatAsState(
+        targetValue = if (anchorPressed) 0.94f else 1f,
+        animationSpec = tween(90),
+        label = "galleryFabAnchorPress"
+    )
     val anchorRotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
+        animationSpec = tween(
+            durationMillis = if (expanded) 160 else 90,
+            delayMillis = if (expanded) 0 else 150,
+            easing = FastOutSlowInEasing
+        ),
         label = "galleryFabAnchorRotation"
     )
 
-    Box(modifier = modifier) {
-        // 특별한 갤러리 3종 — 서로 가까이 묶어 하나의 작은 하위 군집으로
-        // 읽히게 하되, 이를 감싸는 Card/box/capsule은 두지 않는다(거리와
-        // 배치만으로 그룹을 표현).
+    // 펼친 버튼의 48dp 터치 영역도 부모 layout 안에 둔다. 빈 공간은 입력을 소비하지 않는다.
+    Box(modifier = modifier.size(width = 160.dp, height = 216.dp)) {
+        // 작은 3개는 부모(-60, -112)의 왼쪽·왼쪽 위·위에 붙는다.
         GalleryFabShortcut(
-            expanded = expanded,
-            offsetX = (-52).dp,
-            offsetY = (-148).dp,
+            expanded = expanded && childrenExpanded,
+            offsetX = (-112).dp,
+            offsetY = (-104).dp,
+            originX = (-60).dp,
+            originY = (-112).dp,
+            enterDelayMillis = 120,
             size = GalleryFabMiniSize,
-            backgroundColor = if (playMode == GalleryPlayMode.POND) SunsetGold else BrutalWhite,
+            backgroundColor = if (playMode == GalleryPlayMode.POND) GalleryFabChildSelectedColor else PaperTray,
             onClick = { onPlayModeSelected(GalleryPlayMode.POND) }
         ) {
             Icon(
                 imageVector = PondDrawerIcon,
                 contentDescription = "엽서의 연못",
-                tint = InkSecondary,
+                tint = InkPrimary,
                 modifier = Modifier.size(20.dp)
             )
         }
 
         GalleryFabShortcut(
-            expanded = expanded,
-            offsetX = (-100).dp,
-            offsetY = (-128).dp,
+            expanded = expanded && childrenExpanded,
+            offsetX = (-104).dp,
+            offsetY = (-156).dp,
+            originX = (-60).dp,
+            originY = (-112).dp,
+            enterDelayMillis = 160,
             size = GalleryFabMiniSize,
-            backgroundColor = if (playMode == GalleryPlayMode.SHEEP_RANCH) SunsetGold else BrutalWhite,
+            backgroundColor = if (playMode == GalleryPlayMode.SHEEP_RANCH) GalleryFabChildSelectedColor else PaperTray,
             onClick = { onPlayModeSelected(GalleryPlayMode.SHEEP_RANCH) }
         ) {
             Icon(
                 imageVector = SheepDrawerIcon,
                 contentDescription = "양떼목장",
-                tint = InkSecondary,
+                tint = InkPrimary,
                 modifier = Modifier.size(20.dp)
             )
         }
 
         GalleryFabShortcut(
-            expanded = expanded,
-            offsetX = (-136).dp,
-            offsetY = (-88).dp,
+            expanded = expanded && childrenExpanded,
+            offsetX = (-52).dp,
+            offsetY = (-168).dp,
+            originX = (-60).dp,
+            originY = (-112).dp,
+            enterDelayMillis = 200,
             size = GalleryFabMiniSize,
-            backgroundColor = if (playMode == GalleryPlayMode.RACE) SunsetGold else BrutalWhite,
+            backgroundColor = if (playMode == GalleryPlayMode.RACE) GalleryFabChildSelectedColor else PaperTray,
             onClick = { onPlayModeSelected(GalleryPlayMode.RACE) }
         ) {
             Icon(
                 imageVector = CheckFlagDrawerIcon,
                 contentDescription = "엽서 쫑쫑컵",
-                tint = InkSecondary,
+                tint = InkPrimary,
                 modifier = Modifier.size(20.dp)
             )
         }
 
-        // 엽서 생성 / 미래 우체통 — 주요 바로가기, 작은 군집보다 크고
-        // anchor에 더 가깝게 배치해 위계를 준다.
+        // 주요 3개는 동일한 시간에 anchor에서 펼쳐진다.
         GalleryFabShortcut(
             expanded = expanded,
-            offsetX = (-72).dp,
-            offsetY = (-56).dp,
+            offsetX = (-60).dp,
+            offsetY = (-112).dp,
             size = GalleryFabPrimarySize,
-            backgroundColor = BrutalWhite,
+            backgroundColor = InkSecondary,
+            onClick = { childrenExpanded = !childrenExpanded },
+            modifier = Modifier.semantics {
+                stateDescription = if (childrenExpanded) "하위 기능 펼쳐짐" else "하위 기능 접힘"
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.PhotoLibrary,
+                contentDescription = "특별한 갤러리",
+                tint = PaperSurface,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        GalleryFabShortcut(
+            expanded = expanded,
+            offsetX = (-64).dp,
+            offsetY = (-44).dp,
+            size = GalleryFabPrimarySize,
+            backgroundColor = GalleryFabPrimaryColor,
             onClick = onNavigateToFutureMailbox
         ) {
             Icon(
                 imageVector = Icons.Default.MailOutline,
                 contentDescription = "미래 우체통",
-                tint = InkSecondary,
+                tint = PaperSurface,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -1189,17 +1238,16 @@ private fun GalleryFabCluster(
         GalleryFabShortcut(
             expanded = expanded,
             offsetX = 0.dp,
-            offsetY = (-76).dp,
+            offsetY = (-68).dp,
             size = GalleryFabPrimarySize,
-            backgroundColor = BrutalWhite,
+            backgroundColor = GalleryFabPrimaryColor,
             onClick = onNavigateToCamera
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_camera_button),
+            Icon(
+                imageVector = Icons.Default.CameraAlt,
                 contentDescription = "카메라",
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
+                tint = PaperSurface,
+                modifier = Modifier.size(24.dp)
             )
         }
 
@@ -1207,22 +1255,27 @@ private fun GalleryFabCluster(
         // 닫기(×) 표시로 읽히게 한다(새 아이콘을 추가하지 않는다).
         FloatingActionButton(
             onClick = onToggle,
-            containerColor = BrutalWhite,
+            interactionSource = anchorInteraction,
+            containerColor = InkPrimary,
             shape = CircleShape,
             elevation = FloatingActionButtonDefaults.elevation(
                 defaultElevation = 3.dp,
-                pressedElevation = 6.dp
+                pressedElevation = 3.dp
             ),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .size(GalleryFabAnchorSize)
+                .graphicsLayer {
+                    scaleX = anchorScale
+                    scaleY = anchorScale
+                }
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = if (expanded) "바로가기 닫기" else "바로가기 열기",
-                tint = InkPrimary,
+                tint = PaperSurface,
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(24.dp)
                     .rotate(anchorRotation)
             )
         }
@@ -1237,27 +1290,54 @@ private fun BoxScope.GalleryFabShortcut(
     size: Dp,
     backgroundColor: Color,
     onClick: () -> Unit,
+    originX: Dp = 0.dp,
+    originY: Dp = 0.dp,
+    enterDelayMillis: Int = 0,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    AnimatedVisibility(
-        visible = expanded,
-        enter = fadeIn(tween(160)) + scaleIn(tween(160), initialScale = 0.6f),
-        exit = fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.6f),
-        modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .offset(x = offsetX, y = offsetY)
-    ) {
-        FloatingActionButton(
-            onClick = onClick,
-            containerColor = backgroundColor,
-            shape = CircleShape,
-            elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 2.dp,
-                pressedElevation = 4.dp
-            ),
-            modifier = Modifier.size(size)
+    val isChild = size == GalleryFabMiniSize
+    val transition = updateTransition(expanded, label = "galleryShortcutVisibility")
+    val progress by transition.animateFloat(
+        transitionSpec = {
+            if (targetState) {
+                tween(if (isChild) 140 else 180, enterDelayMillis, LinearOutSlowInEasing)
+            } else {
+                tween(if (isChild) 90 else 110, if (isChild) 0 else 70, FastOutSlowInEasing)
+            }
+        },
+        label = "galleryShortcutProgress"
+    ) { shown -> if (shown) 1f else 0f }
+
+    // 등장 대기·퇴장 중에는 입력을 막고, 퇴장 완료 후 터치 영역까지 제거한다.
+    if (transition.currentState || transition.targetState || transition.isRunning) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = offsetX, y = offsetY)
+                .size(48.dp)
+                .graphicsLayer {
+                    alpha = progress
+                    scaleX = 0.82f + 0.18f * progress
+                    scaleY = scaleX
+                    translationX = (originX - offsetX).toPx() * (1f - progress)
+                    translationY = (originY - offsetY).toPx() * (1f - progress)
+                }
+                .then(modifier)
+                .clip(CircleShape)
+                .clickable(
+                    enabled = expanded && progress >= 0.5f,
+                    role = Role.Button,
+                    onClick = onClick
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            content()
+            Box(
+                modifier = Modifier.size(size).background(backgroundColor, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                content()
+            }
         }
     }
 }

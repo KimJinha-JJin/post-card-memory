@@ -1,6 +1,7 @@
 package com.postcardmemory.ui.gallery
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -101,16 +102,26 @@ class GalleryViewSelectionStructureTest {
             "private fun BoxScope.GalleryFabShortcut("
         )
 
-        // 엽서 생성 — 기존 카메라 FAB 문법(같은 drawable) 그대로 재사용
-        assertTrue(cluster.contains("R.drawable.ic_camera_button"))
+        // 주요 3개 + 하위 3개 + anchor 1개. 부모를 더해도 기존 진입을 대체하지 않는다.
+        assertEquals(6, Regex("GalleryFabShortcut\\(").findAll(cluster).count())
+        assertEquals(1, Regex("FloatingActionButton\\(").findAll(cluster).count())
+        assertTrue(cluster.contains("imageVector = Icons.Default.Add"))
+
+        // 엽서 생성 — 앱의 사진 가져오기 메뉴와 동일한 단색 카메라 아이콘
+        assertTrue(cluster.contains("Icons.Default.CameraAlt"))
+        assertFalse(cluster.contains("R.drawable.ic_camera_button"))
         assertTrue(cluster.contains("contentDescription = \"카메라\""))
+        assertTrue(cluster.contains("onClick = onNavigateToCamera"))
 
         // 미래 우체통 — 기존 아이콘과 콜백 재사용, 새 destination 없음
         assertTrue(cluster.contains("Icons.Default.MailOutline"))
         assertTrue(cluster.contains("contentDescription = \"미래 우체통\""))
         assertTrue(cluster.contains("onClick = onNavigateToFutureMailbox"))
 
-        // 특별한 갤러리 3종 — 대표 아이콘으로 한 번 더 감싸지 않고 개별 진입
+        // 부모는 하위 표시만 제어하고, 3종의 기존 진입은 유지한다.
+        assertTrue(cluster.contains("Icons.Default.PhotoLibrary"))
+        assertTrue(cluster.contains("contentDescription = \"특별한 갤러리\""))
+        assertTrue(cluster.contains("onClick = { childrenExpanded = !childrenExpanded }"))
         assertTrue(cluster.contains("PondDrawerIcon"))
         assertTrue(cluster.contains("SheepDrawerIcon"))
         assertTrue(cluster.contains("CheckFlagDrawerIcon"))
