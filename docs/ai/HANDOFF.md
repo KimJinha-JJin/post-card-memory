@@ -1934,4 +1934,33 @@
 - 최종 코드 검증은 직전 색상 보강 이후 compile / 전체 542 tests(실패·오류·skip 0) / installDebug 성공. 이후 production/test 추가 변경 없음. 커밋 전 전체 diff 및 diff --check 재확인.
 - 반영 대상은 GalleryScreen.kt, GalleryViewSelectionStructureTest.kt, 이 HANDOFF.md의 3파일. 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/` 제외.
 - 기준 브랜치 `feature/photo-sticker`, 작업 시작 HEAD `cacbc4c`. 이 기록을 포함하는 커밋이 64일차 폴리시 결과이며, 최종 해시는 Git log로 확인한다.
+
+## 2026-09-05 — 64일차 후속: Codex 세션 중단 복구 + 특별한 갤러리 부모 버튼 배치 하향 조정
+
+**상황**: 위 64일차 마감 이후 Codex 세션에서 이어진 후속 작업이 commit/push 도중 사용량 한도로 강제 종료됐다는 지시서를 받고 시작함. 실제 Git 상태부터 판정.
+
+**Git 복구 판정**: `git fetch` 결과 `feature/photo-sticker`는 origin과 완전히 동기화(ahead/behind 0/0), HEAD `024ac1f`("Polish gallery action cluster hierarchy and motion")가 `origin/feature/photo-sticker`와 일치. 이 커밋을 `git show --stat`으로 확인한 결과 `GalleryScreen.kt`(색상·크기 정돈) + 구조 테스트 + HANDOFF 3파일을 포함 — 직전 64일차 마감 항목(색상 계층 보강, 실기기 확인·commit/push 승인)이 실제로 이 커밋으로 완료돼 있었다. **commit도 push도 이미 완료된 상태**였고 작업트리에는 남은 미커밋 변경이 없었다(기존 untracked `.codex-config.candidate.toml`, `.kotlin/`만 존재). 따라서 중복 commit 없이 이번 배치 보정만 새 변경으로 추가한다.
+
+**목표**: 기능·색상·크기·아이콘·애니메이션은 그대로 두고, 위로 과도하게 솟아 있던 특별한 갤러리 부모 버튼 위치만 하향 조정해 카메라·미래 우체통과 하나의 응집된 큰 3개 군집으로 보이게 한다.
+
+**앱에서의 의미**: 화면 조작감·기능·navigation·데이터는 전혀 변하지 않는다. + 를 펼쳤을 때 특별한 갤러리가 예전보다 아래로 내려와 카메라·미래 우체통 사이 상단에 자리하고, 하위 3개(연못/양떼목장/쫑쫑컵)는 부모를 그대로 따라 이동해 부모-자식 관계가 시각적으로 더 뚜렷해진다.
+
+**변경(좌표만, 우측 하단 기준 offset, dp)**:
+- 특별한 갤러리(부모): `(-60,-112)` → `(-48,-100)`. 카메라`(0,-68)`·미래 우체통`(-64,-44)`을 잇는 선분의 수직이등분선 위, 두 버튼과의 터치영역(48dp) 겹침 여유가 각각 약 9.7dp/10.2dp가 되는 지점으로 계산해 선정. anchor(0,0)와의 거리는 127.1dp→110.9dp로 줄어 "너무 높이 솟은" 인상을 낮추되 anchor 바로 위까지 내려오지는 않는다.
+- 연못: `(-112,-104)`→`(-100,-92)`, 양떼목장: `(-104,-156)`→`(-92,-144)`, 쫑쫑컵: `(-52,-168)`→`(-40,-156)`. 부모 이동분(+12,+12)만큼 그대로 평행이동해 부모 기준 상대 위치(왼쪽/왼쪽 위/위)와 하위 3개 상호 간격(최소 약 4.6dp, 기존과 동일 수준)을 그대로 보존.
+- 각 `GalleryFabShortcut`의 `originX`/`originY`(등장 애니메이션 출발점)도 새 부모 좌표로 함께 갱신.
+- 크기(52/48/36dp), 색상(`GalleryFabPrimaryColor`/`GalleryFabChildSelectedColor`/`InkSecondary`/`PaperTray` 등), 아이콘(`PhotoLibrary`/`MailOutline`/`CameraAlt`/`PondDrawerIcon`/`SheepDrawerIcon`/`CheckFlagDrawerIcon`), 애니메이션 timing/API(`updateTransition`, stagger, dim, anchor 회전), 클릭 handler, 컨테이너 크기(160×216dp)는 전혀 변경하지 않음.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt`, 이 문서.
+
+**검증**:
+- 로컬 Gradle 9.4.1 + Android Studio JBR(PowerShell)로 `:app:compileDebugKotlin` — BUILD SUCCESSFUL.
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL, XML 집계 **67 suites / 542 tests / failures 0 / errors 0 / skipped 0** — 직전 64일차 마감 baseline과 정확히 동일(좌표 하드코딩 assertion 없음을 `GalleryViewSelectionStructureTest.kt` grep으로 재확인, 신규/변경 테스트 없음).
+- `git diff --check` — 오류 없음(LF→CRLF 안내만). `git diff` 전체 재검토 — 4개 offset 쌍(부모+하위 3개의 offsetX/offsetY/originX/originY)과 주석 외 예상 밖 변경 없음.
+
+**남은 위험 또는 미검증 항목**: **실기기 검증 대기** — 특별한 갤러리가 실제로 큰 3개 군집처럼 읽히는지, 하위 3개가 여전히 부모 하위 기능으로 자연스럽게 붙어 보이는지, 겹침·빠른 반복 입력·기존 5개 기능(카메라/미래 우체통/연못/양떼목장/쫑쫑컵)과 Back/dim 동작은 사용자 확인이 필요하다. 좌표 계산상 터치영역 겹침은 없음을 확인했으나 이는 실제 터치 감각을 대신하지 않는다.
+
+**Git 상태**: `feature/photo-sticker`, 시작 HEAD `024ac1f`(origin과 일치, 중복 commit 없음). 위 1개 production 파일 + 이 문서만 unstaged 수정, 기존 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존. **사용자 실기기 확인 및 명시적 승인 전 commit/push 하지 않는다.**
+
+**다음 작업**: 사용자 실기기 확인 → 승인 시 `GalleryScreen.kt` + `HANDOFF.md`만 명시적으로 stage해 commit/push.
 - 다음 작업: 이번 작업은 사용자 확인까지 완료. 다음 독립 목표는 사용자 지정 후 시작.

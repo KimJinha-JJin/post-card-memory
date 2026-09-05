@@ -1141,13 +1141,13 @@ private fun GalleryFabCluster(
 
     // 펼친 버튼의 48dp 터치 영역도 부모 layout 안에 둔다. 빈 공간은 입력을 소비하지 않는다.
     Box(modifier = modifier.size(width = 160.dp, height = 216.dp)) {
-        // 작은 3개는 부모(-60, -112)의 왼쪽·왼쪽 위·위에 붙는다.
+        // 작은 3개는 부모(-48, -100)의 왼쪽·왼쪽 위·위에 붙는다.
         GalleryFabShortcut(
             expanded = expanded && childrenExpanded,
-            offsetX = (-112).dp,
-            offsetY = (-104).dp,
-            originX = (-60).dp,
-            originY = (-112).dp,
+            offsetX = (-100).dp,
+            offsetY = (-92).dp,
+            originX = (-48).dp,
+            originY = (-100).dp,
             enterDelayMillis = 120,
             size = GalleryFabMiniSize,
             backgroundColor = if (playMode == GalleryPlayMode.POND) GalleryFabChildSelectedColor else PaperTray,
@@ -1163,10 +1163,10 @@ private fun GalleryFabCluster(
 
         GalleryFabShortcut(
             expanded = expanded && childrenExpanded,
-            offsetX = (-104).dp,
-            offsetY = (-156).dp,
-            originX = (-60).dp,
-            originY = (-112).dp,
+            offsetX = (-92).dp,
+            offsetY = (-144).dp,
+            originX = (-48).dp,
+            originY = (-100).dp,
             enterDelayMillis = 160,
             size = GalleryFabMiniSize,
             backgroundColor = if (playMode == GalleryPlayMode.SHEEP_RANCH) GalleryFabChildSelectedColor else PaperTray,
@@ -1182,10 +1182,10 @@ private fun GalleryFabCluster(
 
         GalleryFabShortcut(
             expanded = expanded && childrenExpanded,
-            offsetX = (-52).dp,
-            offsetY = (-168).dp,
-            originX = (-60).dp,
-            originY = (-112).dp,
+            offsetX = (-40).dp,
+            offsetY = (-156).dp,
+            originX = (-48).dp,
+            originY = (-100).dp,
             enterDelayMillis = 200,
             size = GalleryFabMiniSize,
             backgroundColor = if (playMode == GalleryPlayMode.RACE) GalleryFabChildSelectedColor else PaperTray,
@@ -1199,11 +1199,13 @@ private fun GalleryFabCluster(
             )
         }
 
-        // 주요 3개는 동일한 시간에 anchor에서 펼쳐진다.
+        // 주요 3개는 동일한 시간에 anchor에서 펼쳐진다. 특별한 갤러리는
+        // 카메라·미래 우체통을 잇는 선의 위쪽 중심부에 자리해 큰 3개가
+        // 하나의 군집으로 읽히게 한다.
         GalleryFabShortcut(
             expanded = expanded,
-            offsetX = (-60).dp,
-            offsetY = (-112).dp,
+            offsetX = (-48).dp,
+            offsetY = (-100).dp,
             size = GalleryFabPrimarySize,
             backgroundColor = InkSecondary,
             onClick = { childrenExpanded = !childrenExpanded },
