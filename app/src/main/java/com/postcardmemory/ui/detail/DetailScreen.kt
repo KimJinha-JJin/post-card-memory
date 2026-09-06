@@ -70,10 +70,10 @@ import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Texture
 import androidx.compose.material.icons.filled.Verified
@@ -5252,6 +5252,19 @@ fun DetailScreen(
 
                 IconButton(
                     onClick = {
+                        isFocusPreviewMode = true
+                    },
+                    enabled = controlsEnabled
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fullscreen,
+                        contentDescription = "미리보기 크게 보기",
+                        tint = BrutalBlack
+                    )
+                }
+
+                IconButton(
+                    onClick = {
                         viewModel.saveEditsAndClearDraft(
                             postcardId
                         )
@@ -5289,7 +5302,7 @@ fun DetailScreen(
                     ) {
                         DropdownMenuItem(
                             text = {
-                                Text(text = "공유")
+                                Text(text = "공유", color = BrutalBlack)
                             },
                             leadingIcon = {
                                 if (shareState is ShareState.Preparing) {
@@ -5388,12 +5401,12 @@ fun DetailScreen(
 
                         DropdownMenuItem(
                             text = {
-                                Text(text = "파일 내보내기")
+                                Text(text = "파일 내보내기", color = BrutalBlack)
                             },
                             leadingIcon = {
                                 if (exportState is ExportState.Exporting) {
                                     CircularProgressIndicator(
-                                        color = BrutalCoral,
+                                        color = BrutalBlack,
                                         strokeWidth = 2.dp,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -5401,7 +5414,7 @@ fun DetailScreen(
                                     Icon(
                                         imageVector = Icons.Default.Download,
                                         contentDescription = null,
-                                        tint = BrutalCoral
+                                        tint = BrutalBlack
                                     )
                                 }
                             },
@@ -5487,31 +5500,13 @@ fun DetailScreen(
 
                         DropdownMenuItem(
                             text = {
-                                Text(text = "미리보기 크게 보기")
+                                Text(text = "미래의 나에게 보내기", color = BrutalBlack)
                             },
                             leadingIcon = {
                                 Icon(
-                                    imageVector = Icons.Default.Fullscreen,
+                                    imageVector = Icons.Default.MailOutline,
                                     contentDescription = null,
                                     tint = BrutalBlack
-                                )
-                            },
-                            enabled = controlsEnabled,
-                            onClick = {
-                                moreMenuExpanded = false
-                                isFocusPreviewMode = true
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(text = "💌 미래의 나에게 보내기")
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = null,
-                                    tint = InkPrimary
                                 )
                             },
                             enabled = controlsEnabled,

@@ -1964,3 +1964,53 @@
 
 **다음 작업**: 사용자 실기기 확인 → 승인 시 `GalleryScreen.kt` + `HANDOFF.md`만 명시적으로 stage해 commit/push.
 - 다음 작업: 이번 작업은 사용자 확인까지 완료. 다음 독립 목표는 사용자 지정 후 시작.
+
+## 2026-09-06 — 65일차: 상세 편집 상단 메뉴 Action 우선순위 정돈
+
+**목표·범위**: 상세 편집(`DetailScreen.kt`) 상단바 Action 7개를 사용 빈도·편집 직접성·후처리 성격·위험성으로 재분류하고, 최소 범위로 재배치. 기능 로직·state·데이터 구조·삭제 safety는 변경하지 않음.
+
+**전수조사 결과**: 실제 구현은 `TopAppBar` composable이 아니라 `DetailScreen.kt:5200-5549`의 커스텀 `Row`. 조사 시점 실제 구조는 인수인계서 전제(7절)와 일치했다 — 직접 노출: 뒤로가기·앞/뒤 전환(`Flip`)·저장(`Check`), overflow(`MoreVert`): 공유→파일 내보내기→미리보기 크게 보기→💌 미래의 나에게 보내기→삭제(빨간색, 맨 아래).
+
+**Action별 호출 흐름 확인**: 공유(`viewModel.sharePostcard`)·파일 내보내기(`viewModel.exportPostcardToGallery`)·미래의 나에게 보내기(`showFutureMailDatePicker=true`, 이후 날짜 선택 후 발송)는 모두 `createXOverlaysForExport` 계열 비동기 렌더를 거치는 진짜 후처리/전송 액션. 저장(`saveEditsAndClearDraft`)은 `ConfirmSaveState.Saving`으로 관리되는 명시적 확정 액션. 미리보기 크게 보기는 `isFocusPreviewMode=true`만 토글하는 순수 로컬 state 변경(렌더/네트워크 없음, 유일한 진입점 `DetailScreen.kt:5502`였던 구 위치)이며 편집 상태를 바꾸지 않는 순수 확인 기능. 삭제는 `showDeleteDialog=true` → 기존 confirmation dialog로 이어짐(변경 없음).
+
+**앱 내부 선례**: `GalleryScreen.kt:608-647` — 검색/보기형식/정렬처럼 상시 관련 있는 기능은 각각 개별 아이콘으로 직접 노출. `PostcardTemplateRow.kt:225-271` — 이름변경/덮어쓰기/삭제 같은 가끔 쓰는 관리+파괴적 기능은 `MoreVert` 하나에 묶고 삭제를 맨 아래 배치. 기존 DetailScreen 구조는 이미 이 두 선례를 따르고 있었고, 재조사 결과 "미리보기 크게 보기"만 선례 기준과 어긋나 있었다(즉시성 높고 편집 직접성 있는 확인 기능인데 후처리 묶음에 있었음).
+
+**변경**: `DetailScreen.kt` — "미리보기 크게 보기" `DropdownMenuItem`을 제거하고, Flip과 저장(Check) 사이에 동일 아이콘(`Icons.Default.Fullscreen`)·동일 callback(`isFocusPreviewMode = true`)·동일 `enabled = controlsEnabled`로 직접 노출 `IconButton`을 추가. 새 순서: 뒤로 | 제목 | 앞/뒤 전환 | 미리보기 크게 보기 | 저장 | 더보기(공유·파일 내보내기·미래의 나에게 보내기·삭제). 신규 아이콘·신규 UI 문법·callback 구조 변경 없음. 순수 위치 이동(diff: +13/-18줄, 전부 이 파일 하나).
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`, 이 문서.
+
+**검증**:
+- 로컬 Gradle 9.4.1 + Android Studio JBR(PowerShell)로 `:app:compileDebugKotlin` — BUILD SUCCESSFUL(신규 경고 없음, 남은 경고는 전부 기존 무관 항목).
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL, XML 집계 **67 suites / 542 tests / failures 0 / errors 0 / skipped 0** — 64일차 baseline과 동일.
+- `git diff --check` — 오류 없음(LF→CRLF 안내만). `git diff` 전체 재검토 — 위 이동 외 예상 밖 변경 없음. contentDescription("미리보기 크게 보기")·enabled 조건·callback 모두 보존 확인.
+
+**실기기**: `adb devices` 연결 목록이 비어 있어 이번 세션에서 설치·실행 검증을 수행하지 못함. **사용자 실기기 확인 필요**: 상단바 과밀 여부(6개 요소: 뒤로·전환·미리보기·저장·더보기+제목), 미리보기 진입/복귀, 앞/뒤 전환, 저장 피드백, overflow 4항목(공유/내보내기/미래의 나에게/삭제) 정상 동작, 삭제 confirmation 유지.
+
+**Git 상태**: `feature/photo-sticker`, 시작 HEAD `6ba6fa6`(origin과 일치). 위 1개 production 파일 + 이 문서만 unstaged 수정, 기존 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존. **사용자 실기기 확인 및 명시적 승인 전 commit/push 하지 않는다.**
+
+**다음 작업**: 사용자 실기기 확인 → 승인 시 `DetailScreen.kt` + `HANDOFF.md`만 명시적으로 stage해 commit/push.
+
+## 2026-09-06 — 65일차 후속: overflow 메뉴 색상 통일 + 미래의 나에게 보내기 아이콘 교체
+
+**상황**: 위 배치 변경을 사용자가 실기기에서 확인 완료. 같은 세션에서 추가 확정 사항을 받아 이어서 진행(신규 독립 작업 아님, 65일차 범위 내 후속 정돈).
+
+**목표·범위**: `DetailScreen.kt`의 `MoreVert` overflow 메뉴에서 일반 액션(공유·파일 내보내기·미래의 나에게 보내기) 3개의 아이콘·텍스트 색상을 하나로 통일하고, 삭제만 기존 경고색(`GalleryDangerRed`)으로 남긴다. "미래의 나에게 보내기"는 이모지(💌)를 제거하고 아이콘을 종이비행기(전송 의미)에서 봉투(편지 발송 의미) 계열로 교체한다.
+
+**변경 내용**:
+- 색상 통일: 공유(아이콘 `Icons.Default.Share`, 로딩 스피너)와 파일 내보내기(아이콘 `Icons.Default.Download`, 로딩 스피너)는 각각 기존 `BrutalBlack`/`BrutalCoral`로 서로 달랐던 tint를 모두 `BrutalBlack`으로 통일. 세 항목의 `Text` 색상도 명시적으로 `BrutalBlack`을 지정(기존엔 텍스트 색이 지정되지 않아 테마 기본값에 의존했음). `BrutalBlack`은 같은 상단바의 뒤로가기·앞뒤전환·미리보기·더보기 트리거 아이콘이 이미 쓰고 있는 색으로, 새 색상 도입 없이 기존 상단바 문법을 그대로 확장했다.
+- 아이콘 교체: "미래의 나에게 보내기"의 `Icons.AutoMirrored.Filled.Send`를 `Icons.Default.MailOutline`으로 교체. `MailOutline`은 신규 asset이 아니라 `GalleryScreen.kt`(메인 갤러리 "미래 우체통" FAB)와 `PostcardDetailRow.kt`에서 이미 같은 개념으로 쓰고 있는 기존 아이콘을 재사용한 것. 텍스트는 "💌 미래의 나에게 보내기" → "미래의 나에게 보내기"로 이모지만 제거.
+- 삭제 항목은 전혀 손대지 않음(`GalleryDangerRed` 아이콘·텍스트, 위치, confirmation 흐름 그대로).
+- import 정리: 더 이상 쓰이지 않는 `androidx.compose.material.icons.automirrored.filled.Send`를 제거하고 `androidx.compose.material.icons.filled.MailOutline`을 추가. `BrutalCoral`/`InkPrimary`는 파일 내 다른 곳에서 계속 쓰여 import 유지.
+
+**변경 파일**: `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`, 이 문서.
+
+**검증**:
+- `:app:compileDebugKotlin` — BUILD SUCCESSFUL(신규 경고 없음).
+- `:app:testDebugUnitTest` — BUILD SUCCESSFUL, XML 집계 **67 suites / 542 tests / failures 0 / errors 0 / skipped 0** — 직전과 동일.
+- `git diff --check` 통과(LF/CRLF 안내만). `git diff` 재검토 — 색상·아이콘·import 변경 외 예상 밖 변경 없음. `enabled`/`onClick`/`leadingIcon` 조건부 로딩 스피너 로직 등 기존 동작은 전부 보존.
+
+**실기기**: 이번 색상·아이콘 변경은 아직 실기기 미검증. **사용자 확인 필요**: overflow 메뉴를 열었을 때 공유/파일 내보내기/미래의 나에게 보내기 3개가 같은 위계로 차분하게 읽히는지, 삭제만 명확히 구분돼 보이는지, 새 봉투 아이콘이 "편지 보내기" 의미로 잘 읽히는지.
+
+**Git 상태**: `feature/photo-sticker`, 시작 HEAD `6ba6fa6`(origin과 일치). 누적 unstaged 수정은 `DetailScreen.kt` + `HANDOFF.md` 2파일(배치 변경 + 이번 색상 변경 포함), 기존 untracked 그대로 보존. **사용자 실기기 확인 및 명시적 승인 전 commit/push 하지 않는다.**
+
+**다음 작업**: 사용자 실기기 확인 → 승인 시 `DetailScreen.kt` + `HANDOFF.md`만 명시적으로 stage해 commit/push.
