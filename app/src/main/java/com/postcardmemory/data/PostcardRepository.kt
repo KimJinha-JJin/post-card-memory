@@ -327,11 +327,19 @@ class PostcardRepository @Inject constructor(
 
     suspend fun updatePostcardBackMessage(
         id: Long,
-        backMessage: String
+        backMessage: String,
+        writtenAt: Long? = null,
+        offsetMinutes: Int? = null
     ) {
         dao.updatePostcardBackMessage(
             id = id,
-            backMessage = backMessage
+            backMessage = backMessage,
+            writtenAt = writtenAt,
+            offsetMinutes = offsetMinutes
         )
+    }
+
+    suspend fun updatePostcardBackPostscript(id: Long, postscript: String?) {
+        dao.updatePostcardBackPostscript(id, postscript)
     }
 }

@@ -425,12 +425,21 @@ interface PostcardDao {
     @Query(
         """
         UPDATE postcards
-        SET backMessage = :backMessage
+        SET backMessage = :backMessage,
+            backWrittenAt = CASE WHEN backWritingRecordEnabled = 1
+                THEN COALESCE(backWrittenAt, :writtenAt) ELSE backWrittenAt END,
+            backWrittenOffsetMinutes = CASE WHEN backWritingRecordEnabled = 1 AND backWrittenAt IS NULL
+                THEN :offsetMinutes ELSE backWrittenOffsetMinutes END
         WHERE id = :id
         """
     )
     suspend fun updatePostcardBackMessage(
         id: Long,
-        backMessage: String
+        backMessage: String,
+        writtenAt: Long? = null,
+        offsetMinutes: Int? = null
     )
+
+    @Query("UPDATE postcards SET backPostscript = :postscript WHERE id = :id")
+    suspend fun updatePostcardBackPostscript(id: Long, postscript: String?)
 }

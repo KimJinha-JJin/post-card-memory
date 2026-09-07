@@ -120,6 +120,10 @@ ChatGPT가 상세 작업지시서 작성
 - 화면 상태, Room 상태, 편집 미리보기, 저장·복원·공유·이미지 내보내기 결과의 일치를 유지한다.
 - 현재 UI에서 사용하지 않는 필드나 경로도 과거 데이터 호환성과 삭제 방어 역할을 확인한다.
 - 사용자 데이터 일괄 변환이나 삭제는 별도 승인 없이 수행하지 않는다.
+- 실사용 실기기는 테스트 대상이 아니라 보호 대상이다. 명령어 이름이 아니라 효과 기준으로 판단한다: 앱의 설치 상태, package, 내부 저장소, Room DB, SharedPreferences, 앱 전용 파일에 영향을 줄 가능성이 있는 자동 검증은 실기기에서 사용자 명시 승인 없이 실행하지 않는다.
+- 실기기에서 기본 금지: `connectedAndroidTest`, `connectedCheck`, instrumented test, 테스트 APK lifecycle을 발생시키는 task, uninstall, `pm uninstall`, `pm clear`, destructive migration, 데이터 초기화, package 제거 가능성이 있는 자동 task.
+- 명령의 설치/제거 동작을 모르면 실행하지 않고 STOP한다. "검증을 위해 필요함"은 예외 사유가 아니다.
+- 자동 계측 검증이 필요하면 emulator나 별도 테스트 환경을 사용한다. 실기기 검증은 사용자 수동 QA를 기본으로 하고, AI는 사용자가 명시적으로 승인한 일반 install/update, 일반 실행, READ-ONLY 상태 조회로만 관여한다.
 
 ## 6. 범위 확대와 과주행 방지
 

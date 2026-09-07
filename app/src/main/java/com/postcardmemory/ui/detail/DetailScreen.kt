@@ -162,6 +162,9 @@ import com.postcardmemory.ui.components.LabelStickerContent
 import com.postcardmemory.ui.components.PostcardBackgroundColorPicker
 import com.postcardmemory.ui.components.PostcardBackgroundPattern
 import com.postcardmemory.ui.components.PostcardBackFaceContent
+import com.postcardmemory.ui.components.PostcardBackExportCapture
+import com.postcardmemory.data.Postcard
+import androidx.compose.ui.platform.LocalFocusManager
 import com.postcardmemory.ui.components.PostcardBackgroundPatternPicker
 import com.postcardmemory.ui.components.PostcardCustomColorPicker
 import com.postcardmemory.ui.components.PostcardDateFormat
@@ -1232,6 +1235,8 @@ fun DetailScreen(
     var isBackFace by remember {
         mutableStateOf(false)
     }
+    var backExportRequest by remember { mutableStateOf<Pair<Postcard, Boolean>?>(null) }
+    val backFocusManager = LocalFocusManager.current
 
     // 0f=앞면, 180f=뒷면. 90f를 넘는 순간 렌더 내용을 앞면→뒷면으로
     // 교체한다(가운데 지점에서 자연스럽게 면이 바뀜). isFlipAnimating으로
@@ -1249,6 +1254,7 @@ fun DetailScreen(
 
     val triggerFlip: () -> Unit = {
         if (!isFlipAnimating) {
+            backFocusManager.clearFocus()
             isFlipAnimating = true
             val targetRotation =
                 if (isBackFace) 0f else 180f
@@ -1783,7 +1789,9 @@ fun DetailScreen(
         stickerBackgroundRemovalState is StickerBackgroundRemovalState.Removing
 
     val controlsEnabled =
-        exportState !is ExportState.Exporting &&
+        backExportRequest == null &&
+                !isFlipAnimating &&
+                exportState !is ExportState.Exporting &&
                 shareState !is ShareState.Preparing &&
                 backgroundUpdateState !is BackgroundUpdateState.Saving &&
                 layoutUpdateState !is LayoutUpdateState.Saving &&
@@ -4066,7 +4074,12 @@ fun DetailScreen(
                                 )
                             },
                             capturedAt = pc.capturedAt,
-                            enabled = controlsEnabled
+                            enabled = controlsEnabled && !isFocusPreviewMode,
+                            readOnly = isFocusPreviewMode,
+                            postscript = pc.backPostscript,
+                            onPostscriptChanged = viewModel::updateBackPostscript,
+                            writtenAt = pc.backWrittenAt,
+                            writtenOffsetMinutes = pc.backWrittenOffsetMinutes
                         )
                     }
                 }
@@ -5252,6 +5265,7 @@ fun DetailScreen(
 
                 IconButton(
                     onClick = {
+                        backFocusManager.clearFocus()
                         isFocusPreviewMode = true
                     },
                     enabled = controlsEnabled
@@ -5323,6 +5337,11 @@ fun DetailScreen(
                             onClick = {
                                 moreMenuExpanded = false
                                 postcard?.let { pc ->
+                                    if (isBackFace) {
+                                        backFocusManager.clearFocus()
+                                        backExportRequest = pc to true
+                                        return@let
+                                    }
                                     if (postcardPreviewSize == IntSize.Zero) {
                                         Toast.makeText(
                                             context,
@@ -5422,6 +5441,11 @@ fun DetailScreen(
                             onClick = {
                                 moreMenuExpanded = false
                                 postcard?.let { pc ->
+                                    if (isBackFace) {
+                                        backFocusManager.clearFocus()
+                                        backExportRequest = pc to false
+                                        return@let
+                                    }
                                     if (postcardPreviewSize == IntSize.Zero) {
                                         Toast.makeText(
                                             context,
@@ -5544,6 +5568,17 @@ fun DetailScreen(
         }
     }
 
+    backExportRequest?.let { (snapshot, sharing) ->
+        PostcardBackExportCapture(snapshot) { result ->
+            result.fold(
+                onSuccess = { viewModel.exportBackPostcard(snapshot.id, it, sharing) },
+                onFailure = {
+                    Toast.makeText(context, "뒷면 이미지를 준비하지 못했어. 다시 시도해줘.", Toast.LENGTH_SHORT).show()
+                }
+            )
+            backExportRequest = null
+        }
+    }
     if (isFocusPreviewMode) {
         Box(
             modifier = Modifier
@@ -6135,4 +6170,3 @@ fun DetailScreen(
         )
     }
 }
-

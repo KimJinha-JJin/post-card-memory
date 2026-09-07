@@ -582,7 +582,7 @@ fun StampCardContent(
                 )
             }
 
-            if (postcardHasBackContent(postcard.backRecipientModifier, postcard.backMessage)) {
+            if (postcardHasBackContent(postcard.backRecipientModifier, postcard.backMessage, postcard.backPostscript)) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)

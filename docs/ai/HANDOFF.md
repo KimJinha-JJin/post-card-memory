@@ -1,5 +1,218 @@
 # HANDOFF
 
+## 2026-09-07 — 66일차 사고 복구 후 재개: Room 18→19 실기기 적용과 사용자 수동 QA 완료
+
+**사용자 관점 결과**: 전원 종료로 세션이 중단됐지만 미커밋 코드, baseline worktree, install 전후 DB 스냅샷, 실기기 앱 상태가 전부 그대로 보존돼 있었어. 65일차 안정판이 실기기에서 정상 실행되는 걸 먼저 확인한 뒤, Room 19(뒷면 작성시각·P.S.) 변경을 실기기에 `adb install -r`로 안전하게 적용했고, 기존 엽서 1개와 이미지 파일은 그대로 보존됐어. 사용자가 직접 실기기에서 새 엽서 작성/저장, 작성시각 기록, P.S. 저장, 현재 면(뒷면) 공유·파일 내보내기까지 전부 테스트했고 모두 정상 동작을 확인했어.
+
+**진행 방식**: 사용자가 66일차 복구 재개 작업지시서로 장기작업 단위 자율 진행을 명시적으로 승인했어(범위: 66일차 구현 검토, Room 19 적용, 일반 실행·실기기 수동 QA 지원, 최소 수정, 안전한 자동검증, 문서 갱신 / 금지: connectedAndroidTest 등 package·data에 영향 줄 수 있는 자동 작업, commit/push는 승인 전 금지). 이번 세션에서는 계측 테스트(connectedAndroidTest 등)를 전혀 실행하지 않았고, 실기기 검증은 사용자 수동 QA + AI의 READ-ONLY DB/로그 대조로만 진행했어.
+
+### AGENTS.md 안전규칙 보강
+
+- 사고 재발 방지를 위해 `AGENTS.md` 5절 끝에 "실사용 실기기는 테스트 대상이 아니라 보호 대상" 원칙을 추가했어. 명령어 이름이 아니라 효과 기준(설치 상태/package/내부 저장소/Room DB/SharedPreferences/앱 전용 파일 영향 가능성)으로 판단하고, connectedAndroidTest/connectedCheck/instrumented test/uninstall/pm clear/destructive migration을 실기기에서 사용자 명시 승인 없이 금지, 설치/제거 동작을 모르면 실행하지 않고 STOP, 자동 계측은 emulator/별도 환경 사용이 원칙임을 명시했어.
+
+### Room 18→19 적용과 검증 (실기기 R3KYB00HAYY)
+
+- 적용 전 diff 재확인: 66일차 미커밋 변경이 사고 직전과 동일(AGENTS.md 4줄 추가만 새로 생김). `MIGRATION_18_19`는 `ALTER TABLE ... ADD COLUMN` 4개만 수행하는 순수 additive migration이고 `DatabaseModule.kt`에 정상 등록돼 있음을 코드로 재확인했어.
+- install 직전 DB 스냅샷(run-as로 pull): `user_version=18`, `postcards` 1행 유지.
+- `assembleDebug`로 17:54 빌드(소스 변경 없어 UP-TO-DATE, 사고 이전 빌드와 동일) APK를 `adb install -r`로 in-place update. `dumpsys package`로 `firstInstallTime` 불변(18:51:44)·`lastUpdateTime`만 갱신(19:38:59) 확인해 재설치가 아닌 순수 업데이트임을 검증했어.
+- install 직후·실행 전 DB 재확인: `user_version=18` 그대로(마이그레이션은 앱이 DB를 여는 시점에 실행됨을 확인).
+- 런처 인텐트로 일반 실행 → crash 없음(logcat 전체에서 `app died, no saved state`는 install -r이 기존 프로세스를 죽인 정상 로그 2건뿐, 실제 크래시 없음) → 실행 후 DB: `user_version=19`, 기존 row(id=1) 그대로 1개, `backPostscript`/`backWrittenAt`/`backWrittenOffsetMinutes` 모두 `NULL`, `backWritingRecordEnabled=0`(설계대로 소급 기록 없음). 이미지 파일(`postcard_1788774742336.jpg`, 342059 bytes) mtime 불변.
+
+### 사용자 실기기 수동 QA 결과 (AI READ-ONLY DB/로그 대조)
+
+- 기존 엽서(id=1) 뒷면에서 P.S.만 작성·저장 → DB 대조: `backPostscript="밥은 잘 챙겨먹도록해"` 정상 저장(UTF-8 정상), `backWrittenAt`은 여전히 `NULL` — 마이그레이션된 기존 엽서는 `backWritingRecordEnabled=0`으로 영구 고정되고 "P.S.만 작성은 본문 최초 작성으로 취급 안 함"이 `docs/ai/DECISIONS.md` 66일차 결정과 일치하는 정상 동작임을 코드(`PostcardWritingRecord.kt`의 `withBackMessage`)로 재확인했어.
+- 새 엽서(id=2) 생성 후 뒷면 본문 작성·저장 → DB 대조: `backMessage` 2줄 정상 저장, `backWrittenAt=2026-09-07 19:44:51`(KST), `backWrittenOffsetMinutes=540`(UTC+9 정확), `backWritingRecordEnabled=1`(신규 엽서 기본 opt-in). 기존 id=1 row는 그대로 영향 없음. 이미지 파일(`postcard_1788777866812.jpg`, 510308 bytes) 정상 생성.
+- 뒷면 공유·파일 내보내기(현재 면 한 장) 테스트 → 파일 시스템/MediaStore 대조: 공유 캐시(`cache/shared_postcards/postcard_2_..._....png`, 94708 bytes)와 갤러리 저장(`Pictures/PostcardMemory/postcard_memory_....png`, 94708 bytes) 둘 다 생성 확인, 두 파일 크기 동일(같은 렌더 결과). crash 없음.
+- 세션 전체(초기 실행부터 공유·export까지) logcat에서 실제 앱 크래시 0건.
+
+### 자동검증
+
+- `compileDebugKotlin`, `testDebugUnitTest`(JVM, 기기 미개입) 성공. `assembleDebug` 성공(UP-TO-DATE, 소스 불변).
+- 계측 테스트(`connectedAndroidTest` 등)는 신규 안전규칙에 따라 실행하지 않음 — 이전 세션에서 보고된 계측 테스트 통과(6개)는 실기기 데이터 안전의 근거로 사용하지 않음(이미 명시된 원칙).
+
+### 종료 Git과 다음 행동
+
+- branch `feature/photo-sticker`, HEAD `7b4c2bf`, origin과 0/0 동기화 유지. commit/push 없음.
+- working tree: 66일차 구현(16개 파일 수정 + 9개 신규) + 이번 세션에서 추가한 `AGENTS.md` 4줄, 이번 HANDOFF 갱신분. 그 외 변경 없음.
+- **작업 판정: Room 19 실기기 적용과 66일차 핵심 기능(작성시각 기록/P.S./현재 면 공유-export) 실기기 사용자 검증 완료. 데이터 손상 징후 없음.**
+- 다음 행동: 사용자 승인 시 관련 파일만 staged commit + push.
+
+## 2026-09-07 — 66일차 제2차 구현·자동검증 후 중단: 계측 테스트 종료 시 사용자 기기의 앱 제거 확인
+
+**현재 최우선 상태 — 데이터 안전 문제로 중단**
+
+Codex가 사용자 실기기 SM-S936N(Android 16)에서 `:app:connectedDebugAndroidTest`를 실행했고, 테스트 종료 뒤 `com.postcardmemory` 앱 패키지가 제거된 것을 확인했어. 테스트 DB만 분리하면 충분하다고 판단하고 Gradle/UTP의 앱 제거 후처리를 사전에 확인하지 않은 작업자 실수야. ‘기존 앱 데이터 삭제는 하지 않아’라고 안내한 것은 실제 실행 결과와 달랐어. 사용자에게 즉시 알렸고 추가 설치·실행·코드 수정을 중단했어. **자동검증 통과를 사용자 데이터 보존이나 작업 완료로 보고하면 안 돼.**
+
+### 사고 근거와 현재 확인 범위
+
+- 첫 기기 검사: `:app:compileDebugKotlin :app:testDebugUnitTest :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.postcardmemory.PostcardBackMigrationTest,com.postcardmemory.PostcardBackRenderingTest`.
+- 최종 기기 검사: 같은 명령의 class 목록에 `com.postcardmemory.PostcardBackSaveTest`를 추가해 실행했어. `leaveApksInstalledAfterRun` 같은 종료 후 유지 설정을 지정하지 않았어.
+- PackageManager 로그 17:55:21.929: `Update package com.postcardmemory ... Retain data and using new` — 테스트 전 기존 설치 앱이 있었고 처음 설치는 업데이트였어.
+- 17:55:28.570–571: `pkg{com.postcardmemory}, user{0}, caller{2000} flags{2}` 및 패키지 이벤트 `0002`.
+- 17:57:19.714: 두 번째 실행에서 `com.postcardmemory` 설치 완료. 17:57:24.676–677: 같은 앱 제거 이벤트가 다시 기록됐어. 테스트 APK `com.postcardmemory.test`도 뒤이어 제거됐어.
+- 종료 후 `adb shell pm list packages --user 0 postcard`, `pm list packages -u --user 0 postcard`, `pm path --user 0 com.postcardmemory`에서 앱이 조회되지 않아. `run-as com.postcardmemory`는 `unknown package`를 반환해.
+- [Android UTP APK installer 소스](https://android.googlesource.com/platform/tools/base/+/445534e2a5188fca7990ed6455fb83f9aa5bba2a/utp/android-test-plugin-host-apk-installer/src/main/java/com/android/tools/utp/plugins/host/apkinstaller/AndroidTestApkInstallerPlugin.kt)의 afterAll은 uninstallAfterTest 설정에 따라 설치한 앱을 제거하는 동작을 포함해. 이번 동작 판단은 이 소스와 실제 기기 로그·패키지 조회를 함께 근거로 했어.
+- **앱 제거 확인 / 기존 내부 엽서 데이터 손실 가능성 있음 / 원본 데이터 생존·복원 여부 미확인.** 테스트 전 사용자 DB·파일 백업과 엽서 수 확인을 하지 않았으므로 손실 건수나 복원 가능성을 단정할 수 없어.
+- Manifest에는 `android:allowBackup="true"`가 있지만 실제 Google/Samsung/별도 백업이 있다는 근거는 아니야. `backup_rules.xml`/`data_extraction_rules.xml` 파일은 없어. 사용자 백업 유무 확인이 필요해.
+- 이 사실을 발견한 후에는 읽기 전용 패키지/로그 조회와 이 인수인계 기록만 진행해. 재설치·추가 테스트·기기 설정 변경·복원 명령은 실행하지 않았어.
+- 다음 작업은 기능 확장이 아니라 **사용자 백업/기존 내보내기 자료 유무 확인과 복구 가능성 판단**이야. 재설치를 데이터 복구로 표현하거나 자동 실행하지 않아. 다음 에이전트는 실제 사용자 기기에서 이 Gradle 계측 명령을 반복하지 않아야 해. 검증 재개는 별도 에뮬레이터/격리 앱을 우선 검토하고 설치·제거 동작 및 데이터 보존을 먼저 검증해야 해.
+
+### 제2차 사용자 승인과 구현 결과
+
+- 사용자가 공유·파일 내보내기의 ‘현재 보는 면 한 장’ 출력, capturedAt과 별개의 ‘본문 최초 작성 시각’, 이후 수정에도 고정, 기존 엽서 null 유지, P.S.를 포함한 최소 migration을 명시적으로 승인했어. 제1차 제품 판단 대기는 이 직접 지시로 해소됐어.
+- 스탬프: 새 엽서에 첫 비공백 본문이 입력될 때 `backWrittenAt`과 당시 `backWrittenOffsetMinutes`를 기록해. 날짜 formatter는 기존 `PostcardDateFormat.formatIso`에 시간대 인자를 추가해 재사용해. 날짜 `yyyy-MM-dd`, 시간 `HH:mm`, 한국식 월 기준 4계절을 표시해. 이후 수정·본문 전체 삭제·재진입·기기 시간대 변경에도 저장된 작성 기록을 유지하는 로직이야. 기존 From.과 capturedAt은 그대로야.
+- P.S.: `backPostscript: String?`, 최대 60자. 기존 뒷면의 가용 폭과 약 3줄 영역(44dp)을 기준으로 짧은 추신 범위를 잡았어. 실제 문자 측정으로 넘치는 긴 입력을 맞추며 빈/공백 값은 null로 저장하고 읽기/출력에서는 P.S. 영역 전체를 숨겨.
+- Room: **18→19, ALTER TABLE ADD COLUMN 네 개**. nullable P.S./작성시각/당시 offset 기본 null, `backWritingRecordEnabled` SQL 기본값 0. 새 Postcard 객체만 true로 생성하므로 기존 엽서는 이후 편집해도 현재 시각이 소급 기록되지 않아. DAO는 본문과 작성 시각을 한 SQL로 저장하며 COALESCE로 최초 시각을 보존해. 스키마 19 JSON은 KSP로 생성했고 migration 등록을 추가했어. destructive fallback·기존 행 UPDATE·테이블 재생성은 추가하지 않았어.
+- 본문/P.S.는 기존 StateFlow→Repository→컬럼 DAO→Room 즉시 저장과 styleWriteMutex를 사용해. 별도 꾸미기 draft 포맷이나 final/Undo 체계를 추가하지 않았어. P.S. 저장 Job을 기존 화면 이탈 대기에 연결했어.
+- 저장 실패는 편집 version으로 낡은 rollback을 막고 Room을 재조회해 저장된 본문·시각 또는 P.S.를 복원해. 취소는 다시 던져. 같은 id의 `loadPostcard` 재호출은 진행 중 state를 오래된 Room 값으로 덮지 않도록 조기 반환해. 프로세스 종료 전 미완료 쓰기까지 무조건 복원된다고 보장하지 않아.
+- 뒷면 editor/크게 보기/export는 **같은 PostcardBackFaceContent**를 사용해. 기존 To./구분선/본문/From. Column을 유지하고 P.S./작은 InkSecondary 기록 줄을 추가했어. 새 Card·pill·emoji·Seal 속성은 없어. 크게 보기/출력에서는 입력 안내·글자 수·빈 P.S.를 숨겨.
+- 뒷면을 360dp 기준 아트워크로 비례 확대해 줄바꿈과 크기 계산을 공유하고, 실제 TextMeasurer로 긴 본문/P.S.의 글자 크기를 줄여 배치해. 긴 수식언도 한 줄에 맞게 조절해. 앱 바깥 조작 UI의 font scale은 유지하지만 엽서 내부는 고정 artwork scale을 사용해. 이 변화의 실제 입력 가독성은 사용자 미검증이야.
+- 뒷면 공유/파일 내보내기는 클릭 당시 immutable Postcard snapshot을 `PostcardBackExportCapture`에서 2048×2048로 그려 캡처하고 기존 PNG/MediaStore 저장 함수를 재사용해. 캡처 완료 신호를 기다리며 timeout/실패/취소를 구분하고 Bitmap 소유권과 해제를 연결했어. 구현 참고는 [Android 공식 Compose 캡처 문서](https://developer.android.com/develop/ui/compose/graphics/draw/modifiers#composable-to-bitmap)야.
+- 앞면은 원래 overlay 생성과 exporter 경로를 그대로 사용해. 뒷면 분기는 앞면 preview 크기 검사 전에 빠져나와 앞면 사진/overlay에 의존하지 않아. 플립 중 새 출력을 막고 플립/크게 보기/캡처 진입에서 focus를 해제해. 미래 우체통 출력은 이번 면 선택 변경 대상이 아니야.
+- P.S.만 있을 때도 기존 갤러리의 뒷면 내용 있음 표시에 반영했어.
+
+### 변경 파일
+
+- 데이터·migration: `app/src/main/java/com/postcardmemory/data/Postcard.kt`, `PostcardDao.kt`, `PostcardDatabase.kt`, `PostcardRepository.kt`, `app/src/main/java/com/postcardmemory/di/DatabaseModule.kt`, `app/schemas/com.postcardmemory.data.PostcardDatabase/19.json`.
+- UI·출력: `app/src/main/java/com/postcardmemory/ui/components/PostcardBackFace.kt`, `PostcardWritingRecord.kt`(신규), `PostcardBackExportCapture.kt`(신규), `PostcardDateFormat.kt`, `StampCard.kt`, `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`, `DetailViewModel.kt`, `app/src/main/java/com/postcardmemory/ui/gallery/PostcardDetailRow.kt`, `app/src/main/java/com/postcardmemory/utils/PostcardImageExporter.kt`.
+- 테스트: `app/src/test/java/com/postcardmemory/ui/components/PostcardWritingRecordTest.kt`(신규), `app/src/androidTest/java/com/postcardmemory/PostcardBackMigrationTest.kt`, `PostcardBackRenderingTest.kt`, `PostcardBackSaveTest.kt`(신규 3개), `app/build.gradle.kts`(기존 Room schema를 androidTest assets로 읽는 설정만 추가, 의존성 추가 없음).
+- 문서: `docs/ai/DECISIONS.md`(사용자 직접 확정된 제품 동작), 이 HANDOFF(제1차 기록 보존 + 제2차 구현·사고 기록).
+
+### 자동검증과 그 한계
+
+- Gradle 9.4.1 + Android Studio JBR. 최초 sandbox/offline compile은 foojay plugin 해석 단계에서 실패했고, 권한을 확장한 정상 빌드에서 해소됐어. 코드 오류로 기록하지 않아.
+- 최종 `:app:compileDebugKotlin :app:testDebugUnitTest`: 성공. unit XML **68 suites / 548 tests / failures 0 / errors 0 / skipped 0**(제1차 baseline 542 + 신규 6).
+- `PostcardBackMigrationTest` 1개: 실제 18 schema JSON으로 만든 별도 DB에 18→19 migration 적용, Room schema 검증, 기존 본문/사진/capturedAt/null 필드, 기존 엽서 수정에도 시각 null, 새 본문+P.S. 저장·DB 재개방·수정/삭제 후 최초 시각 유지 확인.
+- `PostcardBackRenderingTest` 3개: 원본 사진 없는 뒷면 2048px 캡처가 실제 글자/구분선을 포함하는지, 공유 PNG와 MediaStore 출력이 캡처 Bitmap과 픽셀 단위로 같은지, 빈 읽기 화면에 P.S./placeholder/count가 없는지, 대표 500자 본문/60자 P.S.가 작은/출력 해상도의 계산 영역에 들어가는지 확인.
+- `PostcardBackSaveTest` 2개: 실제 ViewModel·Repository·in-memory Room에 gate/실패 DAO를 주입해 지연된 첫 본문 저장 실패가 새 본문/P.S.를 되돌리지 않는지, 같은 id reload 보호와 새 ViewModel 복원, P.S. 실패 시 기존 저장값 복원을 확인. 고정 delay 대신 CompletableDeferred gate 사용.
+- 최종 계측 XML: **6 tests / failures 0 / errors 0 / skipped 0**. 이 테스트 통과는 **테스트 fixture의 결과**이며 실제 사용자 기기의 데이터 보존 증거가 아니야. 테스트 종료 후 앱 제거 사고가 발생했으므로 기기 안전성은 실패 상태야.
+- UTP의 `androidx.test.services` appops 경고는 있었지만 테스트는 실행됐고 6개 통과했어. 신규 테스트 API/assets 설정의 deprecation 경고와 기존 Gradle 경고가 남아 있어.
+- 캡처 PNG의 자동 픽셀 비교는 통과했지만, 사람이 이미지를 보는 시각 QA는 미완료야. 테스트가 남긴 `cache/day66-back-qa.png`를 읽으려다 앱 제거 사실을 발견했어. 로컬 temp의 `postcard-day66-back-qa.png`는 PNG가 아니라 `unknown package` 오류 텍스트이므로 산출 이미지로 사용하지 않아.
+- 키보드 열린 작은 높이/landscape, 사용자 font scale에서 실제 편집 접근성, 매우 많은 개행·극단적으로 긴 본문의 축소 가독성, 사용자 공유 chooser 조작과 기존 앞면 실기기 회귀는 미검증이야. 자동문자배치 검사만으로 이 항목을 통과 처리하지 않아.
+- 기능 시각·실기기 사용자 승인은 받지 않았어. 추가 기기 검증은 사고 대응과 사용자 판단 전 중단이야.
+
+### 종료 Git과 다음 행동
+
+- 시작/현재 branch `feature/photo-sticker`, HEAD `7b4c2bf6e0d3235774d1683d87dd05c0ae11a7cb`, 기록된 origin 대비 0/0. 제1차 실제 원격 HEAD 조회도 같았어. 이번 commit/push 없음, stage 없음.
+- 위 구현·테스트·schema·문서가 미커밋으로 남아 있어. 시작 시 있던 제1차 HANDOFF 변경을 이어 썼고 기존 `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`는 보존했어.
+- 전체 production diff와 신규 파일을 검토했고 `git diff --check` 통과(LF→CRLF 안내만). 마지막 사고 기록 뒤 문서 diff 검사도 수행해.
+- **작업 판정: 기능 구현과 자동검증은 진행됐지만 사용자 기기 앱 제거 사고로 전체 작업 중단. 완료/데이터 안전/실기기 만족으로 표시하지 않아.**
+- 다음 작업 하나: 사용자의 기존 엽서 백업·내보내기 자료 존재 여부와 복구 가능성 확인. 승인 없이 앱 재설치, 실제 기기 계측 테스트, 코드 추가 수정, commit/push를 하지 않아.
+
+## 2026-09-07 — 66일차: 뒷면 작성 정보 스탬프 + P.S. 제1차 조사 완료 / 제품 판단 대기
+
+**사용자 관점 결과**: 앱 코드와 기존 엽서는 바꾸지 않았어. 현재 뒷면은 화면에서만 제공되고 공유·파일 내보내기는 앞면 전용이야. 이번 두 기능을 최종 이미지까지 보이게 하려면 뒷면 출력 경로와 어떤 면을 내보낼지부터 정해야 해. 기능 구현 완료가 아니라 조사 작업 단위 완료야.
+
+**진행 방식·범위**: 사용자가 직접 제공한 66일차 작업지시서로 수동 표준 모드에서 새 작업을 시작했어. 공용 작업판 모드를 활성화하지 않았고, 이번 지시서 41절에 따라 HANDOFF만 갱신해. 조사 완료, 데이터·렌더링 판정 완료, 구현·자동검증·실기기 검증은 미착수야. 작업 추적 전용 도구는 노출되지 않아 진행 보고와 이 기록으로 상태를 남겨. 하위 agent 위임은 하지 않았어.
+
+### Git Preflight와 65일차 기록 차이
+
+- branch: `feature/photo-sticker`.
+- HEAD / 로컬 origin 추적 ref / 실제 원격 branch HEAD: 모두 `7b4c2bf6e0d3235774d1683d87dd05c0ae11a7cb`.
+- `git rev-list --left-right --count HEAD...origin/feature/photo-sticker`: `0 / 0`.
+- 최초 원격 조회는 네트워크 제한으로 실패했지만, 권한을 확장한 읽기 전용 `git ls-remote origin refs/heads/feature/photo-sticker` 재조회는 성공했어. 원격 동기화는 실제 조회로 확인했어.
+- 시작 시 staged/unstaged 추적 파일 변경 없음. 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`는 그대로 보존해.
+- 최근 관련 commit: `7b4c2bf`(65일차 상단 Action·overflow), `6ba6fa6`(갤러리 부모 버튼 위치), `024ac1f`(갤러리 군집 계층·motion).
+- 65일차 HANDOFF 말미는 `6ba6fa6` 위 미커밋·실기기 대기 상태지만 실제 Git에는 `DetailScreen.kt`와 HANDOFF가 `7b4c2bf`로 commit/push 완료돼 있어. 문서의 과거 기록은 유지하고 여기서 현재 Git 상태를 보정해. 최종 색상·아이콘의 사용자 실기기 확인 여부는 이번 세션에서 별도 확인하지 않았어.
+
+### 뒷면 UI·데이터 조사
+
+| 파일 | 실제 역할과 확인 결과 |
+|---|---|
+| `ui/detail/DetailScreen.kt:1226` | 크게 보기는 `rememberSaveable`, 앞뒤 면은 `remember`의 `isBackFace`와 320ms flip 회전으로 관리해. 새 화면은 앞면부터 시작하며 면 선택을 DB에 저장하지 않아. |
+| `ui/detail/DetailScreen.kt:1897`, `:4039` | 정사각형 뒷면을 일반 폭 80%, 크게 보기 96%로 보여줘. 같은 `PostcardBackFaceContent`에 동일한 Postcard 값을 전달해. |
+| `ui/components/PostcardBackFace.kt:87` | PaperSurface 위 24dp padding, To. 수식언, 구분선, weight(1f) 본문, 글자 수, From. 순서야. 수식언 20자·한 줄, 본문 500자. 본문 15sp/22sp, From. 14sp, count 11sp야. 수식언 폭은 실제 글자 폭으로 계산해. |
+| `data/Postcard.kt` | Room Entity를 화면 모델로도 사용해. 앞면 `message`와 뒷면 `backRecipientModifier`/`backMessage`가 같은 행의 별도 컬럼이야. 별도 뒷면 Domain model은 확인되지 않았어. P.S.나 작성 시점 전용 필드는 없어. |
+| `ui/detail/DetailViewModel.kt:2446` | 본문 입력을 `_postcard` StateFlow에 즉시 반영하고 Room 컬럼 저장을 시작해. 별도 편지 draft state는 없어. |
+| `ui/detail/PostcardEditDraft.kt` | format version 5. 사진 스티커·도장·낙서·텍스트 스티커·테이프·라벨의 편집 스냅샷이며 뒷면 본문은 포함하지 않아. |
+| `utils/PostcardDraftStorage.kt`와 ViewModel의 `persistDraftNow` 호출 | 꾸미기 draft의 저장·복구 경로야. 뒷면 본문/P.S.를 이 포맷에 억지로 넣을 이유는 없어. |
+
+편집/읽기 차이: 크게 보기에서도 같은 BasicTextField, placeholder, 글자 수가 남고 `enabled = controlsEnabled`를 그대로 전달해. 별도 읽기 전용 뒷면 렌더가 아니야. 현재 뒷면 컴포넌트에는 명시적인 focus 이동·IME action 설정이 없고, flip에도 별도 clearFocus 처리가 없어. 하단 편집 영역에 verticalScroll/imePadding이 있지만 정사각형 뒷면 카드 자체의 가용 높이를 보장하는 처리로 볼 수 없어.
+
+공간 판정: 남는 공간은 본문 weight 영역뿐이므로 P.S./스탬프를 아래에 추가하면 본문 가용 높이가 줄어. 기존 BasicTextField는 긴 내용을 편집하며 내부 스크롤할 수 있지만, 이것이 한 장의 최종 이미지에 500자를 모두 표시할 수 있다는 근거는 아니야. 작은 높이·키보드·큰 font scale·긴 본문을 실제 측정하기 전 P.S. 최대 길이를 정하지 않았어. clipping을 재현했다고 주장하지 않아.
+
+### timestamp의 실제 의미
+
+- `Postcard.capturedAt`: Entity 기본값은 현재 시각이지만, 실제 생성 경로 `CameraViewModel.kt:252–280`은 **사진 자르기 확정 후 저장 작업 시작 시각**을 한 번 구해서 새 Postcard에 넣어. 본문 최초 입력 시각, 사진 EXIF 시각, 마지막 수정 시각, 확정 저장 시각이 아니야.
+- 추적한 본문/스타일 DAO 업데이트와 꾸미기 draft/final 저장은 capturedAt을 변경하지 않아. Room에 저장된 값은 재진입 때 읽어와. `PostcardTemplateRow`의 현재 시각은 템플릿 목록 미리보기용이고 기존 엽서 시각 갱신이 아니야.
+- Postcard에는 `createdAt`/`updatedAt` 컬럼이 없어. `PostcardEditDraft.createdAtMillis`는 draft 초기화 때 생성되고 기존 draft 복원 시 유지되며, `updatedAtMillis`는 draft 파일 저장마다 현재 시각을 기록해. final 저장 후 draft가 삭제되므로 영구적인 편지 작성 기록에 사용할 수 없어.
+- 현재 From.은 이미 capturedAt으로 `From. yyyy-MM-dd의 나`를 표시해. `PostcardDateFormat.formatIso`는 `yyyy-MM-dd`, Locale.US, 기기 기본 시간대야. 날짜 값 자체는 안정적이지만 **기기 시간대를 바꾸면 표시 날짜·시간이 바뀔 수 있어**. 시간대/offset을 저장하는 기존 필드는 없어.
+- 후보 판정: ① 엽서 최초 생성 시각은 capturedAt 재사용 가능. ② 본문 최초 작성 ③ final 저장 ④ 스탬프 활성화 ⑤ 마지막 수정은 현재 모델로 복원 불가하며 별도 기록이 필요해. 기존 capturedAt을 어느 후보로 재정의하지 않았어.
+- 제안: 작성 정보의 의미를 ‘엽서를 만든 시각’으로 명시하면 가장 작은 구현이 가능해. 실제 ‘본문을 처음 쓴 시각’이 목표라면 nullable 최초 작성 시각과 당시 시간대/offset 저장을 별도로 설계하고 기존 엽서는 null로 남겨야 해. 아직 확정하지 않았어.
+- 계절은 한국식 3–5/6–8/9–11/12–2월 후보를 검토할 수 있지만, 기준 시간대와 기록 의미 확정 전 적용하지 않았어. 날짜 formatter 중복 생성 없음.
+
+### 본문 입력 → 저장 → 재진입 / draft·final·Undo 관계
+
+1. `PostcardBackFaceContent.onMessageChanged` → `DetailViewModel.updateBackMessage` → 최대 500자로 정규화 → `_postcard.value.copy(backMessage=...)`.
+2. 입력마다 `viewModelScope.launch` → IO → `styleWriteMutex` 획득 뒤 최신 state 재조회 → Repository → DAO의 `UPDATE postcards SET backMessage=:backMessage WHERE id=:id`. 본문에는 debounce나 draft revision이 없어.
+3. `CancellationException`은 다시 던져. 일반 실패는 현재 값이 해당 요청값과 같을 때 이전 값으로 rollback하고 로그를 남겨. 이것을 ‘어떤 경합에서도 안전함’까지 검증한 것은 아니야.
+4. 화면 이탈은 `awaitPendingStyleSaves`에서 본문 저장 Job 등을 최대 2초 기다려. ON_STOP은 `flushDraftNow`를 호출하지만 이 draft는 꾸미기 전용이야.
+5. 재진입은 `loadPostcard` → Repository/Room 조회 → StateFlow 복원. 회전 때도 화면 LaunchedEffect가 Room 재조회를 할 수 있어. DB 반영 전 입력과 재조회가 겹치는 경합까지 보장된 것으로 간주하지 않아.
+6. 프로세스 재생성 뒤 복원 가능한 본문은 Room 쓰기가 완료된 값이야. 미완료 입력을 SavedStateHandle이나 별도 편지 draft로 복구하는 경로는 확인되지 않았어.
+7. 꾸미기 draft는 900ms debounce, revision, atomic 파일 저장을 사용해. `saveEditsAndClearDraft`는 꾸미기 6종 확정 저장이 성공하면 draft 삭제·해당 Undo history 초기화를 수행해. 뒷면 본문은 이 final 결과에 포함되지 않아. 본문 전용 앱 Undo는 확인되지 않았어.
+
+P.S. 최소 후보는 별도 Entity 컬럼과 기존 본문 방식의 StateFlow/Repository/DAO 컬럼 업데이트·이탈 대기 연결이야. 본문 뒤 문자열 결합이나 꾸미기 draft/final architecture 재설계는 하지 않아. ‘draft 저장’ 요구는 현재 본문처럼 편집 중 지속 저장·재진입 복원이라는 실제 동작으로 충족할 수 있는지 다음 범위에서 명시해야 해.
+
+### preview / share / export 연결과 STOP 근거
+
+| 경로 | 현재 구현 |
+|---|---|
+| 상세 편집 뒷면 | `DetailScreen` → `PostcardBackFaceContent`, Postcard의 back 필드와 capturedAt 입력 |
+| 크게 보기 뒷면 | 같은 Composable·같은 데이터, 폭만 80%→96%; 입력 UI까지 그대로 포함 |
+| 공유 이미지 | `DetailViewModel.sharePostcard` → `PostcardImageExporter.exportForSharing` → `createPostcardBitmap` → `PostcardRenderSpec.drawBaseContent` + 앞면 overlays |
+| 파일 내보내기 | `DetailViewModel.exportPostcardToGallery` → `exportToGallery` → 같은 `createPostcardBitmap`; 최종 목적지만 다름 |
+
+- exporter는 Android Canvas로 원본 사진과 앞면 `message` 등을 다시 그려. 화면 스냅샷이 아니고 `backMessage`/수식언/현재 보고 있는 면을 받는 경로가 없어. 저장용 앞면 렌더와 뒷면 Compose는 공통 뒷면 renderer를 공유하지 않아.
+- `docs/ai/DECISIONS.md:9`의 59일차 확정 정책은 ‘뒷면을 보더라도 항상 앞면 출력’이야. 현재 동작은 기존 정책상 버그가 아니야.
+- **최신 66일차 직접 요청의 뒷면 출력 요구가 옛 정책보다 우선해.** 다만 현재 면 한 장 출력인지, 앞뒤 두 장 출력인지가 명시되지 않았고, 기존 단일 앞면 출력에서 각각 다른 사용자 경험으로 바뀌어. 어느 결과를 만들지 임의로 정하지 않았어.
+- 수정은 한 Composable 필드 추가로 끝나지 않아. 뒷면용 출력 표현/공통 배치, editor와 읽기 결과 분리, ViewModel/exporter 입력 연결 및 긴 본문 처리 검증이 필요해. 두 장이면 공유 Intent와 저장 결과 형태까지 추가 조사해야 해. **전체 exporter 재작성이나 대규모 개편이 반드시 필요하다고 단정하지는 않아.**
+- STOP 판정: AGENTS.md 6절의 ‘사용자 경험이 달라지는 실질적인 대안이 둘 이상 존재’에 해당해. 작업지시서의 구조 조사 우선·최소 연결 범위와 출력 일치 조건을 만족시키기 전에 출력 의미를 결정해야 해. 기존 정책만을 이유로 새 요청을 거부하거나 단순 additive migration을 breaking으로 취급한 것이 아니야.
+
+### A/B/C/D 최소 구현 판정
+
+| 항목 | 판정 |
+|---|---|
+| A. P.S. Entity | 의미적으로 별도 컬럼 필요. `backPostscript: String? = null` 후보, 빈/공백 입력은 null 의미로 정규화하는 방안을 검토할 수 있어. 아직 구현하지 않았어. |
+| A. draft | 기존 본문 경로를 따르면 `PostcardEditDraft` 구조 변경 불필요. ViewModel의 Postcard state와 해당 컬럼 저장/대기 연결 필요. |
+| A. migration | 필요. 현재 DB 18 → 19의 nullable 컬럼 ADD 후보. 기존 레코드 null로 보존 가능하므로 이 추가 자체는 breaking 변경이 아니야. |
+| B. 스탬프 | 생성 기록이라면 capturedAt 재사용 가능. 본문 작성 기록이라면 별도 시각 필요. 표시 opt-in이면 nullable 시각 또는 별도 표시값 필요하고, 모든 기존 엽서에 자동 표시할지도 제품 의미야. |
+| B. 시간대 | 현재 날짜 formatter는 기기 시간대 사용. 시간대 변경에도 작성 당시 표기를 고정하려면 기준 시간대 정책 또는 당시 offset 저장 필요. 기존 엽서의 당시 offset을 추정해 채우지 않아. |
+| C. renderer | 한 군데 수정으로 네 경로 반영 불가능. 편집/크게 보기는 공유하지만 현재 share/export에는 뒷면 renderer가 없어. |
+| D. 위험도 | 데이터 추가만은 작은 범위 후보. 그러나 새 출력 동작·작성 기록 의미·정적 레이아웃까지 한 번에 확정하지 않고 조사 차수에서 중단해. |
+
+Room 선례: `PostcardDatabase` version 18/exportSchema=true, schema `app/schemas/com.postcardmemory.data.PostcardDatabase/18.json`. `MIGRATION_17_18`은 뒷면 문자열 2개를 기본값 `''`로 추가했고, `MIGRATION_15_16`·`16_17`에는 nullable 컬럼 ADD 선례가 있어. `DatabaseModule`에 1→18 migration이 명시 등록돼 있고 destructive fallback은 없어. 현재 추적된 androidTest는 앱 context 검사뿐이며 실제 migration 계측 테스트는 없어. `PostcardMigrationRegistrationStructureTest`는 선언·등록·schema 파일을 검사하는 구조 테스트로 SQL 실행 검증을 대체하지 않아.
+
+### UI/UX 문법 사전 판정
+
+| 항목 | 판정 |
+|---|---|
+| 역할 | 스탬프는 Postcard metadata의 시각화 + 뒷면 고정 기록, P.S.는 본문보다 낮은 위계의 짧은 입력/콘텐츠 |
+| 내부 선례 | PostcardBackFace의 From. metadata, To./본문 BasicTextField, 기존 전역 저장 |
+| 재사용 후보 | PaperSurface, PaperDivider, InkPrimary/InkSecondary, 기존 24dp 여백과 typography, PostcardDateFormat.formatIso |
+| 진입·선택·객체 action | 기존 뒷면 진입 사용 후보. 이동/회전/크기/색상/복제/개수 제어 및 Seal 객체 문법은 해당 없음 |
+| 완료·저장 | 기존 전역 저장과 본문의 편집 중 저장 경로. P.S. 전용 저장 UI를 새로 만들지 않아. |
+| variant·승인 상태 | 기존 From./본문 역할은 확인했지만 새로운 정보 스탬프·P.S. 배치의 정적 실기기 결과는 없어. 확정된 variant라고 선언하지 않아. |
+| 신규 문법·예외 | Card/capsule/outline/emoji/새 색상/toolbar를 제안하지 않았어. 구체적인 새 layout은 미구현. 외부 레퍼런스 사용 없음. |
+| STOP | 출력 결과와 작성 시점 의미 판단 대기. 스킬의 형식적 승인을 별도 요구한 것이 아니라 위 실제 제품 선택 때문에 중단해. |
+
+### 구현·검증·남은 위험
+
+- 정보 스탬프/P.S./Entity/DAO/Room/schema/renderer: **미구현·미변경**. 실제 사용자 데이터 읽기·변환·삭제·앱 설치도 하지 않았어.
+- 변경 파일: `docs/ai/HANDOFF.md` 하나, 이 66일차 조사 기록 추가만 수행해.
+- compile / 관련 unit tests / 전체 unit tests / migration 실행 / renderer 실행: **미실행**. 구현 전에 제품 판단 STOP으로 조사 차수를 종료했기 때문이야. 65일차의 542개 통과는 과거 기록이며 이번 실행 결과로 재사용하지 않아.
+- 실기기: 미실시. 새 UI가 없으므로 지금 설치해서 확인할 66일차 기능은 없어. 향후 날짜·시간·계절, 재진입/시간대, P.S. 입력/수정/삭제, 작은 화면·font scaling·IME·긴 본문, 앞뒤 전환·기존 저장, 크게 보기/공유/파일 출력 일치를 확인해야 해.
+- 남은 위험: 작성 당시 시각/표시 opt-in 의미 미확정, 뒷면 export 미존재, 긴 본문의 한 장 출력 공간 미검증, 본문 저장 실패/회전·프로세스 종료 경합 미검증, migration 계측 안전망 부재. 범위 밖 구조 수정은 하지 않았어.
+- 코드 수정 시도 0회. 원상 복구할 구현 없음. 마지막 변경 없는 기준은 `7b4c2bf`이며 사용자 untracked는 건드리지 않아.
+- 종료 Git: branch/HEAD 유지, ahead/behind 0/0, HANDOFF만 unstaged 변경, 기존 untracked 보존. 이번 stage/commit/push 없음. 전체 diff 검토에서 이 조사 기록 추가만 확인했고 `git diff --check`는 통과했어(LF→CRLF 안내만). Git 전역 ignore 파일 접근 경고는 있었지만 status/diff 명령은 성공했어.
+
+### 다음 작업 하나: 뒷면 출력의 제품 동작 확정
+
+- **권장안**: 앞면을 보고 공유/내보내기 하면 앞면 한 장, 뒷면을 보고 실행하면 뒷면 한 장. 단일 이미지 흐름을 유지하며 화면과 출력이 연결돼. 다만 기존 ‘항상 앞면’ 사용자 경험은 바뀌어.
+- 대안: 앞뒤 두 장을 함께 공유/저장. 엽서 전체를 전달할 수 있지만 다중 이미지 전송/저장과 실패 처리까지 범위가 늘어나.
+- 범위 축소 대안: 앞면 전용 출력을 유지하고 뒷면 출력은 다음 작업으로 분리. 이 경우 이번 지시서의 네 경로 일치 완료 조건을 충족하지 못하므로 범위 변경 판단이 필요해.
+- 작성 시각은 생성 기록 재사용과 본문 최초 작성 기록을 구분해 위 timestamp 절의 후보를 함께 검토해. 기존 metadata를 임의 재해석하거나 새 시각으로 덮어쓰지 않아.
+- 출력 동작이 정해지기 전 신규 렌더/공유 연결과 두 기능 통합은 멈춰 있어. 다음 작업자는 이 조사 완료를 기능 완료나 구현 승인으로 확대 해석하지 말고 사용자의 후속 판단 범위를 확인해.
+
 ## 2026-08-15 — AGENTS.md + docs/ai 구조 도입
 
 **변경 파일**

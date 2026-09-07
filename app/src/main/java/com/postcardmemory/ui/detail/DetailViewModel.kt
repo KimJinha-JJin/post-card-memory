@@ -16,6 +16,9 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.ui.components.BACK_MESSAGE_MAX_LENGTH
+import com.postcardmemory.ui.components.BACK_POSTSCRIPT_MAX_LENGTH
+import com.postcardmemory.ui.components.withBackMessage
+import com.postcardmemory.ui.components.writingOffsetMinutes
 import com.postcardmemory.ui.components.BACK_RECIPIENT_MODIFIER_MAX_LENGTH
 import com.postcardmemory.utils.ConfirmedEditStateStorage
 import com.postcardmemory.utils.DoodleStroke
@@ -374,6 +377,9 @@ class DetailViewModel @Inject constructor(
     private var backRecipientModifierSaveJob: Job? = null
 
     private var backMessageSaveJob: Job? = null
+    private var backPostscriptSaveJob: Job? = null
+    private var backMessageEditVersion = 0L
+    private var backPostscriptEditVersion = 0L
 
     private var confirmSaveJob: Job? = null
 
@@ -2145,6 +2151,8 @@ class DetailViewModel @Inject constructor(
     fun loadPostcard(
         postcardId: Long
     ) {
+        // Activity recreation must not replace in-flight text with an older Room read.
+        if (_postcard.value?.id == postcardId) return
         clearPhotoTransformHistory()
 
         viewModelScope.launch {
@@ -2446,6 +2454,7 @@ class DetailViewModel @Inject constructor(
     fun updateBackMessage(
         backMessage: String
     ) {
+        val editVersion = ++backMessageEditVersion
         val currentPostcard =
             _postcard.value
                 ?: return
@@ -2455,13 +2464,8 @@ class DetailViewModel @Inject constructor(
                 BACK_MESSAGE_MAX_LENGTH
             )
 
-        val previous =
-            currentPostcard.backMessage
-
-        _postcard.value =
-            currentPostcard.copy(
-                backMessage = normalized
-            )
+        val now = System.currentTimeMillis()
+        _postcard.value = currentPostcard.withBackMessage(normalized, now, writingOffsetMinutes(now))
 
         backMessageSaveJob = viewModelScope.launch {
             try {
@@ -2472,17 +2476,22 @@ class DetailViewModel @Inject constructor(
                                 ?: return@withLock
                         repository.updatePostcardBackMessage(
                             id = currentPostcard.id,
-                            backMessage = latest.backMessage
+                            backMessage = latest.backMessage,
+                            writtenAt = latest.backWrittenAt,
+                            offsetMinutes = latest.backWrittenOffsetMinutes
                         )
                     }
                 }
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                if (_postcard.value?.backMessage == normalized) {
+                val persisted = readAfterBackSaveFailure(currentPostcard)
+                if (backMessageEditVersion == editVersion) {
                     _postcard.value =
                         _postcard.value?.copy(
-                            backMessage = previous
+                            backMessage = persisted.backMessage,
+                            backWrittenAt = persisted.backWrittenAt,
+                            backWrittenOffsetMinutes = persisted.backWrittenOffsetMinutes
                         )
                 }
 
@@ -2493,6 +2502,42 @@ class DetailViewModel @Inject constructor(
             }
         }
     }
+
+    fun updateBackPostscript(value: String) {
+        val current = _postcard.value ?: return
+        val editVersion = ++backPostscriptEditVersion
+        val normalized = value.take(BACK_POSTSCRIPT_MAX_LENGTH).takeUnless { it.isBlank() }
+        _postcard.value = current.copy(backPostscript = normalized)
+        backPostscriptSaveJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    styleWriteMutex.withLock {
+                        val latest = _postcard.value ?: return@withLock
+                        repository.updatePostcardBackPostscript(current.id, latest.backPostscript)
+                    }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                val persisted = readAfterBackSaveFailure(current)
+                if (backPostscriptEditVersion == editVersion) {
+                    _postcard.value = _postcard.value?.copy(backPostscript = persisted.backPostscript)
+                }
+                Log.w(TAG, "추신 저장 실패", exception)
+            }
+        }
+    }
+
+    private suspend fun readAfterBackSaveFailure(fallback: Postcard): Postcard =
+        withContext(Dispatchers.IO) {
+            try {
+                repository.getPostcardById(fallback.id) ?: fallback
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                fallback
+            }
+        }
 
     fun updateLayoutStyle(
         layoutStyle: String
@@ -3640,6 +3685,7 @@ class DetailViewModel @Inject constructor(
                 messageUpdateJob,
                 backRecipientModifierSaveJob,
                 backMessageSaveJob,
+                backPostscriptSaveJob,
                 confirmSaveJob
             ).filter { it.isActive }
 
@@ -4098,6 +4144,35 @@ class DetailViewModel @Inject constructor(
                 this[index - 1] = temp
             }
         scheduleDraftAutosave()
+    }
+
+    /** Takes ownership of the snapshot. Even a cancelled launch releases it. */
+    fun exportBackPostcard(postcardId: Long, bitmap: Bitmap, sharing: Boolean) {
+        if (_exportState.value is ExportState.Exporting || _shareState.value !is ShareState.Idle) {
+            bitmap.recycle()
+            return
+        }
+        if (sharing) _shareState.value = ShareState.Preparing
+        else _exportState.value = ExportState.Exporting
+        viewModelScope.launch {
+            if (sharing) {
+                val result = withContext(Dispatchers.IO) {
+                    PostcardImageExporter.exportBackForSharing(context, postcardId, bitmap)
+                }
+                _shareState.value = result.fold(
+                    onSuccess = { ShareState.Ready(it) },
+                    onFailure = { ShareState.Error(it.message ?: "뒷면 이미지를 준비하지 못했어.") }
+                )
+            } else {
+                val result = withContext(Dispatchers.IO) {
+                    PostcardImageExporter.exportBackToGallery(context, bitmap)
+                }
+                _exportState.value = result.fold(
+                    onSuccess = { ExportState.Success(it) },
+                    onFailure = { ExportState.Error(it.message ?: "뒷면 이미지를 저장하지 못했어.") }
+                )
+            }
+        }.invokeOnCompletion { bitmap.recycle() }
     }
 
     fun exportPostcardToGallery(

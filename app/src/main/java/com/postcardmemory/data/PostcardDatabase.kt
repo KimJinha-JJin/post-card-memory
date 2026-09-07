@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Postcard::class],
-    version = 18,
+    version = 19,
     exportSchema = true
 )
 abstract class PostcardDatabase : RoomDatabase() {
@@ -453,5 +453,14 @@ abstract class PostcardDatabase : RoomDatabase() {
                     )
                 }
             }
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE postcards ADD COLUMN backPostscript TEXT")
+                db.execSQL("ALTER TABLE postcards ADD COLUMN backWrittenAt INTEGER")
+                db.execSQL("ALTER TABLE postcards ADD COLUMN backWrittenOffsetMinutes INTEGER")
+                db.execSQL("ALTER TABLE postcards ADD COLUMN backWritingRecordEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
     }
 }

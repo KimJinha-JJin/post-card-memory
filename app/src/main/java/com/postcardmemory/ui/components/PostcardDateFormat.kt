@@ -3,6 +3,7 @@ package com.postcardmemory.ui.components
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * 엽서에 표시되는 캡처 날짜의 서식. 값과 무관하게 항상 yyyy-MM-dd로
@@ -21,12 +22,13 @@ enum class PostcardDateFormat {
 
     companion object {
         fun formatIso(
-            capturedAt: Long
+            capturedAt: Long,
+            timeZone: TimeZone = TimeZone.getDefault()
         ): String =
             SimpleDateFormat(
                 "yyyy-MM-dd",
                 Locale.US
-            ).format(
+            ).apply { this.timeZone = timeZone }.format(
                 Date(capturedAt)
             )
     }

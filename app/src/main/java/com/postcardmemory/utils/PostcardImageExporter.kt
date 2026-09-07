@@ -53,6 +53,13 @@ import kotlin.math.sin
 object PostcardImageExporter {
 
     private const val OUTPUT_SIZE = 2048
+
+    /** Caller owns the bitmap; the front renderer and its file paths are unchanged. */
+    internal fun exportBackToGallery(context: Context, bitmap: Bitmap): Result<Uri> =
+        runCatching { saveBitmapToGallery(context, bitmap) }
+
+    internal fun exportBackForSharing(context: Context, postcardId: Long, bitmap: Bitmap): Result<File> =
+        runCatching { saveBitmapForSharing(context, postcardId, bitmap) }
     private const val SHARE_CACHE_DIR_NAME = "shared_postcards"
 
     /**

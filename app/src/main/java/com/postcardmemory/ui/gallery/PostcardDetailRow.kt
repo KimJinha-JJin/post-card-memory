@@ -75,7 +75,7 @@ fun PostcardDetailRow(
             modifier = Modifier.width(96.dp)
         )
 
-        if (postcardHasBackContent(postcard.backRecipientModifier, postcard.backMessage)) {
+        if (postcardHasBackContent(postcard.backRecipientModifier, postcard.backMessage, postcard.backPostscript)) {
             Icon(
                 imageVector = Icons.Filled.MailOutline,
                 contentDescription = "뒷면 편지 있음",

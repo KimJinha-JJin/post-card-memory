@@ -63,7 +63,13 @@ data class Postcard(
     @ColumnInfo(defaultValue = "''")
     val backRecipientModifier: String = "",
     @ColumnInfo(defaultValue = "''")
-    val backMessage: String = ""
+    val backMessage: String = "",
+    val backPostscript: String? = null,
+    val backWrittenAt: Long? = null,
+    val backWrittenOffsetMinutes: Int? = null,
+    // SQL default protects migrated postcards; only newly created objects opt in.
+    @ColumnInfo(defaultValue = "0")
+    val backWritingRecordEnabled: Boolean = true
 )
 
 /** 일반 엽서. 갤러리에 보인다. */

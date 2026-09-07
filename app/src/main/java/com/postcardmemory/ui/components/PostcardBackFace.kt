@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -25,6 +26,10 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.AnnotatedString
 import com.postcardmemory.ui.theme.InkPrimary
 import com.postcardmemory.ui.theme.InkSecondary
 import com.postcardmemory.ui.theme.PaperDivider
@@ -70,9 +75,40 @@ internal fun formatBackFromLine(
  */
 internal fun postcardHasBackContent(
     recipientModifier: String,
-    message: String
+    message: String,
+    postscript: String? = null
 ): Boolean =
-    recipientModifier.isNotBlank() || message.isNotBlank()
+    recipientModifier.isNotBlank() || message.isNotBlank() || !postscript.isNullOrBlank()
+
+internal const val BACK_CARD_SIZE_DP = 360f
+
+/** Measure the actual text, including explicit newlines, rather than clipping saved content. */
+internal fun fittingBackTextSize(
+    measurer: TextMeasurer,
+    text: String,
+    width: Int,
+    height: Int,
+    maximum: Float,
+    lineHeightRatio: Float
+): Float {
+    if (text.isEmpty()) return maximum
+    fun fits(size: Float): Boolean {
+        val layout = measurer.measure(
+            AnnotatedString(text),
+            style = TextStyle(fontSize = size.sp, lineHeight = (size * lineHeightRatio).sp),
+            constraints = Constraints(maxWidth = width.coerceAtLeast(1))
+        )
+        return layout.size.height <= height && !layout.didOverflowWidth
+    }
+    if (fits(maximum)) return maximum
+    var low = 0.1f
+    var high = maximum
+    repeat(14) {
+        val middle = (low + high) / 2
+        if (fits(middle)) low = middle else high = middle
+    }
+    return low
+}
 
 /**
  * 엽서 뒷면 — 수신자(To.)·편지 본문·발신 날짜(From.)로 구성된 편지 영역.
@@ -91,10 +127,19 @@ fun PostcardBackFaceContent(
     onMessageChanged: (String) -> Unit,
     capturedAt: Long,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    postscript: String? = null,
+    onPostscriptChanged: (String) -> Unit = {},
+    writtenAt: Long? = null,
+    writtenOffsetMinutes: Int? = null,
+    readOnly: Boolean = false
 ) {
+    // Like the front renderer, the postcard is a fixed artwork; zoom changes its
+    // scale, not its line wrapping. Device font scale still applies to app controls.
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalDensity provides Density(constraints.maxWidth / BACK_CARD_SIZE_DP, 1f)) {
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(PaperSurface)
             .padding(24.dp)
@@ -102,7 +147,7 @@ fun PostcardBackFaceContent(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            val recipientTextStyle =
+            val baseRecipientTextStyle =
                 TextStyle(
                     color = InkPrimary,
                     fontSize = 16.sp,
@@ -117,6 +162,15 @@ fun PostcardBackFaceContent(
             ) {
                 val recipientSuffix =
                     backRecipientSuffix(recipientModifier)
+                val recipientTextStyle = remember(recipientModifier, constraints, textMeasurer) {
+                    val fullWidth = textMeasurer.measure(
+                        "To. $recipientModifier$recipientSuffix",
+                        style = baseRecipientTextStyle,
+                        softWrap = false
+                    ).size.width.coerceAtLeast(1)
+                    val available = constraints.maxWidth - with(density) { RECIPIENT_FIELD_CURSOR_BUFFER.roundToPx() }
+                    baseRecipientTextStyle.copy(fontSize = (16f * (available.toFloat() / fullWidth).coerceAtMost(1f)).sp)
+                }
 
                 // 실제 표시 폭(한글/영문/공백이 섞여도 정확)을 TextStyle
                 // 그대로 재사용해 측정한다 — 글자 수 기반 어림값이 아니다.
@@ -181,6 +235,7 @@ fun PostcardBackFaceContent(
                             }
                         },
                         enabled = enabled,
+                        readOnly = readOnly,
                         singleLine = true,
                         textStyle = recipientTextStyle,
                         cursorBrush = SolidColor(SunsetGold),
@@ -213,12 +268,13 @@ fun PostcardBackFaceContent(
                 modifier = Modifier.height(16.dp)
             )
 
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                if (message.isEmpty()) {
+                val messageSize = remember(textMeasurer, message, constraints) { fittingBackTextSize(textMeasurer, message, constraints.maxWidth, constraints.maxHeight, 15f, 22f / 15f) }
+                if (message.isEmpty() && !readOnly) {
                     Text(
                         text = "오늘의 나에게 하고 싶은 말을 적어봐.",
                         color = InkSecondary,
@@ -234,10 +290,11 @@ fun PostcardBackFaceContent(
                         }
                     },
                     enabled = enabled,
+                    readOnly = readOnly,
                     textStyle = TextStyle(
                         color = InkPrimary,
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp
+                        fontSize = messageSize.sp,
+                        lineHeight = (messageSize * 22f / 15f).sp
                     ),
                     cursorBrush = SolidColor(SunsetGold),
                     modifier = Modifier.fillMaxSize()
@@ -245,12 +302,34 @@ fun PostcardBackFaceContent(
             }
 
             Text(
-                text = "${message.length} / $BACK_MESSAGE_MAX_LENGTH",
+                text = if (readOnly) "" else "${message.length} / $BACK_MESSAGE_MAX_LENGTH",
                 color = InkSecondary,
                 fontSize = 11.sp,
                 textAlign = TextAlign.End,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().height(14.dp)
             )
+
+            if (!readOnly || !postscript.isNullOrBlank()) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    Text("P.S. ", color = InkSecondary, fontSize = 13.sp)
+                    BoxWithConstraints(Modifier.weight(1f).height(44.dp)) {
+                        val value = postscript.orEmpty()
+                        val psSize = remember(textMeasurer, value, constraints) { fittingBackTextSize(textMeasurer, value, constraints.maxWidth, constraints.maxHeight, 13f, 17f / 13f) }
+                        if (value.isEmpty() && !readOnly) {
+                            Text("한마디 더 남기기", color = InkSecondary, fontSize = 13.sp)
+                        }
+                        BasicTextField(
+                            value = value,
+                            onValueChange = { if (it.length <= BACK_POSTSCRIPT_MAX_LENGTH) onPostscriptChanged(it) },
+                            enabled = enabled,
+                            readOnly = readOnly,
+                            textStyle = TextStyle(color = InkSecondary, fontSize = psSize.sp, lineHeight = (psSize * 17f / 13f).sp),
+                            cursorBrush = SolidColor(SunsetGold),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
 
             Spacer(
                 modifier = Modifier.height(8.dp)
@@ -265,6 +344,17 @@ fun PostcardBackFaceContent(
                 textAlign = TextAlign.End,
                 modifier = Modifier.fillMaxWidth()
             )
+            formatWritingRecord(writtenAt, writtenOffsetMinutes)?.let { record ->
+                Text(
+                    text = record,
+                    color = InkSecondary,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                )
+            }
         }
+    }
+    }
     }
 }
