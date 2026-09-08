@@ -301,13 +301,7 @@ fun PostcardBackFaceContent(
                 )
             }
 
-            Text(
-                text = if (readOnly) "" else "${message.length} / $BACK_MESSAGE_MAX_LENGTH",
-                color = InkSecondary,
-                fontSize = 11.sp,
-                textAlign = TextAlign.End,
-                modifier = Modifier.fillMaxWidth().height(14.dp)
-            )
+            Spacer(modifier = Modifier.height(14.dp))
 
             if (!readOnly || !postscript.isNullOrBlank()) {
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {

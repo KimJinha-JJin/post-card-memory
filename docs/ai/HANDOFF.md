@@ -1,5 +1,110 @@
 # HANDOFF
 
+## 2026-09-08 — 67일차 8차 후속: 단일 tween → 3단계 keyframes 이징으로 교체
+
+- 사용자 피드백: duration을 1100ms까지 늘려도 여전히 "스무스하고 애매하다"고 함 — duration 문제가 아니라 곡선 모양 자체가 처음부터 끝까지 균일하게 매끈한(단일 cubic-bezier tween) 게 원인이라고 판단, 커브 구조를 바꿔달라는 요청.
+- `tween(durationMillis, easing = CubicBezierEasing(...))`를 3단계 `keyframes { }`로 교체했다(duration 1100ms은 유지):
+  - 0~350ms: 전체 회전량의 10%만 진행, `LinearEasing` — 손끝으로 모서리를 천천히 집어드는 구간.
+  - 350~800ms: 나머지 대부분(10%→88%)을 처리, `FastOutSlowInEasing` — 훅 넘어가는 구간.
+  - 800~1100ms: 마지막 12%, `LinearOutSlowInEasing` — 사뿐히 내려앉는 구간.
+- `flipRotation`이 0→180(앞→뒤)과 180→0(뒤→앞) 양방향으로 쓰이므로, keyframe 값들을 `startRotation + rotationRange * 비율`로 계산해서 방향과 무관하게 항상 올바른 절대 각도가 나오게 했다(`rotationRange = targetRotation - startRotation`, 시작값은 `flipRotation.value`를 트리거 시점에 캡처).
+- import 정리: 더 이상 안 쓰는 `tween`/`CubicBezierEasing` 제거, `FastOutSlowInEasing`/`LinearEasing`/`LinearOutSlowInEasing`/`keyframes` 추가.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음).
+- 미검증: 이 3단계 리듬(느긋한 시작 10% → 훅 넘어가는 78% → 사뿐한 착지 12%)이 실기기에서 원하는 "느긋한" 느낌에 가까운지, 여전히 매끄럽게 느껴지면 다음엔 구간 비율(350/800ms 지점, 10%/88% 값)이나 segment별 easing을 더 극단적으로(예: 중간 구간을 더 짧고 급하게) 조정.
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차 7차 후속: 전환 속도 재차 늦춤(750ms → 1100ms)
+
+- 사용자 피드백: 750ms도 여전히 스무스하고 빠르다고 함. 480→750은 절반 정도만 늘렸던 거라 부족했던 것으로 보고 이번엔 더 크게(750→1100ms, 원래 480ms의 약 2.3배) 늘렸다. easing 커브는 계속 그대로.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). 숫자만 바꾼 변경이라 unit test 재실행 안 함.
+- 참고: duration을 계속 숫자만 올려서 맞추는 중이라, 다음에도 안 맞으면 이번엔 curve 모양(현재 `CubicBezierEasing(0.32,0,0.22,1)`)도 같이 재검토가 필요할 수 있음 — 지금까진 "속도가 빠르다"는 피드백만 있었어서 duration만 조정해왔음.
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차 6차 후속: 전환 속도를 더 느긋하게
+
+- 사용자 피드백: 그림자는 만족, 근데 종이 넘어가는 속도가 너무 스무스하고 빨라서 느긋한 느낌으로 늦춰달라고 함.
+- `triggerFlip`의 `tween(durationMillis = ...)`을 480ms → **750ms**로 늘렸다. easing(`CubicBezierEasing(0.32f, 0f, 0.22f, 1f)`)은 그대로 — 속도 문제만 지목했으므로 커브 모양은 안 건드림.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). 숫자만 바꾼 변경이라 unit test 재실행은 안 함.
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차 5차 후속: 평상시 dog-ear 그림자 연하게
+
+- 사용자가 실기기에서 확인: 오른쪽 아래 상시 접힘 효과 자체는 만족, 다만 그림자가 거슬린다고 함.
+- `drawIdleCornerFoldHint()`의 그림자 alpha만 낮췄다: radial 그림자 0.14→0.07, 접힌 삼각형 위 linear 그림자 0.12→0.06 (전환 중에 쓰는 `drawCornerFoldCreaseShade`의 그림자/하이라이트는 건드리지 않음 — 그건 평상시가 아니라 전환 중에만 나오는 별개 효과).
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). 수치만 바꾼 변경이라 별도 unit test 재실행은 안 함(관련 로직 없음).
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차 4차 후속: 평상시 dog-ear affordance 추가 + 접힘 모서리를 오른쪽 아래로 이동
+
+- 사용자가 ChatGPT 쪽에서 받은 상세 작업지시서("엽서 뒷면 전환 어포던스 교정 지시서")를 그대로 전달함. 핵심 요구: transition 자체보다 **정지 화면에서도 "뒤가 있다"는 게 보이는 affordance**가 우선이고, 평상시에도 작게 모서리가 접혀 있는 방향을 우선 검토하라는 지시.
+- 접힘 기준 모서리를 오른쪽 위(anchor)→왼쪽 아래(opposite)에서 **오른쪽 아래(anchor)→왼쪽 위(opposite)**로 바꿨다(`cornerFoldCrease()`의 anchor/opposite 두 줄만 교체) — dog-ear/포스트잇 관용구가 흔히 쓰이는 자리라 인지도가 더 높다고 판단.
+- 새로 추가: `drawIdleCornerFoldHint(depthPx)` — 전환 애니메이션이 없을 때도(`!isFlipAnimating`) 오른쪽 아래 모서리에 고정 크기(26dp) 삼각형을 그린다. 실제 반대 면 콘텐츠 대신 `PaperSurface`(종이 화이트 톤) 채우기 + 옅은 그림자(radial/linear gradient) + `PaperDivider` 색 접힘 경계선으로 가볍게 표현 — 실제 반대 면을 여기서도 보여주려면 평상시에도 앞뒤 두 면을 항상 같이 mount해야 해서 비용이 커지므로(특히 스티커 편집 트리가 무거운 앞면), 지시서 2절이 명시적으로 허용한 "종이 안쪽 색 정도의 가벼운 표현"으로 대체했다.
+- 앞/뒤 각 Box의 `drawWithContent`에서: `isFlipAnimating`이면 기존처럼 `drawCornerFoldCreaseShade`(전환 중 실제 접힘 그림자/하이라이트), 아니면 `drawIdleCornerFoldHint`(평상시 고정 dog-ear) — 조건 하나로 깔끔하게 분기.
+- 알려진 미세한 한계(다음 QA에서 확인 필요): 평상시 dog-ear(26dp, 장식용)와 전환 시작 시점의 실제 접힘(legProgress 0에서 시작해 자라남)이 완전히 매끄럽게 이어지진 않는다 — 버튼 누르는 순간 아주 짧게(수십 ms) dog-ear가 사라졌다가 실제 접힘이 자라나는 형태라, 그 찰나에 깜빡임처럼 보일 수 있음. 실기기에서 거슬리면 legProgress의 최소값(idle floor)을 dog-ear 크기에 맞춰 두는 방식으로 다음에 보정 가능.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). `gradle testDebugUnitTest --tests "com.postcardmemory.ui.detail.*" --tests PostcardBackFaceTest` BUILD SUCCESSFUL.
+- preview/export 영향: 없음 — 이번에도 화면 표시용 Box의 draw 단계에만 추가했고 export/share 경로는 그대로.
+- 미검증(실기기 QA 필요): 정지 화면만 보고 "뒤가 있다"는 게 인지되는지(지시서 9절 최종 판정 기준), dog-ear 크기(26dp)·색/그림자 대비가 배경(사진/색상)에 따라 너무 흐리거나 튀지 않는지, 전환 시작 순간 위 "알려진 한계"가 실제로 거슬리는지, 방향(오른쪽 아래) 자체가 자연스러운지.
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차 3차 후속: 접힘선에 그림자/하이라이트 추가(슬라이드처럼 보이는 문제)
+
+- 사용자 피드백: 모서리 삼각형이 커지는 방향/구조는 맞는데, "그냥 슬라이드 전환 효과 같다"고 함 — 순수 대각선 클리핑만 있고 입체감(그림자/하이라이트)이 없어서 종이가 접히는 게 아니라 사진이 밀려나는 것처럼 보인 것으로 판단.
+- HANDOFF 직전 기록에 이미 "다음 다듬기 후보"로 남겨뒀던 항목을 이번에 구현: 접힘선(crease) 바로 옆에 좁은 그라데이션 띠를 얹었다.
+  - `remaining`(아직 안 넘어간, 곧 덮일) 면 쪽: 접힘선에서 시작해 어두워지는 검은 그라데이션(alpha 0.30) — 접히는 종이가 드리우는 그림자.
+  - `revealed`(방금 드러난, 접혀 넘어온) 면 쪽: 접힘선에서 시작해 밝아지는 흰 그라데이션(alpha 0.32) — 접힌 모서리가 빛을 받는 하이라이트.
+  - 두 그라데이션 모두 폭 24dp, 접힘선과 평행한 띠 모양(같은 half-plane 기법으로 정사각형에 clip)이고, 진행률 0 또는 1(대기 상태)에서는 그려지지 않는다.
+- 구현: 기존 `cornerFoldClipPath` 내부에 흩어져 있던 대각선/수직 벡터 계산을 `cornerFoldCrease()`(접힘선 위치+방향만 반환)로 분리하고, `halfPlaneQuad()`(무한 반평면 생성)와 `drawCornerFoldCreaseShade()`(그림자/하이라이트 띠를 실제로 그리는 `DrawScope` 확장 함수)를 추가했다. 각 면의 `drawWithContent` 블록에서 `clipPath(...)` 다음 줄에 `drawCornerFoldCreaseShade(...)` 한 줄만 추가하는 식으로 연결 — 클리핑 로직 자체는 안 건드림.
+- 리팩터 중 버그 하나 잡음: `halfPlaneQuad`를 분리하면서 처음엔 `cornerFoldClipPath`가 반평면을 반대 방향(`towardAnchor = false`)으로 만들도록 잘못 썼다가, 컴파일 전에 원래 동작(항상 anchor 쪽 반평면을 만들고 revealed 여부에 따라 Intersect/Difference로 고른다)과 대조해서 `towardAnchor = true`로 고쳤다 — 실기기 이전에 코드 리뷰로 잡힌 것이라 이번 빌드에는 반영돼 있음.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). `gradle testDebugUnitTest --tests "com.postcardmemory.ui.detail.*" --tests PostcardBackFaceTest` BUILD SUCCESSFUL.
+- 미검증(실기기 QA 필요): 그림자/하이라이트가 추가된 뒤에도 여전히 "슬라이드 같다"고 느껴지는지, 띠 폭(24dp)·투명도(0.30/0.32)가 과하거나 약한지, 성능 저하(Path.op을 프레임마다 3번 정도 더 호출) 체감 여부.
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차 2차 후속: "회전"이 아니라 진짜 모서리 접힘(corner-fold)으로 재구현
+
+- 사용자가 컨테인 버전도 실기기에서 보고 "그냥 중앙에 꼬챙이 꽂아서 회전시키는 느낌"이라며 반려. 원하는 건 손가락으로 종이 모서리를 접을 때 생기는 삼각형이 점점 커지면서 넘어가는 느낌이라고 명확히 함 — 즉 3D rotationY 계열로는 회전축을 어디에 두든 "판 전체가 뻣뻣하게 도는" 인상을 못 벗어난다는 걸 확인.
+- 이건 작업지시서 12절 STOP 대상(복잡한 custom Canvas renderer)이라 구현 전에 AskUserQuestion으로 세 가지 수준(심플 corner-fold / 정석 page-curl-실제 반대면 콘텐츠 노출 / 현재 방식 각도만 조정)을 제시했고, 사용자가 "정석 page-curl"을 선택함 — 접히는 삼각형 안에 실제 반대 면 콘텐츠가 보이는 버전.
+- 구현 방식: `DetailScreen.kt`에 `cornerFoldClipPath(size, revealProgress, revealed)` private 함수를 추가했다(오른쪽 위 모서리(anchor)→왼쪽 아래 모서리(opposite) 대각선을 따라 진행률만큼 이동하는 직선으로 정사각형을 잘라, `Path.op(square, halfPlane, Intersect/Difference)`로 "이미 넘어간 영역(revealed)"과 "아직 안 넘어간 영역(remaining)"을 구한다). 카드를 감싸던 단일 `graphicsLayer`(rotationY 등 회전 기반 접근)는 완전히 제거했다.
+- 기존에 `if (flipRotation.value <= 90f) { 앞면 Box } else { 뒷면 Box }`로 배타적으로 그리던 구조를, `if (!isBackFace || isFlipAnimating) { 앞면 Box(clip) }` + `if (isBackFace || isFlipAnimating) { 뒷면 Box(clip) }`로 바꿔 전환 중(`isFlipAnimating`)에만 두 면이 동시에 mount되고, 평상시(정지 상태)에는 지금 보는 면 하나만 mount되는 건 그대로 유지했다(정지 상태에서 legProgress가 항상 1이 되도록 방향에 따라 `legProgress = if (isBackFace) flipRotation.value/180f else 1f-flipRotation.value/180f`로 계산해서, 안 보는 면의 clip이 자동으로 빈 Path가 되게 함). 앞면 콘텐츠(사진·스티커·씰·텍스트스티커·라벨스티커·마스킹테이프 등 인터랙티브 편집 트리, 2000줄 이상)는 내부를 전혀 건드리지 않고 감싸는 Box에 `drawWithContent { clipPath(...) { drawContent() } }`만 추가했다 — 이러면 `flipRotation.value`/`isBackFace` 읽기가 draw phase에 걸려서(graphicsLayer{} 블록과 동일한 최적화) 매 프레임 전체 서브트리 recomposition을 유발하지 않는다.
+- 전환 중 스티커 오조작 우려는 기존에 이미 있던 `controlsEnabled`(`!isFlipAnimating` 포함, 1795번째 줄 부근)가 스티커 pointerInput/gesture 쪽에 광범위하게(42곳) 연결돼 있는 걸 확인해서 새로 막을 필요가 없었다.
+- 뒷면 Box에 있던 `graphicsLayer { rotationY = 180f }`(바깥 rotationY를 상쇄해서 텍스트 거울상을 막던 보정)는 바깥 rotationY 자체가 없어졌으므로 같이 제거했다.
+- 속도/이징(480ms, CubicBezierEasing)은 직전 라운드 값을 그대로 유지 — 이번엔 회전 자체를 없앤 게 핵심이라 속도 문제였는지는 이번 라운드로는 분리 확인 안 됨, 실기기에서 다시 봐야 함.
+- 아직 안 넣은 것(다음 다듬기 후보, 필요시에만): 접히는 경계선 자체의 그림자/하이라이트 그라데이션. 지금은 순수 Path 클리핑만 있어서 "접힘"의 입체감이 크게 없을 수 있음 — 기본 구조가 실기기에서 맞다고 확인되면 그 다음에 얹을 예정. 구조를 더 키우기 전에 먼저 핵심 매커니즘부터 검증받는 게 안전하다고 판단했다.
+- preview/export 영향: 이번에도 없음. 손댄 범위는 화면 표시용 Box 두 개의 감싸는 modifier뿐이고, `sharePostcard`/`createXxxOverlaysForExport`/`PostcardBackExportCapture`는 여전히 참조하지 않는다.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음, 기존 무관 경고만). `gradle testDebugUnitTest --tests "com.postcardmemory.ui.detail.*" --tests PostcardBackFaceTest` BUILD SUCCESSFUL. `git diff --check` 통과.
+- 미검증(실기기 QA 필요, 제일 중요한 라운드): 모서리 삼각형이 실제로 커지면서 넘어가는지, 접힌 삼각형 안에 반대 면 콘텐츠가 제대로(거울상 없이, 위치 안 어긋나고) 보이는지, 전환 중 스티커 화면 만졌을 때 오조작 없는지, 속도/부드러움, settle 후 정상 상태, 회귀(작성시각·P.S.·저장·기존 엽서·현재 면 공유export) 전부.
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차 후속: 실기기 QA 피드백 반영(과도한 flip → 컨테인)
+
+- 사용자가 1차 구현을 실기기에서 확인한 결과: "뒤집는 버튼을 누르면 깃대에서 휘리릭 뒤집듯 화면 영역을 벗어나 버림 / 이쑤시개에 종이를 테이프로 고정시킨 채 뒤집는 느낌 / 속도도 너무 빠름"이라는 피드백. `0/500` counter는 이 문제 때문에 화면 밖으로 나가버려서 직접 확인은 못 했다고 함.
+- 원인 파악: `transformOrigin = TransformOrigin(0.85f, 0.15f)`로 rotationY(0→180°) 회전축 자체를 모서리로 옮긴 게 문제였다. pivot에서 먼 대각선 반대쪽 모서리가 회전+perspective(cameraDistance) 조합으로 화면 밖까지 크게 스윙하며 "휘리릭"처럼 보인 것 — 이게 정확히 사용자가 묘사한 증상과 일치.
+- 수정: `DetailScreen.kt` 카드 wrapper `Box`의 `graphicsLayer`에서 `transformOrigin` 커스텀 지정을 제거하고 기본 중앙 pivot으로 되돌렸다(즉 큰 스윙을 만드는 rotationY 자체는 원래의 안전한 중앙 회전 그대로). "모서리 lift" 인상은 rotationY와 무관한 작은 추가 요소만으로 얹는다: `rotationZ` -5°→-3°, 대각선 `translationX/Y` -8dp/+6dp→-4dp/+3dp, `scaleX/Y` 1-0.025→1-0.015, `shadowElevation` 18dp→14dp (전부 `lift`=`sin(progress*PI)`에 비례, 여전히 회전 0°/180°에서 정확히 0으로 settle). `cameraDistance`는 원래 값(12f*density) 유지.
+- 속도: `triggerFlip`의 `tween(durationMillis = 320, easing = FastOutSlowInEasing)`을 `tween(durationMillis = 480, easing = CubicBezierEasing(0.32f, 0f, 0.22f, 1f))`로 변경 — 시작이 더 완만한 커브로 "손끝으로 집어 천천히 넘기는" 느낌에 가깝게. `FastOutSlowInEasing` import는 더 이상 안 쓰여서 제거, `CubicBezierEasing` import 추가. `TransformOrigin` import도 더 이상 안 쓰여서 제거.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음, 기존 무관 경고들만 — Migration `db` 파라미터명, `LocalLifecycleOwner`/`ArrowBack`/`rememberTransformableState` deprecation은 전부 이번 변경과 무관한 기존 코드). unit test는 이번 라운드에서 로직 변경이 없어(수치 튜닝뿐) 재실행하지 않았다.
+- 아직 확정 아님: 컨테인은 됐지만 "모서리부터 들리는" 체감이 지금 수치로 충분한지, 480ms가 충분히 느긋한지는 다시 실기기로 봐야 한다. 여전히 과하면(다시 튀어나가면) 수치를 더 줄이고, 반대로 밋밋하면 corner 요소를 아주 조금씩만 다시 키우는 방향으로 조정할 예정 — transformOrigin을 다시 모서리로 옮기는 방식은 재도입하지 않는다(오늘 확인된 근본 원인).
+- Git 상태: `DetailScreen.kt` 추가 수정, 여전히 staged/commit 안 함.
+
+## 2026-09-08 — 67일차: 뒷면 counter 제거 + 앞↔뒤 page-turn 전환
+
+- 시작 상태: `feature/photo-sticker`, HEAD `244009b`, origin과 동일. AGENTS.md/CLAUDE.md/DECISIONS.md/HANDOFF.md는 66일차 후속 정책 보강분(9-07)이 unstaged로 남아 있었고, 오늘 손대지 않고 그대로 보존했다. untracked `.codex-config.candidate.toml`, `.kotlin/`도 그대로 보존.
+- 수정 파일: `app/src/main/java/com/postcardmemory/ui/components/PostcardBackFace.kt`, `app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt`.
+- A. 뒷면 `0 / 500` counter: `PostcardBackFace.kt`의 `Text("${message.length} / $BACK_MESSAGE_MAX_LENGTH")`를 같은 높이(14dp)의 `Spacer`로 교체. `BACK_MESSAGE_MAX_LENGTH`(500) 제한과 `newValue.length <= BACK_MESSAGE_MAX_LENGTH` 입력 방어 로직은 그대로 유지 — 표시만 제거했다.
+- B. 앞↔뒤 page-turn: `DetailScreen.kt`의 flip 애니메이션은 기존 `Animatable(0f)`(0→180 rotationY, `isBackFace` 토글, 320ms tween, FastOutSlowInEasing)를 그대로 두고, 카드를 감싸는 바깥 `Box`의 `graphicsLayer` 블록에만 손을 댔다. `flipRotation.value/180f`로 progress(0~1)를 구하고 `sin(progress*PI)`로 0→1→0 hump(`lift`, 회전 중간=90°에서 최고조)를 만들어, `transformOrigin`을 중앙(0.5,0.5)에서 모서리 쪽(0.85, 0.15)으로 옮기고 `rotationZ`(-5°*lift), 대각선 `translationX/Y`(-8dp/+6dp * lift), `scaleX/Y`(1-0.025*lift), `shadowElevation`(18dp*lift, shape=RectangleShape)을 lift에 비례해 얹었다. `rotationY = flipRotation.value`와 `cameraDistance = 12f*density`는 원래 값 그대로다. lift가 progress=0/1(=회전 0°/180°)에서 정확히 0으로 돌아오므로 전환 종료 후 위치·크기·shadow·rotation·translation이 원래 상태로 정확히 settle된다. 면 교체 시점(`flipRotation.value <= 90f` 분기)과 뒷면 콘텐츠의 보정용 `rotationY = 180f`(거울상 방지)는 기존 로직 그대로 — 최고조 lift/shadow가 마침 면이 바뀌는 순간(90°)과 겹쳐서 교체 순간을 가려주는 효과도 있다.
+- 이 구조를 고른 이유: 완전한 물리 page-curl(mesh/shader) 없이, 기존 rotationY 기반 flip 파이프라인 안에서 transformOrigin 이동 + rotationZ + 대각선 translation + shadow만 추가해 "중앙축 카드 flip"이 아니라 "모서리가 들리며 대각선으로 넘어가는" 인상을 만들 수 있었다. 렌더링 엔진 교체나 커스텀 Canvas 없이 승인 범위(12절 STOP 경계) 안에서 끝났다.
+- preview/export 영향: 없음. 공유(`sharePostcard` + `createXxxOverlaysForExport`)와 뒷면 export(`PostcardBackExportCapture`)는 이 flip `Box`의 `graphicsLayer`를 전혀 참조하지 않는 별도 렌더링 경로임을 코드로 확인했다 — flip은 순수 화면 전환 연출이고 저장/공유 이미지는 항상 현재 보고 있는 면 1장을 그대로 캡처한다(기존 정책 유지).
+- 인터랙션 범위: 기존 앞/뒤 전환 버튼(`triggerFlip`)에서만 애니메이션이 실행된다. corner drag/swipe/gesture 기반 넘김은 추가하지 않았다(작업지시서 11절 범위 밖).
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(사전에 있던 `LocalLifecycleOwner` deprecation 경고 1건 외 신규 경고/에러 없음). `gradle testDebugUnitTest --tests PostcardBackFaceTest` BUILD SUCCESSFUL(5개 테스트, counter 제거로 인한 회귀 없음 — 해당 테스트는 포맷 로직만 검증하며 counter UI는 다루지 않음). `git diff --check` 통과. 실기기/에뮬레이터 명령은 실행하지 않았다.
+- 미검증(사용자 실기기 QA 필요): 모서리 lift 체감, 앞→뒤/뒤→앞 대칭감, "샤락" 속도감(현재 320ms·FastOutSlowInEasing은 원래 값 그대로 유지 — 필요시 사용자 QA 후 duration/easing만 별도로 조정), settle 후 카드 위치/크기 시각적 확인, 작성 시점 기록·P.S.·저장·기존 엽서 로딩 등 회귀 없음의 실기기 확인.
+- Git 상태: 위 두 파일만 수정, staged 안 함, commit/push 안 함. 66일차 정책 보강 unstaged 변경 4개는 그대로 남아 있음.
+
+## 2026-09-07 — 운영 정책 보강 시점의 현재 상태
+
+- 실제 Git: `feature/photo-sticker`, HEAD `244009b`; 로컬 origin 추적 ref도 동일하다. 이번 작업에서 실제 원격은 조회하지 않았다. 아래 `7b4c2bf` 및 commit 전 상태는 당시 기록으로 보존한다.
+- 이번 변경은 AGENTS.md 실행 안전 원칙, 문서 연결 및 canonical 플러그인 템플릿 보강이다. 앱 코드 수정, 빌드·테스트, 기기 명령, commit/push, plugin 재설치는 하지 않았다.
+- 기기·데이터는 이번에 재조회하지 않았다. 아래 기록의 엽서 1개 보존은 사고 후 업데이트 직전 존재하던 데이터에 대한 확인이며, 사고 전 전체 데이터 복구를 뜻하지 않는다. 사고 전 전체 데이터의 복구 여부는 이 기록으로 확정할 수 없다. 코드의 안전 커밋도 사용자 데이터 백업을 뜻하지 않는다.
+- 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`는 보존한다. canonical source 변경의 캐시 반영·재설치는 별도 작업으로 남긴다. Task/fork 용어 정합성도 이번 범위에서 제외했다.
+- 다음 작업은 현재 Git과 승인 범위를 재확인하고 AGENTS.md 5절 안에서 진행한다. 기기 복구나 새 위험 수단은 별도 승인 없이 재개하지 않는다.
+
 ## 2026-09-07 — 66일차 사고 복구 후 재개: Room 18→19 실기기 적용과 사용자 수동 QA 완료
 
 **사용자 관점 결과**: 전원 종료로 세션이 중단됐지만 미커밋 코드, baseline worktree, install 전후 DB 스냅샷, 실기기 앱 상태가 전부 그대로 보존돼 있었어. 65일차 안정판이 실기기에서 정상 실행되는 걸 먼저 확인한 뒤, Room 19(뒷면 작성시각·P.S.) 변경을 실기기에 `adb install -r`로 안전하게 적용했고, 기존 엽서 1개와 이미지 파일은 그대로 보존됐어. 사용자가 직접 실기기에서 새 엽서 작성/저장, 작성시각 기록, P.S. 저장, 현재 면(뒷면) 공유·파일 내보내기까지 전부 테스트했고 모두 정상 동작을 확인했어.
