@@ -1,5 +1,10 @@
 # DECISIONS
 
+## 2026-09-07 — effect-based execution boundary 채택
+
+- 결정: 실행 수단은 명령 blacklist만이 아니라 대상과 전체 lifecycle의 효과로 판단한다. 강제 규칙은 `AGENTS.md` 5절에서 관리한다.
+- 이유: 테스트 코드가 안전해도 설치·제거·후처리가 사용자 상태를 손상시킬 수 있다. 안전한 범위의 자율 진행은 유지하면서 새로운 위험 수단은 목표 승인과 구분하기 위함이다.
+
 ## 2026-08-15 — AGENTS.md + docs/ai 공용 작업판 구조 도입
 
 - 결정: 공통 안전 규칙(Room/Git/테스트/저장 안전성/commit-push 승인)은 `AGENTS.md`에 두고, Claude Code 전용 실행 규칙(Task 운영, 보고 포맷, `/compact`·`/clear`)은 `CLAUDE.md`에 둔다.
