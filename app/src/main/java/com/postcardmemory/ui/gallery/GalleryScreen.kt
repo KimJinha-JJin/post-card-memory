@@ -5,14 +5,19 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,9 +25,10 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -76,8 +82,6 @@ import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -91,18 +95,23 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -110,18 +119,23 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
@@ -1104,6 +1118,41 @@ private val GalleryFabMiniSize = 36.dp
 // 같은 웜 뉴트럴 계열 안에서 단계와 소속만 구분한다.
 private val GalleryFabPrimaryColor = lerp(InkSecondary, PaperTray, 0.18f)
 private val GalleryFabChildSelectedColor = lerp(PaperTray, SunsetGold, 0.24f)
+// 롱프레스 드래그 selection boundary를 시각적 원보다 살짝 넓힌다(조준 게임 방지).
+private val GalleryFabDragHitSlop = 8.dp
+private val GalleryFabPulseColor = PaperSurface
+// 68일차 2차 후속: 선택 링은 물방울 pulse와 헷갈리지 않도록 별도의 따뜻한
+// 강조색을 쓴다(연못/양떼목장 등 기존 selected 배경에 쓰는 SunsetGold 계열과 통일).
+private val GalleryFabSelectionRingColor = SunsetGold
+
+// 68일차 1차 후속: 실기기 QA 결과 LocalHapticFeedback.performHapticFeedback()이
+// 손끝에 전혀 느껴지지 않는다고 확인됨 — 기기의 "터치 피드백" 시스템 설정이나
+// SegmentTick/Confirm 같은 최신 상수의 API 레벨 지원 여부에 따라 조용히
+// 무반응일 수 있는 것으로 판단, 원인을 앱 코드 안에서 통제 가능한 가장 작은
+// 표준 수단인 Vibrator.vibrate(VibrationEffect)로 직접 교체한다(minSdk 26부터
+// createOneShot 사용 가능, 새 프레임워크 도입 없음).
+private const val GalleryFabHapticLongPressDurationMs = 35L
+private const val GalleryFabHapticLongPressAmplitude = 190
+private const val GalleryFabHapticSegmentTickDurationMs = 12L
+private const val GalleryFabHapticSegmentTickAmplitude = 110
+private const val GalleryFabHapticConfirmDurationMs = 22L
+private const val GalleryFabHapticConfirmAmplitude = 160
+// 68일차 2차 후속: + 짧은 탭 전용 — 롱프레스의 "또잉"보다 가볍고 기능 확정의
+// "톡"보다도 더 짧고 가벼운, 메뉴를 열기 전 손끝에 주는 최소한의 답.
+private const val GalleryFabHapticAnchorTapDurationMs = 10L
+private const val GalleryFabHapticAnchorTapAmplitude = 90
+
+private fun vibrateGalleryFab(context: Context, durationMillis: Long, amplitude: Int) {
+    val vibrator = context.getSystemService(Vibrator::class.java) ?: return
+    if (!vibrator.hasVibrator()) return
+    vibrator.vibrate(VibrationEffect.createOneShot(durationMillis, amplitude))
+}
+
+// 68일차 추가: + 롱프레스 후 손을 떼지 않고 드래그해 바로 실행하는 빠른 조작용
+// 대상 식별자. 기존 탭 실행 흐름과 동일한 콜백을 그대로 재사용한다(dispatch 참고).
+private enum class GalleryFabDragTarget {
+    CAMERA, FUTURE_MAILBOX, SPECIAL_GALLERY_TOGGLE, POND, SHEEP_RANCH, RACE
+}
 
 @Composable
 private fun GalleryFabCluster(
@@ -1122,13 +1171,6 @@ private fun GalleryFabCluster(
 
     // 펼침 상태가 바뀌면 자식의 수동 접힘도 초기화한다. 별도 navigation 상태는 없다.
     var childrenExpanded by remember(expanded) { mutableStateOf(true) }
-    val anchorInteraction = remember { MutableInteractionSource() }
-    val anchorPressed by anchorInteraction.collectIsPressedAsState()
-    val anchorScale by animateFloatAsState(
-        targetValue = if (anchorPressed) 0.94f else 1f,
-        animationSpec = tween(90),
-        label = "galleryFabAnchorPress"
-    )
     val anchorRotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
         animationSpec = tween(
@@ -1138,6 +1180,102 @@ private fun GalleryFabCluster(
         ),
         label = "galleryFabAnchorRotation"
     )
+
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val currentExpanded by rememberUpdatedState(expanded)
+    val currentOnToggle by rememberUpdatedState(onToggle)
+    val currentOnNavigateToCamera by rememberUpdatedState(onNavigateToCamera)
+    val currentOnNavigateToFutureMailbox by rememberUpdatedState(onNavigateToFutureMailbox)
+    val currentOnPlayModeSelected by rememberUpdatedState(onPlayModeSelected)
+
+    // 각 draggable 대상의 실제 터치 영역(윈도우 좌표). 등장 애니메이션이
+    // 50% 미만이거나 사라진 대상은 null로 비워 hit-test에서 제외한다.
+    val dragTargetBounds = remember { mutableStateMapOf<GalleryFabDragTarget, Rect>() }
+    fun updateDragTargetBounds(target: GalleryFabDragTarget, bounds: Rect?) {
+        if (bounds == null) {
+            dragTargetBounds.remove(target)
+        } else {
+            dragTargetBounds[target] = bounds
+        }
+    }
+    fun hitTestDragTarget(windowPosition: Offset): GalleryFabDragTarget? {
+        val slopPx = with(density) { GalleryFabDragHitSlop.toPx() }
+        var best: GalleryFabDragTarget? = null
+        var bestDistanceSq = Float.MAX_VALUE
+        dragTargetBounds.forEach { (target, bounds) ->
+            val inflated = bounds.inflate(slopPx)
+            if (inflated.contains(windowPosition)) {
+                val dx = inflated.center.x - windowPosition.x
+                val dy = inflated.center.y - windowPosition.y
+                val distanceSq = dx * dx + dy * dy
+                if (distanceSq < bestDistanceSq) {
+                    bestDistanceSq = distanceSq
+                    best = target
+                }
+            }
+        }
+        return best
+    }
+
+    // 기존 Tap onClick과 롱프레스 드래그 release가 정확히 같은 동작을
+    // 실행하도록 대상별 실행 경로를 한 곳에만 둔다.
+    fun dispatchDragTarget(target: GalleryFabDragTarget) {
+        when (target) {
+            GalleryFabDragTarget.CAMERA -> currentOnNavigateToCamera()
+            GalleryFabDragTarget.FUTURE_MAILBOX -> currentOnNavigateToFutureMailbox()
+            GalleryFabDragTarget.SPECIAL_GALLERY_TOGGLE -> childrenExpanded = !childrenExpanded
+            GalleryFabDragTarget.POND -> currentOnPlayModeSelected(GalleryPlayMode.POND)
+            GalleryFabDragTarget.SHEEP_RANCH -> currentOnPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)
+            GalleryFabDragTarget.RACE -> currentOnPlayModeSelected(GalleryPlayMode.RACE)
+        }
+    }
+
+    var anchorPressed by remember { mutableStateOf(false) }
+    var longPressActive by remember { mutableStateOf(false) }
+    var dragCandidate by remember { mutableStateOf<GalleryFabDragTarget?>(null) }
+    var anchorCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val anchorScale by animateFloatAsState(
+        targetValue = if (anchorPressed || longPressActive) 0.94f else 1f,
+        animationSpec = tween(90),
+        label = "galleryFabAnchorPress"
+    )
+    // 68일차 1차 후속: "꾸욱 눌렀더니 메뉴가 열린다"가 아니라 "꾸욱 잡았더니
+    // 버튼이 반응한다"는 감각을 위해, 롱프레스가 확정되는 순간에만 한 번의
+    // 뚜렷한 탄성(오버슈트 후 정착)을 anchorScale 위에 곱해서 얹는다.
+    var longPressPunchTrigger by remember { mutableStateOf(0) }
+    val anchorPunch = remember { Animatable(1f) }
+    LaunchedEffect(longPressPunchTrigger) {
+        if (longPressPunchTrigger > 0) {
+            anchorPunch.snapTo(1f)
+            anchorPunch.animateTo(
+                targetValue = 1f,
+                animationSpec = keyframes {
+                    durationMillis = 220
+                    1f at 0
+                    1.22f at 90 using FastOutSlowInEasing
+                    1f at 220 using FastOutSlowInEasing
+                }
+            )
+        }
+    }
+    // 68일차 2차 후속: 짧은 탭도 같은 anchorPunch를 재사용하되, 롱프레스보다
+    // 훨씬 가벼운 peak/duration으로 눌렀다는 최소한의 시각 답만 준다.
+    var tapPunchTrigger by remember { mutableStateOf(0) }
+    LaunchedEffect(tapPunchTrigger) {
+        if (tapPunchTrigger > 0) {
+            anchorPunch.snapTo(1f)
+            anchorPunch.animateTo(
+                targetValue = 1f,
+                animationSpec = keyframes {
+                    durationMillis = 150
+                    1f at 0
+                    1.09f at 60 using FastOutSlowInEasing
+                    1f at 150 using FastOutSlowInEasing
+                }
+            )
+        }
+    }
 
     // 펼친 버튼의 48dp 터치 영역도 부모 layout 안에 둔다. 빈 공간은 입력을 소비하지 않는다.
     Box(modifier = modifier.size(width = 160.dp, height = 216.dp)) {
@@ -1151,7 +1289,10 @@ private fun GalleryFabCluster(
             enterDelayMillis = 120,
             size = GalleryFabMiniSize,
             backgroundColor = if (playMode == GalleryPlayMode.POND) GalleryFabChildSelectedColor else PaperTray,
-            onClick = { onPlayModeSelected(GalleryPlayMode.POND) }
+            dragTarget = GalleryFabDragTarget.POND,
+            isDragSelected = dragCandidate == GalleryFabDragTarget.POND,
+            onDragTargetBoundsChanged = ::updateDragTargetBounds,
+            onClick = { dispatchDragTarget(GalleryFabDragTarget.POND) }
         ) {
             Icon(
                 imageVector = PondDrawerIcon,
@@ -1170,7 +1311,10 @@ private fun GalleryFabCluster(
             enterDelayMillis = 160,
             size = GalleryFabMiniSize,
             backgroundColor = if (playMode == GalleryPlayMode.SHEEP_RANCH) GalleryFabChildSelectedColor else PaperTray,
-            onClick = { onPlayModeSelected(GalleryPlayMode.SHEEP_RANCH) }
+            dragTarget = GalleryFabDragTarget.SHEEP_RANCH,
+            isDragSelected = dragCandidate == GalleryFabDragTarget.SHEEP_RANCH,
+            onDragTargetBoundsChanged = ::updateDragTargetBounds,
+            onClick = { dispatchDragTarget(GalleryFabDragTarget.SHEEP_RANCH) }
         ) {
             Icon(
                 imageVector = SheepDrawerIcon,
@@ -1189,7 +1333,10 @@ private fun GalleryFabCluster(
             enterDelayMillis = 200,
             size = GalleryFabMiniSize,
             backgroundColor = if (playMode == GalleryPlayMode.RACE) GalleryFabChildSelectedColor else PaperTray,
-            onClick = { onPlayModeSelected(GalleryPlayMode.RACE) }
+            dragTarget = GalleryFabDragTarget.RACE,
+            isDragSelected = dragCandidate == GalleryFabDragTarget.RACE,
+            onDragTargetBoundsChanged = ::updateDragTargetBounds,
+            onClick = { dispatchDragTarget(GalleryFabDragTarget.RACE) }
         ) {
             Icon(
                 imageVector = CheckFlagDrawerIcon,
@@ -1208,7 +1355,10 @@ private fun GalleryFabCluster(
             offsetY = (-100).dp,
             size = GalleryFabPrimarySize,
             backgroundColor = InkSecondary,
-            onClick = { childrenExpanded = !childrenExpanded },
+            dragTarget = GalleryFabDragTarget.SPECIAL_GALLERY_TOGGLE,
+            isDragSelected = dragCandidate == GalleryFabDragTarget.SPECIAL_GALLERY_TOGGLE,
+            onDragTargetBoundsChanged = ::updateDragTargetBounds,
+            onClick = { dispatchDragTarget(GalleryFabDragTarget.SPECIAL_GALLERY_TOGGLE) },
             modifier = Modifier.semantics {
                 stateDescription = if (childrenExpanded) "하위 기능 펼쳐짐" else "하위 기능 접힘"
             }
@@ -1227,7 +1377,10 @@ private fun GalleryFabCluster(
             offsetY = (-44).dp,
             size = GalleryFabPrimarySize,
             backgroundColor = GalleryFabPrimaryColor,
-            onClick = onNavigateToFutureMailbox
+            dragTarget = GalleryFabDragTarget.FUTURE_MAILBOX,
+            isDragSelected = dragCandidate == GalleryFabDragTarget.FUTURE_MAILBOX,
+            onDragTargetBoundsChanged = ::updateDragTargetBounds,
+            onClick = { dispatchDragTarget(GalleryFabDragTarget.FUTURE_MAILBOX) }
         ) {
             Icon(
                 imageVector = Icons.Default.MailOutline,
@@ -1243,7 +1396,10 @@ private fun GalleryFabCluster(
             offsetY = (-68).dp,
             size = GalleryFabPrimarySize,
             backgroundColor = GalleryFabPrimaryColor,
-            onClick = onNavigateToCamera
+            dragTarget = GalleryFabDragTarget.CAMERA,
+            isDragSelected = dragCandidate == GalleryFabDragTarget.CAMERA,
+            onDragTargetBoundsChanged = ::updateDragTargetBounds,
+            onClick = { dispatchDragTarget(GalleryFabDragTarget.CAMERA) }
         ) {
             Icon(
                 imageVector = Icons.Default.CameraAlt,
@@ -1255,26 +1411,105 @@ private fun GalleryFabCluster(
 
         // + anchor — 전체 펼침/접힘의 기준점. 펼쳐지면 45도 회전해 자연스럽게
         // 닫기(×) 표시로 읽히게 한다(새 아이콘을 추가하지 않는다).
-        FloatingActionButton(
-            onClick = onToggle,
-            interactionSource = anchorInteraction,
-            containerColor = InkPrimary,
-            shape = CircleShape,
-            elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 3.dp,
-                pressedElevation = 3.dp
-            ),
+        // 68일차 추가: 기존 짧은 탭(펼침/접힘)은 detectTapGestures로 그대로
+        // 유지하고, 그 옆에 detectDragGesturesAfterLongPress를 별도
+        // pointerInput으로 얹어 롱프레스+드래그 빠른 조작을 추가한다 — 두
+        // detector가 같은 포인터 스트림을 각자 관찰하다가, 롱프레스가
+        // 인식되는 순간 드래그 쪽이 소비를 시작해 탭 쪽 gesture가 자연히
+        // 취소되므로 이중 실행 걱정 없이 공존한다.
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .size(GalleryFabAnchorSize)
+                .onGloballyPositioned { anchorCoordinates = it }
                 .graphicsLayer {
-                    scaleX = anchorScale
-                    scaleY = anchorScale
+                    scaleX = anchorScale * anchorPunch.value
+                    scaleY = anchorScale * anchorPunch.value
                 }
+                .shadow(elevation = 3.dp, shape = CircleShape, clip = false)
+                .background(InkPrimary, CircleShape)
+                // 커스텀 pointerInput으로 바뀌어도 TalkBack 등 접근성 서비스는
+                // 실제 터치 제스처가 아니라 이 semantics onClick 액션으로
+                // 여전히 기존 짧은 탭(펼침/접힘)에 접근할 수 있어야 한다.
+                .semantics(mergeDescendants = true) {
+                    contentDescription = if (expanded) "바로가기 닫기" else "바로가기 열기"
+                    role = Role.Button
+                    onClick(label = null) {
+                        currentOnToggle()
+                        true
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            anchorPressed = true
+                            tryAwaitRelease()
+                            anchorPressed = false
+                        },
+                        onTap = {
+                            tapPunchTrigger++
+                            vibrateGalleryFab(
+                                context,
+                                GalleryFabHapticAnchorTapDurationMs,
+                                GalleryFabHapticAnchorTapAmplitude
+                            )
+                            currentOnToggle()
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            longPressActive = true
+                            dragCandidate = null
+                            longPressPunchTrigger++
+                            vibrateGalleryFab(
+                                context,
+                                GalleryFabHapticLongPressDurationMs,
+                                GalleryFabHapticLongPressAmplitude
+                            )
+                            if (!currentExpanded) {
+                                currentOnToggle()
+                            }
+                        },
+                        onDragEnd = {
+                            val finalCandidate = dragCandidate
+                            longPressActive = false
+                            dragCandidate = null
+                            if (finalCandidate != null) {
+                                vibrateGalleryFab(
+                                    context,
+                                    GalleryFabHapticConfirmDurationMs,
+                                    GalleryFabHapticConfirmAmplitude
+                                )
+                                dispatchDragTarget(finalCandidate)
+                            }
+                        },
+                        onDragCancel = {
+                            longPressActive = false
+                            dragCandidate = null
+                        }
+                    ) { change, _ ->
+                        change.consume()
+                        val windowPosition = anchorCoordinates?.localToWindow(change.position)
+                        val newCandidate = windowPosition?.let(::hitTestDragTarget)
+                        if (newCandidate != dragCandidate) {
+                            dragCandidate = newCandidate
+                            if (newCandidate != null) {
+                                vibrateGalleryFab(
+                                    context,
+                                    GalleryFabHapticSegmentTickDurationMs,
+                                    GalleryFabHapticSegmentTickAmplitude
+                                )
+                            }
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = if (expanded) "바로가기 닫기" else "바로가기 열기",
+                contentDescription = null,
                 tint = PaperSurface,
                 modifier = Modifier
                     .size(24.dp)
@@ -1295,6 +1530,9 @@ private fun BoxScope.GalleryFabShortcut(
     originX: Dp = 0.dp,
     originY: Dp = 0.dp,
     enterDelayMillis: Int = 0,
+    dragTarget: GalleryFabDragTarget? = null,
+    isDragSelected: Boolean = false,
+    onDragTargetBoundsChanged: ((GalleryFabDragTarget, Rect?) -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -1313,6 +1551,71 @@ private fun BoxScope.GalleryFabShortcut(
 
     // 등장 대기·퇴장 중에는 입력을 막고, 퇴장 완료 후 터치 영역까지 제거한다.
     if (transition.currentState || transition.targetState || transition.isRunning) {
+        val context = LocalContext.current
+        // 탭 실행과 드래그 selection 진입이 같은 "퐁" 링 펄스 + 탄성 펄스를 공유한다.
+        var pulseTrigger by remember { mutableStateOf(0) }
+        val pulseProgress = remember { Animatable(1f) }
+        LaunchedEffect(pulseTrigger) {
+            if (pulseTrigger > 0) {
+                pulseProgress.snapTo(0f)
+                pulseProgress.animateTo(1f, tween(220, easing = FastOutLinearInEasing))
+            }
+        }
+        LaunchedEffect(isDragSelected) {
+            if (isDragSelected) {
+                pulseTrigger++
+            }
+        }
+        // 68일차 1차 후속: "소심하게 커짐"이 아니라 "통 하고 튀어나옴"을 위해
+        // 두 스케일을 분리한다 — heldScale은 선택 유지 중 지속되는 살짝 커진
+        // 상태("잡힘"), punchScale은 선택 진입/탭 순간에만 한 번 오버슈트했다가
+        // 정착하는 단발성 탄성("통!"). spring 반복 bounce는 쓰지 않는다.
+        val heldScale by animateFloatAsState(
+            targetValue = if (isDragSelected) 1.10f else 1f,
+            animationSpec = tween(90, easing = FastOutSlowInEasing),
+            label = "galleryFabHeldScale"
+        )
+        val punchScale = remember { Animatable(1f) }
+        LaunchedEffect(pulseTrigger) {
+            if (pulseTrigger > 0) {
+                punchScale.snapTo(1f)
+                punchScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = keyframes {
+                        durationMillis = 200
+                        1f at 0
+                        1.16f at 70 using FastOutSlowInEasing
+                        1f at 200 using FastOutSlowInEasing
+                    }
+                )
+            }
+        }
+
+        // 68일차 2차 후속: "선택되었다는 시각적 확신"을 위한 동그란 선택 링.
+        // 드래그 후보로 유지되는 동안은 지속적으로 보이고(dragRingAlpha), 탭
+        // 처럼 후보 상태가 없는 즉시 실행에서는 같은 pulseTrigger에 얹혀
+        // 짧게 나타났다 자연스럽게 사라진다(tapRingAlpha) — 체크 표시가
+        // 아니라 선택 순간을 감싸는 "포옹" 이미지라 둘 다 fade로만 처리한다.
+        val dragRingAlpha by animateFloatAsState(
+            targetValue = if (isDragSelected) 1f else 0f,
+            animationSpec = tween(if (isDragSelected) 80 else 150),
+            label = "galleryFabDragRingAlpha"
+        )
+        val tapRingAlpha = remember { Animatable(0f) }
+        LaunchedEffect(pulseTrigger) {
+            if (pulseTrigger > 0) {
+                tapRingAlpha.snapTo(1f)
+                tapRingAlpha.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+            }
+        }
+        val ringAlpha = maxOf(dragRingAlpha, tapRingAlpha.value)
+
+        if (dragTarget != null && onDragTargetBoundsChanged != null) {
+            DisposableEffect(dragTarget) {
+                onDispose { onDragTargetBoundsChanged(dragTarget, null) }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -1326,16 +1629,64 @@ private fun BoxScope.GalleryFabShortcut(
                     translationY = (originY - offsetY).toPx() * (1f - progress)
                 }
                 .then(modifier)
+                .onGloballyPositioned { coordinates ->
+                    if (dragTarget != null && onDragTargetBoundsChanged != null) {
+                        val hitTestEnabled = expanded && progress >= 0.5f
+                        onDragTargetBoundsChanged(
+                            dragTarget,
+                            if (hitTestEnabled) coordinates.boundsInWindow() else null
+                        )
+                    }
+                }
                 .clip(CircleShape)
                 .clickable(
                     enabled = expanded && progress >= 0.5f,
                     role = Role.Button,
-                    onClick = onClick
+                    onClick = {
+                        pulseTrigger++
+                        vibrateGalleryFab(
+                            context,
+                            GalleryFabHapticConfirmDurationMs,
+                            GalleryFabHapticConfirmAmplitude
+                        )
+                        onClick()
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
             Box(
-                modifier = Modifier.size(size).background(backgroundColor, CircleShape),
+                modifier = Modifier
+                    .size(size)
+                    .graphicsLayer {
+                        scaleX = heldScale * punchScale.value
+                        scaleY = heldScale * punchScale.value
+                    }
+                    .background(backgroundColor, CircleShape)
+                    .drawWithContent {
+                        drawContent()
+                        val baseRadius = this.size.minDimension / 2f
+                        // 선택 링: 버튼 테두리 살짝 안쪽에 고정 반경으로 — 탭이든
+                        // 드래그 후보 진입이든 "지금 이게 선택됨"을 또렷이 감싼다.
+                        if (ringAlpha > 0f) {
+                            drawCircle(
+                                color = GalleryFabSelectionRingColor,
+                                radius = baseRadius - 2.5.dp.toPx(),
+                                alpha = ringAlpha * 0.9f,
+                                style = Stroke(width = 1.5.dp.toPx())
+                            )
+                        }
+                        // 물방울 pulse: 중심에서 빠르게 퍼졌다 옅어지고 사라짐. 한 번
+                        // 터치/선택 진입당 한 번만 재생되며 링과는 색/움직임으로 구분된다.
+                        if (pulseTrigger > 0 && pulseProgress.value < 1f) {
+                            val ringProgress = pulseProgress.value
+                            drawCircle(
+                                color = GalleryFabPulseColor,
+                                radius = baseRadius * (1f + 0.7f * ringProgress),
+                                alpha = (1f - ringProgress) * 0.65f,
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 content()

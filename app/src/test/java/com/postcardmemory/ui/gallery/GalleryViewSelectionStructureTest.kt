@@ -104,30 +104,125 @@ class GalleryViewSelectionStructureTest {
 
         // 주요 3개 + 하위 3개 + anchor 1개. 부모를 더해도 기존 진입을 대체하지 않는다.
         assertEquals(6, Regex("GalleryFabShortcut\\(").findAll(cluster).count())
-        assertEquals(1, Regex("FloatingActionButton\\(").findAll(cluster).count())
         assertTrue(cluster.contains("imageVector = Icons.Default.Add"))
 
         // 엽서 생성 — 앱의 사진 가져오기 메뉴와 동일한 단색 카메라 아이콘
         assertTrue(cluster.contains("Icons.Default.CameraAlt"))
         assertFalse(cluster.contains("R.drawable.ic_camera_button"))
         assertTrue(cluster.contains("contentDescription = \"카메라\""))
-        assertTrue(cluster.contains("onClick = onNavigateToCamera"))
+        assertTrue(cluster.contains("onClick = { dispatchDragTarget(GalleryFabDragTarget.CAMERA) }"))
+        assertTrue(cluster.contains("GalleryFabDragTarget.CAMERA -> currentOnNavigateToCamera()"))
 
         // 미래 우체통 — 기존 아이콘과 콜백 재사용, 새 destination 없음
         assertTrue(cluster.contains("Icons.Default.MailOutline"))
         assertTrue(cluster.contains("contentDescription = \"미래 우체통\""))
-        assertTrue(cluster.contains("onClick = onNavigateToFutureMailbox"))
+        assertTrue(cluster.contains("onClick = { dispatchDragTarget(GalleryFabDragTarget.FUTURE_MAILBOX) }"))
+        assertTrue(cluster.contains("GalleryFabDragTarget.FUTURE_MAILBOX -> currentOnNavigateToFutureMailbox()"))
 
         // 부모는 하위 표시만 제어하고, 3종의 기존 진입은 유지한다.
         assertTrue(cluster.contains("Icons.Default.PhotoLibrary"))
         assertTrue(cluster.contains("contentDescription = \"특별한 갤러리\""))
-        assertTrue(cluster.contains("onClick = { childrenExpanded = !childrenExpanded }"))
+        assertTrue(cluster.contains("onClick = { dispatchDragTarget(GalleryFabDragTarget.SPECIAL_GALLERY_TOGGLE) }"))
+        assertTrue(cluster.contains("GalleryFabDragTarget.SPECIAL_GALLERY_TOGGLE -> childrenExpanded = !childrenExpanded"))
         assertTrue(cluster.contains("PondDrawerIcon"))
         assertTrue(cluster.contains("SheepDrawerIcon"))
         assertTrue(cluster.contains("CheckFlagDrawerIcon"))
-        assertTrue(cluster.contains("onPlayModeSelected(GalleryPlayMode.POND)"))
-        assertTrue(cluster.contains("onPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)"))
-        assertTrue(cluster.contains("onPlayModeSelected(GalleryPlayMode.RACE)"))
+        assertTrue(cluster.contains("GalleryFabDragTarget.POND -> currentOnPlayModeSelected(GalleryPlayMode.POND)"))
+        assertTrue(
+            cluster.contains(
+                "GalleryFabDragTarget.SHEEP_RANCH -> currentOnPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)"
+            )
+        )
+        assertTrue(cluster.contains("GalleryFabDragTarget.RACE -> currentOnPlayModeSelected(GalleryPlayMode.RACE)"))
+    }
+
+    @Test
+    fun fabCluster_longPressDragReusesSameDispatchAsTap() {
+        val cluster = section(
+            "private fun GalleryFabCluster(",
+            "private fun BoxScope.GalleryFabShortcut("
+        )
+
+        // 68일차 추가: 기존 짧은 탭(펼침/접힘)과 새 롱프레스+드래그가 앵커 하나에
+        // 각자의 pointerInput으로 공존하고, 드래그 release도 tap과 동일한
+        // dispatchDragTarget(...)만 호출해 실행 경로가 갈라지지 않는다.
+        assertEquals(2, Regex("\\.pointerInput\\(Unit\\)").findAll(cluster).count())
+        assertTrue(cluster.contains("detectTapGestures("))
+        assertTrue(cluster.contains("detectDragGesturesAfterLongPress("))
+        assertTrue(cluster.contains("currentOnToggle()"))
+        assertTrue(cluster.contains("dispatchDragTarget(finalCandidate)"))
+
+        // 모든 6개 shortcut이 drag hit-test 대상으로 등록된다(조준 게임 방지용 slop 포함).
+        assertEquals(6, Regex("dragTarget = GalleryFabDragTarget\\.").findAll(cluster).count())
+        assertTrue(cluster.contains("bounds.inflate(slopPx)"))
+
+        // 68일차 1차 후속: LocalHapticFeedback.performHapticFeedback()이 실기기에서
+        // 느껴지지 않아 Vibrator.vibrate(VibrationEffect)로 교체됨 — 톡/또잉/퐁
+        // 세 단계가 서로 다른 duration/amplitude 상수로 구분된다.
+        assertFalse(cluster.contains("HapticFeedbackType."))
+        assertTrue(cluster.contains("GalleryFabHapticLongPressDurationMs"))
+        assertTrue(cluster.contains("GalleryFabHapticSegmentTickDurationMs"))
+        assertTrue(cluster.contains("GalleryFabHapticConfirmDurationMs"))
+        assertTrue(cluster.contains("longPressPunchTrigger++"))
+    }
+
+    @Test
+    fun fabCluster_hapticsUseDirectVibratorNotPerformHapticFeedback() {
+        // vibrateGalleryFab(...)가 GalleryFabCluster 바깥(파일 상단, private
+        // top-level fun)에 정의되므로 cluster 구간이 아니라 전체 소스에서 확인한다.
+        assertTrue(sourceText.contains("private fun vibrateGalleryFab("))
+        assertTrue(sourceText.contains("VibrationEffect.createOneShot("))
+        assertFalse(sourceText.contains("import androidx.compose.ui.platform.LocalHapticFeedback"))
+        assertFalse(sourceText.contains("import androidx.compose.ui.hapticfeedback.HapticFeedbackType"))
+    }
+
+    @Test
+    fun fabShortcut_usesOneShotPunchNotRepeatingSpring() {
+        val shortcut = section(
+            "private fun BoxScope.GalleryFabShortcut(",
+            "private fun GalleryPageFormatMenuItem("
+        )
+
+        // 선택 유지 중 지속되는 heldScale과, 진입/탭 순간 한 번만 튕기는
+        // punchScale(keyframes 오버슈트→정착)을 곱해서 "통!" 감각을 만든다.
+        assertTrue(shortcut.contains("val heldScale by animateFloatAsState("))
+        assertTrue(shortcut.contains("val punchScale = remember { Animatable(1f) }"))
+        assertTrue(shortcut.contains("scaleX = heldScale * punchScale.value"))
+        assertTrue(shortcut.contains("animationSpec = keyframes {"))
+        // 반복 bounce를 만드는 spring()은 쓰지 않는다.
+        assertFalse(shortcut.contains("spring("))
+        assertTrue(shortcut.contains("vibrateGalleryFab("))
+    }
+
+    @Test
+    fun fabCluster_anchorShortTapAlsoGetsHapticAndLightPunch() {
+        val cluster = section(
+            "private fun GalleryFabCluster(",
+            "private fun BoxScope.GalleryFabShortcut("
+        )
+
+        // 68일차 2차 후속: + 짧은 탭도 롱프레스보다 가벼운 별도 상수로
+        // 진동을 주고, 같은 anchorPunch를 더 작은 peak/duration으로 재사용한다.
+        assertTrue(cluster.contains("tapPunchTrigger++"))
+        assertTrue(cluster.contains("GalleryFabHapticAnchorTapDurationMs"))
+        assertTrue(cluster.contains("GalleryFabHapticAnchorTapAmplitude"))
+    }
+
+    @Test
+    fun fabShortcut_hasSelectionRingDistinctFromRipplePulse() {
+        val shortcut = section(
+            "private fun BoxScope.GalleryFabShortcut(",
+            "private fun GalleryPageFormatMenuItem("
+        )
+
+        // 68일차 2차 후속: "선택되었다"는 확신을 주는 고정 반경 선택 링(탭이면
+        // 짧게, 드래그 후보 유지 중이면 지속)과, 중심에서 퍼지는 물방울 pulse를
+        // 색과 동작 모두로 구분한다.
+        assertTrue(shortcut.contains("val dragRingAlpha by animateFloatAsState("))
+        assertTrue(shortcut.contains("val tapRingAlpha = remember { Animatable(0f) }"))
+        assertTrue(shortcut.contains("val ringAlpha = maxOf(dragRingAlpha, tapRingAlpha.value)"))
+        assertTrue(shortcut.contains("color = GalleryFabSelectionRingColor"))
+        assertTrue(shortcut.contains("color = GalleryFabPulseColor"))
     }
 
     @Test
