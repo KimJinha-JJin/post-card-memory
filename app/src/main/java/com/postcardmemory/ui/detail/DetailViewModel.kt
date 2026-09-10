@@ -422,6 +422,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /** 임시저장 상태가 자동 복원된 순간에만 한 번 발행되는 이벤트(Snackbar 트리거용). */
+    @Suppress("SpellCheckingInspection")
     private val _draftAutoRestoredEvents =
         Channel<Unit>(Channel.BUFFERED)
 
@@ -453,6 +454,7 @@ class DetailViewModel @Inject constructor(
      * (ViewModel 자체는 살아남으므로) 확정 상태를 다시 덮어써 진행 중인
      * 편집을 잃거나 복원 Snackbar가 중복 표시되는 일이 없게 한다.
      */
+    @Suppress("SpellCheckingInspection")
     fun loadStickerSealStateAndAutoRestoreDraft(postcardId: Long) {
         if (currentDraftPostcardId == postcardId) {
             return
@@ -600,6 +602,7 @@ class DetailViewModel @Inject constructor(
      * 상태로 되돌리며, 삭제도 revision을 올려 진행 중이던 자동저장이
      * 되살리지 못하게 막는다(saveEditsAndClearDraft와 동일한 보호 방식).
      */
+    @Suppress("SpellCheckingInspection")
     fun revertToConfirmedState() {
         val postcardId = currentDraftPostcardId
         if (postcardId <= 0L) {
@@ -3711,6 +3714,7 @@ class DetailViewModel @Inject constructor(
             LayoutUpdateState.Idle
     }
 
+    @Suppress("SpellCheckingInspection")
     fun removeStickerBackground(
         stickerId: String,
         sourceUri: Uri
@@ -4146,7 +4150,7 @@ class DetailViewModel @Inject constructor(
         scheduleDraftAutosave()
     }
 
-    /** Takes ownership of the snapshot. Even a cancelled launch releases it. */
+    /** Takes ownership of the snapshot. Even a canceled launch releases it. */
     fun exportBackPostcard(postcardId: Long, bitmap: Bitmap, sharing: Boolean) {
         if (_exportState.value is ExportState.Exporting || _shareState.value !is ShareState.Idle) {
             bitmap.recycle()

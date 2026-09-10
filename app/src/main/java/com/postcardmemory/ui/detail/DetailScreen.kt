@@ -4894,6 +4894,7 @@ fun DetailScreen(
                                                 backgroundRemovalError = null
                                             } else {
                                                 backgroundRemovalError = null
+                                                @Suppress("SpellCheckingInspection")
                                                 val removedBgUri =
                                                     sticker.removedBgUri
                                                 if (removedBgUri != null) {

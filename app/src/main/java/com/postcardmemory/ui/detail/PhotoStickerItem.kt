@@ -8,7 +8,7 @@ data class PhotoStickerItem(
     val id: String = UUID.randomUUID().toString(),
     val originalUri: Uri,
     val displayedUri: Uri,
-    val removedBgUri: Uri? = null,
+    @Suppress("SpellCheckingInspection") val removedBgUri: Uri? = null,
     val isBackgroundRemoved: Boolean = false,
     val offset: Offset? = null,
     val scale: Float = 1f,

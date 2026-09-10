@@ -156,7 +156,6 @@ import com.postcardmemory.ui.components.PinkingPhotoShape
 import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
-import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent

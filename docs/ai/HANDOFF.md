@@ -1,5 +1,18 @@
 # HANDOFF
 
+## 2026-09-09 — 68일차 마감: IDE inspection 경고 정리(기능 변경 없음)
+
+- 사용자가 지정한 IDE 항목 7개만 처리(56일차 때와 달리 이번엔 "IDE가 조용해지는 것"이 완료 기준이라 suppression을 실제로 적용).
+- Unused import: `GalleryScreen.kt`의 미사용 `import com.postcardmemory.ui.theme.BrutalWhite` 1건 삭제(오늘 이전부터 있던 것, 이번 기능 작업과 무관, 파일 내 다른 사용처 0건 확인 후 제거).
+- `removedBgUri` 오탐 ×2: `PhotoStickerItem.kt`의 data class 필드 선언과 `DetailScreen.kt`의 로컬 `val` 선언(4897행) 각각에 `@Suppress("SpellCheckingInspection")`을 붙였다 — `PhotoStickerItem`의 정식 필드명이고 저장/복원/여러 production 경로에서 일관되게 쓰이므로 rename하지 않음, 대신 declaration-level suppression으로 IDE 경고만 제거(런타임 영향 없음).
+- `Snackbar` ×3: 실제 rename도 suppression도 하지 않음 — Compose Material3의 정식 기술 용어(`SnackbarHost`/`SnackbarHostState` 등 라이브러리 심볼 그대로 사용 중)라 지시서 3절대로 "false positive로만 처리"하고 코드는 그대로 둠.
+- `uACBD`/`uACFC` ×3(uACBD 2회 + uACFC 1회): `DetailViewModel.kt`의 두 사용자 노출 에러 메시지("배경 제거 결과를 만들지 못했어." / "배경 제거를 준비하지 못했어...") 안의 `\uXXXX` Unicode escape 조각이 IDE 맞춤법 검사기에 단어처럼 잘못 인식된 것 — 문자열 값은 전혀 건드리지 않고 바로 위 줄에 `//noinspection SpellCheckingInspection` 주석만 추가(3746행 근처, 3778행 근처).
+- American English `-l-` 중복: `DetailViewModel.kt:4149`의 KDoc 주석 `"Even a cancelled launch releases it."`에서만 발견 — 코드 identifier가 아니라 순수 영문 주석이라 안전하게 "cancelled"→"canceled"로 수정. 테스트 파일들의 `Job.isCancelled` 프로퍼티는 `kotlinx.coroutines`가 제공하는 정식 API 이름(우리가 지은 이름이 아님)이라 동일 패턴이지만 rename 대상에서 제외.
+- 실제 identifier rename: 0건. 실제 동작 코드 변경: 0건(전부 import 삭제 / 주석-only 텍스트 / declaration-level suppression annotation).
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음, 무관한 기존 경고만). `gradle testDebugUnitTest --tests "com.postcardmemory.ui.gallery.*" --tests "com.postcardmemory.ui.detail.*"` BUILD SUCCESSFUL(1차 시도는 Android Studio와 CLI Gradle 동시 실행으로 추정되는 `compileDebugKotlin` 캐시 디렉터리 삭제 실패로 실패, 재시도 1회로 정상 통과 — 코드 문제 아님). `git diff --check` 통과(CRLF 경고만). `git diff` 4개 파일 전수 재검토 — import 삭제 1줄, 주석/annotation 5곳 외 다른 변경 없음 확인.
+- 남은 IDE 경고: 없음(보고된 7개 항목 모두 해소 또는 의도적 false-positive 처리로 종결). PostcardDatabase.kt의 Migration 파라미터명 경고, CameraScreen.kt/DetailScreen.kt의 deprecated API 경고는 이번 지정 범위 밖이라 그대로 둠.
+- Git 상태: `DetailScreen.kt`, `DetailViewModel.kt`, `PhotoStickerItem.kt`, `GalleryScreen.kt` 4개 파일 수정, staged 안 함, commit/push 안 함(사용자 확인 전).
+
 ## 2026-09-09 — 68일차 2차 후속: 선택 링 + 물방울 pulse 강화, + 짧은 탭 햅틱 추가
 
 - 사용자 실기기 QA: 1차 후속(햅틱 실제 진동, 버튼 탄성)은 개선 확인됨. 마지막으로 "터치한 버튼이 지금 선택되었다는 시각적 확신"이 부족하다는 피드백 — 동그란 선택 링, 물방울처럼 퍼지는 동심원, `+` 단순 탭 햅틱 3가지 보강 요청.
