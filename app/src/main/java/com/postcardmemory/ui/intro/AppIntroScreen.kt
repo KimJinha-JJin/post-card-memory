@@ -38,10 +38,47 @@ import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.InkSecondary
 import com.postcardmemory.ui.theme.PaperDivider
 import kotlin.math.roundToInt
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 
 private const val INTRO_FILL_DURATION_MS = 1800
 private const val INTRO_SETTLE_DELAY_MS = 150L
+
+/** 인트로 상단에 평소 보이는 조용한 문구 풀. */
+internal val INTRO_GENERAL_MESSAGES = listOf(
+    "작은 편지가 도착하고 있어",
+    "오늘의 엽서함",
+    "작은 기억 하나",
+    "도착한 편지가 있어요",
+    "다시 꺼내 보는 마음",
+    "어제의 장면 하나",
+    "아직 남아 있는 것들",
+    "잠시, 엽서함 앞에서",
+    "오늘 하루의 조각"
+)
+
+/** 아주 낮은 확률로만 등장하는 이스터에그 문구 — 일반 문구와 동일한 디자인으로 노출한다. */
+internal val INTRO_SECRET_MESSAGES = listOf(
+    "뚜뚜뚜두 막스 베르스타펜",
+    "챗지피티야 고마워",
+    "비개발자가 만들었어요"
+)
+
+private const val INTRO_SECRET_PROBABILITY = 0.03f
+
+/** [roll]이 이스터에그 확률 구간(기본 3%) 안에 들어오는지. */
+internal fun isSecretRoll(roll: Float): Boolean = roll < INTRO_SECRET_PROBABILITY
+
+/**
+ * 인트로 상단에 보여줄 문구 하나를 뽑는다. 순수 함수라 [random]을 고정 시드로
+ * 넘기면 결과를 결정적으로 검증할 수 있다.
+ */
+internal fun selectIntroMessage(random: Random = Random): String =
+    if (isSecretRoll(random.nextFloat())) {
+        INTRO_SECRET_MESSAGES.random(random)
+    } else {
+        INTRO_GENERAL_MESSAGES.random(random)
+    }
 
 /**
  * 앱 시작 직후 아주 짧게 보이는 인트로. 실제 갤러리 데이터 로딩과 연결된
@@ -51,6 +88,7 @@ private const val INTRO_SETTLE_DELAY_MS = 150L
 @Composable
 fun AppIntroScreen(onFinished: () -> Unit) {
     val progress = remember { Animatable(0f) }
+    val introMessage = remember { selectIntroMessage() }
 
     LaunchedEffect(Unit) {
         progress.animateTo(
@@ -69,7 +107,7 @@ fun AppIntroScreen(onFinished: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "작은 편지가 도착하고 있어",
+                text = introMessage,
                 fontSize = 12.sp,
                 color = InkSecondary,
                 modifier = Modifier.padding(bottom = 12.dp)

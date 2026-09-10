@@ -1,5 +1,17 @@
 # HANDOFF
 
+## 2026-09-10 — 69일차 후속: 인트로 상단 고정 문구 → 랜덤 문구(+ 3% 이스터에그) 교체
+
+- 전제: 69일차 인트로(진행선/봉투 이동/속도/갤러리 전환/lifecycle)는 완료·실기기 확인·커밋(`1f8b14b`)까지 끝난 상태. 이번 작업은 그 구조를 그대로 두고 상단 고정 캡션 `"작은 편지가 도착하고 있어"`만 랜덤화하는 범위로 한정.
+- `AppIntroScreen.kt`에 순수 함수 3개 + 문구 풀 2개 추가: `INTRO_GENERAL_MESSAGES`(9개, "작은 편지가 도착하고 있어" 기존 문구를 포함해 지시서 4절 권장 결의 짧은 문장들로 구성), `INTRO_SECRET_MESSAGES`(지시서 3절 문자열 그대로 3개, 다듬기/존댓말화/이모지 등 일절 손대지 않음), `isSecretRoll(roll: Float)`(3% 임계값 비교만 하는 순수 함수), `selectIntroMessage(random: Random = Random)`(3% 확률로 secret 풀에서, 아니면 general 풀에서 하나 선택). 둘 다 `internal`로 노출해 테스트에서 직접 검증 가능하게 함.
+- Compose 쪽 연결: `AppIntroScreen`에 `val introMessage = remember { selectIntroMessage() }` 한 줄만 추가하고, 기존 캡션 `Text`의 `text`만 `introMessage`로 교체. `remember`가 key 없이 컴포지션당 1회만 실행되므로 `progress` state 변화로 인한 recomposition에도 같은 문구가 유지됨(지시서 6절 요구사항). 레이아웃/여백/정렬/typography/색상은 전혀 건드리지 않음 — 기존 `Text(fontSize=12.sp, color=InkSecondary, padding(bottom=12.dp))` 그대로, 별도 container/뱃지/강조 없음(지시서 10·12절).
+- Random persistence·cooldown·analytics 등은 추가하지 않음(지시서 8·18절) — `kotlin.random.Random` 기본 인스턴스를 쓰는 순수 로컬 랜덤 선택뿐.
+- 신규 테스트 `app/src/test/java/com/postcardmemory/ui/intro/AppIntroMessageLogicTest.kt`(8건): `isSecretRoll` 경계값(0f/0.0299f/0.03f/0.9999f), `INTRO_SECRET_MESSAGES`가 지시서 문자열과 정확히 일치하는지, 일반 풀 크기가 8~15 범위인지·공백/중복 없는지, 두 풀이 서로 겹치지 않는지, 그리고 고정 시드(`Random(12345)`, `Random(777)`) 기반 2만·5만회 통계 검증(3% 근처인지, secret 3개가 모두 등장하는지) — 고정 시드라 매 실행 결정적이라 flaky 아님.
+- 긴 비밀 문구("뚜뚜뚜두 막스 베르스타펜") 실제 한 줄 표시 여부는 자동 검증 범위 밖(Compose 레이아웃 렌더링) — 실기기 QA에서 확인 필요(지시서 11·17절).
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). `gradle testDebugUnitTest --tests "com.postcardmemory.ui.intro.*"` BUILD SUCCESSFUL(신규 8건 포함). `gradle testDebugUnitTest --tests "com.postcardmemory.ui.gallery.*" --tests "com.postcardmemory.ui.futuremail.*"` BUILD SUCCESSFUL(회귀 없음). `git diff --check` 통과(CRLF 경고만).
+- 미확인/실기기 QA 필요: 일반 문구가 Intro 동안 고정되는지·앱 재실행마다 바뀔 수 있는지, 세 비밀 문구 각각 한 줄 표시/잘림 없음/평문과 동일한 디자인으로 보이는지 — 비밀 문구는 3% 확률이라 자연 발생 대기 대신 필요시 개발 중 임시로 `selectIntroMessage()` 호출부를 강제로 바꿔 확인 후 원복하는 방식 권장(디버그 강제 코드는 최종본에 남기지 않음, 지시서 17절).
+- Git 상태: branch `feature/photo-sticker`, HEAD `1f8b14b`(local == origin), 이번 변경 `AppIntroScreen.kt` 수정 + 신규 테스트 파일 1개, staged 안 함, commit/push 안 함(사용자 실기기 확인 전).
+
 ## 2026-09-10 — 69일차: 앱 실행 인트로("작은 편지가 도착하면 엽서함이 열린다") 최소 구현
 
 - 조사 결과: `MainActivity`는 `NavHost(startDestination = "gallery")` 하나뿐인 단일 Activity 구조. system splash 커스터마이징(`androidx.core.splashscreen`, `windowSplashScreenBackground` 등) 전혀 없음 — API31+ 기기에서는 OS 기본 splash가 뜨고, 그 외엔 `themes.xml`의 `android:windowBackground`(기존 미지정=기본 흰색)만 잠깐 보임. `GalleryViewModel.postcards`는 Room Flow를 `stateIn(initialValue = emptyList())`으로 구독해 초기 방출이 거의 즉시 끝나고 별도 `isLoading` 신호가 없어, 의미 있는 0~100 실제 progress를 새 구조 없이는 얻을 수 없음 → 10절 정책대로 **실제 startup progress 연결을 포기하고 고정 길이 visual intro animation으로 처리**.
