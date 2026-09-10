@@ -1,5 +1,43 @@
 # HANDOFF
 
+## 2026-09-10 — 69일차: 앱 실행 인트로("작은 편지가 도착하면 엽서함이 열린다") 최소 구현
+
+- 조사 결과: `MainActivity`는 `NavHost(startDestination = "gallery")` 하나뿐인 단일 Activity 구조. system splash 커스터마이징(`androidx.core.splashscreen`, `windowSplashScreenBackground` 등) 전혀 없음 — API31+ 기기에서는 OS 기본 splash가 뜨고, 그 외엔 `themes.xml`의 `android:windowBackground`(기존 미지정=기본 흰색)만 잠깐 보임. `GalleryViewModel.postcards`는 Room Flow를 `stateIn(initialValue = emptyList())`으로 구독해 초기 방출이 거의 즉시 끝나고 별도 `isLoading` 신호가 없어, 의미 있는 0~100 실제 progress를 새 구조 없이는 얻을 수 없음 → 10절 정책대로 **실제 startup progress 연결을 포기하고 고정 길이 visual intro animation으로 처리**.
+- 미래편지 화면(`FutureMailboxScreen.kt`의 `FutureMailNavigationLine`)에서 이미 쓰던 문법을 그대로 재사용: 얇은 텍스트 글리프 + `︎`(text-presentation 선택자)로 컬러 이모지 렌더링을 강제로 막는 기법(기존 `"⛵︎"` 배 이모지와 동일 원리), `InkSecondary`/13~14sp 저채도 typography, `clearAndSetSemantics { contentDescription = ... }`로 그룹 전체를 하나의 semantics로 묶는 방식. 이번 인트로에서는 `✉︎`(U+2709 + U+FE0E)를 그대로 적용.
+- 신규 파일 `app/src/main/java/com/postcardmemory/ui/intro/AppIntroScreen.kt`: `Animatable(0f).animateTo(1f, tween(650ms, LinearEasing))`로 진행률만 움직이는 순수 시각 애니메이션(실제 데이터 로딩과 무관, `delay()`로 사용자를 붙잡지 않음). `BoxWithConstraints` 안에서 `Canvas`로 얇은 두 톤 선(지나온 구간=`InkSecondary`, 남은 구간=`PaperDivider`)을 그리고, 그 위에 `✉︎` `Text`를 `travel * progress`만큼 `offset`으로 이동시켜 진행률과 실제 위치를 연결. 퍼센트는 `Modifier.width(30.dp)` + `TextAlign.End`로 숫자 자릿수가 바뀌어도 레이아웃이 흔들리지 않게 고정. 배경은 `GalleryPaperWhite`(=`PaperCanvas`)로 `GalleryScreen`의 `Scaffold(containerColor = GalleryPaperWhite)`와 동일해 인트로→갤러리 전환 시 배경색 차이로 번쩍이지 않음. 접근성: 봉투·선·숫자를 개별 semantics로 노출하지 않고 상위 `Row`에 `clearAndSetSemantics { contentDescription = "엽서함을 여는 중" }` 하나만 둬서, 애니메이션 중 매 프레임 퍼센트가 바뀌어도 TalkBack이 반복 announce할 값(고정 문자열) 자체가 없게 함.
+- `MainActivity.kt`: 기존 `NavHost` 블록을 그대로 `MainNavHost()`로 추출하고, `Surface` 안에 파일 최상단 `private object AppIntroState { var hasShownIntro = false }`(DB/SharedPreferences 없는 in-memory 플래그, 새 영속 구조 추가 안 함)로 게이팅한 `showIntro` state를 추가. `Crossfade(targetState = showIntro, animationSpec = tween(180))`로 인트로 완료 시 `AppIntroScreen`→`MainNavHost()`로 짧게 페이드 전환(급전환에 의한 화면 튐 방지). `AppIntroState.hasShownIntro`가 object(class-level) 상태라 화면 회전/Activity 재생성에는 살아남아 다시 뜨지 않지만, 프로세스 자체가 새로 시작되면(콜드 스타트) 다시 false로 돌아와 "프로세스 시작 시 한 번" 요구를 정확히 만족. NavHost destination이 아니라 그 바깥(Surface 안, NavHost 위)에 있어 gallery 복귀 등 in-app 네비게이션으로는 재진입하지 않음.
+- `themes.xml`에 `android:windowBackground` 1줄 추가(`#FFF4ECDE` = `PaperCanvas`, 인트로/갤러리와 동일 톤) — cold start 시 시스템 기본 흰 배경 → 인트로 사이의 색 차이로 인한 번쩍임을 줄이기 위한 최소 보정. splash theme 전면 재설계는 하지 않음(범위 밖, 20절 STOP 대상).
+- 최소 구현 유지: Room/Migration/데이터 구조/새 dependency/새 persistence 없음. 건드린 파일은 신규 intro 파일 1개, `MainActivity.kt`, `themes.xml` 3개뿐.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(1차 시도에서 `clearAndSetSemantics` 블록 안 `contentDescription` unresolved reference로 실패 → `androidx.compose.ui.semantics.contentDescription` import 추가 후 재시도 성공). `gradle testDebugUnitTest --tests "com.postcardmemory.ui.gallery.*" --tests "com.postcardmemory.ui.futuremail.*"` BUILD SUCCESSFUL. `git diff --check` 통과(기존 파일들의 CRLF 경고만, 신규 파일엔 경고 없음).
+- 미확인/사용자 실기기 QA 대기(5·20절 실기기 보호 정책상 AI가 자동 계측으로 대체 불가): cold start에서 system splash → 인트로 → 갤러리 흐름이 실제로 자연스러운지, 흰/검은 플래시 없는지, 봉투가 실제로 매끄럽게 이동하는지, 인트로가 답답하게 느껴지지 않는지, 화면 회전·백그라운드 복귀·다른 화면에서 갤러리 복귀 시 인트로가 재등장하지 않는지, 기존 갤러리 기능(FAB 드래그·quick menu 등) 회귀 없는지.
+- 68일차 IDE inspection 정리(`DetailScreen.kt`/`DetailViewModel.kt`/`PhotoStickerItem.kt`/`GalleryScreen.kt` 4개 파일)는 오늘 작업과 무관하게 여전히 미커밋 상태로 보존(사용자 확인 전).
+- Git 상태: branch `feature/photo-sticker`, HEAD가 `origin/feature/photo-sticker`와 동일한 지점에서 시작(`4bd72ed`), local == origin. 오늘 변경 3개 파일 + 68일차 잔여 변경 4개 파일 모두 staged 안 함, commit/push 안 함(사용자 확인 전).
+
+### 69일차 후속 — 실기기 QA 1차 피드백: 봉투가 너무 빨라 안 보임
+
+- 사용자 실기기 QA 결과: "봉투가 너무 빠른 것 같아 아예 보이지도 않아". 진행 채우기 애니메이션 길이(`INTRO_FILL_DURATION_MS`)가 650ms로 너무 짧아 이동을 눈으로 따라가기 전에 끝나버린 것으로 판단.
+- 조치: `AppIntroScreen.kt`의 `INTRO_FILL_DURATION_MS` 650→1100ms, `INTRO_SETTLE_DELAY_MS` 120→150ms로 늘림(다른 구조·로직 변경 없음, 상수 2개만 조정). LinearEasing 그대로 유지 — 실제 진행률을 균일한 속도로 표현하는 의미라 easing을 바꾸지 않고 길이만 늘림.
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음, `PostcardDatabase.kt`/`CameraScreen.kt`/`DetailScreen.kt`의 기존 무관 경고만 그대로 출력).
+- 미확인: 1100ms로 실제 실기기에서 충분히 보이는지, 반대로 답답하게 느껴지지는 않는지 — 다음 실기기 QA 대기.
+
+### 69일차 후속 2차 — 실기기 QA 2차 피드백: 봉투-진행선 간격, 속도, 상단 문구 추가 요청
+
+- 사용자 피드백: "봉투가 바닥에 거의 붙었다 → 간격 띄워달라", "가로바 차오르는 느낌도 느리게", "로딩창 상단에 천천히 귀여운 문구가 랜덤으로 뜨는 것도 넣어줘".
+- 간격/속도(바로 반영, 지시서 문법 범위 안): `INTRO_FILL_DURATION_MS` 1100→1800ms로 재조정. 진행선 트랙(`BoxWithConstraints`) 높이 20dp→32dp, `Canvas`의 선 `centerY`를 `size.height / 2f`→`size.height * 0.82f`로 내려 트랙을 아래쪽에 붙이고, 봉투 `Text`는 기존처럼 박스 상단 기준(기본 TopStart)에 그대로 둬 봉투와 선 사이에 시각적 여백이 생기도록 함. 다른 로직 변경 없음.
+- 랜덤 문구: 오늘 작업지시서 21절이 "여러 줄 감성 문구", "Preparing something magical…" 류를 명시적으로 금지 항목으로 못 박아둔 것과 정확히 충돌하는 요청이라 바로 구현하지 않고 사용자에게 확인. 사용자가 "지금 바로 고정 문구 1건만 넣어본다"를 선택 — 랜덤/여러 개/애니메이션 없이 정적 문구 1개만 우선 도입하는 절충으로 진행.
+- 구현: `AppIntroScreen`의 `Box` 안에 `Column`을 추가해 진행 UI(`AppIntroProgress`) 위에 고정 캡션 `"작은 편지가 도착하고 있어"`를 배치(`fontSize = 12.sp`, `color = InkSecondary`, `padding(bottom = 12.dp)`) — 퍼센트(13.sp)보다 작게 둬 시각적으로 캡션이 진행 UI보다 튀지 않게 함. 랜덤 문구 목록/타이머는 아직 추가하지 않음(사용자가 이번 QA에서 이 정적 버전이 "로딩화면처럼 안 보이는지" 먼저 확인한 뒤, 괜찮으면 다음 단계에서 랜덤 확장 여부를 다시 결정하기로 함).
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). `git diff --check` 통과(기존 CRLF 경고만).
+- 미확인/다음 실기기 QA 필요: 봉투-선 간격이 실제로 자연스러운지, 1800ms가 느리게 느껴지되 답답하지는 않은지, 상단 고정 문구가 "예쁜 로딩화면"처럼 보이지 않고 여전히 조용한 인트로로 읽히는지 — 이 정적 버전이 통과해야 랜덤 확장을 다음 단계로 진행.
+
+### 69일차 후속 3차 — 실기기 QA 3차 피드백: 문구 확정, 봉투가 끝에 못 닿는 문제
+
+- 사용자 피드백: "가로바 차오르는 속도보다 봉투가 살짝 느린 거 같음, 맨끝까지 닿는 거 같지가 않아" / "이 문구로 된 로딩창 맘에 들어" — 고정 캡션 "작은 편지가 도착하고 있어"는 이번 QA로 확정, 봉투 이동만 보정 필요.
+- 원인: 이전 코드가 봉투가 차지할 너비를 `16.dp`로 임의 가정하고 `travel = maxWidth - 16.dp`로 이동 거리를 계산했는데, 실제 `"✉︎"` 글리프(14sp)의 렌더링 너비가 이 가정값과 다르면(대부분 더 작음) 100% 시점에도 봉투 우측 끝이 트랙 끝(`maxWidth`)에 못 미쳐 "덜 도착한" 것처럼 보임 — 가로선은 항상 정확히 `size.width * progress`로 끝까지 차므로 두 속도가 다르게 느껴진 것.
+- 조치: 하드코딩된 `16.dp` 추정치를 제거하고, 봉투 `Text`에 `Modifier.onGloballyPositioned { }`를 붙여 실제 렌더링된 너비를 `remember { mutableStateOf(0.dp) }`에 측정해 담고, `travel = maxWidth - (측정된 실제 너비)`로 계산 — 폰트/기기별 실제 글리프 크기와 무관하게 100%에서 봉투 우측 끝이 정확히 트랙 끝에 닿도록 함. 첫 프레임(측정 전, 너비=0)만 아주 짧게 `travel = maxWidth`로 근사되고 이후 실제 값으로 바로 보정됨(눈에 띄는 튐 없음).
+- 자동검증: `gradle compileDebugKotlin` BUILD SUCCESSFUL(신규 경고 없음). `git diff --check` 통과(기존 CRLF 경고만).
+- 사용자 실기기 QA 확인: "봉투 끝까지 잘 닿음!!!!!!!!!!!!!" — 69일차 목표(간격/속도/문구/도착 지점) 전부 실기기 확인 완료. `커밋, 푸시` 승인.
+- 69일차 마감: 오늘 변경분(`app/src/main/java/com/postcardmemory/ui/intro/AppIntroScreen.kt`, `MainActivity.kt`, `themes.xml`)만 별도 커밋으로 분리해 커밋/푸시. 68일차 IDE inspection 정리(4개 파일)는 오늘 QA와 무관해 사용자 선택대로 별도 커밋으로 분리.
+
 ## 2026-09-09 — 68일차 마감: IDE inspection 경고 정리(기능 변경 없음)
 
 - 사용자가 지정한 IDE 항목 7개만 처리(56일차 때와 달리 이번엔 "IDE가 조용해지는 것"이 완료 기준이라 suppression을 실제로 적용).
