@@ -34,12 +34,22 @@ private fun sealImageRes(type: SealType): Int? =
         else -> null
     }
 
+/**
+ * 원형 소인 안 날짜 글자 크기(내부 원 반지름 대비). 엽서에 찍히는 도장의
+ * 기존 비율이며 저장본 exporter(PostcardImageExporter)도 같은 값을 쓴다 —
+ * 이 기본값을 바꾸면 이미 저장된 엽서의 소인 모양까지 달라지므로 바꾸지
+ * 않는다. 엽서가 아닌 화면(인트로 방문 소인 등)에서 더 작은 글자가 필요하면
+ * 기본값을 건드리지 말고 [SealPreviewContent]에 다른 비율을 넘긴다.
+ */
+internal const val SEAL_POSTMARK_DATE_TEXT_RATIO = 0.42f
+
 /** 도장 종류에 맞는 모양을 정사각형 영역 안에 그린다. 미리보기 전용(저장본은 PostcardImageExporter에서 별도로 그림) */
 @Composable
 fun SealPreviewContent(
     type: SealType,
     color: Color,
     capturedAtMillis: Long? = null,
+    dateTextRatio: Float = SEAL_POSTMARK_DATE_TEXT_RATIO,
     modifier: Modifier = Modifier
 ) {
     val imageRes = sealImageRes(type)
@@ -60,7 +70,12 @@ fun SealPreviewContent(
 
         when (type) {
             SealType.CIRCLE_POSTMARK ->
-                drawCirclePostmark(color, strokeWidth, capturedAtMillis)
+                drawCirclePostmark(
+                    color,
+                    strokeWidth,
+                    capturedAtMillis,
+                    dateTextRatio
+                )
 
             SealType.WAVE_CANCEL ->
                 drawWaveCancel(color, strokeWidth)
@@ -79,7 +94,8 @@ fun SealPreviewContent(
 private fun DrawScope.drawCirclePostmark(
     color: Color,
     strokeWidth: Float,
-    capturedAtMillis: Long?
+    capturedAtMillis: Long?,
+    dateTextRatio: Float = SEAL_POSTMARK_DATE_TEXT_RATIO
 ) {
     val outerRadius = size.minDimension / 2f - strokeWidth
     val innerRadius = outerRadius * 0.72f
@@ -128,7 +144,7 @@ private fun DrawScope.drawCirclePostmark(
                     Typeface.SANS_SERIF,
                     Typeface.BOLD
                 )
-                textSize = innerRadius * 0.42f
+                textSize = innerRadius * dateTextRatio
                 textAlign = Paint.Align.CENTER
             }
 
