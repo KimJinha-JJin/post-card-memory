@@ -1,5 +1,7 @@
 # WORK_CONTEXT
 
+> 비활성 작업판의 역사 기록. 아래 2026-08-15 사실을 현재 구현이나 승인으로 사용하지 않는다. 현재 기본은 수동 표준 모드이며 재개 시 [HANDOFF](HANDOFF.md)의 현재 상태·위험을 읽는다.
+
 ## 2026-08-15 — AGENTS.md + docs/ai 구조 도입
 
 - 결정된 방향: 기존 실제 저장소 `CLAUDE.md`(Git/Room/저장 안전성/테스트/commit-push 승인 등 안전 규칙)를 삭제·약화하지 않고, 공통 규칙은 `AGENTS.md`로, Claude Code 전용 실행·세션 규칙은 `CLAUDE.md`로 분리한다.

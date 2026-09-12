@@ -1,3 +1,5 @@
+> **문서 상태:** 아래 앱 소개는 과거 설명을 보존한 참고 자료이며 현재 기능·설정·작업 승인의 기준이 아니야. 2열 그리드 등 일부 설명은 현재 규칙과 달라. 현재 작업은 [AGENTS.md](AGENTS.md), [현재 HANDOFF](docs/ai/HANDOFF.md), [유효한 결정](docs/ai/DECISIONS.md)을 먼저 확인해. 제품 소개 전체 갱신은 별도 작업으로 남겨.
+
 <div align="center">
 
 ```
