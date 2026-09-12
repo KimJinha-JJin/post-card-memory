@@ -124,4 +124,57 @@ class AppIntroMessageLogicTest {
             )
         }
     }
+
+    // ---- 선수 등번호 milestone (3/7/16/44/63번째 방문) ----
+
+    @Test
+    fun milestoneMessages_matchFixedSpec() {
+        assertEquals(
+            mapOf(
+                3 to "피에르으으으으으으으 가슬리이이이이이이이이이이",
+                7 to "럭키데이",
+                16 to "그것은 물이다",
+                33 to "뚜뚜뚜두 막스 베르스타펜",
+                44 to "Hey, man",
+                63 to "Here comes the DIVA"
+            ),
+            INTRO_MILESTONE_MESSAGES
+        )
+    }
+
+    @Test
+    fun selectIntroMessage_atEachDriverNumberMilestone_alwaysReturnsMappedMessage() {
+        INTRO_MILESTONE_MESSAGES.forEach { (visitDay, expectedMessage) ->
+            val random = Random(visitDay)
+            repeat(200) {
+                assertEquals(
+                    "visitDay=$visitDay",
+                    expectedMessage,
+                    selectIntroMessage(random, totalVisitDays = visitDay)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun selectIntroMessage_daysAdjacentToDriverNumberMilestones_doNotForceMessage() {
+        // milestone 키 바로 옆 방문일들은 milestone 분기를 타지 않고
+        // totalVisitDays 없을 때와 완전히 같은 결과·난수 소비를 가져야 한다.
+        val adjacentDays = INTRO_MILESTONE_MESSAGES.keys
+            .flatMap { listOf(it - 1, it + 1) }
+            .filter { it !in INTRO_MILESTONE_MESSAGES }
+
+        adjacentDays.forEach { day ->
+            val withoutContext = Random(day)
+            val atDay = Random(day)
+
+            repeat(100) {
+                assertEquals(
+                    "day=$day",
+                    selectIntroMessage(withoutContext),
+                    selectIntroMessage(atDay, totalVisitDays = day)
+                )
+            }
+        }
+    }
 }

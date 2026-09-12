@@ -82,8 +82,27 @@ internal val INTRO_SECRET_MESSAGES = listOf(
 
 private const val INTRO_SECRET_PROBABILITY = 0.03f
 
-/** 누적 방문일이 이 값과 정확히 같으면 확률과 무관하게 막스 베르스타펜 문구를 확정한다. */
+/**
+ * 누적 방문일이 이 값과 정확히 같으면 확률과 무관하게 막스 베르스타펜 문구를
+ * 확정하고, 소인이 착지할 때 한 바퀴 돈다 — [INTRO_MILESTONE_MESSAGES]의
+ * 다른 방문일에는 문구만 확정될 뿐 회전은 이 값에만 붙는 특권이다.
+ */
 internal const val INTRO_MAX_MILESTONE_VISIT_DAY = 33
+
+/**
+ * 특정 누적 방문일에 확률과 무관하게 확정으로 뜨는 문구들(선수 등번호
+ * 이스터에그). 키는 방문일, 값은 그날 확정될 문구다. 디자인은
+ * [INTRO_MAX_MILESTONE_VISIT_DAY](33)의 소인 회전 하나를 빼면 전부 일반
+ * 문구와 완전히 동일하다.
+ */
+internal val INTRO_MILESTONE_MESSAGES: Map<Int, String> = mapOf(
+    3 to "피에르으으으으으으으 가슬리이이이이이이이이이이",
+    7 to "럭키데이",
+    16 to "그것은 물이다",
+    INTRO_MAX_MILESTONE_VISIT_DAY to INTRO_SECRET_MESSAGES[0],
+    44 to "Hey, man",
+    63 to "Here comes the DIVA"
+)
 
 /** [roll]이 이스터에그 확률 구간(기본 3%) 안에 들어오는지. */
 internal fun isSecretRoll(roll: Float): Boolean = roll < INTRO_SECRET_PROBABILITY
@@ -92,14 +111,12 @@ internal fun isSecretRoll(roll: Float): Boolean = roll < INTRO_SECRET_PROBABILIT
  * 인트로 상단에 보여줄 문구 하나를 뽑는다. 순수 함수라 [random]을 고정 시드로
  * 넘기면 결과를 결정적으로 검증할 수 있다.
  *
- * [totalVisitDays]가 정확히 [INTRO_MAX_MILESTONE_VISIT_DAY]번째면 확률 롤 없이
- * [INTRO_SECRET_MESSAGES]의 막스 베르스타펜 문구를 확정으로 돌려준다. 그 외
- * 값(32/34번째 등)에는 이 규칙이 적용되지 않고 기존 3% 확률 롤을 그대로 탄다.
+ * [totalVisitDays]가 [INTRO_MILESTONE_MESSAGES]의 키와 정확히 같으면 확률 롤
+ * 없이 그 문구를 확정으로 돌려준다. 그 외 값(2/4/32/34번째 등)에는 이 규칙이
+ * 적용되지 않고 기존 3% 확률 롤을 그대로 탄다.
  */
 internal fun selectIntroMessage(random: Random = Random, totalVisitDays: Int? = null): String {
-    if (totalVisitDays == INTRO_MAX_MILESTONE_VISIT_DAY) {
-        return INTRO_SECRET_MESSAGES[0]
-    }
+    INTRO_MILESTONE_MESSAGES[totalVisitDays]?.let { return it }
 
     return if (isSecretRoll(random.nextFloat())) {
         INTRO_SECRET_MESSAGES.random(random)
@@ -130,6 +147,14 @@ private const val INTRO_POSTMARK_INK_RAMP = 2.2f
 
 /** "통" 하고 한 번 눌렸다 앉는 탄성. 반복되지 않는 일회성 움직임이다. */
 private const val INTRO_POSTMARK_PRESS_STIFFNESS = 2600f
+
+/**
+ * [INTRO_MAX_MILESTONE_VISIT_DAY]에서만 착지 직전 한 바퀴(360도) 더 돌고
+ * 내려앉는다. 기존 [stampPress]([Animatable]) 하나로 계산하는 값이라 새
+ * 애니메이션 시스템이 필요 없고, 다른 milestone/일반 문구에는 이 항이
+ * 그대로 0이라 회전이 붙지 않는다.
+ */
+private const val INTRO_POSTMARK_MILESTONE_SPIN_DEGREES = 360f
 
 /**
  * 도장이 종이에 "닿았다"고 볼 눌림 정도. 애니메이션이 완전히 멈춘 뒤가 아니라
@@ -253,7 +278,8 @@ fun AppIntroScreen(
  * 상태에서 잉크가 배어들며 내려와, 목표 크기를 살짝 지나 눌렸다가 제자리에
  * 앉고 동시에 손으로 찍은 듯한 각도까지 돌아간다. 반복되지 않는 일회성
  * 움직임이고, 값을 [graphicsLayer] 안에서 읽으므로 프레임마다 recomposition이
- * 일어나지 않는다.
+ * 일어나지 않는다. [INTRO_MAX_MILESTONE_VISIT_DAY]번째 방문이면 착지 직전
+ * 한 바퀴 더 돌고 같은 자리에 앉는다 — 다른 방문일에는 이 회전이 붙지 않는다.
  *
  * 이 움직임은 앱을 열 때마다 보이지만, 닿는 순간의 진동은
  * [isFirstVisitToday]일 때만 울린다.
@@ -269,6 +295,7 @@ private fun AppIntroVisitPostmark(
     // 0 = 아직 들려 있음, 1 = 종이에 앉음. 탄성이 1을 살짝 넘는 구간이 "통"이다.
     val stampPress = remember { Animatable(0f) }
     val hasVisitRecord = visitRecord != null
+    val isMaxMilestone = visitRecord?.totalVisitDays == INTRO_MAX_MILESTONE_VISIT_DAY
     val context = LocalContext.current
 
     LaunchedEffect(hasVisitRecord, isFirstVisitToday) {
@@ -316,7 +343,12 @@ private fun AppIntroVisitPostmark(
 
                     scaleX = pressScale
                     scaleY = pressScale
-                    rotationZ = INTRO_POSTMARK_TILT_DEGREES * press
+                    rotationZ = INTRO_POSTMARK_TILT_DEGREES * press +
+                        if (isMaxMilestone) {
+                            INTRO_POSTMARK_MILESTONE_SPIN_DEGREES * (1f - press)
+                        } else {
+                            0f
+                        }
                 }
         ) {
             if (visitRecord != null) {

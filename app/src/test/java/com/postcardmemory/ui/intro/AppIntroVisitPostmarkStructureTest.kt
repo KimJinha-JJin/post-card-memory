@@ -126,6 +126,31 @@ class AppIntroVisitPostmarkStructureTest {
         )
     }
 
+    // ---- 33번째 milestone 전용 착지 회전 ----
+
+    @Test
+    fun postmark_spinsOnceOnlyOnMaxMilestoneVisit() {
+        assertTrue(
+            "33번째만 회전하는 조건이 있어야 함",
+            introSource.contains(
+                "val isMaxMilestone = visitRecord?.totalVisitDays == INTRO_MAX_MILESTONE_VISIT_DAY"
+            )
+        )
+        assertTrue(
+            "회전은 기존 rotationZ 계산식에 항으로 더해져야 함(새 애니메이션 아님)",
+            introSource.contains("rotationZ = INTRO_POSTMARK_TILT_DEGREES * press +")
+        )
+        assertTrue(
+            "회전량은 착지 진행률(press)에 따라 줄어들어 같은 최종 기울기로 앉아야 함",
+            introSource.contains("INTRO_POSTMARK_MILESTONE_SPIN_DEGREES * (1f - press)")
+        )
+        assertFalse(
+            "회전 때문에 반복 애니메이션을 새로 두면 안 됨",
+            introSource.contains("infiniteRepeatable") ||
+                introSource.contains("rememberInfiniteTransition")
+        )
+    }
+
     // ---- 닿는 순간의 햅틱 ----
 
     @Test

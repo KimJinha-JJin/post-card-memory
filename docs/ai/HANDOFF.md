@@ -1,5 +1,19 @@
 # HANDOFF
 
+## 2026-09-12 — 71일차 후속: 선수 등번호 milestone 5개 추가 + 33번째 소인 회전
+
+- 상황: 위 71일차(33번째 milestone)를 사용자가 실기기 확인 후 commit·push(`d466811`)까지 마친 같은 세션에서 이어진 후속 확장. 사용자가 직접 지정한 5개 신규 milestone과, 33번째(막스)만 착지 시 한 바퀴 도는 회전 효과를 요청.
+- 구조 변경: `selectIntroMessage`의 "33이면 확정" 단일 분기를 `INTRO_MILESTONE_MESSAGES: Map<Int, String>` 기반 조회로 일반화했다(`INTRO_MILESTONE_MESSAGES[totalVisitDays]?.let { return it }`). 기존 33번째 항목은 `INTRO_MAX_MILESTONE_VISIT_DAY to INTRO_SECRET_MESSAGES[0]`로 맵에 그대로 편입돼 동작 변화 없음.
+- 사용자가 확정한 신규 5개: `3 → "피에르으으으으으으으 가슬리이이이이이이이이이이"`, `7 → "럭키데이"`, `16 → "그것은 물이다"`, `44 → "Hey, man"`, `63 → "Here comes the DIVA"`. 디자인은 일반 문구와 완전히 동일(9절 원칙 유지) — 회전은 붙지 않는다.
+- 회전 범위 결정: 사용자가 "회전은 33(막스)만, 새 milestone엔 회전 없음"으로 명시적으로 선택. 회전 방식도 "착지할 때 한 바퀴 도는 정도"로 확정(인트로가 떠있는 내내 도는 방식은 반복 애니메이션이 필요해 기각).
+- 회전 구현: 새 애니메이션 시스템 없이 기존 `stampPress`(`Animatable`) 하나로 계산한다. `rotationZ = INTRO_POSTMARK_TILT_DEGREES * press + (if (isMaxMilestone) INTRO_POSTMARK_MILESTONE_SPIN_DEGREES(360f) * (1f - press) else 0f)` — press가 0(들려 있음)일 때 360도 더해져 있다가 1(착지)로 갈수록 그 항이 0으로 줄어, 다른 날과 똑같은 최종 기울기(`-7도`)로 앉는다. `isMaxMilestone = visitRecord?.totalVisitDays == INTRO_MAX_MILESTONE_VISIT_DAY`는 정적 값이라 `graphicsLayer` 밖에서 계산해도 무방(애니메이션 값 자체가 아님). 반복 애니메이션(`infiniteRepeatable`/`rememberInfiniteTransition`)은 추가하지 않음 — 구조 테스트로 고정.
+- 변경 파일: `app/src/main/java/com/postcardmemory/ui/intro/AppIntroScreen.kt`(milestone 맵 일반화 + 회전 상수/분기), `app/src/test/java/com/postcardmemory/ui/intro/AppIntroMessageLogicTest.kt`(milestone 맵·조회 테스트), `app/src/test/java/com/postcardmemory/ui/intro/AppIntroVisitPostmarkStructureTest.kt`(회전 구조 테스트), 이 문서. Room/DataStore/dependency/navigation 변경 0건, production 방문 데이터 조작 없음.
+- 신규 테스트 5건: `milestoneMessages_matchFixedSpec`(맵 내용 고정), `selectIntroMessage_atEachDriverNumberMilestone_alwaysReturnsMappedMessage`(6개 milestone 전부 각 200회 반복 확정 확인), `selectIntroMessage_daysAdjacentToDriverNumberMilestones_doNotForceMessage`(milestone 바로 옆 방문일 12개가 totalVisitDays 없을 때와 동일한 결과·난수 소비를 갖는지 — milestone이 인접일에 새지 않음을 증명), `postmark_spinsOnceOnlyOnMaxMilestoneVisit`(회전 조건·계산식·반복 애니메이션 부재 고정).
+- 자동검증 실제 결과: `gradle :app:compileDebugKotlin` **BUILD SUCCESSFUL**(신규 경고 0건). `gradle :app:testDebugUnitTest` 전체 **BUILD SUCCESSFUL — 72 클래스 625건, failures 0 / errors 0 / skipped 0**(직전 621건 + 오늘 신규 4건). `git diff --check` 통과(기존 CRLF 안내만). `git diff` 전체 재검토 — `AppIntroScreen.kt`의 milestone 맵·회전 계산식 + 테스트 2개 파일 외 예상 밖 변경 없음.
+- 미검증 / 사용자 실기기 QA 필요: 33번째 방문에서 소인이 실제로 한 바퀴 돌고 착지하는 모습이 자연스러운지(회전 속도·탄성은 기존 "통" 스프링 그대로라 조정 여지는 `INTRO_POSTMARK_PRESS_STIFFNESS`/`dampingRatio`), 나머지 5개 milestone 문구가 일반 문구와 구별 없이 자연스럽게 보이는지. 6개 milestone 모두 실기기로 재현하지 않고 host-side unit test로만 확정(3/7/16/33/44/63번째 방문은 자연 도달까지 오래 걸려 production 데이터를 조작하지 않았다).
+- 남은 위험: 없음(저장 형식·Room·방문 판정 로직 변경 0). 후속 아이디어(오늘 구현 안 함): 추가 선수번호 milestone, 새 milestone 전용 회전/효과가 필요해지면 이번처럼 `isMaxMilestone` 패턴을 그 milestone 전용 플래그로 확장.
+- Git 상태: branch `feature/photo-sticker`, 시작 HEAD `d466811`(local == origin, 이동 없음). 수정 3개 파일(`AppIntroScreen.kt`, `AppIntroMessageLogicTest.kt`, `AppIntroVisitPostmarkStructureTest.kt`) + 이 문서, **staged 안 함, commit·push 안 함**(사용자 실기기 확인 및 승인 전).
+
 ## 2026-09-12 — 71일차: Intro 랜덤 문구에 33번째 방문 milestone 연결
 
 - 시작 Git 상태: branch `feature/photo-sticker`, HEAD `62b5935`(local == origin, ahead/behind 0/0). 미커밋 변경 없음, 기존 untracked `.codex-config.candidate.toml`/`.kotlin/`만 존재. 지시서 기준 HEAD도 `62b5935`로 실제와 일치. **문서 지연 발견**: 바로 아래 70일차 항목(특히 "70일차 후속 3차")은 아직 "staged 안 함, commit·push 안 함"으로 적혀 있지만, 실제로는 이미 이 `62b5935` 커밋("Remember each day the app is opened and stamp a postmark for it")으로 70일차 전체(방문 기록·소인·햅틱)가 commit·push까지 끝나 있었다 — 과거 기록은 고치지 않고 이번 항목에만 사실을 남긴다.
