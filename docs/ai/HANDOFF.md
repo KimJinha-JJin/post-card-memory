@@ -5,7 +5,7 @@
 ## 현재 Git과 이번 문서 작업
 
 - branch: `feature/photo-sticker`
-- HEAD: `c5959d87c09d22bae423c2cfb4598f655394dcfa`
+- 이 문서 정리 시작 기준 HEAD: `c5959d87c09d22bae423c2cfb4598f655394dcfa`. 이번 마감 commit/push 결과는 Git 기록과 최종 보고에서 확인한다.
 - 2026-09-13 fetch 후 로컬 HEAD와 `origin/feature/photo-sticker`가 일치하며 ahead/behind는 `0/0`이다.
 - 시작 시 tracked/staged 변경 없음. 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`는 보존 대상이며 이번 범위가 아니다.
 - 이번 범위: AGENTS/CLAUDE, 작업판의 비활성 표시, 현재·역사 기록 분리, README/DECISIONS 상태 안내, canonical workflow 스킬의 충돌 문구 정리. 앱 코드·설정·기기 작업은 제외한다.
