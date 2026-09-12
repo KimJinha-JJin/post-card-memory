@@ -83,4 +83,45 @@ class AppIntroMessageLogicTest {
 
         assertEquals(INTRO_SECRET_MESSAGES.toSet(), seen)
     }
+
+    // ---- 33번째 방문 milestone ----
+
+    @Test
+    fun selectIntroMessage_at33rdVisit_alwaysReturnsMaxVerstappenMessage() {
+        val random = Random(1)
+        repeat(1_000) {
+            assertEquals(
+                "뚜뚜뚜두 막스 베르스타펜",
+                selectIntroMessage(random, totalVisitDays = INTRO_MAX_MILESTONE_VISIT_DAY)
+            )
+        }
+    }
+
+    @Test
+    fun selectIntroMessage_32ndVisit_milestoneDoesNotApply() {
+        // 32번째는 milestone 분기를 타지 않고 totalVisitDays 없을 때와 완전히
+        // 같은 난수 소비·결과 분포를 가져야 한다(같은 시드로 결과 동일성 확인).
+        val withoutContext = Random(555)
+        val at32 = Random(555)
+
+        repeat(500) {
+            assertEquals(
+                selectIntroMessage(withoutContext),
+                selectIntroMessage(at32, totalVisitDays = 32)
+            )
+        }
+    }
+
+    @Test
+    fun selectIntroMessage_34thVisit_milestoneDoesNotApply() {
+        val withoutContext = Random(999)
+        val at34 = Random(999)
+
+        repeat(500) {
+            assertEquals(
+                selectIntroMessage(withoutContext),
+                selectIntroMessage(at34, totalVisitDays = 34)
+            )
+        }
+    }
 }

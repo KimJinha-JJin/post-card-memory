@@ -314,6 +314,28 @@ class AppIntroVisitPostmarkStructureTest {
         assertFalse("강조 배경을 두지 않음", introSource.contains("BrutalYellow"))
     }
 
+    // ---- 상단 문구: 방문 기록 도착 전엔 즉시 고르지 않음(33번째 milestone 대비) ----
+
+    @Test
+    fun introMessage_isGatedOnVisitRecordArrivalInsteadOfPickedImmediately() {
+        assertTrue(
+            "방문 기록 도착 여부로 게이팅해야 함(즉시 remember { selectIntroMessage() }로 돌아가지 않음)",
+            introSource.contains("remember(hasVisitRecord) {")
+        )
+        assertFalse(
+            "도착을 기다리지 않는 즉시 선택 방식으로 되돌아가면 안 됨",
+            introSource.contains("remember { selectIntroMessage() }")
+        )
+        assertTrue(
+            "방문 기록이 도착하면 누적 방문일을 문구 선택에 넘겨야 함",
+            introSource.contains("selectIntroMessage(totalVisitDays = visitRecord.totalVisitDays)")
+        )
+        assertTrue(
+            "문구도 소인과 같은 orEmpty() 관례로 도착 전엔 빈 자리로 둬야 함",
+            introSource.contains("text = introMessage.orEmpty()")
+        )
+    }
+
     // ---- 방문 판정 위치: 프로세스당 1회, IO에서 ----
 
     @Test

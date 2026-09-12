@@ -82,19 +82,31 @@ internal val INTRO_SECRET_MESSAGES = listOf(
 
 private const val INTRO_SECRET_PROBABILITY = 0.03f
 
+/** 누적 방문일이 이 값과 정확히 같으면 확률과 무관하게 막스 베르스타펜 문구를 확정한다. */
+internal const val INTRO_MAX_MILESTONE_VISIT_DAY = 33
+
 /** [roll]이 이스터에그 확률 구간(기본 3%) 안에 들어오는지. */
 internal fun isSecretRoll(roll: Float): Boolean = roll < INTRO_SECRET_PROBABILITY
 
 /**
  * 인트로 상단에 보여줄 문구 하나를 뽑는다. 순수 함수라 [random]을 고정 시드로
  * 넘기면 결과를 결정적으로 검증할 수 있다.
+ *
+ * [totalVisitDays]가 정확히 [INTRO_MAX_MILESTONE_VISIT_DAY]번째면 확률 롤 없이
+ * [INTRO_SECRET_MESSAGES]의 막스 베르스타펜 문구를 확정으로 돌려준다. 그 외
+ * 값(32/34번째 등)에는 이 규칙이 적용되지 않고 기존 3% 확률 롤을 그대로 탄다.
  */
-internal fun selectIntroMessage(random: Random = Random): String =
-    if (isSecretRoll(random.nextFloat())) {
+internal fun selectIntroMessage(random: Random = Random, totalVisitDays: Int? = null): String {
+    if (totalVisitDays == INTRO_MAX_MILESTONE_VISIT_DAY) {
+        return INTRO_SECRET_MESSAGES[0]
+    }
+
+    return if (isSecretRoll(random.nextFloat())) {
         INTRO_SECRET_MESSAGES.random(random)
     } else {
         INTRO_GENERAL_MESSAGES.random(random)
     }
+}
 
 /** 인트로 아래쪽 방문 소인의 지름. 엽서 위 도장(90.dp)보다 작게 둬 인트로에서 튀지 않게 한다. */
 private val INTRO_POSTMARK_SIZE = 76.dp
@@ -166,8 +178,9 @@ private fun vibrateIntroPostmark(context: Context) {
  *
  * [visitRecord]는 오늘 방문 기록이며, 아직 읽히지 않았으면 null이다. 인트로는
  * 이 값을 **기다리지 않는다** — null이어도 진행선은 그대로 흐르고, 값이
- * 도착하면 아래쪽 소인만 조용히 나타난다(저장소 I/O 때문에 인트로가
- * 느려지거나 멈추지 않는다).
+ * 도착하면 아래쪽 소인과 위쪽 문구가 조용히 나타난다(저장소 I/O 때문에
+ * 인트로가 느려지거나 멈추지 않는다). 상단 문구는 누적 방문일이 정확히 33일
+ * 때만 막스 베르스타펜 이스터에그를 확정으로 보여준다.
  *
  * [isFirstVisitToday]는 이번 실행이 오늘의 첫 방문인지다. 소인은 앱을 열
  * 때마다 찍히지만 도장이 닿는 진동은 이때만 울린다 — 같은 날 여러 번 열
@@ -180,7 +193,19 @@ fun AppIntroScreen(
     onFinished: () -> Unit
 ) {
     val progress = remember { Animatable(0f) }
-    val introMessage = remember { selectIntroMessage() }
+
+    // 방문 기록이 도착하기 전엔(null) 33번째 milestone 여부를 알 수 없다.
+    // 즉시 아무 문구나 골랐다가 데이터가 도착한 뒤 다시 고르면 "문구 A→B"로
+    // 바뀌는 모습이 보이므로, 아래 방문 소인과 같은 hasVisitRecord 게이팅으로
+    // 도착 전엔 자리만 비워두고 데이터가 오면 그 순간 한 번만 확정한다.
+    val hasVisitRecord = visitRecord != null
+    val introMessage = remember(hasVisitRecord) {
+        if (hasVisitRecord) {
+            selectIntroMessage(totalVisitDays = visitRecord.totalVisitDays)
+        } else {
+            null
+        }
+    }
 
     LaunchedEffect(Unit) {
         progress.animateTo(
@@ -199,7 +224,7 @@ fun AppIntroScreen(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = introMessage,
+                text = introMessage.orEmpty(),
                 fontSize = 12.sp,
                 color = InkSecondary,
                 modifier = Modifier.padding(bottom = 12.dp)
