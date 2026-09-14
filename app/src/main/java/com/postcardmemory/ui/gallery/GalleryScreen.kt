@@ -77,11 +77,14 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MailOutline
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -98,6 +101,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -175,6 +179,7 @@ import java.time.format.DateTimeFormatter
 import java.io.File
 import coil.compose.AsyncImage
 import kotlin.math.sqrt
+import kotlinx.coroutines.launch
 
 private val PlayModeSaver = Saver<GalleryPlayMode, String>(
     save = { it.name },
@@ -303,6 +308,8 @@ fun GalleryScreen(
     onNavigateToCamera: () -> Unit,
     onNavigateToDetail: (Long) -> Unit,
     onNavigateToFutureMailbox: () -> Unit,
+    visitedEpochDays: Set<Long> = emptySet(),
+    totalVisitDays: Int? = null,
     viewModel: GalleryViewModel = hiltViewModel()
 ) {
     val postcards by viewModel.postcards.collectAsState()
@@ -426,6 +433,8 @@ fun GalleryScreen(
     var fabMenuExpanded by remember {
         mutableStateOf(false)
     }
+    val visitDrawerState = rememberDrawerState(DrawerValue.Closed)
+    val visitDrawerScope = rememberCoroutineScope()
 
     val selectionMode = selectedIds.isNotEmpty()
 
@@ -473,6 +482,7 @@ fun GalleryScreen(
         }
     }
 
+    VisitCalendarDrawer(visitDrawerState, visitedEpochDays, totalVisitDays) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
         containerColor = GalleryPaperWhite,
@@ -628,6 +638,21 @@ fun GalleryScreen(
                             ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(
+                            onClick = {
+                                fabMenuExpanded = false
+                                sortMenuExpanded = false
+                                viewMenuExpanded = false
+                                visitDrawerScope.launch { visitDrawerState.open() }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "방문 달력 열기",
+                                tint = InkSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                         Text(
                             text = "포스트카드 메모리",
                             fontSize = 18.sp,
@@ -1049,6 +1074,8 @@ fun GalleryScreen(
                 .navigationBarsPadding()
                 .padding(16.dp)
         )
+    }
+
     }
 
     if (showDeleteDialog) {

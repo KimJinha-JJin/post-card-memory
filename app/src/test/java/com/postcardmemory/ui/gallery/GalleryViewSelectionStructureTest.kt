@@ -85,14 +85,13 @@ class GalleryViewSelectionStructureTest {
     }
 
     @Test
-    fun leftPanelDrawer_isCompletelyRemoved() {
+    fun visitDrawer_doesNotRestoreTheOldFeatureMenu() {
         assertFalse(sourceText.contains("GalleryFeatureDrawer("))
-        assertFalse(sourceText.contains("ModalNavigationDrawer"))
-        assertFalse(sourceText.contains("ModalDrawerSheet"))
         assertFalse(sourceText.contains("NavigationDrawerItem"))
         assertFalse(sourceText.contains("GalleryPlayModeDrawerItem"))
-        assertFalse(sourceText.contains("rememberDrawerState"))
         assertFalse(sourceText.contains("기능 메뉴 열기"))
+        assertTrue(sourceText.contains("VisitCalendarDrawer(visitDrawerState, visitedEpochDays, totalVisitDays)"))
+        assertTrue(sourceText.contains("contentDescription = \"방문 달력 열기\""))
     }
 
     @Test

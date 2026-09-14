@@ -28,6 +28,10 @@ import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.PostCardMemoryTheme
 import com.postcardmemory.utils.TodayVisit
 import com.postcardmemory.utils.VisitRecordStorage
+import com.postcardmemory.utils.VisitHistoryStorage
+import com.postcardmemory.utils.visitEpochDay
+import java.time.LocalDate
+import java.time.YearMonth
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,6 +50,8 @@ import kotlinx.coroutines.withContext
 private object AppIntroState {
     var hasShownIntro = false
     var todayVisit: TodayVisit? = null
+    var observedVisitDate: LocalDate? = null
+    var visitedEpochDays: Set<Long> = emptySet()
 }
 
 @AndroidEntryPoint
@@ -67,21 +73,46 @@ class MainActivity : ComponentActivity() {
                     var todayVisit by remember {
                         mutableStateOf(AppIntroState.todayVisit)
                     }
+                    var visitedEpochDays by remember {
+                        mutableStateOf(AppIntroState.visitedEpochDays)
+                    }
 
                     // 오늘 방문 기록은 프로세스 시작마다 한 번만, IO 디스패처에서
                     // 판정한다. 인트로 애니메이션은 이 결과를 기다리지 않고
                     // 바로 시작되며, 값이 도착하면 소인만 나중에 나타난다.
                     LaunchedEffect(Unit) {
                         if (AppIntroState.todayVisit == null) {
+                            val nowMillis = System.currentTimeMillis()
                             val recorded = withContext(Dispatchers.IO) {
                                 VisitRecordStorage.recordTodayVisit(
-                                    applicationContext
+                                    applicationContext,
+                                    nowMillis = nowMillis
                                 )
                             }
 
                             AppIntroState.todayVisit = recorded
+                            AppIntroState.observedVisitDate =
+                                LocalDate.ofEpochDay(visitEpochDay(nowMillis))
                             todayVisit = recorded
                         }
+
+                        // 기존 집계와 소인 결과를 먼저 전달한다. history 실패는
+                        // 기존 기록을 되돌리거나 인트로 실행을 막지 않는다.
+                        // Activity 재생성 시 중단된 history 작업만 재시도할 수 있다.
+                        val days = withContext(Dispatchers.IO) {
+                            AppIntroState.observedVisitDate?.let { observedDate ->
+                                VisitHistoryStorage.recordDate(
+                                    applicationContext.filesDir,
+                                    observedDate
+                                )
+                            }
+                            VisitHistoryStorage.loadMonth(
+                                applicationContext.filesDir,
+                                YearMonth.now()
+                            )
+                        }
+                        AppIntroState.visitedEpochDays = days
+                        visitedEpochDays = days
                     }
 
                     Crossfade(
@@ -100,7 +131,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         } else {
-                            MainNavHost()
+                            MainNavHost(visitedEpochDays, todayVisit?.record?.totalVisitDays)
                         }
                     }
                 }
@@ -110,7 +141,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MainNavHost() {
+private fun MainNavHost(visitedEpochDays: Set<Long>, totalVisitDays: Int?) {
     val navController = rememberNavController()
 
     NavHost(
@@ -120,6 +151,8 @@ private fun MainNavHost() {
     ) {
         composable("gallery") {
             GalleryScreen(
+                visitedEpochDays = visitedEpochDays,
+                totalVisitDays = totalVisitDays,
                 onNavigateToCamera = {
                     navController.navigate("camera")
                 },
