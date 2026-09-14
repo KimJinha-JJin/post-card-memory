@@ -18,12 +18,12 @@
 | 구분 | 상태 |
 |---|---|
 | 구현 | 완료 — history·사이드바·달력·주말 색상·주차 구분선·방문일 채움(`#16A7A1`)+자동 대비·카오모지 보조 스탬프(4종)·방문 횟수 문구·봉투 카운터. 공휴일 색상은 데이터 없어 STOP(§공휴일 STOP 참고) |
-| 자동 검증 | 통과 — compile 및 관련 unit test, 전체 unit test, `git diff --check` (1~4차 + 카오모지 4종 조정까지 모두 재실행) |
-| 사용자 QA | **실기기 최종 확인 대기** — 4차 폴리시(방문일 채움 색, 자동 대비, 카오모지 보조화, 4종 후보)는 아직 실기기 미확인. 목업으로 미감만 먼저 확인했고 이제 실기기로 넘어가면 됨 |
-| commit | 미승인·미실행 |
-| push | 미승인·미실행 |
+| 자동 검증 | 통과 — compile 및 관련 unit test, 전체 unit test(641건, 실패·에러 0), `git diff --check` (1~4차 + 카오모지 4종 조정까지 모두 재실행) |
+| 사용자 QA | **완료** — 실기기 최종 확인 통과, 사용자가 commit/push 승인 |
+| commit | **완료** — `02574f1` "Add a visit calendar sidebar with a date-stamped kaomoji and highlight fill" (10 files changed, 839 insertions(+), 43 deletions(-)) |
+| push | **완료** — `feature/photo-sticker`에 push, 원격 `94c4ea4..02574f1` |
 
-사용자 지시는 구현·검증·보고 후 멈추는 것이야. 사용자 QA 없이 폴리시를 추측으로 추가하지 않고, commit/push는 별도 승인 전 실행하지 않아.
+이번 73일차 작업은 사용자 QA·commit·push까지 전부 끝났어. 다음 세션은 새 작업으로 시작하면 돼.
 
 ## 저장 구조·파일 보호·실패 처리
 
@@ -128,10 +128,9 @@
 
 ## Git·기존 위험·다음 행동
 
-- 시작 branch/HEAD: `feature/photo-sticker` / `94c4ea428d2e15b472ec97a14aefa3994278d55b`.
-- 로컬 origin 추적 기준 ahead/behind `0/0`, 이번 fetch 미실행. 서버 최신 상태를 새로 확인한 것은 아니야.
-- A 재개 전 변경은 앞선 조사에서 만든 HANDOFF와 2026-09-13 archive뿐이었어. 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`는 보존했어.
-- 최근 관련 commit: `94c4ea4` checkpoint 설명, `1f1ddc2` 하네스 정리, `c5959d8` milestone 5종/33번째 회전. 신규 commit/push/stage는 하지 않았어.
+- 시작 branch/HEAD: `feature/photo-sticker` / `94c4ea428d2e15b472ec97a14aefa3994278d55b`. 종료 HEAD: `02574f1`(원격 push 완료, 로컬=원격 동기화).
+- 이번 작업으로 stage·commit한 파일: `MainActivity.kt`, `GalleryScreen.kt`, `GalleryViewSelectionStructureTest.kt`, `HANDOFF.md`(수정) + `VisitCalendarDrawer.kt`, `VisitHistoryStorage.kt`, `VisitCalendarTest.kt`, `VisitHistoryStorageTest.kt`, `archive/HANDOFF-2026-09-13-harness.md`, `archive/HANDOFF-2026-09-14-history-investigation.md`(신규). 기존 untracked `.codex-config.candidate.toml`, `.kotlin/`는 이번 커밋에 포함하지 않고 그대로 보존했어.
+- 최근 commit: `02574f1` 이번 방문 달력 기능(신규), `94c4ea4` checkpoint 설명, `1f1ddc2` 하네스 정리, `c5959d8` milestone 5종/33번째 회전.
 - 기존 사고·복구 원문은 [2026-09-12까지 이력](archive/HANDOFF-through-2026-09-12.md), 직전 상태는 [2026-09-13 원문](archive/HANDOFF-2026-09-13-harness.md), 이번 최초 STOP은 [73일차 조사 원문](archive/HANDOFF-2026-09-14-history-investigation.md)에 있어. archive 상대 링크는 당시 HANDOFF 위치 기준이야. 사고 후 엽서 1개 보존을 사고 전 전체 복구로 해석하지 않아.
 - 전용 단계 추적 도구가 노출되지 않아 진행 메시지와 이 문서로 단계를 기록했어. Goal 대체·위임 agent는 사용하지 않았어.
-- 다음 승인된 작업: 1~4차(구현 → X/문구 폴리시 → 달력 재구성 → 방문일 채움+자동 대비) + 카오모지 4종 조정까지 모두 자동 검증 완료. 미감은 목업으로 먼저 확인했고 이제 실기기 최종 QA 대기. QA 결과에서 문제가 없으면 사용자 승인 후 commit/push. 공휴일 색상은 데이터 소스 선택이 필요해 STOP 상태로 남겨둠 — 재개하려면 사용자 판단 필요. 새로운 기능·추측 폴리시는 실행하지 않아.
+- 다음 후보(미승인, 사용자 판단 필요): 공휴일/대체공휴일 색상은 데이터 소스가 없어 STOP 상태로 남아 있어 — 정적 연도별 데이터 내장/새 dependency/외부 API 중 방식을 먼저 정해야 재개할 수 있어. 그 외 새로운 기능·추측 폴리시는 실행하지 않아.
