@@ -170,7 +170,7 @@ internal fun MonthlyVisitCalendar(month: YearMonth, visitedEpochDays: Set<Long>,
                                         .align(Alignment.Center)
                                         .fillMaxSize()
                                         .padding(3.dp)
-                                        .background(VisitFillColor, RoundedCornerShape(6.dp))
+                                        .background(VisitFillColor, RoundedCornerShape(2.dp))
                                 )
                             }
                             val cellTextColor = if (visited) VisitFillContrastColor else visitDateColor(date)
