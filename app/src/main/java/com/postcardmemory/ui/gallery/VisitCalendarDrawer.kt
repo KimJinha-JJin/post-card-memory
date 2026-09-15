@@ -51,6 +51,8 @@ internal fun visitCountLabel(totalVisitDays: Int?): String =
 // 차분한 웜톤 잉크 색을 재사용한다(SealInkNavy/SealInkRed) — 새 원색을 추가하지 않는다.
 private val WeekendSaturday = SealInkNavy
 private val WeekendSunday = SealInkRed
+private val VisitCalendarOrnamentColor = InkSecondary.copy(alpha = 0.29f)
+private val VisitCalendarBottomOrnamentColor = InkSecondary.copy(alpha = 0.39f)
 
 /** 공휴일 데이터가 없어 요일 기본색만 적용한다. 대체공휴일 포함 지원은 STOP 상태다. */
 internal fun visitDateColor(date: LocalDate): Color = when (date.dayOfWeek) {
@@ -69,6 +71,46 @@ private const val VisitFillArgb = 0xFF16A7A1L
  * ([com.postcardmemory.ui.detail.labelStickerTextColorArgbFor])을 그대로 재사용한다.
  */
 internal val VisitFillContrastColor = Color(labelStickerTextColorArgbFor(VisitFillArgb))
+
+@Composable
+private fun VisitCalendarTopOrnament() {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(21.dp).clearAndSetSemantics { },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = .5.dp,
+            color = VisitCalendarOrnamentColor
+        )
+        Spacer(Modifier.width(6.dp))
+        Text("✦", color = VisitCalendarOrnamentColor, fontSize = 9.sp)
+        Spacer(Modifier.width(6.dp))
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = .5.dp,
+            color = VisitCalendarOrnamentColor
+        )
+    }
+}
+
+@Composable
+private fun VisitCalendarBottomOrnament() {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(21.dp).clearAndSetSemantics { },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("୨୧", color = VisitCalendarBottomOrnamentColor, fontSize = 9.sp)
+        Spacer(Modifier.width(2.dp))
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = .5.dp,
+            color = VisitCalendarBottomOrnamentColor
+        )
+        Spacer(Modifier.width(4.dp))
+        Text("୨୧", color = VisitCalendarBottomOrnamentColor, fontSize = 9.sp)
+    }
+}
 
 /** 예전 좌측 drawer의 위치·종이색을 재사용하되, 기능 메뉴는 복원하지 않는다. */
 @Composable
@@ -126,9 +168,7 @@ internal fun MonthlyVisitCalendar(month: YearMonth, visitedEpochDays: Set<Long>,
             fontSize = 9.sp,
             modifier = Modifier.padding(top = 1.dp)
         )
-        Spacer(Modifier.height(10.dp))
-        HorizontalDivider(thickness = .5.dp, color = PaperDivider)
-        Spacer(Modifier.height(10.dp))
+        VisitCalendarTopOrnament()
         Row(Modifier.fillMaxWidth()) {
             listOf(
                 "일" to DayOfWeek.SUNDAY, "월" to DayOfWeek.MONDAY, "화" to DayOfWeek.TUESDAY,
@@ -198,7 +238,7 @@ internal fun MonthlyVisitCalendar(month: YearMonth, visitedEpochDays: Set<Long>,
                 }
             }
             // 종이 달력의 행 구분을 흉내 낸 아주 옅은 가로선. 표/타임테이블처럼 보이지 않도록
-            // 상단/하단 구분선보다 훨씬 연하게 두고, 마지막 주 다음에는 넣지 않는다.
+            // 장식선과 함께 낮은 대비를 유지하고, 마지막 주 다음에는 넣지 않는다.
             if (weekIndex != weeks.lastIndex) {
                 HorizontalDivider(
                     thickness = .5.dp,
@@ -207,10 +247,9 @@ internal fun MonthlyVisitCalendar(month: YearMonth, visitedEpochDays: Set<Long>,
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
-        HorizontalDivider(thickness = .5.dp, color = PaperDivider)
+        VisitCalendarBottomOrnament()
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(

@@ -4,16 +4,16 @@
 
 ## 현재 상태
 
-방문 라벨 모서리만 **6dp → 2dp**로 바꿨어. 청록색·크기·3dp 여백·날짜·카오모지 위치·대비와 방문 저장 구조는 그대로야. 공휴일은 지원 연도 결정 지점에서 STOP했고, 추가 장식은 채택하지 않았어.
+방문 라벨 모서리는 **6dp → 2dp**로 바꿨고 실기기 QA와 이전 commit·push까지 끝났어. 사용자가 승인한 전체 폭 장식선을 실제 방문 달력에도 최소 반영했어. 청록색·라벨 크기·3dp 여백·날짜·카오모지 위치·대비와 방문 저장 구조는 그대로야. 공휴일은 지원 연도 결정 지점에서 STOP했어.
 
 | 구분 | 상태 |
 |---|---|
-| 구현 | 2dp 완료, 공휴일 미구현·정책 판단 대기 |
+| 구현 | 2dp 완료. 장식선 목업 승인 및 production 최소 반영 완료. 공휴일 미구현·정책 판단 대기 |
 | 자동 검증 | 관련 테스트 16건·Kotlin compile·diff check 통과 |
-| 사용자 QA | 완료 — 목업과 실기기에서 2dp 미감 만족 확인 |
-| commit | 완료 — `49654c2` 2dp 코드·목업·73일차 원문 보존 |
-| push | 완료 — `141d6cb..49654c2` 원격 반영 |
-| 전체 완료 | 2dp 폴리싱 완료. 공휴일 구현은 지원 연도 판단 대기 |
+| 사용자 QA | 2dp 실기기 완료. 장식선 목업 승인 완료, production 실기기 QA 대기 |
+| commit | 2dp 작업 완료 — `49654c2`, HANDOFF `a113dd7`. 현재 장식선 변경은 미커밋 |
+| push | 2dp 작업 완료 — 원격 `a113dd7`. 현재 장식선 변경은 미푸시 |
+| 전체 완료 | 2dp 폴리싱 완료. 장식선은 production 반영 후 실기기 QA 대기. 공휴일 구현은 사용자 정책 판단 대기 |
 
 73일차 원문은 [방문 달력 최종 인수인계](archive/HANDOFF-2026-09-14-visit-calendar-final.md)에 byte 동일하게 보존했어(SHA256 일치 확인). 과거 사고·실패·폐기 접근도 원문 그대로야. archive 안 상대 링크는 원래 HANDOFF 위치 기준이야. 원문에 QA 완료 표와 과거 QA 대기 문장이 혼재해 있어. 73일차 QA 완료는 현재 사용자 지시서와 원문 최종 표를 기준으로 봐. 이번 QA와 혼동하지 않아.
 
@@ -83,26 +83,50 @@
 - 실제 filesDir·visit_record·방문 횟수·streak 접근 없음. 이번 추가 작업에서 production 수정 없음. 기존 2dp 한 줄 변경만 그대로 남아 있어.
 - 추가 산출물은 `docs/ai/mockups/`의 HTML·PNG와 이 기록이야. HTML 정적 점검 및 `git diff --check` 통과. 앱 코드 변경이 없어 Gradle 재실행은 불필요, 직전 관련 16건·compile 통과 기록 유지. 실기기 2dp QA와 `49654c2` commit·push까지 완료했어.
 
+### 74일차 추가 장식선 목업 승인 및 production 최소 구현
+
+- 사용자 지정 조합을 같은 HTML 목업에 추가했어: 상단 `────── ✦ ──────`, 하단 `⋆｡────────｡⋆`.
+- 첫 목업 확인 후 사용자가 양옆 선이 중간에서 끊겨 보인다고 피드백했어. 상·하단 선을 주차 구분선과 같은 달력 전체 폭으로 늘리고, 중앙 `✦`와 양끝 `⋆｡`·`｡⋆`만 작은 문자로 남겼어.
+- 두 장식선은 기존 상·하단 구분선 자리를 대신해 달력 높이를 거의 늘리지 않아. 선 두께는 주차 구분선과 같은 0.5px이고, 본문 잉크보다 훨씬 낮은 대비(`InkSecondary` 계열을 약 29%로 표현)와 9px 장식 문자 크기를 사용했어.
+- `장식선 보기`를 켜고 끌 수 있어 같은 3종 전체 달력에서 기존 가로선과 직접 비교 가능해. 2dp·공휴일 가정 비교 기능도 유지했어.
+- Chrome headless로 선 길이 수정 후 PNG를 다시 만들고 직접 확인했어. 양쪽 여백까지 선이 이어져 기존보다 덜 끊겨 보이며, 상단 장식은 요일·날짜보다 뒤로 물러나고 하단 장식은 방문 횟수 문구보다도 조용하게 보여.
+- HTML script 실행 점검: 상단 장식 3개, 하단 장식 3개, 전체 폭 선 조각 9개, 끄면 기존 구분선 6개, 방문 라벨 26개, 2px 반경 유지 모두 통과. `git diff --check` 통과.
+- 사용자 확인(2026-09-15): 늘린 선 길이가 정확히 원한 지점이고 완벽하다고 명시했어. 이 승인으로 정적 프로토타입 단계를 통과했어.
+- production은 `VisitCalendarDrawer.kt` 안에서 기존 상·하단 구분선 자리를 전용 장식 composable로 교체했어. 상단은 전체 폭 선 사이 중앙 `✦`, 하단은 양끝 `⋆｡`·`｡⋆` 사이 전체 폭 선이야. 선은 0.5dp, `InkSecondary` 29% 색, 문자는 9sp로 목업과 맞췄어.
+- 장식 Row를 기존 구분선과 여백의 총높이에 맞추고 footer 위 여백을 조정해 달력 전체 밀도와 위치를 유지했어. 장식은 `clearAndSetSemantics`로 접근성 읽기에서 제외했어.
+- 실제 방문 데이터·filesDir·visit_record·streak 접근 없음. route·dependency·저장 구조 변경 없음. 현재 변경은 `VisitCalendarDrawer.kt`, `docs/ai/mockups/visit-calendar-2dp.html`, 갱신된 PNG와 이 HANDOFF야.
+- 상태: 목업 승인과 production 최소 구현 완료, production 실기기 QA 대기. 현재 변경은 commit·push하지 않았어.
+
+### 74일차 하단 장식선 대비·문자 후보 목업
+
+- 사용자 추가 지시(2026-09-15): 현재 `⋆｡────────｡⋆` 문자열은 유지하되 색 대비를 소폭 높인 안을 먼저 확인하고, 존재감이 부족하면 `୨୧────────୨୧`와 `୨୧ ──────── ୨୧` 후보를 비교하기로 했어. 대비를 높여도 별무늬 가독성이 약해 사용자가 `୨୧ ──────── ୨୧`를 선택했어.
+- 같은 HTML 목업에 `하단 장식` 선택을 추가했어. 기본 선택은 기존 문자열 + 대비 상향(약 39%)이고, 기존 대비(약 29%)와 두 `୨୧` 후보를 같은 2026년 10월 A/B/C 전체 달력에서 비교할 수 있어.
+- 상단 `✦`와 선 길이, 달력 크기, 2dp 라벨, 공휴일 가정은 유지했어. 실제 앱 코드·route·dependency·filesDir·visit_record·streak는 건드리지 않았어.
+- Chrome headless로 기본 대비 상향 상태의 PNG를 갱신하고 3개 달력 전체를 직접 확인했어. 문자열은 양끝에 남고 선은 기존 승인 길이를 유지하며, 대비 상향안도 방문 라벨보다 먼저 시선을 끌 정도는 아니었어. 후보 선택별 최종 채택은 아직 사용자 확인 대기야.
+- 사용자가 선택한 `୨୧ ──────── ୨୧`를 production 하단 장식에 반영했고, 하단만 대비를 39%로 올렸어. 상단 `✦`는 기존 29% 대비를 유지해 시선 우선순위를 보존했어. 목업 기본 선택도 선택안으로 맞췄어.
+- 자동 검증: 단일 Gradle 프로세스로 `VisitCalendarTest`·`VisitHistoryStorageTest` 관련 테스트 통과, `:app:compileDebugKotlin` 성공. 병렬 실행 시 Kotlin incremental cache 잠금 환경 오류가 있었지만 중단 후 단일 실행으로 재검증했어.
+- 상태: 선택안 production 반영 및 자동 검증 완료, 실기기 QA 대기. 현재 변경은 commit·push하지 않았어.
+
 ## 자동 검증·실행 환경
 
 - 기존 로컬 Gradle 9.4.1 및 Android Studio JBR 사용. 저장소에 실행 wrapper가 없어 기존 로컬 `gradle.bat` 사용.
 - 첫 offline 실행은 `settings.gradle.kts:8`의 기존 `foojay-resolver-convention:0.10.0`을 찾지 못해 설정 단계에서 실패. 앱 코드 오류가 아니야. build 설정을 수정하지 않았어.
 - 기존 캐시·네트워크 접근 권한으로 재실행. `:app:testDebugUnitTest --tests com.postcardmemory.ui.gallery.VisitCalendarTest --tests com.postcardmemory.utils.VisitHistoryStorageTest :app:compileDebugKotlin --console=plain`.
-- 최종 결과: `BUILD SUCCESSFUL in 2m 34s`. `VisitCalendarTest` 8건, `VisitHistoryStorageTest` 8건, 실패·에러 0을 XML 결과로 확인. `compileDebugKotlin` 성공. 카오모지·색상·월 경계·방문 저장의 기존 관련 검사를 통과했지만 실기기 미감을 대신하지 않아.
-- `git diff --check` 통과. production 전체 diff는 반경 한 줄뿐이고, 문서 diff와 archive 원문 보존도 검토했어. 기존 LF→CRLF 경고는 있어.
-- 전체 unit test는 한 줄 shape 변경에 비례해 실행하지 않았어. 새 구현을 그대로 되풀이하는 테스트도 추가하지 않았어.
+- 장식선 production 반영 후 재검증 결과: `BUILD SUCCESSFUL in 2m 32s`. `VisitCalendarTest` 8건, `VisitHistoryStorageTest` 8건, 실패·에러 0을 XML 결과로 확인했고 `compileDebugKotlin`도 성공했어. 기존 코드의 deprecated API 등 warning만 있었어.
+- 최종 `git diff --check` 통과. production diff는 장식선 전용 composable과 기존 구분선 교체 및 밀도 보정으로 한정했어. 기존 LF→CRLF 경고는 있어.
+- 전체 unit test는 국소 시각 변경에 비례해 실행하지 않았어. 새 장식을 그대로 되풀이하는 테스트도 추가하지 않았어.
 - 실기기 설치·실행·삭제·초기화·계측 테스트·사용자 데이터 조작은 실행하지 않았어.
 
 ## 실기기 QA·남은 위험·다음 행동
 
-**실기기 QA 완료.** 사용자가 실제 앱에서 2dp를 확인하고 마음에 든다고 명시했어.
+**2dp 실기기 QA는 완료했고, 새 장식선 production 실기기 QA는 대기 중이야.** 사용자가 목업의 전체 폭 선 길이와 인상을 승인한 뒤 실제 코드에 반영했어.
 
 - 확인 대상은 `141d6cb` 위 2dp 작업트리였고, 확인된 결과를 `49654c2`에 commit했어.
 - Gallery 좌측 메뉴 → 방문 달력. 여러 방문 라벨을 함께 보고 종이 조각 느낌인지, 너무 직각이거나 답답한지 확인해. 닫고 다시 열어 날짜·카오모지·횟수 유지도 확인해.
 - 5~7일 연속 기록이 없다면 기록·기기 날짜를 조작하지 않고 자연적으로 쌓인 뒤 확인해. 그 조건은 미검증으로 남겨.
-- 공휴일 QA는 미구현이라 해당 없어. 새 장식 QA도 해당 없어.
+- 장식선 QA는 Gallery 좌측 메뉴에서 방문 달력을 열어 상·하단 선이 목업처럼 양옆까지 충분히 이어지는지, 본문·방문 라벨보다 먼저 보이지 않는지, 전체 높이와 footer 간격이 자연스러운지 확인하면 돼. 공휴일 QA는 미구현이라 해당 없어.
 - history marker와 `visit_record.txt`, total/streak·하루 중복 방지, Intro·Gallery 기타 기능, Room·Migration·저장·공유 경로는 변경하지 않았어.
 - 기존 위험 유지: history와 요약 저장은 단일 트랜잭션이 아니며 history 실패 시 그날 라벨이 없을 수 있어. 자정 너머 프로세스를 유지할 때 방문 집계 범위도 기존 그대로야. 이번에 이를 해결하거나 실기기에서 검증했다고 주장하지 않아.
 - 과거 데이터 사고·복구 범위와 Intro 자연 도달 미검증은 archive 기록을 유지해. 코드 커밋을 사용자 데이터 백업으로 해석하지 않아.
-- 다음 후보: 공휴일은 지원 연도·유지 방침 결정 후 별도 재개 가능. 현재 승인된 추가 production 작업은 없어.
+- 다음 행동: 사용자가 장식선 production 실기기 화면을 확인해. 통과 후 별도 명시 요청이 있으면 현재 4개 tracked 파일만 commit·push할 수 있어. 공휴일은 지원 연도·유지 방침 결정 후 별도 재개 가능해.
 - 전용 task checklist 도구가 없어 진행 메시지와 이 문서로 단계를 기록했어. Goal 대체나 하위 agent 위임 없음.
