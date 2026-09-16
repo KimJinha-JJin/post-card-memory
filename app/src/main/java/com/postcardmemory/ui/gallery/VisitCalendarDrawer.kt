@@ -1,19 +1,38 @@
 package com.postcardmemory.ui.gallery
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -22,6 +41,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.detail.labelStickerTextColorArgbFor
@@ -65,12 +85,30 @@ internal fun visitDateColor(date: LocalDate): Color = when (date.dayOfWeek) {
 internal val VisitFillColor = Color(0xFF16A7A1)
 private const val VisitFillArgb = 0xFF16A7A1L
 
+// 오늘 + 실제 방문 history가 있는 날만 쓰는 한 톤 진한 청록. 75일차 목업 3안(A/B/C) 중
+// 사용자가 B(또렷하게)를 확정했다. 같은 hue family를 유지한 채 기존 #16A7A1보다 어둡게 낮췄다.
+internal val VisitFillColorToday = Color(0xFF117E7A)
+private const val VisitFillTodayArgb = 0xFF117E7AL
+
 /**
  * 방문일 채움 위의 글자색. 새 대비 로직을 만들지 않고 텍스트 스티커의
  * "밝은 배경 → 어두운 글자 / 어두운 배경 → 밝은 글자" 판정
  * ([com.postcardmemory.ui.detail.labelStickerTextColorArgbFor])을 그대로 재사용한다.
  */
 internal val VisitFillContrastColor = Color(labelStickerTextColorArgbFor(VisitFillArgb))
+
+/** 오늘 진한 청록 위의 글자색도 같은 자동 대비 로직을 재사용한다. */
+internal val VisitFillContrastColorToday = Color(labelStickerTextColorArgbFor(VisitFillTodayArgb))
+
+/**
+ * 오늘 + 실제 방문만 진한 청록, 그 외 방문일은 기존 색. 이 함수는 이미 `visited`인
+ * 날짜에만 호출된다 — 미방문·미래 날짜는 호출부에서 라벨 자체를 그리지 않는다.
+ */
+internal fun visitDayFillColor(date: LocalDate, today: LocalDate): Color =
+    if (date == today) VisitFillColorToday else VisitFillColor
+
+internal fun visitDayFillContrastColor(date: LocalDate, today: LocalDate): Color =
+    if (date == today) VisitFillContrastColorToday else VisitFillContrastColor
 
 @Composable
 private fun VisitCalendarTopOrnament() {
@@ -92,6 +130,28 @@ private fun VisitCalendarTopOrnament() {
             color = VisitCalendarOrnamentColor
         )
     }
+}
+
+// 150~250ms 검토 범위 중 다른 화면 전환보다 유독 느리지 않도록 중간값을 택했다.
+private const val MONTH_TRANSITION_DURATION_MS = 200
+
+private val VisitCalendarMonthSaver = Saver<YearMonth, String>(
+    save = { it.toString() },
+    restore = { saved -> runCatching { YearMonth.parse(saved) }.getOrDefault(YearMonth.now()) }
+)
+
+/**
+ * 종이를 옆으로 미는 방향 = 시간이 이동하는 방향. state(월 값의 전후 비교)가 방향을 결정하고
+ * animation은 그 결과를 표현만 한다 — 별도 "방향" state를 따로 두지 않는다.
+ */
+private fun AnimatedContentTransitionScope<YearMonth>.visitCalendarMonthTransition(): ContentTransform {
+    val forward = targetState > initialState
+    val offsetSpec = tween<IntOffset>(MONTH_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing)
+    val enter = slideInHorizontally(offsetSpec) { width -> if (forward) width else -width }
+    val exit = slideOutHorizontally(offsetSpec) { width -> if (forward) -width else width }
+    return (enter togetherWith exit).using(
+        SizeTransform(sizeAnimationSpec = { _, _ -> tween(MONTH_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing) })
+    )
 }
 
 @Composable
@@ -144,7 +204,7 @@ internal fun VisitCalendarDrawer(
                     ) {
                         Icon(Icons.Default.Close, "방문 달력 닫기", tint = InkSecondary, modifier = Modifier.size(20.dp))
                     }
-                    MonthlyVisitCalendar(YearMonth.now(), visitedEpochDays, totalVisitDays)
+                    MonthlyVisitCalendar(visitedEpochDays, totalVisitDays)
                 }
             }
         },
@@ -152,43 +212,10 @@ internal fun VisitCalendarDrawer(
     )
 }
 
+/** 한 달 분량의 날짜 grid만 그린다. AnimatedContent가 이 composable 전체를 슬라이드시킨다. */
 @Composable
-internal fun MonthlyVisitCalendar(month: YearMonth, visitedEpochDays: Set<Long>, totalVisitDays: Int? = null) {
+private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>, today: LocalDate) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "${month.year}년 ${month.monthValue}월",
-            color = InkPrimary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.semantics { heading() }
-        )
-        Text(
-            text = "다녀간 날들",
-            color = InkSecondary,
-            fontSize = 9.sp,
-            modifier = Modifier.padding(top = 1.dp)
-        )
-        VisitCalendarTopOrnament()
-        Row(Modifier.fillMaxWidth()) {
-            listOf(
-                "일" to DayOfWeek.SUNDAY, "월" to DayOfWeek.MONDAY, "화" to DayOfWeek.TUESDAY,
-                "수" to DayOfWeek.WEDNESDAY, "목" to DayOfWeek.THURSDAY, "금" to DayOfWeek.FRIDAY,
-                "토" to DayOfWeek.SATURDAY
-            ).forEach { (label, dow) ->
-                Text(
-                    label,
-                    Modifier.weight(1f),
-                    color = when (dow) {
-                        DayOfWeek.SUNDAY -> WeekendSunday
-                        DayOfWeek.SATURDAY -> WeekendSaturday
-                        else -> InkSecondary
-                    },
-                    fontSize = 10.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-        Spacer(Modifier.height(6.dp))
         val weeks = calendarCellsFor(month).chunked(7)
         weeks.forEachIndexed { weekIndex, week ->
             Row(Modifier.fillMaxWidth()) {
@@ -210,10 +237,10 @@ internal fun MonthlyVisitCalendar(month: YearMonth, visitedEpochDays: Set<Long>,
                                         .align(Alignment.Center)
                                         .fillMaxSize()
                                         .padding(3.dp)
-                                        .background(VisitFillColor, RoundedCornerShape(2.dp))
+                                        .background(visitDayFillColor(date, today), RoundedCornerShape(2.dp))
                                 )
                             }
-                            val cellTextColor = if (visited) VisitFillContrastColor else visitDateColor(date)
+                            val cellTextColor = if (visited) visitDayFillContrastColor(date, today) else visitDateColor(date)
                             Text(
                                 date.dayOfMonth.toString(),
                                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
@@ -246,6 +273,103 @@ internal fun MonthlyVisitCalendar(month: YearMonth, visitedEpochDays: Set<Long>,
                     modifier = Modifier.padding(vertical = 2.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+internal fun MonthlyVisitCalendar(
+    visitedEpochDays: Set<Long>,
+    totalVisitDays: Int? = null,
+    today: LocalDate = remember { LocalDate.now() },
+    initialMonth: YearMonth = YearMonth.from(today)
+) {
+    var displayedMonth by rememberSaveable(stateSaver = VisitCalendarMonthSaver) {
+        mutableStateOf(initialMonth)
+    }
+    val isCurrentMonth = displayedMonth == YearMonth.from(today)
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    "이전 달",
+                    tint = InkSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            AnimatedContent(
+                targetState = displayedMonth,
+                transitionSpec = { visitCalendarMonthTransition() },
+                modifier = Modifier.weight(1f).clipToBounds(),
+                contentAlignment = Alignment.Center,
+                label = "visitCalendarMonthTitle"
+            ) { month ->
+                Text(
+                    text = "${month.year}년 ${month.monthValue}월",
+                    color = InkPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().semantics { heading() }
+                )
+            }
+            IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    "다음 달",
+                    tint = InkSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "다녀간 날들",
+                color = InkSecondary,
+                fontSize = 9.sp,
+                modifier = Modifier.weight(1f).padding(top = 1.dp)
+            )
+            if (!isCurrentMonth) {
+                Text(
+                    text = "오늘",
+                    color = InkSecondary,
+                    fontSize = 9.sp,
+                    modifier = Modifier
+                        .padding(top = 1.dp)
+                        .clickable(onClick = { displayedMonth = YearMonth.from(today) })
+                )
+            }
+        }
+        VisitCalendarTopOrnament()
+        Row(Modifier.fillMaxWidth()) {
+            listOf(
+                "일" to DayOfWeek.SUNDAY, "월" to DayOfWeek.MONDAY, "화" to DayOfWeek.TUESDAY,
+                "수" to DayOfWeek.WEDNESDAY, "목" to DayOfWeek.THURSDAY, "금" to DayOfWeek.FRIDAY,
+                "토" to DayOfWeek.SATURDAY
+            ).forEach { (label, dow) ->
+                Text(
+                    label,
+                    Modifier.weight(1f),
+                    color = when (dow) {
+                        DayOfWeek.SUNDAY -> WeekendSunday
+                        DayOfWeek.SATURDAY -> WeekendSaturday
+                        else -> InkSecondary
+                    },
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        AnimatedContent(
+            targetState = displayedMonth,
+            transitionSpec = { visitCalendarMonthTransition() },
+            modifier = Modifier.fillMaxWidth().clipToBounds(),
+            label = "visitCalendarMonthGrid"
+        ) { month ->
+            VisitCalendarMonthGrid(month, visitedEpochDays, today)
         }
         VisitCalendarBottomOrnament()
         Row(

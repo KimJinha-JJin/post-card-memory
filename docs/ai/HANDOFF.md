@@ -1,3 +1,38 @@
+# HANDOFF — 75일차 방문 달력 월 탐색·오늘 복귀·전환 애니메이션·오늘 방문 색
+
+확인일: 2026-09-16. 수동 표준 모드. 사용자 제공 75일차 지시서에 따라 피코(Claude Code)가 직접 구현했어. 공용 작업판은 활성화하지 않았어.
+
+## 75일차 현재 상태
+
+시작 HEAD는 `86baedf`(74일차 장식선 production 반영까지 포함, 지시서 참고값 `a113dd7`보다 한 커밋 앞섰음 — 실제 상태로 확인 후 진행). 이전/다음 달 이동, 오늘 복귀, 월 전환 슬라이드 애니메이션은 구현·자동 검증까지 끝났어. **오늘 방문 색상만 사용자 목업 승인 대기**야 — 승인 전에는 production에 최종 반영하지 않아.
+
+- 표시 월 state: `MonthlyVisitCalendar` 안에 `displayedMonth`를 `rememberSaveable`로 둬(기존 `GalleryScreen.kt`의 `visibleMonth` 패턴과 동일한 `YearMonth` 문자열 Saver 재사용, 이 파일 안에 따로 둠). 이전/다음 달은 `YearMonth.minusMonths(1)`/`plusMonths(1)`만 호출 — `visitedEpochDays`/`totalVisitDays`는 절대 만지지 않음.
+- 이전/다음 달 UI: 이 드로어에 이미 있던 닫기 버튼과 같은 문법(`IconButton` + `InkSecondary` 20dp 아이콘) 재사용. `Icons.AutoMirrored.Filled.KeyboardArrowLeft/Right` — `GalleryScreen.kt`의 `GalleryCalendarPage` 월 이동과 같은 아이콘·색상 선례.
+- 미래 달 정책: **제한 없음**. `GalleryCalendarPage`도 미래 달 제한이 없는 기존 선례라 그대로 따름 — 빈 달만 보일 뿐 데이터 위험이 없고, 제한을 넣으면 state만 복잡해짐.
+- 오늘 복귀: "다녀간 날들" 캡션 줄 끝에 작은 텍스트 `오늘`, 현재 월일 때는 숨김(`isCurrentMonth` 조건). 방문 데이터에는 손대지 않고 `displayedMonth = YearMonth.from(today)`만 실행.
+- 애니메이션: Compose `AnimatedContent` 2곳(월 제목 텍스트, 날짜 grid) — 둘 다 같은 `displayedMonth`로 동시에 트리거되어 함께 슬라이드. 방향은 `targetState > initialState`(YearMonth 비교)로만 결정 — 별도 "방향" state 없음(state가 진짜 값, animation은 표현). `slideInHorizontally`/`slideOutHorizontally` + `tween(200ms, FastOutSlowInEasing)`, `SizeTransform`도 같은 duration으로 덮어써 기본 spring bounce를 제거. `clipToBounds()`로 슬라이드 중 드로어 폭 밖으로 새는 것 방지.
+- animation duration: **200ms** (150~250ms 검토 범위 중 다른 화면 전환보다 유독 느리지 않은 중간값).
+- 오늘 방문 색: 함수 `visitDayFillColor(date, today)` / `visitDayFillContrastColor(date, today)` 추가. `visited`가 이미 true인 날짜에만 호출되므로(기존 gate 유지) 오늘+미방문·미래는 애초에 라벨 자체가 없음. 오늘+방문만 `VisitFillColorToday`, 그 외 방문은 기존 `VisitFillColor(#16A7A1)` 그대로. 대비도 같은 `labelStickerTextColorArgbFor` 재사용(`VisitFillContrastColorToday`).
+- **오늘 방문 색 최종 HEX: `#117E7A`(후보 B, "또렷하게") 확정.** 아티팩트(https://claude.ai/artifact/5v44EFArEciGTaB8FacmCE)와 로컬 목업(`docs/ai/mockups/today-color-artifact.html`, `docs/ai/mockups/visit-calendar-today-color.html`)으로 A(#13908B)/B(#117E7A)/C(#0E6C68) 세 후보를 제시했고 사용자가 B를 선택했어(2026-09-16). `VisitFillColorToday`/`VisitFillTodayArgb`에 반영 후 재검증 완료. 세 후보 모두 luminance 계산상 기존과 같은 "밝은 글자" 쪽으로 나와 자동 대비 로직이 뒤집히지 않음을 Node로 확인했음.
+- 2dp 라벨 모서리, 3dp 내부 여백, 카오모지 4종, deterministic selector, 토요일/일요일 무디게 낮춘 잉크색, 주차 구분선, 상하단 장식선, "다녀간 날들"/"오늘까지 N번 만났어요~!"/봉투 카운터, drawer 구조, 달력 크기 모두 그대로 유지.
+- 공휴일 STOP 유지, 회귀 보호(방문 기록/Intro/Gallery) 모두 준수. 실제 `filesDir`·`visit_record.txt`·history marker·total/streak 접근 없음.
+
+### 자동 검증
+
+- `:app:testDebugUnitTest --tests VisitCalendarTest --tests VisitHistoryStorageTest :app:compileDebugKotlin`: `BUILD SUCCESSFUL`. `VisitCalendarTest` 8→11건(오늘 방문 색 결정 로직 신규 3건 포함) 전부 통과, `VisitHistoryStorageTest` 8건 통과. `compileDebugKotlin`은 기존 경고(Migration `db` 파라미터명, deprecated API)만 있고 신규 경고 없음. B 색상 확정 후 동일 테스트·compile 재실행해 재통과 확인(11건·8건 그대로 통과).
+- `git diff --check` 통과(기존 LF→CRLF 경고만, 신규 오류 없음).
+- 전체 unit test는 국소 UI 변경에 비례해 실행하지 않았어(기존 74일차 관례와 동일).
+- 실기기 설치·실행·삭제·초기화·계측 테스트·사용자 데이터 조작 없음.
+- 월 이동 자체의 연도 경계(12월↔1월)는 java.time `YearMonth.minusMonths/plusMonths`에 위임하고 자체 계산을 하지 않음 — 기존 `sharedCalendarHandlesLeapYearsMonthLengthsAndYearBoundary` 테스트가 `calendarCellsFor`로 이미 확인.
+- **미검증**: 실제 클릭 → `displayedMonth` state 전환·애니메이션 방향·빠른 연속 클릭·drawer 재오픈 후 유지는 Compose UI 테스트 하네스(Robolectric 등)가 이 저장소에 없어 JVM 단위 테스트로 확인 불가 — 실기기 QA로만 확인 가능. 새 테스트 의존성 추가는 미승인 범위라 시도하지 않았어.
+
+### 다음 행동
+
+1. 실기기 QA(75일차 지시서 28절: 월 이동, 오늘 복귀, 애니메이션, 오늘 방문 색 `#117E7A`) — 대기 중.
+2. QA 통과 후 사용자 승인 시에만 commit, 이후 별도 승인 시에만 push.
+
+---
+
 # HANDOFF — 74일차 방문 달력 폴리싱
 
 확인일: 2026-09-15. 수동 표준 모드. 사용자 제공 74일차 지시서에 따라 Codex가 직접 구현했어. 공용 작업판은 활성화하지 않았어.
