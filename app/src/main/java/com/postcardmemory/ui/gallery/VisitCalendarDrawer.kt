@@ -7,8 +7,14 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,9 +26,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -154,6 +163,203 @@ private fun AnimatedContentTransitionScope<YearMonth>.visitCalendarMonthTransiti
     )
 }
 
+/**
+ * MONTH_PICKER/YEAR_PICKER 안에서 ▲▼로 연도·decade를 한 칸씩 옮길 때 쓰는 수직 슬라이드.
+ * 월 이동의 가로 슬라이드와 같은 원리(state 비교가 방향을 정하고 animation은 표현만) —
+ * ▲(다음)는 위로 스와이프하듯, ▼(이전)는 아래로 스와이프하듯 움직인다(실기기 QA 피드백).
+ */
+private fun <T : Comparable<T>> AnimatedContentTransitionScope<T>.visitCalendarPickerStepTransition(): ContentTransform {
+    val forward = targetState > initialState
+    val offsetSpec = tween<IntOffset>(MONTH_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing)
+    val enter = slideInVertically(offsetSpec) { height -> if (forward) height else -height }
+    val exit = slideOutVertically(offsetSpec) { height -> if (forward) -height else height }
+    return (enter togetherWith exit).using(
+        SizeTransform(sizeAnimationSpec = { _, _ -> tween(MONTH_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing) })
+    )
+}
+
+/** 일반 달력 ↔ 월 선택 ↔ 연도 선택. 날짜 선택기가 아니라 달력 탐색기 단계만 나타낸다. */
+internal enum class VisitCalendarNavLevel { CALENDAR, MONTH_PICKER, YEAR_PICKER }
+
+private val VisitCalendarNavLevelSaver = Saver<VisitCalendarNavLevel, String>(
+    save = { it.name },
+    restore = { saved ->
+        runCatching { VisitCalendarNavLevel.valueOf(saved) }.getOrDefault(VisitCalendarNavLevel.CALENDAR)
+    }
+)
+
+/** back 한 번에 한 단계씩만 내려온다. 이미 CALENDAR면 더 내려갈 단계가 없다(호출부가 drawer를 닫는다). */
+internal fun visitCalendarNavLevelOnBack(current: VisitCalendarNavLevel): VisitCalendarNavLevel = when (current) {
+    VisitCalendarNavLevel.YEAR_PICKER -> VisitCalendarNavLevel.MONTH_PICKER
+    VisitCalendarNavLevel.MONTH_PICKER -> VisitCalendarNavLevel.CALENDAR
+    VisitCalendarNavLevel.CALENDAR -> VisitCalendarNavLevel.CALENDAR
+}
+
+/** 2026 -> 2020, 1999 -> 1990처럼 10년 단위 시작 연도를 계산한다. */
+internal fun decadeStartFor(year: Int): Int = (year / 10) * 10
+
+/** 이 연도가 지금 보는 10년 단위 decade 안에 있는지. YEAR_PICKER 4×4 grid에서 진하게/연하게를 가른다. */
+internal fun isYearWithinDecade(year: Int, decadeStart: Int): Boolean = year in decadeStart..decadeStart + 9
+
+/** YEAR_PICKER에서 약하게 구분할 연도. 표시 월의 연도가 지금 보는 decade 밖이면 아무 해도 강조하지 않는다. */
+internal fun highlightedYearFor(decadeStart: Int, displayedMonth: YearMonth): Int? =
+    if (isYearWithinDecade(displayedMonth.year, decadeStart)) displayedMonth.year else null
+
+/**
+ * YEAR_PICKER 4×4 grid: decade 앞 2년 + 실제 decade 10년 + 뒤 4년, 총 16개.
+ * 예: decadeStart=2020 -> 2018~2033. 윈도우 작업표시줄 캘린더의 연도 grid와 같은 배치.
+ */
+internal fun yearPickerGridYears(decadeStart: Int): List<Int> = (decadeStart - 2 until decadeStart + 14).toList()
+
+/**
+ * MONTH_PICKER 4×4 grid: pickerYear의 1~12월 + 다음 해 1~4월, 총 16개.
+ * YEAR_PICKER와 같은 4×4 리듬을 맞추기 위해 다음 해 앞부분만 살짝 보여준다.
+ */
+internal fun monthPickerGridCells(pickerYear: Int): List<Pair<Int, Int>> =
+    (1..16).map { index -> if (index <= 12) pickerYear to index else pickerYear + 1 to (index - 12) }
+
+// 기존 월 슬라이드(200ms)와 성격이 다른 계층 이동이라는 걸 구분하기 위해 살짝 더 짧게 뒀다.
+private const val HIERARCHY_TRANSITION_DURATION_MS = 170
+
+/**
+ * CALENDAR/MONTH_PICKER/YEAR_PICKER 사이는 옆으로 미는 게 아니라 짧은 fade + 아주 작은 scale로
+ * "단계가 바뀐다"는 느낌만 준다. 월 슬라이드의 가로 이동과 시각적으로 혼동되지 않도록 방향성 없이
+ * 대칭적으로 처리한다(과한 zoom 금지 지시에 맞춰 최소 후보만 선택).
+ */
+private fun AnimatedContentTransitionScope<VisitCalendarNavLevel>.visitCalendarHierarchyTransition(): ContentTransform {
+    val spec = tween<Float>(HIERARCHY_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing)
+    val enter = fadeIn(spec) + scaleIn(spec, initialScale = 0.97f)
+    val exit = fadeOut(spec) + scaleOut(spec, targetScale = 0.97f)
+    return (enter togetherWith exit).using(
+        SizeTransform(sizeAnimationSpec = { _, _ -> tween(HIERARCHY_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing) })
+    )
+}
+
+/**
+ * MONTH_PICKER("2026년")·YEAR_PICKER("2020 - 2029") 공용 상단 줄. 왼쪽 라벨은(있다면) 한 단계
+ * 위로 올라가는 진입점, 오른쪽 ▲▼는 같은 단계 안에서 연도/decade를 하나씩 옮긴다.
+ */
+@Composable
+private fun VisitCalendarPickerHeaderRow(
+    label: String,
+    onLabelClick: (() -> Unit)?,
+    stepUpDescription: String,
+    stepDownDescription: String,
+    onStepUp: () -> Unit,
+    onStepDown: () -> Unit
+) {
+    Row(
+        // 높이를 임의로 고정하지 않고 아래 ▲▼ 두 아이콘이 필요한 만큼 그대로 차지하게 둔다
+        // (24dp로 고정했다가 36dp가 필요한 아이콘 둘이 잘려서 ▼가 작게 보였던 문제 수정, QA 피드백).
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = InkPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .weight(1f)
+                .then(if (onLabelClick != null) Modifier.clickable(onClick = onLabelClick) else Modifier)
+                .semantics { heading() }
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Icon(
+                Icons.Filled.KeyboardArrowUp,
+                stepUpDescription,
+                tint = InkSecondary,
+                modifier = Modifier.size(20.dp).clickable(onClick = onStepUp)
+            )
+            Icon(
+                Icons.Filled.KeyboardArrowDown,
+                stepDownDescription,
+                tint = InkSecondary,
+                modifier = Modifier.size(20.dp).clickable(onClick = onStepDown)
+            )
+        }
+    }
+}
+
+// 다음 해로 넘어가는 4칸을 구분하는 정도의 낮은 대비. 새 회색 토큰을 추가하지 않고 기존
+// InkSecondary를 더 낮은 alpha로 재사용한다(장식선과 같은 방식).
+private val VisitCalendarAdjacentPeriodColor = InkSecondary.copy(alpha = 0.4f)
+
+/**
+ * pickerYear의 1~12월 + 다음 해 1~4월을 4열×4행으로. 다음 해 4칸은 연하게 구분해
+ * YEAR_PICKER의 4×4 리듬과 맞춘다. 카드·pill·border 없이 텍스트 중심 grid만 쓴다.
+ */
+@Composable
+private fun VisitCalendarMonthPicker(
+    pickerYear: Int,
+    displayedMonth: YearMonth,
+    onMonthSelected: (year: Int, month: Int) -> Unit
+) {
+    Column(Modifier.fillMaxWidth()) {
+        monthPickerGridCells(pickerYear).chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { (year, month) ->
+                    val isNextYear = year != pickerYear
+                    val isHighlighted = year == displayedMonth.year && month == displayedMonth.monthValue
+                    Text(
+                        text = month.toString(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .clickable(onClick = { onMonthSelected(year, month) })
+                            .wrapContentHeight(Alignment.CenterVertically),
+                        textAlign = TextAlign.Center,
+                        color = when {
+                            isHighlighted -> InkPrimary
+                            isNextYear -> VisitCalendarAdjacentPeriodColor
+                            else -> InkSecondary
+                        },
+                        fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * decade 앞 2년 + 실제 10년 + 뒤 4년을 4열×4행으로(윈도우 작업표시줄 캘린더와 같은 배치).
+ * 앞/뒤 6칸은 연하게 구분해 지금 보는 decade가 어디까지인지 알 수 있게 한다.
+ */
+@Composable
+private fun VisitCalendarYearPicker(decadeStart: Int, highlightYear: Int?, onYearSelected: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        yearPickerGridYears(decadeStart).chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { year ->
+                    val inDecade = isYearWithinDecade(year, decadeStart)
+                    val isHighlighted = year == highlightYear
+                    Text(
+                        text = year.toString(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .clickable(onClick = { onYearSelected(year) })
+                            .wrapContentHeight(Alignment.CenterVertically),
+                        textAlign = TextAlign.Center,
+                        color = when {
+                            isHighlighted -> InkPrimary
+                            inDecade -> InkSecondary
+                            else -> VisitCalendarAdjacentPeriodColor
+                        },
+                        fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun VisitCalendarBottomOrnament() {
     Row(
@@ -181,8 +387,22 @@ internal fun VisitCalendarDrawer(
     content: @Composable () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    var navLevel by rememberSaveable(stateSaver = VisitCalendarNavLevelSaver) {
+        mutableStateOf(VisitCalendarNavLevel.CALENDAR)
+    }
+
+    // drawer를 다시 열 때는 항상 CALENDAR로 연다 — YEAR_PICKER 등에 머문 채로 사용자를 놀라게
+    // 하지 않는다. displayedMonth(표시 중이던 월)는 기존 동작을 그대로 유지하므로 건드리지 않는다.
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) navLevel = VisitCalendarNavLevel.CALENDAR
+    }
+
     BackHandler(enabled = drawerState.isOpen) {
-        scope.launch { drawerState.close() }
+        if (navLevel == VisitCalendarNavLevel.CALENDAR) {
+            scope.launch { drawerState.close() }
+        } else {
+            navLevel = visitCalendarNavLevelOnBack(navLevel)
+        }
     }
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -204,7 +424,12 @@ internal fun VisitCalendarDrawer(
                     ) {
                         Icon(Icons.Default.Close, "방문 달력 닫기", tint = InkSecondary, modifier = Modifier.size(20.dp))
                     }
-                    MonthlyVisitCalendar(visitedEpochDays, totalVisitDays)
+                    MonthlyVisitCalendar(
+                        visitedEpochDays = visitedEpochDays,
+                        totalVisitDays = totalVisitDays,
+                        navLevel = navLevel,
+                        onNavLevelChange = { navLevel = it }
+                    )
                 }
             }
         },
@@ -212,11 +437,27 @@ internal fun VisitCalendarDrawer(
     )
 }
 
+// 실제 달은 4~6주(28~37칸을 7의 배수로 채움)로 흔들린다. 6주로 고정해야 어떤 달이든
+// 절대 모자라지 않는다 — 5주로 고정하면 31일이 금/토에 시작하는 달(6주 필요)이 그대로 넘친다.
+private const val VISIT_CALENDAR_FIXED_ROW_COUNT = 6
+
+/**
+ * 실제 달 칸 뒤에 빈 칸을 채워 항상 [VISIT_CALENDAR_FIXED_ROW_COUNT]주(6주=42칸) 길이로
+ * 맞춘다. 채우는 칸은 전부 null이라 존재하지 않는 날짜를 만들어내지 않는다 — 오직 표시 높이만
+ * 맞추는 패딩이다.
+ */
+internal fun visitCalendarPaddedCells(month: YearMonth): List<LocalDate?> {
+    val cells = calendarCellsFor(month)
+    val targetSize = VISIT_CALENDAR_FIXED_ROW_COUNT * 7
+    return if (cells.size >= targetSize) cells else cells + List(targetSize - cells.size) { null }
+}
+
 /** 한 달 분량의 날짜 grid만 그린다. AnimatedContent가 이 composable 전체를 슬라이드시킨다. */
 @Composable
 private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>, today: LocalDate) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        val weeks = calendarCellsFor(month).chunked(7)
+        val realWeekCount = calendarCellsFor(month).chunked(7).size
+        val weeks = visitCalendarPaddedCells(month).chunked(7)
         weeks.forEachIndexed { weekIndex, week ->
             Row(Modifier.fillMaxWidth()) {
                 week.forEach { date ->
@@ -265,8 +506,9 @@ private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>
                 }
             }
             // 종이 달력의 행 구분을 흉내 낸 아주 옅은 가로선. 표/타임테이블처럼 보이지 않도록
-            // 장식선과 함께 낮은 대비를 유지하고, 마지막 주 다음에는 넣지 않는다.
-            if (weekIndex != weeks.lastIndex) {
+            // 장식선과 함께 낮은 대비를 유지하고, 실제 마지막 주 다음이나 높이를 맞추는
+            // 빈 패딩 행 사이에는 넣지 않는다.
+            if (weekIndex < realWeekCount - 1) {
                 HorizontalDivider(
                     thickness = .5.dp,
                     color = PaperDivider.copy(alpha = 0.3f),
@@ -282,94 +524,172 @@ internal fun MonthlyVisitCalendar(
     visitedEpochDays: Set<Long>,
     totalVisitDays: Int? = null,
     today: LocalDate = remember { LocalDate.now() },
-    initialMonth: YearMonth = YearMonth.from(today)
+    initialMonth: YearMonth = YearMonth.from(today),
+    navLevel: VisitCalendarNavLevel = VisitCalendarNavLevel.CALENDAR,
+    onNavLevelChange: (VisitCalendarNavLevel) -> Unit = {}
 ) {
     var displayedMonth by rememberSaveable(stateSaver = VisitCalendarMonthSaver) {
         mutableStateOf(initialMonth)
     }
+    // MONTH_PICKER/YEAR_PICKER가 지금 보여주는 연도. 실제 달력의 displayedMonth와는 분리해서,
+    // picker 안에서 연도만 훑어보다가 선택 없이 뒤로 가도 실제 표시 월을 건드리지 않는다.
+    var pickerYear by rememberSaveable { mutableStateOf(initialMonth.year) }
     val isCurrentMonth = displayedMonth == YearMonth.from(today)
+    val decadeStart = decadeStartFor(pickerYear)
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    "이전 달",
-                    tint = InkSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            AnimatedContent(
-                targetState = displayedMonth,
-                transitionSpec = { visitCalendarMonthTransition() },
-                modifier = Modifier.weight(1f).clipToBounds(),
-                contentAlignment = Alignment.Center,
-                label = "visitCalendarMonthTitle"
-            ) { month ->
-                Text(
-                    text = "${month.year}년 ${month.monthValue}월",
-                    color = InkPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().semantics { heading() }
-                )
-            }
-            IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    "다음 달",
-                    tint = InkSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "다녀간 날들",
-                color = InkSecondary,
-                fontSize = 9.sp,
-                modifier = Modifier.weight(1f).padding(top = 1.dp)
-            )
-            if (!isCurrentMonth) {
-                Text(
-                    text = "오늘",
-                    color = InkSecondary,
-                    fontSize = 9.sp,
-                    modifier = Modifier
-                        .padding(top = 1.dp)
-                        .clickable(onClick = { displayedMonth = YearMonth.from(today) })
-                )
-            }
-        }
-        VisitCalendarTopOrnament()
-        Row(Modifier.fillMaxWidth()) {
-            listOf(
-                "일" to DayOfWeek.SUNDAY, "월" to DayOfWeek.MONDAY, "화" to DayOfWeek.TUESDAY,
-                "수" to DayOfWeek.WEDNESDAY, "목" to DayOfWeek.THURSDAY, "금" to DayOfWeek.FRIDAY,
-                "토" to DayOfWeek.SATURDAY
-            ).forEach { (label, dow) ->
-                Text(
-                    label,
-                    Modifier.weight(1f),
-                    color = when (dow) {
-                        DayOfWeek.SUNDAY -> WeekendSunday
-                        DayOfWeek.SATURDAY -> WeekendSaturday
-                        else -> InkSecondary
-                    },
-                    fontSize = 10.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-        Spacer(Modifier.height(6.dp))
         AnimatedContent(
-            targetState = displayedMonth,
-            transitionSpec = { visitCalendarMonthTransition() },
-            modifier = Modifier.fillMaxWidth().clipToBounds(),
-            label = "visitCalendarMonthGrid"
-        ) { month ->
-            VisitCalendarMonthGrid(month, visitedEpochDays, today)
+            targetState = navLevel,
+            transitionSpec = { visitCalendarHierarchyTransition() },
+            modifier = Modifier.fillMaxWidth(),
+            label = "visitCalendarNavLevel"
+        ) { level ->
+            Column(Modifier.fillMaxWidth()) {
+                when (level) {
+                    VisitCalendarNavLevel.CALENDAR -> {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                    "이전 달",
+                                    tint = InkSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            AnimatedContent(
+                                targetState = displayedMonth,
+                                transitionSpec = { visitCalendarMonthTransition() },
+                                modifier = Modifier.weight(1f).clipToBounds(),
+                                contentAlignment = Alignment.Center,
+                                label = "visitCalendarMonthTitle"
+                            ) { month ->
+                                Text(
+                                    text = "${month.year}년 ${month.monthValue}월",
+                                    color = InkPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = TextAlign.Center,
+                                    // 근거리는 좌우 화살표, 원거리는 이 제목을 눌러 월/연도 grid로.
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(onClick = {
+                                            pickerYear = displayedMonth.year
+                                            onNavLevelChange(VisitCalendarNavLevel.MONTH_PICKER)
+                                        })
+                                        .semantics { heading() }
+                                )
+                            }
+                            IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    "다음 달",
+                                    tint = InkSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "다녀간 날들",
+                                color = InkSecondary,
+                                fontSize = 9.sp,
+                                modifier = Modifier.weight(1f).padding(top = 1.dp)
+                            )
+                            if (!isCurrentMonth) {
+                                Text(
+                                    text = "오늘",
+                                    color = InkSecondary,
+                                    fontSize = 9.sp,
+                                    modifier = Modifier
+                                        .padding(top = 1.dp)
+                                        .clickable(onClick = { displayedMonth = YearMonth.from(today) })
+                                )
+                            }
+                        }
+                        VisitCalendarTopOrnament()
+                        Row(Modifier.fillMaxWidth()) {
+                            listOf(
+                                "일" to DayOfWeek.SUNDAY, "월" to DayOfWeek.MONDAY, "화" to DayOfWeek.TUESDAY,
+                                "수" to DayOfWeek.WEDNESDAY, "목" to DayOfWeek.THURSDAY, "금" to DayOfWeek.FRIDAY,
+                                "토" to DayOfWeek.SATURDAY
+                            ).forEach { (label, dow) ->
+                                Text(
+                                    label,
+                                    Modifier.weight(1f),
+                                    color = when (dow) {
+                                        DayOfWeek.SUNDAY -> WeekendSunday
+                                        DayOfWeek.SATURDAY -> WeekendSaturday
+                                        else -> InkSecondary
+                                    },
+                                    fontSize = 10.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        AnimatedContent(
+                            targetState = displayedMonth,
+                            transitionSpec = { visitCalendarMonthTransition() },
+                            modifier = Modifier.fillMaxWidth().clipToBounds(),
+                            label = "visitCalendarMonthGrid"
+                        ) { month ->
+                            VisitCalendarMonthGrid(month, visitedEpochDays, today)
+                        }
+                    }
+                    VisitCalendarNavLevel.MONTH_PICKER -> {
+                        VisitCalendarPickerHeaderRow(
+                            label = "${pickerYear}년",
+                            onLabelClick = { onNavLevelChange(VisitCalendarNavLevel.YEAR_PICKER) },
+                            stepUpDescription = "다음 연도",
+                            stepDownDescription = "이전 연도",
+                            onStepUp = { pickerYear++ },
+                            onStepDown = { pickerYear-- }
+                        )
+                        VisitCalendarTopOrnament()
+                        AnimatedContent(
+                            targetState = pickerYear,
+                            transitionSpec = { visitCalendarPickerStepTransition() },
+                            modifier = Modifier.fillMaxWidth().clipToBounds(),
+                            label = "visitCalendarMonthPickerYear"
+                        ) { year ->
+                            VisitCalendarMonthPicker(
+                                pickerYear = year,
+                                displayedMonth = displayedMonth,
+                                onMonthSelected = { selectedYear, month ->
+                                    displayedMonth = YearMonth.of(selectedYear, month)
+                                    onNavLevelChange(VisitCalendarNavLevel.CALENDAR)
+                                }
+                            )
+                        }
+                    }
+                    VisitCalendarNavLevel.YEAR_PICKER -> {
+                        VisitCalendarPickerHeaderRow(
+                            label = "$decadeStart - ${decadeStart + 9}",
+                            onLabelClick = null,
+                            stepUpDescription = "다음 10년",
+                            stepDownDescription = "이전 10년",
+                            onStepUp = { pickerYear += 10 },
+                            onStepDown = { pickerYear -= 10 }
+                        )
+                        VisitCalendarTopOrnament()
+                        AnimatedContent(
+                            targetState = decadeStart,
+                            transitionSpec = { visitCalendarPickerStepTransition() },
+                            modifier = Modifier.fillMaxWidth().clipToBounds(),
+                            label = "visitCalendarYearPickerDecade"
+                        ) { start ->
+                            VisitCalendarYearPicker(
+                                decadeStart = start,
+                                highlightYear = highlightedYearFor(start, displayedMonth),
+                                onYearSelected = { year ->
+                                    pickerYear = year
+                                    onNavLevelChange(VisitCalendarNavLevel.MONTH_PICKER)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
         VisitCalendarBottomOrnament()
         Row(

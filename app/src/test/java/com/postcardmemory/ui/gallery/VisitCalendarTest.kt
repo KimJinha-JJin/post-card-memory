@@ -135,4 +135,72 @@ class VisitCalendarTest {
         val future = today.plusDays(5)
         assertFalse(future.toEpochDay() in visitedEpochDays)
     }
+
+    // 75일차 추가 수정지시서: 계층형 월/연도 탐색기 (달력 → 월 선택 → 연도 선택).
+
+    @Test fun decadeStartForComputesTheTenYearBucketAcrossBoundaries() {
+        assertEquals(1990, decadeStartFor(1999))
+        assertEquals(2000, decadeStartFor(2000))
+        assertEquals(2000, decadeStartFor(2009))
+        assertEquals(2010, decadeStartFor(2010))
+        assertEquals(2020, decadeStartFor(2026))
+        assertEquals(2020, decadeStartFor(2029))
+        assertEquals(2030, decadeStartFor(2030))
+    }
+
+    @Test fun visitCalendarNavLevelOnBackStepsDownOneLevelAtATimeAndStaysOnCalendar() {
+        assertEquals(VisitCalendarNavLevel.MONTH_PICKER, visitCalendarNavLevelOnBack(VisitCalendarNavLevel.YEAR_PICKER))
+        assertEquals(VisitCalendarNavLevel.CALENDAR, visitCalendarNavLevelOnBack(VisitCalendarNavLevel.MONTH_PICKER))
+        // CALENDAR에서는 이 함수가 더 내려갈 단계가 없다고만 알려준다 — drawer를 닫는 건 호출부(BackHandler) 책임.
+        assertEquals(VisitCalendarNavLevel.CALENDAR, visitCalendarNavLevelOnBack(VisitCalendarNavLevel.CALENDAR))
+    }
+
+    @Test fun highlightedYearForOnlyMarksAYearWhenItFallsInsideTheShownDecade() {
+        val displayedMonth = YearMonth.of(2026, 9)
+        assertEquals(2026, highlightedYearFor(decadeStart = 2020, displayedMonth = displayedMonth))
+        assertNull(highlightedYearFor(decadeStart = 2030, displayedMonth = displayedMonth))
+        assertNull(highlightedYearFor(decadeStart = 2010, displayedMonth = displayedMonth))
+        // decade 경계값도 포함 관계를 정확히 판단해야 한다.
+        assertEquals(2029, highlightedYearFor(decadeStart = 2020, displayedMonth = YearMonth.of(2029, 12)))
+        assertNull(highlightedYearFor(decadeStart = 2020, displayedMonth = YearMonth.of(2030, 1)))
+    }
+
+    // 실기기 QA 후속 지시: 월 grid 4×4(다음 해 4칸), 연도 grid 4×4(앞 2년+뒤 4년), 달력 6주 고정.
+
+    @Test fun isYearWithinDecadeMatchesTheSameBoundaryAsHighlightedYearFor() {
+        assertTrue(isYearWithinDecade(2020, decadeStart = 2020))
+        assertTrue(isYearWithinDecade(2029, decadeStart = 2020))
+        assertFalse(isYearWithinDecade(2019, decadeStart = 2020))
+        assertFalse(isYearWithinDecade(2030, decadeStart = 2020))
+    }
+
+    @Test fun yearPickerGridYearsSpansTwoYearsBeforeAndFourYearsAfterTheDecade() {
+        val years = yearPickerGridYears(decadeStart = 2020)
+        assertEquals(16, years.size)
+        assertEquals((2018..2033).toList(), years)
+        assertEquals((2020..2029).toList(), years.filter { isYearWithinDecade(it, 2020) })
+    }
+
+    @Test fun monthPickerGridCellsHasTwelveMonthsOfPickerYearThenFourMonthsOfTheNextYear() {
+        val cells = monthPickerGridCells(pickerYear = 2026)
+        assertEquals(16, cells.size)
+        assertEquals((1..12).map { 2026 to it }, cells.take(12))
+        assertEquals((1..4).map { 2027 to it }, cells.drop(12))
+    }
+
+    @Test fun visitCalendarPaddedCellsAlwaysFillsSixFullWeeksWithoutInventingRealDates() {
+        listOf(
+            YearMonth.of(2026, 9), // 평범한 5주
+            YearMonth.of(2026, 2), // 짧은 2월, 4주
+            YearMonth.of(2027, 1), // 31일, 6주가 필요할 수 있는 경우 포함해 연도 경계 확인
+            YearMonth.of(2028, 2) // 윤년 2월
+        ).forEach { month ->
+            val real = calendarCellsFor(month)
+            val padded = visitCalendarPaddedCells(month)
+            assertEquals(42, padded.size)
+            assertEquals(real, padded.take(real.size))
+            // 채운 칸은 전부 빈 칸이어야 한다 — 실제 날짜를 만들어내지 않는다.
+            padded.drop(real.size).forEach { assertNull(it) }
+        }
+    }
 }

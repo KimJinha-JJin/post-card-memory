@@ -1,3 +1,50 @@
+# HANDOFF — 75일차 추가: 방문 달력 계층형 월/연도 탐색
+
+확인일: 2026-09-16. 수동 표준 모드. 75일차 기본 작업(월 이동/오늘 복귀/애니메이션/오늘 색) commit·push(`f687145`) 이후, 사용자가 챗지피티에게 받은 "75일차 추가 수정지시서"(계층형 월/연도 탐색)를 피코(Claude Code)가 직접 구현했어. 이어서 실기기 QA 중 나온 사용자 추가 요청(▼ 버튼 가시성, ▲▼ 애니메이션, 4×4 grid, 달력 6주 고정)까지 같은 흐름에서 반영했어. 공용 작업판은 활성화하지 않았어. **실기기 QA 통과, 사용자가 commit·push를 명시적으로 요청 — 이 HANDOFF 커밋에 포함.**
+
+## 계층형 탐색 최종 상태
+
+시작 HEAD `f687145`(clean, 기존 untracked 2개만). CALENDAR → MONTH_PICKER → YEAR_PICKER 3단 탐색기 + 실기기 QA 2라운드 반영까지 구현·자동 검증 완료.
+
+- navigation level: `internal enum class VisitCalendarNavLevel { CALENDAR, MONTH_PICKER, YEAR_PICKER }`. `VisitCalendarDrawer`(부모)에서 `rememberSaveable`로 보유(hoist) — `BackHandler`와 drawer 재오픈 리셋이 이 값을 봐야 해서 `MonthlyVisitCalendar` 밖으로 끌어올렸어. `MonthlyVisitCalendar`는 `navLevel`/`onNavLevelChange`를 파라미터로만 받음.
+- 표시 연도 state: `pickerYear: Int`를 `displayedMonth`와 분리된 별도 `rememberSaveable`로 둠. MONTH_PICKER/YEAR_PICKER 안에서 연도만 훑어보다가 선택 없이 뒤로 가도 실제 달력(`displayedMonth`)은 건드리지 않음 — 월/연도를 실제로 선택(탭)하는 순간에만 `displayedMonth`에 반영.
+- **MONTH_PICKER grid 구조(QA 후 확정): 4열×4행(16칸)** — `monthPickerGridCells(pickerYear)`가 pickerYear의 1~12월(라벨 "1"~"12", "월" 접미사 제거) + 다음 해 1~4월을 반환. 다음 해 4칸은 `VisitCalendarAdjacentPeriodColor`(`InkSecondary` alpha 0.4, 새 회색 토큰 추가 안 함)로 낮춰 구분.
+- **YEAR_PICKER grid 구조(QA 후 확정): 4열×4행(16칸)** — `yearPickerGridYears(decadeStart)`가 decade 앞 2년 + 실제 10년 + 뒤 4년을 반환(예: decadeStart=2020 → 2018~2033). 앞/뒤 6칸은 같은 낮춘 색으로 구분. 사용자가 확인한 Windows 작업표시줄 캘린더의 연도 grid 배치와 동일. (최초엔 5×2였다가 이 요청으로 4×4로 교체.)
+- 연도 ▲▼ 동작: MONTH_PICKER 헤더 우측 ▲=`pickerYear++`(다음 연도), ▼=`pickerYear--`(이전 연도).
+- decade ▲▼ 동작: YEAR_PICKER 헤더 우측 ▲=`pickerYear += 10`, ▼=`pickerYear -= 10`. decade 자체 state 없이 `pickerYear`에서 매번 계산.
+- decade 계산 방식: `internal fun decadeStartFor(year: Int) = (year / 10) * 10`. 순수 함수, 경계값(1999/2000/2009/2010/2029/2030) 테스트 완료.
+- 월 선택 동작: MONTH_PICKER에서 월(다음 해 4칸 포함) 탭 → `displayedMonth = YearMonth.of(선택한 year, month)`, `navLevel = CALENDAR`로 즉시 복귀. history marker·visit count·streak 변경 없음(순수 표시 state만).
+- 연도 선택 동작: YEAR_PICKER에서 연도(앞뒤 6칸 포함) 탭 → `pickerYear = year`, `navLevel = MONTH_PICKER`로 한 단계 내려옴.
+- 현재 선택값 표시: 강조 기준은 "오늘"이 아니라 "지금 표시 중인 연·월"(실제 `displayedMonth`와 정확히 일치하는 칸만). 강조 방식은 텍스트 weight(Medium)+색(InkPrimary) 하나만 사용 — 방문 라벨보다 약함.
+- 계층 전환 animation(CALENDAR↔MONTH_PICKER↔YEAR_PICKER): `visitCalendarHierarchyTransition()` — `fadeIn + scaleIn(0.97f)` / `fadeOut + scaleOut(0.97f)`, 방향성 없이 대칭 처리, 170ms. `SizeTransform`도 같은 spec으로 덮어써 기본 spring 제거.
+- **▲▼ 스텝 애니메이션(실기기 QA 추가 요청, 최초엔 애니메이션 없이 즉시 전환이라 "밑밑하다"는 피드백):** `visitCalendarPickerStepTransition()` 추가 — 월 이동과 같은 원리(state 비교가 방향 결정)로 `slideInVertically`/`slideOutVertically` 사용. ▲(다음 연도/decade)는 위로, ▼(이전)는 아래로 스르륵. MONTH_PICKER는 `pickerYear`로, YEAR_PICKER는 `decadeStart`로 각각 `AnimatedContent` 트리거. `MONTH_TRANSITION_DURATION_MS`(200ms) 재사용 — 월 이동과 같은 느낌을 원한 요청이라 새 duration을 만들지 않음.
+- 계층 전환 duration: 170ms. 스텝(▲▼) 전환 duration: 200ms(월 이동과 동일).
+- **CALENDAR 날짜 grid 높이(실기기 QA 추가 요청): 항상 6주(42칸) 고정.** `visitCalendarPaddedCells(month)`가 실제 달 뒤에 빈 칸(null)만 채워 42칸으로 맞춤 — 실제 날짜를 만들어내지 않음. 지시서 원문은 "5주 기준"이라고 했지만, 31일짜리 달이 금/토에 시작하면 실제로 6주가 필요해 5주로 고정하면 그 달만 여전히 튀어나온다고 판단해 6주로 구현하고 사용자에게 설명함(승인됨, 실기기 QA 통과). 주차 구분선은 실제 주(real week)까지만 그리고 패딩 행 사이에는 넣지 않음(`realWeekCount` 계산).
+- drawer 재오픈 시 mode: `LaunchedEffect(drawerState.isOpen)`으로 drawer가 열릴 때마다 `navLevel = CALENDAR`로 리셋. `displayedMonth`는 기존 74·75일차 동작 그대로 유지.
+- 오늘 복귀 시 mode: "오늘" 버튼은 CALENDAR 레벨에서만 보임(변경 없음) — 이미 CALENDAR로 돌아온 상태에서만 누를 수 있음.
+- back 동작: `VisitCalendarDrawer`의 `BackHandler` — `navLevel == CALENDAR`면 drawer를 닫고, 아니면 `visitCalendarNavLevelOnBack(navLevel)`로 한 단계만 내려옴(YEAR_PICKER→MONTH_PICKER→CALENDAR).
+- 미래 연도 탐색 정책: 75일차 기본 작업의 "제한 없음" 정책 그대로.
+- 방문 셀 스타일(2dp, `#16A7A1`/`#117E7A`, 자동 대비)은 이번 작업에서 전혀 건드리지 않음.
+- **QA 라운드 1 수정**: picker 헤더 Row에 `height(24.dp)`로 고정했다가 ▲▼ 아이콘 두 개(18+18=36dp)가 그 안에 다 못 들어가 ▼가 잘려서 작게 보이던 버그. 고정 높이를 제거하고 아이콘을 20dp로, 둘 사이 2dp 간격을 추가해 수정.
+- UI 미감: Material DatePicker·card·pill·border·shadow·gradient 없음. 텍스트 중심 grid + 기존 `clickable` ripple만 사용. ▲▼는 20dp 아이콘(월/연도 이동 화살표와 동일 크기로 QA 후 통일).
+
+### 자동 검증
+
+- `:app:testDebugUnitTest --tests VisitCalendarTest :app:compileDebugKotlin`: 매 수정 라운드마다 재실행, 최종 `BUILD SUCCESSFUL`. `VisitCalendarTest` 11→18건(decade 계산·back 단계 이동·강조 로직·4×4 grid 생성·6주 패딩 신규 7건) 전부 통과. `compileDebugKotlin`은 기존 경고만, 신규 경고 없음.
+- `git diff --check` 통과(기존 CRLF 경고만).
+- **미검증**: 실제 탭 → navLevel 전환, ▲▼ 빠른 반복 입력, 각 애니메이션 자체, drawer 재오픈 시 리셋은 Compose UI 테스트 하네스가 이 저장소에 없어(새 테스트 의존성 추가는 미승인 범위) JVM 단위 테스트로 확인 불가 — **실기기 QA 2라운드로 확인 완료**(제목 터치, 4×4 월/연도 grid, ▲▼ 방향·가시성, 계층 전환, drawer 재오픈, back, ▲▼ 슬라이드 애니메이션, 6주 고정 높이 모두 통과).
+
+### 사용자 승인
+
+2026-09-16, 실기기 QA 2라운드(▼ 가시성 수정 확인, ▲▼ 애니메이션·4×4 grid·6주 높이 확인) 통과 후 사용자가 "커밋하고 푸시하자"로 commit·push를 명시적으로 요청함.
+
+### 다음 행동
+
+1. 실기기 QA 통과, 사용자 승인 완료 — commit·push 진행.
+2. 다음 작업은 없음. 필요하면 사용자가 새 지시서로 시작.
+
+---
+
 # HANDOFF — 75일차 방문 달력 월 탐색·오늘 복귀·전환 애니메이션·오늘 방문 색
 
 확인일: 2026-09-16. 수동 표준 모드. 사용자 제공 75일차 지시서에 따라 피코(Claude Code)가 직접 구현했어. 공용 작업판은 활성화하지 않았어.
