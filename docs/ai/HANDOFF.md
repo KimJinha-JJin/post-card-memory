@@ -36,7 +36,7 @@ production 반영 후 실기기 QA → 물뿌리개 제거, 구분선 통합, �
 
 ## Git
 
-commit·push는 사용자가 명시적으로 요청("좋아 커밋하고 푸시 부탁해~"). 아래 결과는 커밋 직후 갱신.
+commit·push는 사용자가 명시적으로 요청("좋아 커밋하고 푸시 부탁해~"). commit `06af4fe`(5 files changed), push 완료. 종료 HEAD `06af4fe`, local == origin/feature/photo-sticker, tracked working tree clean(기존 무관 untracked `.codex-config.candidate.toml`/`.kotlin/`만 남음).
 
 ## 다음 행동
 
