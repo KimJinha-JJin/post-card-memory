@@ -10,9 +10,11 @@ import org.junit.Test
 
 /**
  * 76일차: 기억밀도가 "여러 연도를 이어붙인 원형 점 grid"에서 "지정한 한
- * 해의 1월→12월 막대그래프 + 3단계 카오모지"로 재정의되며, 그 계산
- * 로직([memoryDensityMonthsForYear], [memoryDensityBarLevel],
- * [memoryDensityHasOverflow], [memoryDensityKaomoji])을 검증한다.
+ * 해의 1월→12월 줄기 그래프"로 재정의되며, 그 계산 로직
+ * ([memoryDensityMonthsForYear], [memoryDensityBarLevel],
+ * [memoryDensityHasOverflow])을 검증한다. 76일차 후속(새싹형)으로 표정
+ * 3단계는 폐기되고, 줄기 위 하트의 진하기([memoryDensityHeartAlpha])만
+ * 줄기 단계에 비례해 검증한다.
  */
 class GalleryMemoryDensityTest {
 
@@ -130,17 +132,19 @@ class GalleryMemoryDensityTest {
         assertTrue(memoryDensityHasOverflow(100))
     }
 
-    // ── 32절: 카오모지 경계값 ───────────────────────────────────────
+    // ── 76일차 후속(새싹형): 하트 진하기는 줄기 단계에 비례 ──────────────
 
     @Test
-    fun kaomoji_matchesThreeStageBoundaries() {
-        assertEquals("•_•", memoryDensityKaomoji(0))
-        assertEquals("•_•", memoryDensityKaomoji(4))
-        assertEquals("˙ᵕ˙", memoryDensityKaomoji(5))
-        assertEquals("˙ᵕ˙", memoryDensityKaomoji(8))
-        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(9))
-        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(12))
-        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(13))
-        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(100))
+    fun heartAlpha_isMinimumAtLevelOneAndFullAtMaxLevel() {
+        assertEquals(0.5f, memoryDensityHeartAlpha(1), 0.001f)
+        assertEquals(1.0f, memoryDensityHeartAlpha(6), 0.001f)
+    }
+
+    @Test
+    fun heartAlpha_increasesMonotonicallyWithLevel() {
+        val alphas = (1..6).map { memoryDensityHeartAlpha(it) }
+        for (i in 1 until alphas.size) {
+            assertTrue("level ${i + 1} 하트가 이전 단계보다 진해야 함", alphas[i] > alphas[i - 1])
+        }
     }
 }

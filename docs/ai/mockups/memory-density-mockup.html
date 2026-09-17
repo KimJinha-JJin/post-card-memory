@@ -70,27 +70,34 @@
     font-weight: 500;
     color: var(--sunset-gold);
   }
-  .bar-area {
-    height: 48px;
+  .plant-area {
+    height: 58px;
     width: 100%;
     display: flex;
-    align-items: flex-end;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
   }
-  .bar {
-    width: 14px;
+  .stem {
+    width: 3px;
     background: var(--sunset-gold);
   }
-  .divider {
-    width: 22px;
+  .sprout-heart {
+    font-size: 11px;
+    line-height: 1;
+    color: var(--sunset-gold);
+    margin-bottom: 1px;
+  }
+  .ground-line {
+    width: 100%;
     height: 1px;
     background: var(--paper-divider);
-    margin-top: 4px;
+    margin: 2px 0 5px;
   }
-  .kaomoji {
+  .face {
     font-size: 12px;
     color: var(--ink-secondary);
-    margin-top: 6px;
+    margin-top: 0;
     height: 16px;
   }
   .month-num {
@@ -148,17 +155,21 @@
 </head>
 <body>
 
-<h1>기억 밀도 목업</h1>
+<h1>기억 밀도 목업 — 새싹형</h1>
 <p class="note">
-  앱 밖의 독립 HTML 목업입니다. 실제 코드에는 반영되지 않으며, 실제 앱과 같은
-  공식(1칸=엽서 2장, 최대 6칸, 13장부터 overflow, 카오모지 3단계)을 그대로
-  재현했습니다. 아래 숫자 입력칸을 직접 눌러 값을 바꾸면 실시간으로 막대·
-  카오모지가 바뀝니다. 프리셋 버튼으로 여러 해의 느낌도 비교해보세요.
+  앱 밖의 독립 HTML 목업입니다. 실제 코드에는 반영됐지만 이 파일 자체는
+  참고용입니다. 실기기 QA 반영: 물뿌리개 아이콘 제거, 달마다 끊기던
+  구분선을 전체 폭 하나로 연결. 얼굴 색을 하트 진하기와 공유해보는 시도는
+  되돌려 항상 같은 무채색 •_•를 씁니다. 수치는 줄기 길이로만 표현하고
+  새싹 모양은 모든 달에서 동일합니다(1칸=엽서 2장, 최대 6칸, 13장부터
+  overflow는 그대로). 아래 숫자 입력칸을 직접 눌러보거나 프리셋으로 비교해보세요.
 </p>
 
 <div class="phone">
   <div class="year-label">2026년</div>
-  <div class="row" id="chartRow"></div>
+  <div class="row" id="stemRow"></div>
+  <div class="ground-line"></div>
+  <div class="row" id="footRow"></div>
 </div>
 
 <div class="controls">
@@ -170,8 +181,10 @@
 </div>
 
 <div class="legend">
-  <div><b>막대</b>: 1칸 = 엽서 2장, 최대 6칸(12장), 13장부터는 6칸 유지 + 위에 "+" 표시</div>
-  <div><b>카오모지</b>: 0~4장 •_•  ·  5~8장 ˙ᵕ˙  ·  9장 이상 ᵔᴗᵔ</div>
+  <div><b>줄기</b>: 1칸 = 엽서 2장, 최대 6칸(12장), 13장부터는 6칸 유지 + 위에 "+" 표시</div>
+  <div><b>새싹</b>: 줄기가 있으면(1장 이상) 항상 같은 모양으로 줄기 위에 표시</div>
+  <div><b>얼굴</b>: 항상 같은 무표정 •_•, 같은 무채색 — 수치와 무관</div>
+  <div><b>0장</b>: 얼굴만 표시, 줄기·새싹 없음</div>
 </div>
 
 <script>
@@ -185,10 +198,8 @@
   function hasOverflow(count) {
     return count > OVERFLOW_THRESHOLD;
   }
-  function kaomoji(count) {
-    if (count >= 9) return "ᵔᴗᵔ";
-    if (count >= 5) return "˙ᵕ˙";
-    return "•_•";
+  function heartAlpha(level) {
+    return 0.4 + (level / MAX_LEVEL) * 0.6;
   }
 
   const presets = {
@@ -201,46 +212,57 @@
 
   let counts = presets.quiet.slice();
 
-  const row = document.getElementById("chartRow");
+  const stemRow = document.getElementById("stemRow");
+  const footRow = document.getElementById("footRow");
 
   function render() {
-    row.innerHTML = "";
+    stemRow.innerHTML = "";
+    footRow.innerHTML = "";
+
     for (let i = 0; i < 12; i++) {
       const count = counts[i];
       const level = barLevel(count);
       const overflow = hasOverflow(count);
 
-      const col = document.createElement("div");
-      col.className = "col";
+      // 위쪽 절반: overflow 표시 + 줄기/새싹
+      const stemCol = document.createElement("div");
+      stemCol.className = "col";
 
       const overflowMark = document.createElement("div");
       overflowMark.className = "overflow-mark";
       overflowMark.textContent = overflow ? "+" : "";
-      col.appendChild(overflowMark);
+      stemCol.appendChild(overflowMark);
 
-      const barArea = document.createElement("div");
-      barArea.className = "bar-area";
+      const plantArea = document.createElement("div");
+      plantArea.className = "plant-area";
       if (level > 0) {
-        const bar = document.createElement("div");
-        bar.className = "bar";
-        bar.style.height = (level * 8) + "px";
-        barArea.appendChild(bar);
+        const heart = document.createElement("div");
+        heart.className = "sprout-heart";
+        heart.textContent = "♥";
+        heart.style.opacity = heartAlpha(level).toFixed(2);
+        plantArea.appendChild(heart);
+
+        const stem = document.createElement("div");
+        stem.className = "stem";
+        stem.style.height = (level * 8) + "px";
+        plantArea.appendChild(stem);
       }
-      col.appendChild(barArea);
+      stemCol.appendChild(plantArea);
+      stemRow.appendChild(stemCol);
 
-      const divider = document.createElement("div");
-      divider.className = "divider";
-      col.appendChild(divider);
+      // 아래쪽 절반: 얼굴(진하기만 하트와 공유) + 월 숫자 + 입력칸
+      const footCol = document.createElement("div");
+      footCol.className = "col";
 
-      const kao = document.createElement("div");
-      kao.className = "kaomoji";
-      kao.textContent = kaomoji(count);
-      col.appendChild(kao);
+      const face = document.createElement("div");
+      face.className = "face";
+      face.textContent = "•_•";
+      footCol.appendChild(face);
 
       const monthNum = document.createElement("div");
       monthNum.className = "month-num";
       monthNum.textContent = String(i + 1);
-      col.appendChild(monthNum);
+      footCol.appendChild(monthNum);
 
       const input = document.createElement("input");
       input.className = "count-input";
@@ -253,9 +275,9 @@
         counts[i] = isNaN(v) ? 0 : Math.max(0, v);
         render();
       });
-      col.appendChild(input);
+      footCol.appendChild(input);
 
-      row.appendChild(col);
+      footRow.appendChild(footCol);
     }
   }
 

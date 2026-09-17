@@ -123,6 +123,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
@@ -1826,27 +1827,25 @@ internal fun memoryDensityHasOverflow(count: Int): Boolean =
     count > MEMORY_DENSITY_OVERFLOW_THRESHOLD
 
 /**
- * 카오모지는 기억량을 3단계로 감각적으로 번역한다 — 정확한 비교는 막대가
- * 담당하므로 카오모지 단계를 더 세분화하지 않는다. 기억이 적은 달을
- * 슬픔/실망으로 표현하지 않는다.
+ * 76일차 후속(새싹형): 줄기가 있을 때(1장 이상) 그 위에 얹는 하트가
+ * 줄기 단계가 높을수록 더 진하게 보이도록 하는 alpha. 표정 대신 진하기로
+ * "많이 자랐다"는 인상만 살짝 보태고, 정확한 비교는 여전히 줄기 길이가
+ * 담당한다.
  */
-internal fun memoryDensityKaomoji(count: Int): String = when {
-    count >= 9 -> "ᵔᴗᵔ"
-    count >= 5 -> "˙ᵕ˙"
-    else -> "•_•"
-}
+internal fun memoryDensityHeartAlpha(level: Int): Float =
+    0.4f + (level.toFloat() / MEMORY_DENSITY_MAX_BAR_LEVEL) * 0.6f
 
-private val MEMORY_DENSITY_BAR_WIDTH = 14.dp
-private val MEMORY_DENSITY_BAR_UNIT_HEIGHT = 8.dp
-private val MEMORY_DENSITY_BAR_AREA_HEIGHT =
-    MEMORY_DENSITY_BAR_UNIT_HEIGHT * MEMORY_DENSITY_MAX_BAR_LEVEL
+private val MEMORY_DENSITY_STEM_WIDTH = 3.dp
+private val MEMORY_DENSITY_STEM_UNIT_HEIGHT = 8.dp
+private val MEMORY_DENSITY_PLANT_AREA_HEIGHT =
+    MEMORY_DENSITY_STEM_UNIT_HEIGHT * MEMORY_DENSITY_MAX_BAR_LEVEL + 10.dp
 private val MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT = 14.dp
 
 /**
  * 76일차: 기억밀도의 새 정의 — "한 해 동안 어느 달에 기억을 많이 남겼는지
  * 조용히 바라보는 화면". dashboard·통계판이 아니라 1월→12월로 흐르는 작은
- * ASCII 감성 막대그래프 하나다. 사진을 보여주거나 탭해서 상세로 들어가는
- * 상호작용은 오늘 범위가 아니다(작업지시서 23·26절) — 순수 조회 화면.
+ * 화단이다. 사진을 보여주거나 탭해서 상세로 들어가는 상호작용은 오늘
+ * 범위가 아니다(작업지시서 23·26절) — 순수 조회 화면.
  */
 @Composable
 private fun GalleryDensityPage(
@@ -1878,12 +1877,36 @@ private fun GalleryDensityPage(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // 76일차 후속(새싹형): 각 달의 줄기·구분선·얼굴을 한 Column에
+        // 몰아두면 구분선이 달마다 짧게 끊겨 보인다(실기기 QA 지적) —
+        // 줄기 Row와 얼굴 Row를 분리하고 그 사이에 전체 폭 구분선 하나만
+        // 둬서 12개월이 하나로 이어진 선 위에 서 있는 모습으로 만든다.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             months.forEach { month ->
-                GalleryMemoryDensityBar(
+                GalleryMemoryDensityStem(
+                    month = month,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            color = PaperDivider,
+            thickness = 1.dp
+        )
+
+        Spacer(modifier = Modifier.height(5.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            months.forEach { month ->
+                GalleryMemoryDensityFoot(
                     month = month,
                     modifier = Modifier.weight(1f)
                 )
@@ -1892,15 +1915,19 @@ private fun GalleryDensityPage(
     }
 }
 
-/** 월 하나의 막대 + 카오모지 + 월 숫자. 정량 정보(막대)와 감각적 3단계 상태(카오모지)를 함께 보여준다. */
+/**
+ * 월 하나의 위쪽 절반 — overflow 표시와, 수치만큼 자란 줄기 + 줄기 위
+ * 하트(진하기만 줄기 단계에 비례). 접근성 설명(월·기억 개수)은 이
+ * composable에만 붙이고 아래 [GalleryMemoryDensityFoot]는 별도로 읽히지
+ * 않게 한다.
+ */
 @Composable
-private fun GalleryMemoryDensityBar(
+private fun GalleryMemoryDensityStem(
     month: GalleryMemoryDensityMonth,
     modifier: Modifier = Modifier
 ) {
     val level = memoryDensityBarLevel(month.count)
     val hasOverflow = memoryDensityHasOverflow(month.count)
-    val kaomoji = memoryDensityKaomoji(month.count)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1922,34 +1949,49 @@ private fun GalleryMemoryDensityBar(
             }
         }
 
-        Box(
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Bottom,
             modifier = Modifier
-                .height(MEMORY_DENSITY_BAR_AREA_HEIGHT)
-                .fillMaxWidth(),
-            contentAlignment = Alignment.BottomCenter
+                .height(MEMORY_DENSITY_PLANT_AREA_HEIGHT)
+                .fillMaxWidth()
         ) {
             if (level > 0) {
+                Text(
+                    text = "♥",
+                    fontSize = 11.sp,
+                    color = SunsetGold.copy(alpha = memoryDensityHeartAlpha(level)),
+                    modifier = Modifier.padding(bottom = 1.dp)
+                )
+
                 Box(
                     modifier = Modifier
-                        .width(MEMORY_DENSITY_BAR_WIDTH)
-                        .height(MEMORY_DENSITY_BAR_UNIT_HEIGHT * level)
+                        .width(MEMORY_DENSITY_STEM_WIDTH)
+                        .height(MEMORY_DENSITY_STEM_UNIT_HEIGHT * level)
                         .background(SunsetGold)
                 )
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        HorizontalDivider(
-            modifier = Modifier.width(MEMORY_DENSITY_BAR_WIDTH + 8.dp),
-            color = PaperDivider,
-            thickness = 1.dp
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
+/**
+ * 월 하나의 아래쪽 절반 — 고정된 무표정 얼굴과 월 숫자. 얼굴은 항상
+ * 같은 모양·색("•_•", InkSecondary)이다 — 수치를 표정이나 색으로
+ * 평가하지 않고, 자란 길이(위 [GalleryMemoryDensityStem])만으로 양을
+ * 보여준다.
+ */
+@Composable
+private fun GalleryMemoryDensityFoot(
+    month: GalleryMemoryDensityMonth,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.clearAndSetSemantics {}
+    ) {
         Text(
-            text = kaomoji,
+            text = "•_•",
             fontSize = 12.sp,
             color = InkSecondary
         )
