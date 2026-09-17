@@ -7,13 +7,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 62일차 추가 작업: Gallery 보기 관리가 우측 상단 한 곳에서만
- * [GalleryPageFormat] 활성 집합을 조작하고, 3단 페이지가 다시 legacy
- * 목록 보기로 바뀌지 않는 구조를 고정한다.
- *
  * 63일차 추가 구현: 좌측 패널([GalleryFeatureDrawer])이 완전히 제거되고
  * 그 진입 기능(미래 우체통, 특별한 갤러리 3종)이 우측 하단 + 클러스터
  * ([GalleryFabCluster])로 흡수된 구조를 고정한다.
+ *
+ * 76일차: 3단/캘린더/우표/타임라인 보기가 삭제되며 체크박스 기반 "보기
+ * 형식 관리" selector 자체가 사라지고, 월별/기억 밀도 2페이지만 항상
+ * 활성화된 채 pager 좌우 스와이프로 전환되는 구조를 고정한다.
  */
 class GalleryViewSelectionStructureTest {
 
@@ -40,29 +40,41 @@ class GalleryViewSelectionStructureTest {
     }
 
     @Test
-    fun topBarViewMenu_managesAllGalleryPageFormatsFromActiveSet() {
+    fun topBar_hasNoViewFormatSelectorMenu() {
         val topBar = section("topBar = {", ") { paddingValues ->")
 
-        assertTrue(topBar.contains("contentDescription = \"보기 형식 관리\""))
-        assertTrue(topBar.contains("GalleryPageFormat.entries.forEach"))
-        assertTrue(topBar.contains("checked = format in activePageFormats"))
-        assertTrue(topBar.contains("toggleActivePageFormat(format)"))
+        // 76일차: 체크박스 기반 "보기 형식 관리" 메뉴 자체가 사라졌다 —
+        // 남은 두 보기는 항상 함께 활성화되어 있어 고를 필요가 없다.
+        assertFalse(topBar.contains("contentDescription = \"보기 형식 관리\""))
+        assertFalse(topBar.contains("GalleryPageFormat.entries.forEach"))
+        assertFalse(topBar.contains("toggleActivePageFormat"))
+        assertFalse(topBar.contains("viewMenuExpanded"))
         assertFalse(topBar.contains("3열 그리드 보기"))
         assertFalse(topBar.contains("세부 기록 보기"))
         assertFalse(topBar.contains("기능 메뉴 열기"))
     }
 
     @Test
-    fun threeColumnPage_alwaysRendersThreeColumnGrid() {
-        val threeColumnPage = section(
-            "private fun GalleryThreeColumnPage(",
-            "private val monthlyGridDayLabelFormatter"
+    fun monthlyAndDensity_areAlwaysBothActiveWithNoToggleState() {
+        // 76일차: activePageFormats는 더 이상 rememberSaveable Set이 아니라
+        // 월별·기억 밀도 2개로 고정된 값이다.
+        assertTrue(
+            sourceText.contains(
+                "setOf(GalleryPageFormat.MONTHLY, GalleryPageFormat.DENSITY)"
+            )
         )
+        assertFalse(sourceText.contains("ActivePageFormatsSaver"))
+        assertFalse(sourceText.contains("fun toggleActivePageFormat"))
+    }
 
-        assertTrue(threeColumnPage.contains("GalleryGrid("))
-        assertFalse(threeColumnPage.contains("viewMode"))
-        assertFalse(threeColumnPage.contains("GalleryDetailList("))
-        assertFalse(threeColumnPage.contains("detailListState"))
+    @Test
+    fun legacyPageFormat_fallsBackToMonthly() {
+        // 76일차: 3단/캘린더/우표/타임라인처럼 삭제된 이름이 저장값으로
+        // 남아 있어도 안전 보기인 월별 보기로 되돌아가야 한다.
+        val saver = section("private val PageFormatSaver", "private const val SHAKE_THRESHOLD_G")
+
+        assertTrue(saver.contains(".getOrDefault(GalleryPageFormat.MONTHLY)"))
+        assertFalse(saver.contains("THREE_COLUMN"))
     }
 
     @Test
@@ -70,18 +82,6 @@ class GalleryViewSelectionStructureTest {
         assertFalse(sourceText.contains("ViewModeSaver"))
         assertFalse(sourceText.contains("var viewMode"))
         assertFalse(sourceText.contains("GalleryViewMode."))
-    }
-
-    @Test
-    fun fixedThreeColumnEntry_staysCheckedAndCannotBeDisabled() {
-        val menuItem = section(
-            "private fun GalleryPageFormatMenuItem(",
-            "private val PondDrawerIcon"
-        )
-
-        assertTrue(menuItem.contains("if (checked)"))
-        assertTrue(menuItem.contains("Icons.Default.Check"))
-        assertTrue(menuItem.contains("enabled = !locked"))
     }
 
     @Test
@@ -179,7 +179,7 @@ class GalleryViewSelectionStructureTest {
     fun fabShortcut_usesOneShotPunchNotRepeatingSpring() {
         val shortcut = section(
             "private fun BoxScope.GalleryFabShortcut(",
-            "private fun GalleryPageFormatMenuItem("
+            "private val PondDrawerIcon"
         )
 
         // 선택 유지 중 지속되는 heldScale과, 진입/탭 순간 한 번만 튕기는
@@ -211,7 +211,7 @@ class GalleryViewSelectionStructureTest {
     fun fabShortcut_hasSelectionRingDistinctFromRipplePulse() {
         val shortcut = section(
             "private fun BoxScope.GalleryFabShortcut(",
-            "private fun GalleryPageFormatMenuItem("
+            "private val PondDrawerIcon"
         )
 
         // 68일차 2차 후속: "선택되었다"는 확신을 주는 고정 반경 선택 링(탭이면

@@ -8,9 +8,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 캘린더 보기(작업지시서 24절)의 날짜 칸 배치를 계산하는
- * [calendarCellsFor]를 검증한다. 일요일 시작 기준으로 앞뒤 빈 칸을
- * 채우고, 항상 7의 배수(온전한 주)로 끝나는지 확인한다.
+ * 날짜 칸 배치를 계산하는 [calendarCellsFor]를 검증한다. 일요일 시작
+ * 기준으로 앞뒤 빈 칸을 채우고, 항상 7의 배수(온전한 주)로 끝나는지
+ * 확인한다. 76일차에 갤러리 자체의 캘린더 보기는 삭제됐지만, 이 함수는
+ * 방문 달력([VisitCalendarDrawer])이 계속 재사용한다.
  */
 class GalleryCalendarCellsTest {
 

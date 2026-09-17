@@ -21,16 +21,12 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -40,8 +36,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -50,9 +44,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items as lazyColumnItems
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -69,13 +61,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -132,7 +120,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -156,8 +143,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.components.StampCardContent
-import com.postcardmemory.ui.components.PinkingPhotoShape
-import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.GalleryDangerRed
@@ -176,8 +161,6 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.io.File
-import coil.compose.AsyncImage
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 
@@ -191,46 +174,15 @@ private val SortOrderSaver = Saver<GallerySortOrder, String>(
     restore = { GallerySortOrder.valueOf(it) }
 )
 
+/**
+ * 저장된 이름이 3단/캘린더/우표/타임라인처럼 76일차에 삭제된 보기이거나
+ * 알 수 없는 값이면 안전 보기인 [GalleryPageFormat.MONTHLY]로 되돌린다.
+ */
 private val PageFormatSaver = Saver<GalleryPageFormat, String>(
     save = { it.name },
     restore = { saved ->
         runCatching { GalleryPageFormat.valueOf(saved) }
-            .getOrDefault(GalleryPageFormat.THREE_COLUMN)
-    }
-)
-
-/**
- * 활성 보기 형식 집합을 이름 목록 문자열로 저장/복원한다. [GalleryPageFormat.THREE_COLUMN]은
- * 최소 1개 보기를 보장하는 안전 보기라 복원 결과에 항상 포함시킨다 —
- * 저장된 문자열이 비어있거나, 알 수 없는 이름이 섞여 있거나(향후 enum
- * 변경), 실수로 3단 보기가 빠진 채 저장됐어도 항상 최소 활성 보기를
- * 보장한다.
- */
-private val ActivePageFormatsSaver = Saver<Set<GalleryPageFormat>, String>(
-    save = { formats -> formats.joinToString(",") { it.name } },
-    restore = { saved ->
-        val restored = saved
-            .split(",")
-            .mapNotNull { name ->
-                runCatching { GalleryPageFormat.valueOf(name) }.getOrNull()
-            }
-            .toSet()
-
-        restored + GalleryPageFormat.THREE_COLUMN
-    }
-)
-
-private val CalendarVisibleMonthSaver = Saver<YearMonth, String>(
-    save = { it.toString() },
-    restore = { saved ->
-        runCatching { YearMonth.parse(saved) }.getOrDefault(YearMonth.now())
-    }
-)
-
-private val CalendarSelectedDateSaver = Saver<LocalDate?, String>(
-    save = { it?.toString() ?: "" },
-    restore = { saved ->
-        saved.takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            .getOrDefault(GalleryPageFormat.MONTHLY)
     }
 )
 
@@ -356,50 +308,20 @@ fun GalleryScreen(
         mutableStateOf(GallerySortOrder.NEWEST)
     }
 
-    var activePageFormats by rememberSaveable(stateSaver = ActivePageFormatsSaver) {
-        mutableStateOf(setOf(GalleryPageFormat.THREE_COLUMN))
+    // 76일차: 월별 보기·기억 밀도 보기 2개만 남아 사용자가 껐다 켤 UI가
+    // 없으므로 더 이상 토글 가능한 상태가 아니다 — 항상 이 순서(월별 먼저)로
+    // 고정된 값이다.
+    val activePageFormats = remember {
+        setOf(GalleryPageFormat.MONTHLY, GalleryPageFormat.DENSITY)
     }
 
     var currentPageFormat by rememberSaveable(stateSaver = PageFormatSaver) {
-        mutableStateOf(GalleryPageFormat.THREE_COLUMN)
+        mutableStateOf(GalleryPageFormat.MONTHLY)
     }
 
-    // 3단 보기의 스크롤 위치를 여기서 hoist해 페이지 스와이프로 잠시 화면
+    // 월별 보기의 스크롤 위치를 여기서 hoist해 페이지 스와이프로 잠시 화면
     // 밖에 나갔다 돌아와도 위치가 초기화되지 않게 한다.
-    val gridState = rememberLazyGridState()
-
-    // 월별 보기(62일차 2차)는 3단 보기와 완전히 다른 LazyVerticalGrid
-    // 인스턴스라 같은 gridState를 공유하면 안 된다 — 별도로 hoist한다.
     val monthlyGridState = rememberLazyGridState()
-
-    // 타임라인 보기(62일차 3차)도 자신만의 LazyColumn을 쓰므로 별도 hoist.
-    val timelineListState = rememberLazyListState()
-
-    // 캘린더 보기(62일차 4차)는 월 grid가 고정 높이라 Lazy 없이 일반
-    // Column + verticalScroll을 쓰지만, 스크롤 위치는 다른 페이지와 동일한
-    // 이유로 여기서 hoist한다.
-    val calendarScrollState = rememberScrollState()
-
-    // 우표 보기 역시 별도 LazyVerticalGrid 인스턴스이므로 3단/월별 보기와
-    // 스크롤 상태를 공유하지 않는다.
-    val stampGridState = rememberLazyGridState()
-
-    // 기억 밀도 보기는 연도별 월 점을 세로로 훑으므로 전용 list state를 쓴다.
-    val densityListState = rememberLazyListState()
-    var densitySelectedMonthKey by rememberSaveable { mutableStateOf<String?>(null) }
-
-    fun toggleActivePageFormat(format: GalleryPageFormat) {
-        if (format == GalleryPageFormat.THREE_COLUMN) {
-            // 최소 1개 보기를 보장하는 안전 보기라 끌 수 없다(45절).
-            return
-        }
-
-        activePageFormats = if (format in activePageFormats) {
-            activePageFormats - format
-        } else {
-            activePageFormats + format
-        }
-    }
 
     var searchQuery by rememberSaveable {
         mutableStateOf("")
@@ -409,21 +331,16 @@ fun GalleryScreen(
         mutableStateOf(false)
     }
 
-    var viewMenuExpanded by remember {
-        mutableStateOf(false)
-    }
-
     var sortMenuExpanded by remember {
         mutableStateOf(false)
     }
 
-    // 검색·정렬은 3단 보기 top bar에만 노출된다(위 topBar 참고). 다른 보기
-    // 형식으로 넘어간 사이에도 이 상태들이 true로 남아있으면 3단 보기로
-    // 돌아왔을 때 검색창이나 드롭다운이 탭 없이 저절로 열려 보인다 — 3단
-    // 보기를 벗어나는 순간 정리한다. 보기 형식 메뉴는 모든 페이지의 공통
-    // 진입점이므로 여기서 닫지 않는다.
+    // 검색·정렬은 월별 보기 top bar에만 노출된다(위 topBar 참고). 기억
+    // 밀도 보기로 넘어간 사이에도 이 상태들이 true로 남아있으면 월별 보기로
+    // 돌아왔을 때 검색창이나 드롭다운이 탭 없이 저절로 열려 보인다 — 월별
+    // 보기를 벗어나는 순간 정리한다.
     LaunchedEffect(currentPageFormat) {
-        if (currentPageFormat != GalleryPageFormat.THREE_COLUMN) {
+        if (currentPageFormat != GalleryPageFormat.MONTHLY) {
             isSearchActive = false
             searchQuery = ""
             sortMenuExpanded = false
@@ -642,7 +559,6 @@ fun GalleryScreen(
                             onClick = {
                                 fabMenuExpanded = false
                                 sortMenuExpanded = false
-                                viewMenuExpanded = false
                                 visitDrawerScope.launch { visitDrawerState.open() }
                             }
                         ) {
@@ -663,10 +579,10 @@ fun GalleryScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        // 검색·정렬은 3단 보기 안에서만 의미가 있다. 보기 형식
-                        // 관리는 어느 페이지에서도 다음 swipe 대상을 바꿀 수
-                        // 있어야 하므로 기존 우측 상단 위치에 항상 노출한다.
-                        if (currentPageFormat == GalleryPageFormat.THREE_COLUMN) {
+                        // 검색·정렬은 월별 보기 안에서만 의미가 있다. 기억 밀도
+                        // 보기는 좌우 스와이프(GalleryPageIndicator 점)로
+                        // 들어가므로 별도 진입 아이콘이 필요 없다(76일차).
+                        if (currentPageFormat == GalleryPageFormat.MONTHLY) {
                             Box {
                                 IconButton(
                                     onClick = {
@@ -679,41 +595,6 @@ fun GalleryScreen(
                                         contentDescription = "엽서 검색",
                                         tint = InkSecondary,
                                         modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Box {
-                            IconButton(
-                                onClick = {
-                                    viewMenuExpanded = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.GridView,
-                                    contentDescription = "보기 형식 관리",
-                                    tint = InkSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            DropdownMenu(
-                                expanded = viewMenuExpanded,
-                                onDismissRequest = {
-                                    viewMenuExpanded = false
-                                },
-                                shape = RectangleShape,
-                                containerColor = PaperSurface
-                            ) {
-                                GalleryPageFormat.entries.forEach { format ->
-                                    GalleryPageFormatMenuItem(
-                                        format = format,
-                                        checked = format in activePageFormats,
-                                        locked = format == GalleryPageFormat.THREE_COLUMN,
-                                        onToggle = {
-                                            toggleActivePageFormat(format)
-                                        }
                                     )
                                 }
                             }
@@ -945,67 +826,19 @@ fun GalleryScreen(
                         GalleryPageFormat.DENSITY ->
                             GalleryDensityPage(
                                 postcards = displayedPostcards,
-                                selectedIds = selectedIds,
-                                paddingValues = pageContentPaddingValues,
-                                listState = densityListState,
-                                selectedMonth = densitySelectedMonthKey?.let(YearMonth::parse),
-                                onMonthSelected = { yearMonth ->
-                                    densitySelectedMonthKey = yearMonth?.toString()
-                                },
-                                onItemClick = ::handleItemClick,
-                                onItemLongClick = ::handleItemLongClick
+                                paddingValues = pageContentPaddingValues
                             )
 
-                        GalleryPageFormat.STAMP ->
-                            GalleryStampPage(
-                                postcards = displayedPostcards,
-                                selectedIds = selectedIds,
-                                paddingValues = pageContentPaddingValues,
-                                gridState = stampGridState,
-                                onItemClick = ::handleItemClick,
-                                onItemLongClick = ::handleItemLongClick
-                            )
-
-                        GalleryPageFormat.CALENDAR ->
-                            GalleryCalendarPage(
-                                postcards = displayedPostcards,
-                                selectedIds = selectedIds,
-                                paddingValues = pageContentPaddingValues,
-                                scrollState = calendarScrollState,
-                                onItemClick = ::handleItemClick,
-                                onItemLongClick = ::handleItemLongClick
-                            )
-
-                        GalleryPageFormat.MONTHLY ->
+                        GalleryPageFormat.MONTHLY, null ->
                             GalleryMonthlyGridPage(
                                 postcards = displayedPostcards,
-                                selectedIds = selectedIds,
-                                paddingValues = pageContentPaddingValues,
-                                gridState = monthlyGridState,
-                                onItemClick = ::handleItemClick,
-                                onItemLongClick = ::handleItemLongClick
-                            )
-
-                        GalleryPageFormat.TIMELINE ->
-                            GalleryTimelinePage(
-                                postcards = displayedPostcards,
-                                selectedIds = selectedIds,
-                                paddingValues = pageContentPaddingValues,
-                                listState = timelineListState,
-                                onItemClick = ::handleItemClick,
-                                onItemLongClick = ::handleItemLongClick
-                            )
-
-                        GalleryPageFormat.THREE_COLUMN, null ->
-                            GalleryThreeColumnPage(
-                                displayedPostcards = displayedPostcards,
                                 selectedIds = selectedIds,
                                 shakeTrigger = shakeTrigger,
                                 isPondModeOn = isPondModeOn,
                                 pondController = pondController,
                                 paddingValues = pageContentPaddingValues,
                                 searchQuery = searchQuery,
-                                gridState = gridState,
+                                gridState = monthlyGridState,
                                 onItemClick = ::handleItemClick,
                                 onItemLongClick = ::handleItemLongClick
                             )
@@ -1721,39 +1554,6 @@ private fun BoxScope.GalleryFabShortcut(
     }
 }
 
-@Composable
-private fun GalleryPageFormatMenuItem(
-    format: GalleryPageFormat,
-    checked: Boolean,
-    locked: Boolean,
-    onToggle: () -> Unit
-) {
-    DropdownMenuItem(
-        text = {
-            Text(
-                text = format.label,
-                color = InkPrimary,
-                fontWeight = if (checked) {
-                    FontWeight.Bold
-                } else {
-                    FontWeight.Normal
-                }
-            )
-        },
-        trailingIcon = {
-            if (checked) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = SunsetGold
-                )
-            }
-        },
-        enabled = !locked,
-        onClick = onToggle
-    )
-}
-
 private val PondDrawerIcon: ImageVector =
     ImageVector.Builder(
         name = "PondDrawerIcon",
@@ -1976,113 +1776,6 @@ private fun GalleryComingSoonPage(
     }
 }
 
-private val STAMP_PAPER_PADDING = 8.dp
-
-/**
- * 62일차 5차: 저장된 기억을 기념우표처럼 감상하는 2열 보기. 기존 3단
- * 보기보다 사진을 크게 두고, 카드나 panel을 덧씌우지 않은 채 우표 자체만
- * 반복 배치한다. Lazy grid라 화면에 보이는 항목만 구성·로딩한다.
- */
-@Composable
-private fun GalleryStampPage(
-    postcards: List<Postcard>,
-    selectedIds: Set<Long>,
-    paddingValues: PaddingValues,
-    gridState: LazyGridState,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        state = gridState,
-        contentPadding = PaddingValues(
-            start = 18.dp,
-            end = 18.dp,
-            top = paddingValues.calculateTopPadding() + 16.dp,
-            bottom = paddingValues.calculateBottomPadding() + 88.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GalleryPaperWhite)
-    ) {
-        lazyGridItems(
-            items = postcards,
-            key = { postcard -> postcard.id }
-        ) { postcard ->
-            GalleryStampGridItem(
-                postcard = postcard,
-                isSelected = postcard.id in selectedIds,
-                onClick = { onItemClick(postcard.id) },
-                onLongClick = { onItemLongClick(postcard.id) }
-            )
-        }
-    }
-}
-
-/**
- * 우표 한 장. [PinkingPhotoShape] 바깥선 안에 종이 여백과 원본 thumbnail을
- * 함께 두어 한 객체로 읽히게 한다. 선택은 우표를 가리는 overlay 대신 기존
- * Gallery의 작은 coral 점만 사용한다.
- */
-@Composable
-private fun GalleryStampGridItem(
-    postcard: Postcard,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.combinedClickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick,
-            onLongClick = onLongClick
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(PinkingPhotoShape)
-                .background(PaperSurface)
-                .padding(STAMP_PAPER_PADDING)
-        ) {
-            AsyncImage(
-                model = File(postcard.imagePath),
-                contentDescription = postcard.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(14.dp)
-                        .background(
-                            color = BrutalCoral,
-                            shape = CircleShape
-                        )
-                )
-            }
-        }
-
-        Text(
-            text = PostcardDateFormat.formatIso(postcard.capturedAt),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = GraphiteAccent,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 7.dp)
-        )
-    }
-}
-
 internal data class GalleryMemoryDensityMonth(
     val yearMonth: YearMonth,
     val postcards: List<Postcard>
@@ -2092,224 +1785,206 @@ internal data class GalleryMemoryDensityMonth(
 }
 
 /**
- * 기존 Gallery의 날짜 의미와 동일하게 capturedAt을 시스템 시간대의 월로
- * 변환한다. 첫 기록 연도부터 마지막 기록 연도까지 매년 12개월을 모두 채워
- * 기록이 없던 기간도 화면에서 사라지지 않게 한다.
+ * 76일차: 기억밀도는 더 이상 여러 연도를 이어붙여 훑어보는 화면이 아니라
+ * 지정한 한 해의 1~12월만 항상 보여주는 연간 그래프다(연도 이동 picker는
+ * 기존에 없던 기능이라 새로 만들지 않는다). 기존 Gallery의 날짜 의미와
+ * 동일하게 capturedAt을 시스템 시간대의 월로 변환하고, 기록이 없는 달도
+ * 0개로 채운다(막대가 사라지지 않고 "0칸"으로 표현됨). 방문 기록이 아니라
+ * 포스트카드 생성 시각만 기준으로 삼는다.
  */
-internal fun memoryDensityMonthsFor(
+internal fun memoryDensityMonthsForYear(
     postcards: List<Postcard>,
+    year: Int,
     zoneId: ZoneId = ZoneId.systemDefault()
 ): List<GalleryMemoryDensityMonth> {
-    if (postcards.isEmpty()) return emptyList()
-
     val grouped = postcards.groupBy { postcard ->
         YearMonth.from(
             Instant.ofEpochMilli(postcard.capturedAt).atZone(zoneId)
         )
     }
-    val firstYear = grouped.keys.minOf { it.year }
-    val lastYear = grouped.keys.maxOf { it.year }
 
-    // 밀도 차트의 시간축은 정렬 메뉴와 무관하게 과거→현재로 고정한다.
-    // 같은 위치가 늘 같은 시기를 뜻해야 분포 변화를 비교하기 쉽다.
-    return (firstYear..lastYear).flatMap { year ->
-        (1..12).map { month ->
-            val yearMonth = YearMonth.of(year, month)
-            GalleryMemoryDensityMonth(
-                yearMonth = yearMonth,
-                postcards = grouped[yearMonth].orEmpty()
-            )
-        }
+    return (1..12).map { month ->
+        val yearMonth = YearMonth.of(year, month)
+        GalleryMemoryDensityMonth(
+            yearMonth = yearMonth,
+            postcards = grouped[yearMonth].orEmpty()
+        )
     }
 }
 
-internal fun memoryDensityIntensity(count: Int, maxCount: Int): Float {
-    if (count <= 0) return 0f
-    return (count.toFloat() / maxCount.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
-}
+private const val MEMORY_DENSITY_UNIT_POSTCARDS = 2
+private const val MEMORY_DENSITY_MAX_BAR_LEVEL = 6
+private const val MEMORY_DENSITY_OVERFLOW_THRESHOLD =
+    MEMORY_DENSITY_UNIT_POSTCARDS * MEMORY_DENSITY_MAX_BAR_LEVEL // 12장
 
-internal fun selectedMemoryDensityMonth(
-    months: List<GalleryMemoryDensityMonth>,
-    requested: YearMonth?
-): GalleryMemoryDensityMonth? =
-    months.firstOrNull { month ->
-        month.yearMonth == requested && month.count > 0
-    }
+/** 1칸 = 엽서 2장, 최대 6칸(12장). 0장은 0칸(막대 없음, 억지 최소 높이를 주지 않는다). */
+internal fun memoryDensityBarLevel(count: Int): Int =
+    ((count + 1) / MEMORY_DENSITY_UNIT_POSTCARDS).coerceIn(0, MEMORY_DENSITY_MAX_BAR_LEVEL)
+
+/** 12장(6칸) 초과분은 막대를 더 키우지 않고 위에 작은 "+" 표시로만 알린다. */
+internal fun memoryDensityHasOverflow(count: Int): Boolean =
+    count > MEMORY_DENSITY_OVERFLOW_THRESHOLD
 
 /**
- * 62일차 6차: 사진을 감상하는 대신 기록이 몰린 시기와 빈 시기를 멀리서
- * 보는 월 단위 기억 밀도 보기. 초록 사각 격자 대신 따뜻한 원형 기억 점의
- * 크기와 농도로 분포를 표현한다.
+ * 카오모지는 기억량을 3단계로 감각적으로 번역한다 — 정확한 비교는 막대가
+ * 담당하므로 카오모지 단계를 더 세분화하지 않는다. 기억이 적은 달을
+ * 슬픔/실망으로 표현하지 않는다.
+ */
+internal fun memoryDensityKaomoji(count: Int): String = when {
+    count >= 9 -> "ᵔᴗᵔ"
+    count >= 5 -> "˙ᵕ˙"
+    else -> "•_•"
+}
+
+private val MEMORY_DENSITY_BAR_WIDTH = 14.dp
+private val MEMORY_DENSITY_BAR_UNIT_HEIGHT = 8.dp
+private val MEMORY_DENSITY_BAR_AREA_HEIGHT =
+    MEMORY_DENSITY_BAR_UNIT_HEIGHT * MEMORY_DENSITY_MAX_BAR_LEVEL
+private val MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT = 14.dp
+
+/**
+ * 76일차: 기억밀도의 새 정의 — "한 해 동안 어느 달에 기억을 많이 남겼는지
+ * 조용히 바라보는 화면". dashboard·통계판이 아니라 1월→12월로 흐르는 작은
+ * ASCII 감성 막대그래프 하나다. 사진을 보여주거나 탭해서 상세로 들어가는
+ * 상호작용은 오늘 범위가 아니다(작업지시서 23·26절) — 순수 조회 화면.
  */
 @Composable
 private fun GalleryDensityPage(
     postcards: List<Postcard>,
-    selectedIds: Set<Long>,
-    paddingValues: PaddingValues,
-    listState: LazyListState,
-    selectedMonth: YearMonth?,
-    onMonthSelected: (YearMonth?) -> Unit,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
+    paddingValues: PaddingValues
 ) {
-    val densityMonths = remember(postcards) {
-        memoryDensityMonthsFor(postcards)
-    }
-    val yearGroups = remember(densityMonths) {
-        densityMonths.groupBy { it.yearMonth.year }.toList()
-    }
-    val maxCount = densityMonths.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
-    val selectedBucket = selectedMemoryDensityMonth(densityMonths, selectedMonth)
-
-    LaunchedEffect(selectedMonth, selectedBucket) {
-        if (selectedMonth != null && selectedBucket == null) {
-            onMonthSelected(null)
-        }
+    val year = remember { YearMonth.now().year }
+    val months = remember(postcards, year) {
+        memoryDensityMonthsForYear(postcards, year)
     }
 
-    LazyColumn(
-        state = listState,
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = paddingValues.calculateTopPadding() + 16.dp,
-            bottom = paddingValues.calculateBottomPadding() + 88.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(26.dp),
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(GalleryPaperWhite)
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = paddingValues.calculateTopPadding() + 20.dp,
+                bottom = paddingValues.calculateBottomPadding() + 24.dp
+            )
     ) {
-        lazyColumnItems(
-            items = yearGroups,
-            key = { (year, _) -> year }
-        ) { (year, months) ->
-            Column {
-                Text(
-                    text = year.toString(),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = InkPrimary
+        Text(
+            text = "${year}년",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = InkPrimary
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            months.forEach { month ->
+                GalleryMemoryDensityBar(
+                    month = month,
+                    modifier = Modifier.weight(1f)
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                months.chunked(6).forEach { halfYear ->
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        halfYear.forEach { month ->
-                            GalleryMemoryDensityDot(
-                                month = month,
-                                maxCount = maxCount,
-                                isSelected = month.yearMonth == selectedBucket?.yearMonth,
-                                onClick = {
-                                    if (month.count > 0) {
-                                        onMonthSelected(
-                                            month.yearMonth.takeUnless { it == selectedMonth }
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                if (selectedBucket != null && selectedBucket.yearMonth.year == year) {
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        selectedBucket.postcards.forEach { postcard ->
-                            StampCardContent(
-                                postcard = postcard,
-                                isSelected = postcard.id in selectedIds,
-                                dateLabelOverride = "",
-                                modifier = Modifier
-                                    .width(TIMELINE_PHOTO_WIDTH)
-                                    .combinedClickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = { onItemClick(postcard.id) },
-                                        onLongClick = { onItemLongClick(postcard.id) }
-                                    )
-                            )
-                        }
-                    }
-                }
             }
         }
     }
 }
 
+/** 월 하나의 막대 + 카오모지 + 월 숫자. 정량 정보(막대)와 감각적 3단계 상태(카오모지)를 함께 보여준다. */
 @Composable
-private fun GalleryMemoryDensityDot(
+private fun GalleryMemoryDensityBar(
     month: GalleryMemoryDensityMonth,
-    maxCount: Int,
-    isSelected: Boolean,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val intensity = memoryDensityIntensity(month.count, maxCount)
-    val dotSize = if (month.count == 0) 6.dp else (10f + 22f * sqrt(intensity)).dp
-    val dotColor = when {
-        isSelected -> BrutalCoral
-        month.count == 0 -> PaperDivider.copy(alpha = 0.7f)
-        else -> SunsetGold.copy(alpha = 0.35f + 0.65f * intensity)
-    }
+    val level = memoryDensityBarLevel(month.count)
+    val hasOverflow = memoryDensityHasOverflow(month.count)
+    val kaomoji = memoryDensityKaomoji(month.count)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .then(
-                if (month.count > 0) {
-                    Modifier.clickable(onClick = onClick)
-                } else {
-                    Modifier
-                }
-            )
-            .semantics {
-                contentDescription =
-                    "${month.yearMonth.year}년 ${month.yearMonth.monthValue}월, 기억 ${month.count}개"
-            }
-            .padding(vertical = 5.dp)
+        modifier = modifier.semantics {
+            contentDescription = "${month.yearMonth.monthValue}월, 기억 ${month.count}개"
+        }
     ) {
         Box(
-            modifier = Modifier
-                .size(38.dp),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.height(MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Box(
-                modifier = Modifier
-                    .size(dotSize)
-                    .background(
-                        color = dotColor,
-                        shape = CircleShape
-                    )
-            )
+            if (hasOverflow) {
+                Text(
+                    text = "+",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = SunsetGold
+                )
+            }
         }
+
+        Box(
+            modifier = Modifier
+                .height(MEMORY_DENSITY_BAR_AREA_HEIGHT)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            if (level > 0) {
+                Box(
+                    modifier = Modifier
+                        .width(MEMORY_DENSITY_BAR_WIDTH)
+                        .height(MEMORY_DENSITY_BAR_UNIT_HEIGHT * level)
+                        .background(SunsetGold)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        HorizontalDivider(
+            modifier = Modifier.width(MEMORY_DENSITY_BAR_WIDTH + 8.dp),
+            color = PaperDivider,
+            thickness = 1.dp
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = kaomoji,
+            fontSize = 12.sp,
+            color = InkSecondary
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         Text(
             text = month.yearMonth.monthValue.toString(),
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             color = InkSecondary
         )
     }
 }
 
+/** 월별 보기 grid 셀에 쓰는 "일(day)만" 표기 — 월 헤더가 이미 연/월을 보여준다. */
+private val monthlyGridDayLabelFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd")
+
 /**
- * 항상 3열 grid를 보여주는 "3단 보기" 페이지. 검색·정렬 적용 결과
- * ([displayedPostcards])와 진짜 빈
- * 상태(엽서가 하나도 없음) 판정을 호출부(pager 레벨)가 먼저 처리한다 —
- * 빈 상태는 월별 보기 등 다른 보기와 공통으로 써야 해서(30절) 특정 페이지
- * 안에 가두지 않는다. 이 페이지는 "검색 결과가 없음"만 자기 몫으로 남긴다.
+ * 62일차 2차: 월별로 묶어 보여주는 grid 보기(76일차부터 기본 갤러리).
+ * 월마다 둥근 카드로 감싸지 않고, 기존 [GalleryMonthHeader]를 그대로
+ * 재사용해 하나의 [LazyVerticalGrid] 안에서 전체 폭 헤더와 3열 썸네일을
+ * 번갈아 그린다 — `LazyColumn`을 중첩하지 않고
+ * `item(span = { GridItemSpan(maxLineSpan) })`으로 헤더에만 전체 폭을
+ * 줘서 스크롤 컨테이너를 하나로 유지한다.
+ *
+ * 76일차: 3단 보기가 삭제되며 그 페이지 전용이던 연못 물리 오버레이
+ * (탭/드래그 파문, [PondRippleOverlay])를 이 grid로 그대로 옮겼다.
+ * 검색 결과가 없을 때의 안내([SearchEmptyState])도 3단 보기가 맡던
+ * 역할을 그대로 이어받는다("엽서가 하나도 없음" 판정은 여전히 호출부인
+ * pager 레벨이 먼저 처리한다).
  */
 @Composable
-private fun GalleryThreeColumnPage(
-    displayedPostcards: List<Postcard>,
+private fun GalleryMonthlyGridPage(
+    postcards: List<Postcard>,
     selectedIds: Set<Long>,
     shakeTrigger: Int,
     isPondModeOn: Boolean,
@@ -2320,536 +1995,18 @@ private fun GalleryThreeColumnPage(
     onItemClick: (Long) -> Unit,
     onItemLongClick: (Long) -> Unit
 ) {
-    if (displayedPostcards.isEmpty()) {
+    if (postcards.isEmpty()) {
         SearchEmptyState(
             query = searchQuery.trim(),
             paddingValues = paddingValues
         )
-    } else {
-        GalleryGrid(
-            postcards = displayedPostcards,
-            selectedIds = selectedIds,
-            shakeTrigger = shakeTrigger,
-            isPondModeOn = isPondModeOn,
-            pondController = pondController,
-            paddingValues = paddingValues,
-            gridState = gridState,
-            onItemClick = onItemClick,
-            onItemLongClick = onItemLongClick
-        )
+        return
     }
-}
 
-/** 월별 보기 grid 셀에 쓰는 "일(day)만" 표기 — 월 헤더가 이미 연/월을 보여준다. */
-private val monthlyGridDayLabelFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("dd")
-
-/**
- * 62일차 2차: 월별로 묶어 보여주는 grid 보기. 월마다 둥근 카드로 감싸지
- * 않고(작업지시서 22절), 기존 [GalleryMonthHeader]("세부 기록 보기"의 날짜
- * 헤더와 동일한 컴포넌트, 배경색만 있는 평면 헤더)를 그대로 재사용해
- * 하나의 [LazyVerticalGrid] 안에서 전체 폭 헤더와 3열 썸네일을 번갈아
- * 그린다 — `LazyColumn` 안에 `LazyVerticalGrid`를 중첩하지 않고
- * `item(span = { GridItemSpan(maxLineSpan) })`으로 헤더에만 전체 폭을
- * 줘서 스크롤 컨테이너를 하나로 유지한다.
- */
-@Composable
-private fun GalleryMonthlyGridPage(
-    postcards: List<Postcard>,
-    selectedIds: Set<Long>,
-    paddingValues: PaddingValues,
-    gridState: LazyGridState,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
-) {
     val monthSections = remember(postcards) {
         monthSectionsFor(postcards)
     }
 
-    LazyVerticalGrid(
-        state = gridState,
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(
-            start = 12.dp,
-            end = 12.dp,
-            top = paddingValues.calculateTopPadding() + 14.dp,
-            bottom = paddingValues.calculateBottomPadding() + 88.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GalleryPaperWhite)
-    ) {
-        monthSections.forEach { section ->
-            item(
-                key = "month_${section.yearMonth}",
-                span = { GridItemSpan(maxLineSpan) }
-            ) {
-                GalleryMonthHeader(
-                    yearMonth = section.yearMonth,
-                    postcardCount = section.postcards.size
-                )
-            }
-
-            lazyGridItems(
-                items = section.postcards,
-                key = { postcard -> postcard.id }
-            ) { postcard ->
-                GalleryMonthlyGridItem(
-                    postcard = postcard,
-                    isSelected = postcard.id in selectedIds,
-                    onClick = {
-                        onItemClick(postcard.id)
-                    },
-                    onLongClick = {
-                        onItemLongClick(postcard.id)
-                    }
-                )
-            }
-        }
-    }
-}
-
-/**
- * 월별 보기의 썸네일 한 칸. 3단 보기의 [StampCard]는 연못 모드 물리·기울임
- * 연출이 붙은 무거운 wrapper라 재사용하지 않고, 실제 시각 요소(사진·선택
- * 표시·뒷면 편지 배지)만 그리는 [StampCardContent]를 가져와 날짜 자리만
- * "일(day)"로 바꾼다 — 사진 렌더링 자체(테두리 모양, crop)는 3단 보기와
- * 완전히 같은 컴포넌트를 공유한다.
- */
-@Composable
-private fun GalleryMonthlyGridItem(
-    postcard: Postcard,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit
-) {
-    val dayLabel = remember(postcard.capturedAt) {
-        Instant.ofEpochMilli(postcard.capturedAt)
-            .atZone(ZoneId.systemDefault())
-            .format(monthlyGridDayLabelFormatter)
-    }
-
-    StampCardContent(
-        postcard = postcard,
-        isSelected = isSelected,
-        dateLabelOverride = dayLabel,
-        modifier = Modifier.combinedClickable(
-            // 3단 보기가 쓰는 StampCard 컴포저블의 연못 모드 꺼짐 분기와
-            // 동일하게 기본 Material 리플을 끈다 — 우표를 늘어놓은 평면
-            // 문법과 리플이 섞이지 않게.
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick,
-            onLongClick = onLongClick
-        )
-    )
-}
-
-private val TIMELINE_MARKER_COLUMN_WIDTH = 20.dp
-private val TIMELINE_DOT_SIZE = 10.dp
-private val TIMELINE_LINE_WIDTH = 2.dp
-private val TIMELINE_ENTRY_BOTTOM_SPACING = 28.dp
-private val TIMELINE_PHOTO_WIDTH = 96.dp
-
-/**
- * 62일차 3차: 기억이 흘러온 순서를 보여주는 타임라인 보기. 항목마다 새
- * Card를 만들지 않고(23절), 날짜 + 점 + 연결선 + 사진만으로 구성한다.
- * 같은 날짜의 여러 postcard는 [daySectionsFor]로 자연스럽게 한 항목에
- * 묶는다(DB 변경 없음). 마지막 항목 아래로는 선을 그리지 않는다.
- */
-@Composable
-private fun GalleryTimelinePage(
-    postcards: List<Postcard>,
-    selectedIds: Set<Long>,
-    paddingValues: PaddingValues,
-    listState: LazyListState,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
-) {
-    val daySections = remember(postcards) {
-        daySectionsFor(postcards)
-    }
-
-    LazyColumn(
-        state = listState,
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = paddingValues.calculateTopPadding() + 14.dp,
-            bottom = paddingValues.calculateBottomPadding() + 88.dp
-        ),
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GalleryPaperWhite)
-    ) {
-        itemsIndexed(
-            items = daySections,
-            key = { _, section -> "day_${section.date}" }
-        ) { index, section ->
-            GalleryTimelineEntry(
-                section = section,
-                isLast = index == daySections.lastIndex,
-                selectedIds = selectedIds,
-                onItemClick = onItemClick,
-                onItemLongClick = onItemLongClick
-            )
-        }
-    }
-}
-
-@Composable
-private fun GalleryTimelineEntry(
-    section: GalleryDaySection,
-    isLast: Boolean,
-    selectedIds: Set<Long>,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
-) {
-    val dayLabel = remember(section.date) {
-        section.date.format(timelineDayLabelFormatter)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(TIMELINE_MARKER_COLUMN_WIDTH)
-        ) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .size(TIMELINE_DOT_SIZE)
-                    .background(
-                        color = SunsetGold,
-                        shape = CircleShape
-                    )
-            )
-
-            if (!isLast) {
-                Box(
-                    // fillMaxHeight()는 Column의 "전체" 들어온 높이 제약에
-                    // 맞추려 해서 앞선 dot 높이만큼 밖으로 넘친다(Column의
-                    // 비-weight 자식은 서로 예산을 나눠 쓰지 않음) — weight(1f)로
-                    // dot이 쓰고 남은 높이만 정확히 채운다.
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                        .width(TIMELINE_LINE_WIDTH)
-                        .weight(1f)
-                        .background(PaperDivider)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = TIMELINE_ENTRY_BOTTOM_SPACING)
-        ) {
-            Text(
-                text = dayLabel,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = InkPrimary
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                section.postcards.forEach { postcard ->
-                    StampCardContent(
-                        postcard = postcard,
-                        isSelected = postcard.id in selectedIds,
-                        // 날짜는 이미 위 dayLabel 하나로 표시하므로 사진마다
-                        // 반복하지 않는다(22절과 같은 원칙 — 상위에 표시된
-                        // 날짜를 항목마다 되풀이하지 않는다).
-                        dateLabelOverride = "",
-                        modifier = Modifier
-                            .width(TIMELINE_PHOTO_WIDTH)
-                            .combinedClickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { onItemClick(postcard.id) },
-                                onLongClick = { onItemLongClick(postcard.id) }
-                            )
-                    )
-                }
-            }
-        }
-    }
-}
-
-private val calendarMonthLabelFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy년 M월")
-private val CALENDAR_WEEKDAY_LABELS = listOf("일", "월", "화", "수", "목", "금", "토")
-private val CALENDAR_DAY_CIRCLE_SIZE = 30.dp
-private val CALENDAR_DAY_DOT_SIZE = 4.dp
-
-/**
- * 이번 달의 날짜 칸 목록을 만든다. 1일 이전은 일요일 시작 기준으로 빈
- * 칸(null)을 채우고, 마지막 주도 7의 배수가 되도록 뒤를 null로 채운다 —
- * 실제 존재하지 않는 날짜는 그리지 않되 요일 정렬은 항상 유지한다.
- */
-internal fun calendarCellsFor(yearMonth: YearMonth): List<LocalDate?> {
-    val firstOfMonth = yearMonth.atDay(1)
-    // DayOfWeek.value: MONDAY=1..SUNDAY=7 → 일요일 시작 기준으로 0~6 변환.
-    val leadingBlanks = firstOfMonth.dayOfWeek.value % 7
-
-    val cells = mutableListOf<LocalDate?>()
-    repeat(leadingBlanks) { cells.add(null) }
-    (1..yearMonth.lengthOfMonth()).forEach { day ->
-        cells.add(yearMonth.atDay(day))
-    }
-    while (cells.size % 7 != 0) {
-        cells.add(null)
-    }
-
-    return cells
-}
-
-/**
- * 62일차 4차: 날짜에서 기억으로 들어가는 캘린더 보기. 월 grid는 고정
- * 높이라 Lazy 없이 일반 Column + verticalScroll을 쓴다(24절). 날짜 칸
- * 안에는 사진을 억지로 넣지 않고 작은 점 하나로 "이 날 기록 있음"만
- * 표시하고(24절), 날짜를 선택하면 그 날의 사진을 grid 아래에 기존
- * StampCardContent로 보여준다 — 새 modal/bottom sheet 없이 같은 페이지
- * 안에서 기존 클릭(onItemClick → 상세 화면 이동) 경로를 그대로 재사용한다.
- */
-@Composable
-private fun GalleryCalendarPage(
-    postcards: List<Postcard>,
-    selectedIds: Set<Long>,
-    paddingValues: PaddingValues,
-    scrollState: ScrollState,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
-) {
-    var visibleMonth by rememberSaveable(stateSaver = CalendarVisibleMonthSaver) {
-        mutableStateOf(YearMonth.now())
-    }
-
-    var selectedDate by rememberSaveable(stateSaver = CalendarSelectedDateSaver) {
-        mutableStateOf<LocalDate?>(null)
-    }
-
-    val postcardsByDate = remember(postcards) {
-        daySectionsFor(postcards).associate { it.date to it.postcards }
-    }
-
-    val today = remember { LocalDate.now() }
-    val cells = remember(visibleMonth) { calendarCellsFor(visibleMonth) }
-    val selectedDayPostcards = selectedDate?.let { postcardsByDate[it] }.orEmpty()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GalleryPaperWhite)
-            .verticalScroll(scrollState)
-            .padding(
-                start = 16.dp,
-                end = 16.dp,
-                top = paddingValues.calculateTopPadding() + 14.dp
-            )
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = {
-                    selectedDate = null
-                    visibleMonth = visibleMonth.minusMonths(1)
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    contentDescription = "이전 달",
-                    tint = InkSecondary
-                )
-            }
-
-            Text(
-                text = visibleMonth.format(calendarMonthLabelFormatter),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = InkPrimary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f)
-            )
-
-            IconButton(
-                onClick = {
-                    selectedDate = null
-                    visibleMonth = visibleMonth.plusMonths(1)
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "다음 달",
-                    tint = InkSecondary
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            CALENDAR_WEEKDAY_LABELS.forEach { label ->
-                Text(
-                    text = label,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = InkSecondary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        cells.chunked(7).forEach { week ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                week.forEach { date ->
-                    GalleryCalendarDayCell(
-                        date = date,
-                        isToday = date == today,
-                        isSelected = date != null && date == selectedDate,
-                        hasPostcards = date != null && postcardsByDate.containsKey(date),
-                        onClick = {
-                            selectedDate = if (selectedDate == date) null else date
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        if (selectedDayPostcards.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Text(
-                text = selectedDate?.format(timelineDayLabelFormatter).orEmpty(),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = InkPrimary
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                selectedDayPostcards.forEach { postcard ->
-                    StampCardContent(
-                        postcard = postcard,
-                        isSelected = postcard.id in selectedIds,
-                        dateLabelOverride = "",
-                        modifier = Modifier
-                            .width(TIMELINE_PHOTO_WIDTH)
-                            .combinedClickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { onItemClick(postcard.id) },
-                                onLongClick = { onItemLongClick(postcard.id) }
-                            )
-                    )
-                }
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(paddingValues.calculateBottomPadding() + 88.dp)
-        )
-    }
-}
-
-/**
- * 날짜 칸 하나. 사진을 넣지 않고 날짜 숫자 + (기록이 있으면) 작은 점만
- * 그린다(24절 — 작은 화면에서 날짜·thumbnail·선택 상태가 서로 경쟁하지
- * 않게). 선택된 날짜는 원형 배경으로, 오늘은 굵은 글씨로 구분한다.
- */
-@Composable
-private fun GalleryCalendarDayCell(
-    date: LocalDate?,
-    isToday: Boolean,
-    isSelected: Boolean,
-    hasPostcards: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .then(
-                if (date != null) {
-                    Modifier.clickable(onClick = onClick)
-                } else {
-                    Modifier
-                }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        if (date != null) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    modifier = Modifier
-                        .size(CALENDAR_DAY_CIRCLE_SIZE)
-                        .background(
-                            color = if (isSelected) SunsetGold else Color.Transparent,
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = date.dayOfMonth.toString(),
-                        fontSize = 13.sp,
-                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) PaperSurface else InkPrimary
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(3.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(CALENDAR_DAY_DOT_SIZE)
-                        .background(
-                            color = if (hasPostcards) SunsetGold else Color.Transparent,
-                            shape = CircleShape
-                        )
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GalleryGrid(
-    postcards: List<Postcard>,
-    selectedIds: Set<Long>,
-    shakeTrigger: Int,
-    isPondModeOn: Boolean,
-    pondController: PondController,
-    paddingValues: PaddingValues,
-    gridState: LazyGridState,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
-) {
     var originInWindow by remember { mutableStateOf(Offset.Zero) }
 
     Box(
@@ -2955,28 +2112,114 @@ private fun GalleryGrid(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            lazyGridItems(
-                items = postcards,
-                key = { postcard ->
-                    postcard.id
+            monthSections.forEach { section ->
+                item(
+                    key = "month_${section.yearMonth}",
+                    span = { GridItemSpan(maxLineSpan) }
+                ) {
+                    GalleryMonthHeader(
+                        yearMonth = section.yearMonth,
+                        postcardCount = section.postcards.size
+                    )
                 }
-            ) { postcard ->
-                StampCard(
-                    postcard = postcard,
-                    isSelected = postcard.id in selectedIds,
-                    shakeTrigger = shakeTrigger,
-                    isPondModeOn = isPondModeOn,
-                    pondController = if (isPondModeOn) pondController else null,
-                    onClick = {
-                        onItemClick(postcard.id)
-                    },
-                    onLongClick = {
-                        onItemLongClick(postcard.id)
-                    }
-                )
+
+                lazyGridItems(
+                    items = section.postcards,
+                    key = { postcard -> postcard.id }
+                ) { postcard ->
+                    GalleryMonthlyGridItem(
+                        postcard = postcard,
+                        isSelected = postcard.id in selectedIds,
+                        shakeTrigger = shakeTrigger,
+                        isPondModeOn = isPondModeOn,
+                        pondController = pondController,
+                        onClick = {
+                            onItemClick(postcard.id)
+                        },
+                        onLongClick = {
+                            onItemLongClick(postcard.id)
+                        }
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * 월별 보기의 썸네일 한 칸. 평상시(연못 모드 꺼짐)에는 실제 시각 요소(사진·
+ * 선택 표시·뒷면 편지 배지)만 그리는 가벼운 [StampCardContent]를 그대로
+ * 쓰고, 날짜 자리만 "일(day)"로 바꾼다.
+ *
+ * 76일차: 3단 보기가 삭제되며 그 페이지 전용이던 연못 모드가 이 grid로
+ * 이식됐다 — 연못 모드가 켜졌을 때만 물리·기울임 연출이 붙은 무거운
+ * [StampCard]로 바꿔 그린다(평상시 렌더링 비용은 그대로 유지).
+ */
+@Composable
+private fun GalleryMonthlyGridItem(
+    postcard: Postcard,
+    isSelected: Boolean,
+    shakeTrigger: Int,
+    isPondModeOn: Boolean,
+    pondController: PondController,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val dayLabel = remember(postcard.capturedAt) {
+        Instant.ofEpochMilli(postcard.capturedAt)
+            .atZone(ZoneId.systemDefault())
+            .format(monthlyGridDayLabelFormatter)
+    }
+
+    if (isPondModeOn) {
+        StampCard(
+            postcard = postcard,
+            isSelected = isSelected,
+            shakeTrigger = shakeTrigger,
+            isPondModeOn = true,
+            pondController = pondController,
+            dateLabelOverride = dayLabel,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    } else {
+        StampCardContent(
+            postcard = postcard,
+            isSelected = isSelected,
+            dateLabelOverride = dayLabel,
+            modifier = Modifier.combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+        )
+    }
+}
+
+/**
+ * 이번 달의 날짜 칸 목록을 만든다. 1일 이전은 일요일 시작 기준으로 빈
+ * 칸(null)을 채우고, 마지막 주도 7의 배수가 되도록 뒤를 null로 채운다 —
+ * 실제 존재하지 않는 날짜는 그리지 않되 요일 정렬은 항상 유지한다.
+ *
+ * 76일차: 갤러리 자체의 "캘린더 보기"는 삭제됐지만, 이 함수는 방문
+ * 달력([VisitCalendarDrawer])이 그대로 재사용하므로 남겨둔다.
+ */
+internal fun calendarCellsFor(yearMonth: YearMonth): List<LocalDate?> {
+    val firstOfMonth = yearMonth.atDay(1)
+    // DayOfWeek.value: MONDAY=1..SUNDAY=7 → 일요일 시작 기준으로 0~6 변환.
+    val leadingBlanks = firstOfMonth.dayOfWeek.value % 7
+
+    val cells = mutableListOf<LocalDate?>()
+    repeat(leadingBlanks) { cells.add(null) }
+    (1..yearMonth.lengthOfMonth()).forEach { day ->
+        cells.add(yearMonth.atDay(day))
+    }
+    while (cells.size % 7 != 0) {
+        cells.add(null)
+    }
+
+    return cells
 }
 
 @Composable
@@ -3140,42 +2383,6 @@ private fun monthSectionsFor(
         GalleryMonthSection(
             yearMonth = yearMonth,
             postcards = postcardsInMonth
-        )
-    }
-}
-
-private data class GalleryDaySection(
-    val date: LocalDate,
-    val postcards: List<Postcard>
-)
-
-/** 연도 경계에서도 헷갈리지 않도록 월별 헤더와 동일하게 연도를 항상 포함한다. */
-private val timelineDayLabelFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy년 M월 d일")
-
-/**
- * [monthSectionsFor]와 같은 방식(이미 정렬된 순서를 그대로 따르는
- * `LinkedHashMap` 그룹핑)으로, 같은 날짜의 여러 postcard를 하나의 타임라인
- * 항목으로 자연스럽게 묶는다(23절) — 새 날짜 필드나 DB 변경 없음.
- */
-private fun daySectionsFor(
-    postcards: List<Postcard>
-): List<GalleryDaySection> {
-    val grouped = LinkedHashMap<LocalDate, MutableList<Postcard>>()
-
-    postcards.forEach { postcard ->
-        val date =
-            Instant.ofEpochMilli(postcard.capturedAt)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-
-        grouped.getOrPut(date) { mutableListOf() }.add(postcard)
-    }
-
-    return grouped.map { (date, postcardsOnDate) ->
-        GalleryDaySection(
-            date = date,
-            postcards = postcardsOnDate
         )
     }
 }

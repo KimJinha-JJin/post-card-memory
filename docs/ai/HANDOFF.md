@@ -1,3 +1,63 @@
+# HANDOFF — 76일차: 갤러리 보기 체계 축소 + 기억밀도 재정의
+
+확인일: 2026-09-17. 수동 표준 모드. 사용자 제공 76일차 지시서에 따라 피코(Claude Code)가 조사→production 구현(fork 위임 후 직접 재검증)→실기기 QA→commit·push 순으로 진행했어. 공용 작업판은 활성화하지 않았어. **실기기 QA 통과("아주 완벽해 내가 원했던 거 그대로야"), 사용자가 commit·push를 명시적으로 요청 — 이 HANDOFF 커밋에 포함.**
+
+## 시작 상태
+
+branch `feature/photo-sticker`, 시작 HEAD `e6659da`(local==origin, tracked clean, 기존 무관 untracked `.codex-config.candidate.toml`/`.kotlin/`만 존재 — 실측이 인수인계 참고값과 일치). 직전 HANDOFF는 75일차 방문 달력 작업으로 오늘 작업과 무관했어.
+
+## 기존 ViewMode 구조(조사 결과)
+
+- enum은 `GalleryPageFormat`(GalleryPageFormat.kt) — THREE_COLUMN/MONTHLY/TIMELINE/CALENDAR/STAMP/DENSITY 6종, default THREE_COLUMN. (참고: `GalleryViewMode.kt`의 COMPACT_GRID/DETAIL_LIST는 어디서도 참조 안 되는 완전 무관 dead code라 이번에도 건드리지 않았어.)
+- 저장 방식은 SharedPreferences/DataStore가 아니라 `GalleryScreen.kt` 내부 `rememberSaveable`+커스텀 Saver뿐 — 앱 완전 재시작 시 항상 기본값으로 리셋됨(회전 등 프로세스 재생성에만 살아남음).
+- 조사 중 지시서에 없던 위험 2가지를 발견해 사용자에게 확인받았어: ①"퐁(연못) 놀이 모드"가 3단 보기에만 렌더링 경로가 있었음(→월별 보기로 이식 승인), ②기억밀도로 들어가는 별도 진입점이 없었음(→기존 pager+점 인디케이터를 그대로 재사용해 월별/기억밀도 2페이지 좌우 스와이프로 승인).
+
+## 삭제한 보기 / 월별 보기 default화
+
+- 3단 보기, 캘린더 보기(갤러리 ViewMode만 — 방문 달력과 무관), 우표 보기, 타임라인 보기 삭제. enum에서 4개 항목 제거, 전용 composable(`GalleryThreeColumnPage`, `GalleryCalendarPage`, `GalleryStampPage`+`GalleryStampGridItem`, `GalleryTimelinePage`+`GalleryTimelineEntry`) 삭제.
+- 공용 자산은 보존: `PinkingPhotoShape`/`StampCardContent`/`StampCard`(다른 화면에서도 재사용), `calendarCellsFor`(방문 달력 `VisitCalendarDrawer.kt`가 재사용 중 — 삭제했으면 방문 달력이 깨졌을 부분, diff에서 직접 확인).
+- `activePageFormats`를 토글 가능한 `rememberSaveable Set`에서 `setOf(MONTHLY, DENSITY)` 고정값으로 단순화(더 이상 아무도 켤 수 없는 토글 로직을 남기지 않음). `currentPageFormat` 기본값 MONTHLY.
+- 우측 상단 체크박스 기반 "보기 형식 관리" 드롭다운 UI 전체 제거(`GalleryPageFormatMenuItem` 포함). 기존 `HorizontalPager`+`GalleryPageIndicator`(2페이지 이상일 때 자동 표시)가 그대로 월별↔기억밀도 스와이프를 보여줌 — 새 UI 문법 추가 없음.
+- 검색 아이콘 노출 조건과 검색 강제 종료 `LaunchedEffect`를 THREE_COLUMN→MONTHLY로 이관(정렬은 원래 MONTHLY도 `sortAffectsOrder=true`라 이관 불필요).
+- 퐁 모드: `isPondModeOn`/`pondController`와 탭/드래그 파문 제스처를 `GalleryMonthlyGridPage`로 이식. 평소엔 가벼운 `StampCardContent`, 퐁 모드 켜졌을 때만 물리 연출 붙은 `StampCard`로 전환(`StampCard.kt`에 `dateLabelOverride` 파라미터 추가해 월 헤더와 날짜 중복 안 되게 "일"만 표기).
+- legacy fallback: `PageFormatSaver`가 삭제된 이름(THREE_COLUMN/CALENDAR/STAMP/TIMELINE)이나 알 수 없는 값을 만나면 MONTHLY로 자동 복귀(`getOrDefault(GalleryPageFormat.MONTHLY)`). SharedPreferences/DataStore 자체가 없어 별도 마이그레이션 불필요.
+
+## 기억밀도 재정의
+
+- 데이터 source: `postcard.capturedAt`(방문 기록 아님), 지정 연도(기본 현재 연도) 1~12월만 — 연도 이동 picker는 기존에 없던 기능이라 새로 안 만듦.
+- 막대 단위: 1칸=엽서 2장, 최대 6칸(12장), 13장부터 6칸 유지+위에 "+" 표시(`memoryDensityMonthsForYear`/`memoryDensityBarLevel`/`memoryDensityHasOverflow`).
+- 카오모지 3단계: 0~4장 •_•, 5~8장 ˙ᵕ˙, 9장 이상 ᵔᴗᵔ(`memoryDensityKaomoji`) — 슬픈/우는 표정 없음.
+- 레이아웃: 12개월을 `weight(1f)` 균등폭 Row로 한 화면 배치, 가로 스크롤 없음 — 실기기 QA로 뭉개짐 없이 확인됨. 월 표기는 숫자만("1"~"12").
+- 기존에 있던 "점 탭하면 그 달 사진이 아래 펼쳐지는" 기능은 제거함 — "dashboard 아닌 순수 조회 화면" 재정의와 새 막대그래프 디자인이 양립하지 않아서 없앴고, 실기기 QA 통과로 사실상 승인됨(사용자에게 명시적으로 짚었고 이견 없었음).
+
+## 자동 검증
+
+- 내가 직접 재실행(fork의 보고를 그대로 믿지 않고 diff·테스트 결과를 재검증): `:app:testDebugUnitTest`(gallery 패키지 9개 파일, VisitCalendarTest 18건 포함 전부 통과) + `:app:compileDebugKotlin` `BUILD SUCCESSFUL`.
+- 전체 unit test 재실행: `BUILD SUCCESSFUL`, test-results XML 직접 집계 **647건 전부 통과, 실패·에러 0건**.
+- `git diff --check` 통과(기존 LF→CRLF 경고만).
+- 기억밀도 막대/카오모지 경계값(0~13+ 전 구간), legacy ViewMode fallback 최소 테스트 신규 추가.
+- 삭제한 ViewMode 전용 테스트 3개 파일(`GalleryCalendarStructureTest`/`GalleryStampStructureTest`/`GalleryTimelineStructureTest`) 삭제, `GalleryViewSelectionStructureTest`는 새 selector 없는 구조에 맞게 전면 재작성.
+
+## 실기기 QA
+
+통과. 사용자 확인: "아주 완벽해 내가 원했던 거 그대로야". 12개월 배치·월 숫자 표기·카오모지 가독성·퐁 모드 이관 모두 문제 없음.
+
+## 추가 산출물 — 기억밀도 목업
+
+며칠치 실데이터만으로는 밀도 체감이 어렵다는 사용자 요청으로 `docs/ai/mockups/memory-density-mockup.html` 추가(74~75일차와 같은 패턴 — 앱 밖 독립 HTML, production 미반영). 실제 앱과 동일한 막대/overflow/카오모지 공식을 그대로 재현했고, 월별 숫자를 직접 입력해 실시간으로 바꿔보거나 프리셋(조용한 해/보통인 해/풍성한 해/폭발적인 달 포함/기복이 큰 해)으로 비교 가능. Chrome headless로 직접 캡처해 12개월 전체 배치·overflow 표시·카오모지 단계를 확인했고, 그 과정에서 flex 자식 최소 너비 문제(입력창 때문에 12번째 달까지 안 잘리는지 확인 안 되던 버그)를 발견해 `min-width: 0` 추가로 수정했어. 검증용 스크린샷과 임시 Chrome 프로필은 작업 후 삭제.
+
+## 남은 위험 / 다음 행동
+
+- 지시서 26절(기억밀도 월 탭→월별 보기 이동)은 오늘 범위 아님, 77일차 이후 후보.
+- 77일차 예약 범위(방문 달력 폴리싱, Intro 총 방문 33일차 조건 복구)는 이번 작업에서 건드리지 않음.
+- 실사용 데이터가 쌓이면 12개월 배치·카오모지 가독성을 다시 한 번 확인하면 좋음(현재는 QA 시점 데이터량 기준 확인).
+
+## Git
+
+commit·push는 사용자가 목업 확인 후 명시적으로 요청("이대로 커밋 푸시하자") — 아래 결과는 커밋 직후 갱신.
+
+---
+
 # HANDOFF — 75일차 추가: 방문 달력 계층형 월/연도 탐색
 
 확인일: 2026-09-16. 수동 표준 모드. 75일차 기본 작업(월 이동/오늘 복귀/애니메이션/오늘 색) commit·push(`f687145`) 이후, 사용자가 챗지피티에게 받은 "75일차 추가 수정지시서"(계층형 월/연도 탐색)를 피코(Claude Code)가 직접 구현했어. 이어서 실기기 QA 중 나온 사용자 추가 요청(▼ 버튼 가시성, ▲▼ 애니메이션, 4×4 grid, 달력 6주 고정)까지 같은 흐름에서 반영했어. 공용 작업판은 활성화하지 않았어. **실기기 QA 통과, 사용자가 commit·push를 명시적으로 요청 — 이 HANDOFF 커밋에 포함.**

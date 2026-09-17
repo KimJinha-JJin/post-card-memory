@@ -2,12 +2,18 @@ package com.postcardmemory.ui.gallery
 
 import com.postcardmemory.data.Postcard
 import java.time.ZoneId
-import java.time.YearMonth
 import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * 76일차: 기억밀도가 "여러 연도를 이어붙인 원형 점 grid"에서 "지정한 한
+ * 해의 1월→12월 막대그래프 + 3단계 카오모지"로 재정의되며, 그 계산
+ * 로직([memoryDensityMonthsForYear], [memoryDensityBarLevel],
+ * [memoryDensityHasOverflow], [memoryDensityKaomoji])을 검증한다.
+ */
 class GalleryMemoryDensityTest {
 
     private val zone = ZoneId.of("Asia/Seoul")
@@ -22,15 +28,21 @@ class GalleryMemoryDensityTest {
                 .toEpochMilli()
         )
 
+    // ── 33절: 월별 grouping ──────────────────────────────────────────
+
     @Test
-    fun emptyPostcards_returnsNoMonths() {
-        assertTrue(memoryDensityMonthsFor(emptyList(), zone).isEmpty())
+    fun emptyPostcards_stillReturnsAllTwelveMonthsAtZero() {
+        val result = memoryDensityMonthsForYear(emptyList(), 2026, zone)
+
+        assertEquals(12, result.size)
+        assertTrue(result.all { it.count == 0 })
     }
 
     @Test
     fun sameMonthPostcards_areAggregatedTogether() {
-        val result = memoryDensityMonthsFor(
+        val result = memoryDensityMonthsForYear(
             listOf(postcard(1, 2026, 9, 1), postcard(2, 2026, 9, 30)),
+            2026,
             zone
         )
 
@@ -38,18 +50,33 @@ class GalleryMemoryDensityTest {
     }
 
     @Test
-    fun everyYearContainsAllTwelveMonths_includingEmptyPeriods() {
-        val result = memoryDensityMonthsFor(
-            listOf(postcard(1, 2025, 12, 31), postcard(2, 2026, 1, 1)),
-            zone
-        )
+    fun januaryPostcard_isOnlyCountedInJanuary() {
+        val result = memoryDensityMonthsForYear(listOf(postcard(1, 2026, 1, 15)), 2026, zone)
 
-        assertEquals(24, result.size)
-        assertEquals(12, result.count { it.yearMonth.year == 2025 })
-        assertEquals(12, result.count { it.yearMonth.year == 2026 })
-        assertEquals(0, result.single { it.yearMonth.year == 2025 && it.yearMonth.monthValue == 1 }.count)
-        assertEquals(1, result.single { it.yearMonth.year == 2025 && it.yearMonth.monthValue == 12 }.count)
-        assertEquals(1, result.single { it.yearMonth.year == 2026 && it.yearMonth.monthValue == 1 }.count)
+        assertEquals(1, result.single { it.yearMonth.monthValue == 1 }.count)
+        assertEquals(0, result.filter { it.yearMonth.monthValue != 1 }.sumOf { it.count })
+    }
+
+    @Test
+    fun decemberPostcard_isOnlyCountedInDecember() {
+        val result = memoryDensityMonthsForYear(listOf(postcard(1, 2026, 12, 25)), 2026, zone)
+
+        assertEquals(1, result.single { it.yearMonth.monthValue == 12 }.count)
+        assertEquals(0, result.filter { it.yearMonth.monthValue != 12 }.sumOf { it.count })
+    }
+
+    @Test
+    fun previousYearPostcard_isNotIncludedInCurrentYearCount() {
+        val result = memoryDensityMonthsForYear(listOf(postcard(1, 2025, 12, 31)), 2026, zone)
+
+        assertEquals(0, result.sumOf { it.count })
+    }
+
+    @Test
+    fun nextYearPostcard_isNotIncludedInCurrentYearCount() {
+        val result = memoryDensityMonthsForYear(listOf(postcard(1, 2027, 1, 1)), 2026, zone)
+
+        assertEquals(0, result.sumOf { it.count })
     }
 
     @Test
@@ -64,44 +91,56 @@ class GalleryMemoryDensityTest {
             capturedAt = instantNearBoundary
         )
 
-        val result = memoryDensityMonthsFor(listOf(input), zone)
+        val result = memoryDensityMonthsForYear(listOf(input), 2026, zone)
 
         assertEquals(1, result.single { it.yearMonth.monthValue == 9 }.count)
         assertEquals(0, result.single { it.yearMonth.monthValue == 8 }.count)
     }
 
     @Test
-    fun timeAxis_isAlwaysPastToPresent_regardlessOfInputOrder() {
-        val result = memoryDensityMonthsFor(
-            listOf(postcard(2, 2026, 1, 1), postcard(1, 2025, 12, 31)),
-            zone
+    fun monthOrder_isAlwaysJanuaryToDecember() {
+        val result = memoryDensityMonthsForYear(emptyList(), 2026, zone)
+
+        assertEquals((1..12).toList(), result.map { it.yearMonth.monthValue })
+    }
+
+    // ── 31절: 막대 단위(1칸 = 엽서 2장, 최대 6칸) ──────────────────────
+
+    @Test
+    fun barLevel_matchesTwoPostcardsPerUnitUpToSixUnits() {
+        val expected = mapOf(
+            0 to 0, 1 to 1, 2 to 1, 3 to 2, 4 to 2, 5 to 3, 6 to 3,
+            7 to 4, 8 to 4, 9 to 5, 10 to 5, 11 to 6, 12 to 6, 13 to 6
         )
 
-        assertEquals(2025, result.first().yearMonth.year)
-        assertEquals(1, result.first().yearMonth.monthValue)
-        assertEquals(2026, result.last().yearMonth.year)
-        assertEquals(12, result.last().yearMonth.monthValue)
+        expected.forEach { (count, level) ->
+            assertEquals("count=$count", level, memoryDensityBarLevel(count))
+        }
     }
 
     @Test
-    fun densityIntensity_handlesEmptyMaximumAndIntermediateCounts() {
-        assertEquals(0f, memoryDensityIntensity(count = 0, maxCount = 0))
-        assertEquals(1f, memoryDensityIntensity(count = 4, maxCount = 4))
-        assertEquals(0.5f, memoryDensityIntensity(count = 2, maxCount = 4))
-        assertEquals(1f, memoryDensityIntensity(count = 5, maxCount = 4))
+    fun barLevel_largeValueStaysCappedAtSixUnits() {
+        assertEquals(6, memoryDensityBarLevel(100))
     }
 
     @Test
-    fun selectedMonth_isClearedWhenItsLastPostcardDisappears() {
-        val months = memoryDensityMonthsFor(listOf(postcard(1, 2026, 9, 1)), zone)
+    fun overflow_onlyTrueAboveTwelvePostcards() {
+        assertFalse(memoryDensityHasOverflow(12))
+        assertTrue(memoryDensityHasOverflow(13))
+        assertTrue(memoryDensityHasOverflow(100))
+    }
 
-        assertEquals(
-            YearMonth.of(2026, 9),
-            selectedMemoryDensityMonth(months, YearMonth.of(2026, 9))?.yearMonth
-        )
-        assertEquals(
-            null,
-            selectedMemoryDensityMonth(months, YearMonth.of(2026, 8))
-        )
+    // ── 32절: 카오모지 경계값 ───────────────────────────────────────
+
+    @Test
+    fun kaomoji_matchesThreeStageBoundaries() {
+        assertEquals("•_•", memoryDensityKaomoji(0))
+        assertEquals("•_•", memoryDensityKaomoji(4))
+        assertEquals("˙ᵕ˙", memoryDensityKaomoji(5))
+        assertEquals("˙ᵕ˙", memoryDensityKaomoji(8))
+        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(9))
+        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(12))
+        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(13))
+        assertEquals("ᵔᴗᵔ", memoryDensityKaomoji(100))
     }
 }

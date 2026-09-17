@@ -111,6 +111,10 @@ fun StampCard(
     shakeTrigger: Int = 0,
     isPondModeOn: Boolean = false,
     pondController: PondController? = null,
+    // 76일차: 월별 보기에 연못 모드가 이식되며, 월 헤더와 날짜가 중복되지
+    // 않도록 day-only 표기를 넘길 수 있게 함(GalleryMonthlyGridItem 참고).
+    // null이면(기본값) 기존과 동일하게 전체 날짜를 보여준다.
+    dateLabelOverride: String? = null,
     onLongClick: () -> Unit = {}
 ) {
     val seed = remember(postcard.id) { abs(postcard.id.hashCode()) }
@@ -525,7 +529,8 @@ fun StampCard(
     ) {
         StampCardContent(
             postcard = postcard,
-            isSelected = isSelected
+            isSelected = isSelected,
+            dateLabelOverride = dateLabelOverride
         )
     }
 }

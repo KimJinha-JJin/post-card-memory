@@ -84,7 +84,7 @@ class GalleryMonthlyGridStructureTest {
     }
 
     @Test
-    fun monthlyGridItem_reusesStampCardContentInsteadOfHeavyStampCard() {
+    fun monthlyGridItem_usesLightContentNormallyAndHeavyStampCardOnlyInPondMode() {
         val itemStart = sourceText.indexOf("private fun GalleryMonthlyGridItem(")
         assertTrue("GalleryMonthlyGridItem 선언을 찾지 못함", itemStart >= 0)
 
@@ -93,17 +93,44 @@ class GalleryMonthlyGridStructureTest {
 
         val itemBody = sourceText.substring(itemStart, itemEnd)
 
+        // 76일차: 3단 보기가 삭제되며 그 페이지 전용이던 연못 모드가 이
+        // grid로 이식됐다 — 평상시엔 가벼운 StampCardContent를 그대로 쓰고,
+        // 연못 모드가 켜졌을 때만 물리 연출이 붙은 StampCard로 바꿔 그린다.
         assertTrue(
-            "사진 렌더링은 3단 보기와 같은 StampCardContent를 공유해야 함",
+            "평상시(연못 모드 꺼짐)에는 가벼운 StampCardContent를 그대로 써야 함",
             itemBody.contains("StampCardContent(")
         )
         assertTrue(
-            "날짜 표기는 월 헤더와 중복되지 않게 day-only override를 넘겨야 함",
+            "연못 모드가 켜졌을 때만 물리 연출이 붙은 StampCard를 써야 함",
+            itemBody.contains("StampCard(")
+        )
+        assertTrue(
+            "두 렌더링은 isPondModeOn 분기로 갈려야 함",
+            itemBody.contains("if (isPondModeOn)")
+        )
+        assertTrue(
+            "날짜 표기는 월 헤더와 중복되지 않게 두 분기 모두 day-only override를 넘겨야 함",
             itemBody.contains("dateLabelOverride = dayLabel")
         )
-        assertFalse(
-            "연못 모드 물리 연출이 붙은 무거운 StampCard를 재사용하면 안 됨",
-            itemBody.contains("StampCard(")
+    }
+
+    @Test
+    fun monthlyGridPage_reusesPondRippleOverlayMigratedFromThreeColumnPage() {
+        val start = sourceText.indexOf("private fun GalleryMonthlyGridPage(")
+        assertTrue("GalleryMonthlyGridPage 선언을 찾지 못함", start >= 0)
+
+        val end = sourceText.indexOf("private fun GalleryMonthlyGridItem(", start)
+        assertTrue("GalleryMonthlyGridItem 선언을 찾지 못함", end > start)
+
+        val body = sourceText.substring(start, end)
+
+        // 76일차: 3단 보기가 삭제되며 그 페이지의 연못 물리 오버레이(탭/드래그
+        // 파문)가 월별 보기로 그대로 옮겨졌다.
+        assertTrue(body.contains("PondRippleOverlay("))
+        assertTrue(body.contains("pondController.gridBoundsInWindow"))
+        assertTrue(
+            "검색 결과 없음 안내는 3단 보기가 맡던 역할을 이어받아야 함",
+            body.contains("SearchEmptyState(")
         )
     }
 }
