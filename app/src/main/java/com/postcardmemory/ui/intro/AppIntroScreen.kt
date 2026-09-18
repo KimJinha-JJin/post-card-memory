@@ -73,12 +73,19 @@ internal val INTRO_GENERAL_MESSAGES = listOf(
     "오늘 하루의 조각"
 )
 
-/** 아주 낮은 확률로만 등장하는 이스터에그 문구 — 일반 문구와 동일한 디자인으로 노출한다. */
+/**
+ * 아주 낮은 확률로만 등장하는 이스터에그 문구 — 일반 문구와 동일한 디자인으로 노출한다.
+ * 막스 베르스타펜 문구는 여기 넣지 않는다 — [INTRO_MAX_MILESTONE_VISIT_DAY](33)에서만
+ * 확정으로 뜨는 전용 문구인데 이 무작위 풀에 같이 있으면 33일차가 아닌 날에도(예:
+ * 6일차) 낮은 확률로 새어나온다(77일차에서 발견해 수정한 버그).
+ */
 internal val INTRO_SECRET_MESSAGES = listOf(
-    "뚜뚜뚜두 막스 베르스타펜",
     "챗지피티야 고마워",
     "비개발자가 만들었어요"
 )
+
+/** 33일차 전용 확정 문구. [INTRO_SECRET_MESSAGES] 무작위 풀과 분리해서 관리한다. */
+internal const val INTRO_MAX_MILESTONE_MESSAGE = "뚜뚜뚜두 막스 베르스타펜"
 
 private const val INTRO_SECRET_PROBABILITY = 0.03f
 
@@ -99,7 +106,7 @@ internal val INTRO_MILESTONE_MESSAGES: Map<Int, String> = mapOf(
     3 to "피에르으으으으으으으 가슬리이이이이이이이이이이",
     7 to "럭키데이",
     16 to "그것은 물이다",
-    INTRO_MAX_MILESTONE_VISIT_DAY to INTRO_SECRET_MESSAGES[0],
+    INTRO_MAX_MILESTONE_VISIT_DAY to INTRO_MAX_MILESTONE_MESSAGE,
     44 to "Hey, man",
     63 to "Here comes the DIVA"
 )

@@ -1,3 +1,73 @@
+# HANDOFF — 77일차: 방문 달력 폴리싱 + Intro 막스 33일차 조건 복구
+
+확인일: 2026-09-18. 수동 표준 모드. 사용자 제공 77일차 지시서에 따라 피코(Claude Code)가 조사→구현→자동 검증→실기기 QA 순으로 진행했어. 지시서 범위(달력 현재 위치 표시·swipe 손맛, Intro 막스 문구 버그)를 끝낸 뒤, 같은 세션에서 사용자가 실기기로 확인하다가 작은 후속 요청("다른 월/연도 탐색 중엔 오늘 marker가 안 보이니 상단에 복귀 링크를 달아달라")을 추가로 반영했어. **실기기 QA 전부 통과. commit·push는 아직 요청받지 않아 미실행.**
+
+## 시작 상태
+
+branch `feature/photo-sticker`, 시작 HEAD `7e7b77f`(local==origin, tracked clean, 기존 무관 untracked `.codex-config.candidate.toml`/`.kotlin/`만 존재 — 76일차 종료 참고값과 정확히 일치). 76일차(갤러리 축소+기억밀도 새싹형)는 이번 작업에서 전혀 건드리지 않았어.
+
+## 방문 달력 — 현재 월/연도 marker
+
+- 75일차에 이미 있던 `displayedMonth`(선택/표시 중인 월) 강조와 완전히 분리된 "실제 오늘" 판정을 추가: `isCurrentMonthCell(year, month, today)`/`isCurrentYearCell(year, today)` 순수 함수.
+- 표시: `VisitCalendarCurrentPeriodMarker`(26dp 원, `InkSecondary.copy(alpha=0.16f)`) — 새 색 안 만들고 기존 색을 한 번 더 낮춰 재사용. 성취처럼 안 보이게 아주 연하게.
+- 겹침 방지: `visitCalendarShowsCurrentMarker(isCurrentPeriod, isSelected)` — 선택된 칸과 같으면 marker를 그리지 않음(강조 이중 적용 금지 지시 반영).
+- `VisitCalendarMonthPicker`/`VisitCalendarYearPicker`가 `today: YearMonth` 파라미터를 새로 받음, `MonthlyVisitCalendar`에서 `todayYearMonth`로 계산해 전달.
+
+## 방문 달력 — 후속: 오늘이 화면 밖일 때 헤더 복귀 링크 (사용자 실기기 QA 중 추가 요청)
+
+- 문제: 위 marker는 오늘이 지금 보이는 4×4 창 안에 있을 때만 보임. 다른 연도로 탐색해 오늘이 창 밖으로 나가면 "오늘이 어딘지" 알 방법이 없었음 — 사용자가 실기기로 직접 확인하다 발견.
+- 사용자에게 "안내 문구만" vs "탭하면 오늘로 복귀" 두 방식을 물어봤고, 후자로 확정.
+- 순수 판정 함수 추가: `isCurrentMonthVisibleInMonthPicker(pickerYear, today)`, `isCurrentYearVisibleInYearPicker(decadeStart, today)` — 지금 보이는 4×4 grid 범위 안에 오늘이 있는지.
+- 창 밖일 때만 헤더(`VisitCalendarPickerHeaderRow`) 바로 아래에 "오늘 2026년 9월 →" / "오늘 2026년 →" 같은 조용한 텍스트 링크를 추가로 보여줌. 탭하면 `pickerYear = todayYearMonth.year`로 이동 — **보기 창만 오늘이 포함되게 재배치**할 뿐, `navLevel`이나 실제 선택(`displayedMonth`)은 바꾸지 않음(CALENDAR 레벨의 "오늘" 버튼과 다른 동작이라 헷갈리지 않게 의도적으로 구분).
+- 오늘이 이미 창 안에 보이면(예: 그냥 열었을 때 흔한 케이스) 이 링크는 안 뜨고 기존 marker만으로 충분 — 중복 표시 없음.
+
+## 방문 달력 — MONTH_PICKER/YEAR_PICKER 수직 swipe
+
+- 새 gesture 엔진 없이 표준 `detectVerticalDragGestures` + `android.view.ViewConfiguration.get(context).scaledPagingTouchSlop`(Android가 "페이지 넘기기"에 표준으로 쓰는 threshold, 임의 px 값 아님) 사용.
+- 방향 판정은 순수 함수 `visitCalendarSwipeStepFor(accumulatedDrag, thresholdPx)`로 분리(위=NEXT, 아래=PREVIOUS, 미만은 NONE) — 단위 테스트로 직접 검증 가능.
+- **버튼과 완전히 같은 handler 공유**: MONTH_PICKER/YEAR_PICKER 분기에서 `onStepUp`/`onStepDown` 람다를 한 번만 만들어 `VisitCalendarPickerHeaderRow`(▲▼ 버튼)와 `rememberVisitCalendarPickerSwipeModifier`(swipe) 양쪽에 그대로 전달 — 별도 swipe 전용 경로 없음.
+- **애니메이션도 완전히 재사용**: swipe가 바꾸는 state(`pickerYear`/`decadeStart`)가 기존 `AnimatedContent`+`visitCalendarPickerStepTransition()`(75일차부터 있던 수직 슬라이드) 그대로를 트리거 — 새 transition 안 만듦.
+- gesture 범위는 MONTH_PICKER/YEAR_PICKER의 `AnimatedContent` 영역에만 한정(CALENDAR 레벨은 그대로 버튼만). drawer 전체를 감싸는 `verticalScroll`과의 충돌 가능성을 조사 단계에서 짚었고, `change.consume()`으로 소비해 우선권을 가져가도록 구현 — 실기기 QA로 충돌 없음 확인.
+
+## 방문 달력 — 오늘 복귀 햅틱
+
+- `vibrateVisitCalendarTodayReturn`(14ms/amplitude 120) 추가. 프로젝트 표준 패턴(`Vibrator.vibrate(VibrationEffect.createOneShot)`, `LocalHapticFeedback` 무반응 확인 전력 재사용 — 갤러리 `vibrateGalleryFab`, 인트로 `vibrateIntroPostmark`와 동일 판단).
+- 강도는 인트로 방문 소인의 "통"(24ms/175)보다 가볍고 갤러리 최소 탭(10ms/90)보다 살짝 무겁게 — "톡" 목표.
+- 반복 탭 방지 로직 불필요: "오늘" 텍스트 자체가 기존부터 `!isCurrentMonth`일 때만 렌더링되므로(이미 76일차 이전부터 있던 gate), 클릭이 발생하는 시점은 항상 실제 이동일 때뿐.
+
+## Intro — 막스 베르스타펜 33일차 버그 원인·수정
+
+- **원인**: `INTRO_MILESTONE_MESSAGES[33]` 확정 조건 자체는 이미 정확했지만, 같은 문자열("뚜뚜뚜두 막스 베르스타펜")이 무작위 이스터에그 풀 `INTRO_SECRET_MESSAGES`(3% 확률)에도 동시에 들어있었음 — 33일차가 아닌 날에도 약 1%(3%×1/3) 확률로 같은 문구가 새어나왔음(실제 발견 당시 6일차에 노출).
+- **수정**: `INTRO_MAX_MILESTONE_MESSAGE` 상수로 분리해 milestone map에서만 참조하고, `INTRO_SECRET_MESSAGES`에서는 완전히 제거(남은 무작위 풀은 "챗지피티야 고마워"/"비개발자가 만들었어요" 2개). 방문 데이터·Room·streak 계산은 전혀 안 건드림 — 순수 문구 풀 구성만 수정.
+- 기존에 이 버그를 놓쳤던 이유: `AppIntroMessageLogicTest.secretMessages_matchFixedSpec`가 막스 문구가 풀 안에 있는 걸 "정상"으로 고정 검증하고 있었음 — 이번에 그 테스트도 함께 수정.
+
+## 0/6/32/33/34 경계 테스트
+
+`selectIntroMessage_atNonMilestoneVisitDays_neverReturnsMaxVerstappenMessageEvenByRandomRoll`(0/6/32/34, 각 2만 회 롤) + `selectIntroMessage_at33rdVisit_alwaysReturnsExactlyTheMaxMilestoneMessageConstant`(1천 회) 신규 추가, 기존 32/33/34 milestone 비적용 테스트와 함께 전부 통과.
+
+## 자동 검증
+
+- `compileDebugKotlin`: BUILD SUCCESSFUL(2회 재실행, marker/swipe 라운드 + 복귀 링크 라운드), 신규 경고 없음(기존 Migration/deprecated 경고만).
+- `VisitCalendarTest` 24건(marker 판정 2개, 겹침 방지 1개, swipe 방향 1개, 창 안/밖 판정 2개 = 신규 6건), `AppIntroMessageLogicTest` 18건(신규 2건) 전부 통과.
+- 전체 unit test: 660건 전부 통과, 실패·에러 0건(test-results XML 직접 집계로 재확인).
+- `git diff --check`: 통과(기존 LF→CRLF 경고만).
+- **미검증(Compose UI 테스트 하네스 없음, 75일차와 동일한 이유)**: 실제 swipe 제스처 손맛, drawer scroll과의 실제 충돌 여부, marker·복귀 링크 실기기 가독성, 햅틱 강도 — 전부 실기기 QA로 확인함(아래).
+
+## 실기기 QA
+
+2라운드 전부 통과. 1라운드(marker+swipe+햅틱+Intro): "월/연도 marker 잘 보이고 swipe도 자연스러워", "햅틱은 톡 정도로 가볍고, 막스 문구도 안 떴어". 2라운드(오늘 복귀 링크 후속): "잘 돌아가". MONTH_PICKER/YEAR_PICKER marker 가독성, swipe 방향·손맛, 기존 ▲▼ 버튼과의 일관성, 오늘 복귀 햅틱 강도, 33일 아닌 날 막스 문구 미노출, 창 밖일 때 복귀 링크 동작까지 전부 확인됨.
+
+## 자연 QA로 남긴 항목
+
+실제 총 방문일이 33일에 도달하는 날 막스 문구가 실제로 뜨는지는 자동 테스트(33일차 강제 파라미터 통과)로만 확인했고, 실사용 33일차 자연 노출은 아직 미확인 — 방문일이 자연스럽게 33에 도달할 때까지 향후 확인 대상으로 남김(지시서 20절에 명시된 정책과 동일).
+
+## 다음 행동
+
+1. 실기기 QA 통과 — 사용자의 commit·push 승인 대기 중.
+2. 승인 후 commit·push, push 후 HEAD/local-origin/git status 재확인해 이 HANDOFF에 반영 예정.
+
+---
+
 # HANDOFF — 76일차 후속: 기억밀도 카오모지 → 새싹형 전환
 
 확인일: 2026-09-17. 수동 표준 모드. 76일차 본작업(commit `7d2f476`/`515ada5`) 이후 같은 세션에서 이어진 후속 지시서("카오모지형 → 새싹형 전환")를 피코(Claude Code)가 직접 구현했어. HTML 목업 먼저 만들어 확인받고(사용자 요청으로 편자→♥ 모양 수정, 하트 진하기, 물뿌리개 아이콘 추가까지 목업 단계에서 반복), 그 다음 production에 반영 → 실기기 QA → QA 피드백 2건(물뿌리개 제거, 구분선 통합, 얼굴 색 되돌림) 반영까지 끝냈어. **실기기 QA 통과, 사용자가 "커밋하고 푸시 부탁해"로 명시적으로 요청 — 이 HANDOFF 커밋에 포함. 사용자가 이 작업으로 76일차 전체를 마무리한다고 확인함(추가 예정 작업 없음).**

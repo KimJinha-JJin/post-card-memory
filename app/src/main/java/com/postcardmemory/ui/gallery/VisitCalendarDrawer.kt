@@ -1,5 +1,8 @@
 package com.postcardmemory.ui.gallery
 
+import android.content.Context
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -18,8 +21,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -44,6 +50,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -206,6 +214,36 @@ internal fun highlightedYearFor(decadeStart: Int, displayedMonth: YearMonth): In
     if (isYearWithinDecade(displayedMonth.year, decadeStart)) displayedMonth.year else null
 
 /**
+ * MONTH_PICKER 칸이 "실제 오늘이 포함된 현재 월"인지. `displayedMonth`(선택/표시 중인 월)와는
+ * 완전히 독립적인 판정이다 — 다른 달을 보고 있어도 오늘이 속한 달은 항상 같은 결과를 낸다.
+ */
+internal fun isCurrentMonthCell(year: Int, month: Int, today: YearMonth): Boolean =
+    year == today.year && month == today.monthValue
+
+/** YEAR_PICKER 칸이 실제 현재 연도인지. */
+internal fun isCurrentYearCell(year: Int, today: YearMonth): Boolean = year == today.year
+
+/**
+ * 현재 위치 표시(아주 연한 원)를 그릴지. 선택 강조와 같은 칸이면 그리지 않는다 —
+ * "선택 상태와 현재 상태는 다른 의미"이지만 같은 칸일 때 두 강조를 겹겹이 쌓지 않는다.
+ */
+internal fun visitCalendarShowsCurrentMarker(isCurrentPeriod: Boolean, isSelected: Boolean): Boolean =
+    isCurrentPeriod && !isSelected
+
+/** MONTH_PICKER/YEAR_PICKER 수직 swipe가 어느 방향으로 이동할지 결정하는 순수 판정. */
+internal enum class VisitCalendarSwipeStep { NEXT, PREVIOUS, NONE }
+
+/**
+ * 위로 밀면(누적 drag가 음수 방향으로 threshold를 넘으면) NEXT(▲와 같은 방향),
+ * 아래로 당기면 PREVIOUS(▼와 같은 방향). threshold 미만은 NONE(아직 swipe로 인정 안 함).
+ */
+internal fun visitCalendarSwipeStepFor(accumulatedDrag: Float, thresholdPx: Float): VisitCalendarSwipeStep = when {
+    accumulatedDrag <= -thresholdPx -> VisitCalendarSwipeStep.NEXT
+    accumulatedDrag >= thresholdPx -> VisitCalendarSwipeStep.PREVIOUS
+    else -> VisitCalendarSwipeStep.NONE
+}
+
+/**
  * YEAR_PICKER 4×4 grid: decade 앞 2년 + 실제 decade 10년 + 뒤 4년, 총 16개.
  * 예: decadeStart=2020 -> 2018~2033. 윈도우 작업표시줄 캘린더의 연도 grid와 같은 배치.
  */
@@ -217,6 +255,18 @@ internal fun yearPickerGridYears(decadeStart: Int): List<Int> = (decadeStart - 2
  */
 internal fun monthPickerGridCells(pickerYear: Int): List<Pair<Int, Int>> =
     (1..16).map { index -> if (index <= 12) pickerYear to index else pickerYear + 1 to (index - 12) }
+
+/**
+ * 지금 MONTH_PICKER가 보여주는 4×4 창 안에 오늘이 포함되는지. 포함돼 있으면 칸 안의 연한
+ * 원(marker)만으로 충분하고, 포함이 안 되면(다른 연도를 탐색 중이면) 헤더 아래 "오늘 ...로
+ * 돌아가기" 링크를 따로 보여준다.
+ */
+internal fun isCurrentMonthVisibleInMonthPicker(pickerYear: Int, today: YearMonth): Boolean =
+    today.year == pickerYear || (today.year == pickerYear + 1 && today.monthValue <= 4)
+
+/** 지금 YEAR_PICKER가 보여주는 4×4 창(decade ± 여백) 안에 오늘 연도가 포함되는지. */
+internal fun isCurrentYearVisibleInYearPicker(decadeStart: Int, today: YearMonth): Boolean =
+    today.year in yearPickerGridYears(decadeStart)
 
 // 기존 월 슬라이드(200ms)와 성격이 다른 계층 이동이라는 걸 구분하기 위해 살짝 더 짧게 뒀다.
 private const val HIERARCHY_TRANSITION_DURATION_MS = 170
@@ -288,6 +338,89 @@ private fun VisitCalendarPickerHeaderRow(
 // InkSecondary를 더 낮은 alpha로 재사용한다(장식선과 같은 방식).
 private val VisitCalendarAdjacentPeriodColor = InkSecondary.copy(alpha = 0.4f)
 
+// "지금 여기"라는 조용한 위치 안내일 뿐 성취가 아니므로, 선택 강조(InkPrimary)보다 훨씬
+// 연한 alpha만 쓴다. 새 색을 만들지 않고 기존 InkSecondary를 한 번 더 낮춰 재사용한다.
+private val VisitCalendarCurrentPeriodMarkerColor = InkSecondary.copy(alpha = 0.16f)
+private val VisitCalendarCurrentPeriodMarkerSize = 26.dp
+
+@Composable
+private fun VisitCalendarCurrentPeriodMarker() {
+    Box(
+        modifier = Modifier
+            .size(VisitCalendarCurrentPeriodMarkerSize)
+            .background(VisitCalendarCurrentPeriodMarkerColor, CircleShape)
+    )
+}
+
+/**
+ * 다른 달에서 오늘로 돌아왔을 때 딱 한 번 울리는 가벼운 "톡". 인트로 방문 소인이 종이에
+ * 닿는 "통"(24ms/175, [com.postcardmemory.ui.intro.AppIntroScreen])보다 가볍게,
+ * 갤러리 최소 탭(10ms/90)보다는 살짝 무겁게 잡았다. 이 "오늘" 버튼 자체가 이미
+ * `!isCurrentMonth`일 때만 보이므로(이미 현재 월이면 버튼이 없음) 반복 탭에 대한 별도
+ * 방지 로직 없이도 실제로 이동했을 때만 울린다. `LocalHapticFeedback`이 실기기에서
+ * 무반응이라 확인된 전력이 있어(갤러리/인트로와 동일 판단) `Vibrator.vibrate`를 직접 쓴다.
+ */
+private const val VISIT_CALENDAR_TODAY_RETURN_HAPTIC_DURATION_MS = 14L
+private const val VISIT_CALENDAR_TODAY_RETURN_HAPTIC_AMPLITUDE = 120
+
+private fun vibrateVisitCalendarTodayReturn(context: Context) {
+    val vibrator = context.getSystemService(Vibrator::class.java) ?: return
+    if (!vibrator.hasVibrator()) return
+    vibrator.vibrate(
+        VibrationEffect.createOneShot(
+            VISIT_CALENDAR_TODAY_RETURN_HAPTIC_DURATION_MS,
+            VISIT_CALENDAR_TODAY_RETURN_HAPTIC_AMPLITUDE
+        )
+    )
+}
+
+/**
+ * Android가 "페이지 넘기기" 제스처에 표준으로 쓰는 scaledPagingTouchSlop을 그대로 쓴다.
+ * 일반 touchSlop(탭/드래그 구분용)보다 커서 아주 작은 움직임에는 반응하지 않고, 새로
+ * 임의의 px 값을 만들지 않는다.
+ */
+@Composable
+private fun rememberVisitCalendarPagingTouchSlopPx(): Float {
+    val context = LocalContext.current
+    return remember(context) {
+        android.view.ViewConfiguration.get(context).scaledPagingTouchSlop.toFloat()
+    }
+}
+
+/**
+ * MONTH_PICKER/YEAR_PICKER 공용 수직 swipe. 위로 밀면 [onStepUp](▲와 동일), 아래로 당기면
+ * [onStepDown](▼와 동일) — 헤더의 ▲▼ 버튼과 똑같은 handler를 그대로 받아 두 입력 경로가
+ * 분리되지 않게 한다. 방향 판정은 [visitCalendarSwipeStepFor] 순수 함수로 뺐다.
+ */
+@Composable
+private fun rememberVisitCalendarPickerSwipeModifier(
+    onStepUp: () -> Unit,
+    onStepDown: () -> Unit
+): Modifier {
+    val pagingTouchSlop = rememberVisitCalendarPagingTouchSlopPx()
+    val latestStepUp by rememberUpdatedState(onStepUp)
+    val latestStepDown by rememberUpdatedState(onStepDown)
+    return Modifier.pointerInput(pagingTouchSlop) {
+        var accumulatedDrag = 0f
+        detectVerticalDragGestures(
+            onDragStart = { accumulatedDrag = 0f },
+            onDragCancel = { accumulatedDrag = 0f },
+            onDragEnd = {
+                when (visitCalendarSwipeStepFor(accumulatedDrag, pagingTouchSlop)) {
+                    VisitCalendarSwipeStep.NEXT -> latestStepUp()
+                    VisitCalendarSwipeStep.PREVIOUS -> latestStepDown()
+                    VisitCalendarSwipeStep.NONE -> Unit
+                }
+                accumulatedDrag = 0f
+            },
+            onVerticalDrag = { change, dragAmount ->
+                change.consume()
+                accumulatedDrag += dragAmount
+            }
+        )
+    }
+}
+
 /**
  * pickerYear의 1~12월 + 다음 해 1~4월을 4열×4행으로. 다음 해 4칸은 연하게 구분해
  * YEAR_PICKER의 4×4 리듬과 맞춘다. 카드·pill·border 없이 텍스트 중심 grid만 쓴다.
@@ -296,6 +429,7 @@ private val VisitCalendarAdjacentPeriodColor = InkSecondary.copy(alpha = 0.4f)
 private fun VisitCalendarMonthPicker(
     pickerYear: Int,
     displayedMonth: YearMonth,
+    today: YearMonth,
     onMonthSelected: (year: Int, month: Int) -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
@@ -304,22 +438,29 @@ private fun VisitCalendarMonthPicker(
                 row.forEach { (year, month) ->
                     val isNextYear = year != pickerYear
                     val isHighlighted = year == displayedMonth.year && month == displayedMonth.monthValue
-                    Text(
-                        text = month.toString(),
+                    val isCurrent = isCurrentMonthCell(year, month, today)
+                    Box(
                         modifier = Modifier
                             .weight(1f)
                             .height(40.dp)
-                            .clickable(onClick = { onMonthSelected(year, month) })
-                            .wrapContentHeight(Alignment.CenterVertically),
-                        textAlign = TextAlign.Center,
-                        color = when {
-                            isHighlighted -> InkPrimary
-                            isNextYear -> VisitCalendarAdjacentPeriodColor
-                            else -> InkSecondary
-                        },
-                        fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
-                        fontSize = 13.sp
-                    )
+                            .clickable(onClick = { onMonthSelected(year, month) }),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (visitCalendarShowsCurrentMarker(isCurrent, isHighlighted)) {
+                            VisitCalendarCurrentPeriodMarker()
+                        }
+                        Text(
+                            text = month.toString(),
+                            textAlign = TextAlign.Center,
+                            color = when {
+                                isHighlighted -> InkPrimary
+                                isNextYear -> VisitCalendarAdjacentPeriodColor
+                                else -> InkSecondary
+                            },
+                            fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         }
@@ -331,29 +472,41 @@ private fun VisitCalendarMonthPicker(
  * 앞/뒤 6칸은 연하게 구분해 지금 보는 decade가 어디까지인지 알 수 있게 한다.
  */
 @Composable
-private fun VisitCalendarYearPicker(decadeStart: Int, highlightYear: Int?, onYearSelected: (Int) -> Unit) {
+private fun VisitCalendarYearPicker(
+    decadeStart: Int,
+    highlightYear: Int?,
+    today: YearMonth,
+    onYearSelected: (Int) -> Unit
+) {
     Column(Modifier.fillMaxWidth()) {
         yearPickerGridYears(decadeStart).chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth()) {
                 row.forEach { year ->
                     val inDecade = isYearWithinDecade(year, decadeStart)
                     val isHighlighted = year == highlightYear
-                    Text(
-                        text = year.toString(),
+                    val isCurrent = isCurrentYearCell(year, today)
+                    Box(
                         modifier = Modifier
                             .weight(1f)
                             .height(40.dp)
-                            .clickable(onClick = { onYearSelected(year) })
-                            .wrapContentHeight(Alignment.CenterVertically),
-                        textAlign = TextAlign.Center,
-                        color = when {
-                            isHighlighted -> InkPrimary
-                            inDecade -> InkSecondary
-                            else -> VisitCalendarAdjacentPeriodColor
-                        },
-                        fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
-                        fontSize = 12.sp
-                    )
+                            .clickable(onClick = { onYearSelected(year) }),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (visitCalendarShowsCurrentMarker(isCurrent, isHighlighted)) {
+                            VisitCalendarCurrentPeriodMarker()
+                        }
+                        Text(
+                            text = year.toString(),
+                            textAlign = TextAlign.Center,
+                            color = when {
+                                isHighlighted -> InkPrimary
+                                inDecade -> InkSecondary
+                                else -> VisitCalendarAdjacentPeriodColor
+                            },
+                            fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
@@ -534,8 +687,10 @@ internal fun MonthlyVisitCalendar(
     // MONTH_PICKER/YEAR_PICKER가 지금 보여주는 연도. 실제 달력의 displayedMonth와는 분리해서,
     // picker 안에서 연도만 훑어보다가 선택 없이 뒤로 가도 실제 표시 월을 건드리지 않는다.
     var pickerYear by rememberSaveable { mutableStateOf(initialMonth.year) }
-    val isCurrentMonth = displayedMonth == YearMonth.from(today)
+    val todayYearMonth = YearMonth.from(today)
+    val isCurrentMonth = displayedMonth == todayYearMonth
     val decadeStart = decadeStartFor(pickerYear)
+    val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxWidth()) {
         AnimatedContent(
@@ -602,7 +757,10 @@ internal fun MonthlyVisitCalendar(
                                     fontSize = 9.sp,
                                     modifier = Modifier
                                         .padding(top = 1.dp)
-                                        .clickable(onClick = { displayedMonth = YearMonth.from(today) })
+                                        .clickable(onClick = {
+                                            displayedMonth = todayYearMonth
+                                            vibrateVisitCalendarTodayReturn(context)
+                                        })
                                 )
                             }
                         }
@@ -637,24 +795,43 @@ internal fun MonthlyVisitCalendar(
                         }
                     }
                     VisitCalendarNavLevel.MONTH_PICKER -> {
+                        // ▲▼ 버튼과 swipe가 완전히 같은 결과를 내도록 handler를 한 번만 만들어
+                        // 헤더 버튼과 아래 swipe modifier 양쪽에 그대로 넘긴다.
+                        val onStepUp: () -> Unit = { pickerYear++ }
+                        val onStepDown: () -> Unit = { pickerYear-- }
                         VisitCalendarPickerHeaderRow(
                             label = "${pickerYear}년",
                             onLabelClick = { onNavLevelChange(VisitCalendarNavLevel.YEAR_PICKER) },
                             stepUpDescription = "다음 연도",
                             stepDownDescription = "이전 연도",
-                            onStepUp = { pickerYear++ },
-                            onStepDown = { pickerYear-- }
+                            onStepUp = onStepUp,
+                            onStepDown = onStepDown
                         )
+                        // 지금 보는 4×4 창에 오늘이 없으면(다른 연도를 탐색 중이면) 헤더 아래
+                        // 조용한 복귀 링크를 보여준다 — 오늘이 이미 보이면(칸 안 marker로 충분)
+                        // 굳이 중복 표시하지 않는다.
+                        if (!isCurrentMonthVisibleInMonthPicker(pickerYear, todayYearMonth)) {
+                            Text(
+                                text = "오늘 ${todayYearMonth.year}년 ${todayYearMonth.monthValue}월 →",
+                                color = InkSecondary,
+                                fontSize = 9.sp,
+                                modifier = Modifier
+                                    .padding(top = 1.dp)
+                                    .clickable(onClick = { pickerYear = todayYearMonth.year })
+                            )
+                        }
                         VisitCalendarTopOrnament()
                         AnimatedContent(
                             targetState = pickerYear,
                             transitionSpec = { visitCalendarPickerStepTransition() },
-                            modifier = Modifier.fillMaxWidth().clipToBounds(),
+                            modifier = Modifier.fillMaxWidth().clipToBounds()
+                                .then(rememberVisitCalendarPickerSwipeModifier(onStepUp, onStepDown)),
                             label = "visitCalendarMonthPickerYear"
                         ) { year ->
                             VisitCalendarMonthPicker(
                                 pickerYear = year,
                                 displayedMonth = displayedMonth,
+                                today = todayYearMonth,
                                 onMonthSelected = { selectedYear, month ->
                                     displayedMonth = YearMonth.of(selectedYear, month)
                                     onNavLevelChange(VisitCalendarNavLevel.CALENDAR)
@@ -663,24 +840,38 @@ internal fun MonthlyVisitCalendar(
                         }
                     }
                     VisitCalendarNavLevel.YEAR_PICKER -> {
+                        val onStepUp: () -> Unit = { pickerYear += 10 }
+                        val onStepDown: () -> Unit = { pickerYear -= 10 }
                         VisitCalendarPickerHeaderRow(
                             label = "$decadeStart - ${decadeStart + 9}",
                             onLabelClick = null,
                             stepUpDescription = "다음 10년",
                             stepDownDescription = "이전 10년",
-                            onStepUp = { pickerYear += 10 },
-                            onStepDown = { pickerYear -= 10 }
+                            onStepUp = onStepUp,
+                            onStepDown = onStepDown
                         )
+                        if (!isCurrentYearVisibleInYearPicker(decadeStart, todayYearMonth)) {
+                            Text(
+                                text = "오늘 ${todayYearMonth.year}년 →",
+                                color = InkSecondary,
+                                fontSize = 9.sp,
+                                modifier = Modifier
+                                    .padding(top = 1.dp)
+                                    .clickable(onClick = { pickerYear = todayYearMonth.year })
+                            )
+                        }
                         VisitCalendarTopOrnament()
                         AnimatedContent(
                             targetState = decadeStart,
                             transitionSpec = { visitCalendarPickerStepTransition() },
-                            modifier = Modifier.fillMaxWidth().clipToBounds(),
+                            modifier = Modifier.fillMaxWidth().clipToBounds()
+                                .then(rememberVisitCalendarPickerSwipeModifier(onStepUp, onStepDown)),
                             label = "visitCalendarYearPickerDecade"
                         ) { start ->
                             VisitCalendarYearPicker(
                                 decadeStart = start,
                                 highlightYear = highlightedYearFor(start, displayedMonth),
+                                today = todayYearMonth,
                                 onYearSelected = { year ->
                                     pickerYear = year
                                     onNavLevelChange(VisitCalendarNavLevel.MONTH_PICKER)

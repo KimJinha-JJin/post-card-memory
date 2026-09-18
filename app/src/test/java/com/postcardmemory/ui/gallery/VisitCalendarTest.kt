@@ -188,6 +188,75 @@ class VisitCalendarTest {
         assertEquals((1..4).map { 2027 to it }, cells.drop(12))
     }
 
+    // 77일차: MONTH_PICKER/YEAR_PICKER "지금 여기" 현재 위치 marker (선택 상태와 독립).
+
+    @Test fun isCurrentMonthCellMatchesOnlyTheExactYearAndMonthOfToday() {
+        val today = YearMonth.of(2026, 9)
+        assertTrue(isCurrentMonthCell(2026, 9, today))
+        assertFalse(isCurrentMonthCell(2026, 8, today))
+        assertFalse(isCurrentMonthCell(2025, 9, today))
+        assertFalse(isCurrentMonthCell(2027, 1, today))
+    }
+
+    @Test fun isCurrentYearCellMatchesOnlyTheExactYearOfToday() {
+        val today = YearMonth.of(2026, 9)
+        assertTrue(isCurrentYearCell(2026, today))
+        assertFalse(isCurrentYearCell(2025, today))
+        assertFalse(isCurrentYearCell(2027, today))
+    }
+
+    @Test fun currentMarkerNeverStacksWithSelectionHighlightOnTheSameCell() {
+        assertTrue(visitCalendarShowsCurrentMarker(isCurrentPeriod = true, isSelected = false))
+        assertFalse(visitCalendarShowsCurrentMarker(isCurrentPeriod = true, isSelected = true))
+        assertFalse(visitCalendarShowsCurrentMarker(isCurrentPeriod = false, isSelected = false))
+        assertFalse(visitCalendarShowsCurrentMarker(isCurrentPeriod = false, isSelected = true))
+    }
+
+    // 77일차: MONTH_PICKER/YEAR_PICKER 공용 수직 swipe 방향 판정 — ▲/▼ 버튼과 같은 결과를 내야 한다.
+
+    @Test fun visitCalendarSwipeStepForTreatsUpwardSwipeAsNextAndDownwardAsPrevious() {
+        val threshold = 24f
+        // 위로 밀기(누적 drag가 음수) -> 다음 범위 -> onStepUp과 같은 방향(NEXT).
+        assertEquals(VisitCalendarSwipeStep.NEXT, visitCalendarSwipeStepFor(-40f, threshold))
+        assertEquals(VisitCalendarSwipeStep.NEXT, visitCalendarSwipeStepFor(-threshold, threshold))
+        // 아래로 당기기(누적 drag가 양수) -> 이전 범위 -> onStepDown과 같은 방향(PREVIOUS).
+        assertEquals(VisitCalendarSwipeStep.PREVIOUS, visitCalendarSwipeStepFor(40f, threshold))
+        assertEquals(VisitCalendarSwipeStep.PREVIOUS, visitCalendarSwipeStepFor(threshold, threshold))
+        // threshold 미만의 아주 작은 움직임은 아직 swipe로 인정하지 않는다.
+        assertEquals(VisitCalendarSwipeStep.NONE, visitCalendarSwipeStepFor(10f, threshold))
+        assertEquals(VisitCalendarSwipeStep.NONE, visitCalendarSwipeStepFor(-10f, threshold))
+        assertEquals(VisitCalendarSwipeStep.NONE, visitCalendarSwipeStepFor(0f, threshold))
+    }
+
+    // 77일차 후속: 다른 월/연도를 탐색 중이라 오늘이 4×4 창 밖에 있을 때 헤더에 복귀 링크를 띄우는 판정.
+
+    @Test fun isCurrentMonthVisibleInMonthPickerMatchesTheActualGridWindow() {
+        val today = YearMonth.of(2026, 9)
+        // pickerYear가 오늘의 해와 같으면(1~12월 전부 보임) 항상 보임.
+        assertTrue(isCurrentMonthVisibleInMonthPicker(pickerYear = 2026, today = today))
+        // 전년도를 보고 있으면 grid는 pickerYear의 1~12월 + 다음 해 1~4월만 보여준다 ->
+        // pickerYear=2025면 2026년 1~4월만 보이고 9월은 안 보임.
+        assertFalse(isCurrentMonthVisibleInMonthPicker(pickerYear = 2025, today = today))
+        val earlyMonthToday = YearMonth.of(2026, 3)
+        assertTrue(isCurrentMonthVisibleInMonthPicker(pickerYear = 2025, today = earlyMonthToday))
+        assertFalse(isCurrentMonthVisibleInMonthPicker(pickerYear = 2024, today = earlyMonthToday))
+        // 완전히 먼 연도는 당연히 안 보임.
+        assertFalse(isCurrentMonthVisibleInMonthPicker(pickerYear = 2030, today = today))
+    }
+
+    @Test fun isCurrentYearVisibleInYearPickerMatchesTheActualGridWindow() {
+        val today = YearMonth.of(2026, 9)
+        // yearPickerGridYears(2020) = 2018~2033 -> 2026 포함.
+        assertTrue(isCurrentYearVisibleInYearPicker(decadeStart = 2020, today = today))
+        // 경계값: yearPickerGridYears(2013) = 2011~2026 -> 2026이 마지막 칸으로 포함.
+        assertTrue(isCurrentYearVisibleInYearPicker(decadeStart = 2013, today = today))
+        // 다음 decade(2030)의 창은 2028~2043이라 2026이 빠진다.
+        assertFalse(isCurrentYearVisibleInYearPicker(decadeStart = 2030, today = today))
+        // 완전히 먼 decade는 당연히 안 보임.
+        assertFalse(isCurrentYearVisibleInYearPicker(decadeStart = 1990, today = today))
+        assertFalse(isCurrentYearVisibleInYearPicker(decadeStart = 2050, today = today))
+    }
+
     @Test fun visitCalendarPaddedCellsAlwaysFillsSixFullWeeksWithoutInventingRealDates() {
         listOf(
             YearMonth.of(2026, 9), // 평범한 5주

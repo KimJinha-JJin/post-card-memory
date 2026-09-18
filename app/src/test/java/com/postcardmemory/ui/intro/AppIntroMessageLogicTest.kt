@@ -3,6 +3,7 @@ package com.postcardmemory.ui.intro
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,14 +35,16 @@ class AppIntroMessageLogicTest {
 
     @Test
     fun secretMessages_matchFixedSpec() {
+        // 막스 베르스타펜 문구는 이 무작위 풀에 없어야 한다 — 33일차 전용
+        // milestone에서만 나와야 하는 문구다(77일차 버그 수정).
         assertEquals(
             listOf(
-                "뚜뚜뚜두 막스 베르스타펜",
                 "챗지피티야 고마워",
                 "비개발자가 만들었어요"
             ),
             INTRO_SECRET_MESSAGES
         )
+        assertFalse("뚜뚜뚜두 막스 베르스타펜" in INTRO_SECRET_MESSAGES)
     }
 
     @Test
@@ -73,7 +76,7 @@ class AppIntroMessageLogicTest {
     }
 
     @Test
-    fun selectIntroMessage_withFixedSeed_allThreeSecretsEventuallyAppear() {
+    fun selectIntroMessage_withFixedSeed_bothSecretsEventuallyAppear() {
         val random = Random(777)
         val seen = mutableSetOf<String>()
         repeat(50_000) {
@@ -92,6 +95,33 @@ class AppIntroMessageLogicTest {
         repeat(1_000) {
             assertEquals(
                 "뚜뚜뚜두 막스 베르스타펜",
+                selectIntroMessage(random, totalVisitDays = INTRO_MAX_MILESTONE_VISIT_DAY)
+            )
+        }
+    }
+
+    // 77일차: 33일차가 아닌 날에는 확률적으로도 막스 문구가 절대 나오면 안 된다
+    // (실제 발견 당시 총 방문일 6일차에 난입했던 버그의 재현·경계 검증).
+    @Test
+    fun selectIntroMessage_atNonMilestoneVisitDays_neverReturnsMaxVerstappenMessageEvenByRandomRoll() {
+        listOf(0, 6, 32, 34).forEach { totalVisitDays ->
+            val random = Random(totalVisitDays * 31 + 1)
+            repeat(20_000) {
+                assertNotEquals(
+                    "totalVisitDays=$totalVisitDays",
+                    INTRO_MAX_MILESTONE_MESSAGE,
+                    selectIntroMessage(random, totalVisitDays = totalVisitDays)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun selectIntroMessage_at33rdVisit_alwaysReturnsExactlyTheMaxMilestoneMessageConstant() {
+        val random = Random(2)
+        repeat(1_000) {
+            assertEquals(
+                INTRO_MAX_MILESTONE_MESSAGE,
                 selectIntroMessage(random, totalVisitDays = INTRO_MAX_MILESTONE_VISIT_DAY)
             )
         }
