@@ -61,10 +61,13 @@ branch `feature/photo-sticker`, 시작 HEAD `7e7b77f`(local==origin, tracked cle
 
 실제 총 방문일이 33일에 도달하는 날 막스 문구가 실제로 뜨는지는 자동 테스트(33일차 강제 파라미터 통과)로만 확인했고, 실사용 33일차 자연 노출은 아직 미확인 — 방문일이 자연스럽게 33에 도달할 때까지 향후 확인 대상으로 남김(지시서 20절에 명시된 정책과 동일).
 
+## Git
+
+실기기 QA 2라운드 전부 통과 후 사용자가 "커밋하고 푸시해줘"로 명시적으로 요청함. commit `fdbc1b1`(5 files changed), push 완료. 종료 HEAD `fdbc1b1`, local == origin/feature/photo-sticker, tracked working tree clean(기존 무관 untracked `.codex-config.candidate.toml`/`.kotlin/`만 남음, `git fetch` 후 재확인 완료).
+
 ## 다음 행동
 
-1. 실기기 QA 통과 — 사용자의 commit·push 승인 대기 중.
-2. 승인 후 commit·push, push 후 HEAD/local-origin/git status 재확인해 이 HANDOFF에 반영 예정.
+**없음.** 77일차(달력 폴리싱·오늘 복귀 링크 후속·Intro 막스 버그 수정) 전체 완료, commit·push까지 끝남. 유일하게 남은 항목은 "자연 QA로 남긴 항목"의 실제 33일차 자연 노출 확인뿐 — 방문일이 자연스럽게 33에 도달할 때 다음 세션에서 확인하면 됨.
 
 ---
 
