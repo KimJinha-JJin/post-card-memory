@@ -1,3 +1,48 @@
+# HANDOFF — 77일차 추가: 달력 현재연도 색상 + 레트로 탁상시계
+
+확인일: 2026-09-18. 수동 표준 모드. 77일차 본작업(`baef7a0`) 이후 사용자가 "77일차 추가 수정 작업지시서"(A. 현재 연도에 해당하는 달력 항목 색상 보강, B. 메인 갤러리 상단 레트로 디지털 탁상시계 추가)를 붙여넣어 피코(Claude Code)가 구현했어. **세션 도중 PC 강제종료로 중단됨** — 새 세션에서 branch/HEAD/git status/git diff/HANDOFF를 먼저 확인하고, 크래시난 세션의 로그 파일을 직접 읽어 이 작업이 실제로 지시받은 범위였는지(특히 A항목이 사용자 기억에 없다고 한 부분) 대조 검증한 뒤 이어서 진행했어. **실기기 QA 전부 통과(A·B 및 시계 후속 폴리싱 2건 포함), 사용자가 "커밋하고 푸시해줘"로 명시적으로 요청.**
+
+## 크래시 정황
+
+이전 세션(`4372dc55-5a9a-479a-b94f-a317ff0a7317.jsonl`, 종료 20:33)은 A·B 구현을 마치고 compile(BUILD SUCCESSFUL)·전체 unit test(677건 전부 통과)·`git diff --check`까지 자동 검증을 끝낸 직후, 시계 v2(폭 축소판) 실기기 QA를 요청하는 `AskUserQuestion` 시점에 끊겼어(로그상 `"User rejected tool use"`/`"Request interrupted by user for tool use"`). working tree에는 그 시점까지의 변경이 그대로 남아 있었고 git lock·gradle daemon 잔존 등 셸 중단 흔적은 없었어 — 파일 내용은 완결돼 있었고 미완성 코드는 없었음.
+
+## 작업 A — 방문 달력 현재 연도 색상
+
+- `VisitCalendarDrawer.kt`에 `VisitCalendarMonthCellEmphasis`/`VisitCalendarYearCellEmphasis` enum과 순수 판정 함수(`visitCalendarMonthCellEmphasisFor`/`visitCalendarYearCellEmphasisFor`) 추가.
+- 우선순위: 선택 > 실제 현재 월(연도) > 현재 연도 소속 월 > 다음 해(YEAR_PICKER는 decade 밖) > 일반. 선택과 실제 현재가 같으면 marker 겹침 없이 기존 `visitCalendarShowsCurrentMarker` 원칙 유지.
+- 새 색상 팔레트 없이 기존 오늘 색을 재사용: `VisitCalendarCurrentYearMonthTintColor = VisitFillColorToday.copy(alpha = 0.5f)`, 실제 현재 월/연도는 `VisitFillColorToday` 그대로.
+- 연한 원(marker)=정확한 위치, 색=현재 연도 소속 시간대로 의미를 분리(코드 주석에 명시).
+- `VisitCalendarTest.kt`에 emphasis 우선순위 테스트 4건 추가(선택 우선, 다음 해 버퍼 칸에 실제 현재 월이 겹칠 때의 우선순위 포함).
+
+## 작업 B — 메인 갤러리 레트로 탁상시계
+
+- `GalleryRetroClock.kt` 신규: `GalleryRetroClock` composable을 `GalleryScreen.kt` 타이틀 Row 아래 별도 줄에 연결.
+- 시간: hh:mm(큰 7세그먼트, Canvas `Path`로 직접 그림, 새 폰트 의존성 없음) / ss(작은 7세그먼트) / AM·PM(절제된 보조 텍스트) 한 가로선 정렬. 날짜는 `2026 SEP 18 FRI` 형식 한 줄, 영문 약어는 화면용이고 접근성 설명(`retroClockAccessibilityDescriptionFor`)은 자연스러운 한국어로 별도 제공.
+- 1초 갱신은 `GalleryRetroClock` 내부 `remember`+`LaunchedEffect`(다음 초 경계까지 delay)로만 처리 — 갤러리 화면 전체 재구성 없음.
+- 커피잔은 기존 아이콘과 같은 `ImageVector.Builder` stroke 패턴으로 신규 제작, 장식 없음(몸체+손잡이+김 두 줄만).
+- **후속 폴리싱 1 (폭)**: 초기 v1이 배너처럼 화면을 거의 다 먹는다는 피드백 → v2로 화면 폭의 58% 고정 비율 적용. 이후 "그래도 억지로 당긴 판넬처럼 보인다"는 추가 피드백을 받아 **v3**에서 고정 비율을 완전히 제거하고 `IntrinsicSize.Min`으로 내부 hh:mm/ss/PM·날짜 중 더 넓은 줄의 실제 글자 폭에만 바디가 맞춰 닫히게 함(안쪽 `HorizontalDivider`의 기본 `fillMaxWidth()`가 상위 화면 폭까지 다시 늘어나는 것을 이 방식으로 차단). 가로 정렬은 `Alignment.CenterHorizontally`로 통일.
+- **후속 폴리싱 2 (상하 위치)**: 콘텐츠가 시각적으로 위로 치우쳐 보인다는 피드백 → 바디 전체 높이(외곽 크림 프레임 4/4dp + 내부 LCD 패널 7/7dp, 합계 22dp)는 그대로 두고 상/하 배분만 프레임 6/2dp·패널 13/1dp로 재분배해 콘텐츠를 8dp 아래로 이동. 요소 사이 `Spacer(4dp/3dp)` 간격, 가로 정렬, 바디 크기, 커피잔은 전혀 안 건드림.
+
+## 자동 검증
+
+- `compileDebugKotlin`: 크래시 직전 1회, 이번 세션에서 v3(폭)·상하 위치 수정 각 1회씩 총 2회 추가 재실행 — 전부 `BUILD SUCCESSFUL`, 신규 경고 없음(기존 Migration/deprecated 경고만).
+- 전체 unit test: 크래시 직전 677건 전부 통과 확인(신규 `GalleryRetroClockTest` 13건 포함). 이후 수정은 레이아웃 modifier·padding 값만 바꾼 것이라 순수 함수·로직 변경 없음 — 전체 재실행하지 않음(변경 영향에 비례한 검증).
+- `git diff --check`: 크래시 직전 통과(기존 CRLF 경고만).
+
+## 실기기 QA
+
+전부 통과. A(달력 현재연도 색상)·B(시계 기본형) QA와, 시계 후속 폴리싱 2건(폭 비율, 상하 중심)에 대해 각각 실기기로 직접 확인받음("실기기 확인완료!").
+
+## Git
+
+실기기 QA 전부 통과 후 사용자가 "커밋하고 푸시해줘"로 명시적으로 요청함.
+
+## 다음 행동
+
+**없음.** 77일차 추가 작업(A·B, 시계 후속 폴리싱 2건) 전체 완료.
+
+---
+
 # HANDOFF — 77일차: 방문 달력 폴리싱 + Intro 막스 33일차 조건 복구
 
 확인일: 2026-09-18. 수동 표준 모드. 사용자 제공 77일차 지시서에 따라 피코(Claude Code)가 조사→구현→자동 검증→실기기 QA 순으로 진행했어. 지시서 범위(달력 현재 위치 표시·swipe 손맛, Intro 막스 문구 버그)를 끝낸 뒤, 같은 세션에서 사용자가 실기기로 확인하다가 작은 후속 요청("다른 월/연도 탐색 중엔 오늘 marker가 안 보이니 상단에 복귀 링크를 달아달라")을 추가로 반영했어. **실기기 QA 전부 통과. commit·push는 아직 요청받지 않아 미실행.**

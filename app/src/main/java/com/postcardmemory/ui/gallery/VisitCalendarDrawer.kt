@@ -230,6 +230,41 @@ internal fun isCurrentYearCell(year: Int, today: YearMonth): Boolean = year == t
 internal fun visitCalendarShowsCurrentMarker(isCurrentPeriod: Boolean, isSelected: Boolean): Boolean =
     isCurrentPeriod && !isSelected
 
+/**
+ * MONTH_PICKER 한 칸의 색상 우선순위: 선택 > 실제 현재 월 > 현재 연도 소속 월(다음 해 칸은
+ * 제외) > 다음 해(연한 구분) > 일반. 다음 해 버퍼 칸이 우연히 오늘의 달과 겹치는 경우(예:
+ * pickerYear가 작년이라 다음 해 1~4월 칸에 오늘이 있을 때)에도 "실제 현재 월"이 "다음 해라 연하게"
+ * 규칙보다 우선한다 — 다른 해를 보여준다는 시각적 구분보다 "오늘이 여기 있다"는 사실이 더 중요하다.
+ */
+internal enum class VisitCalendarMonthCellEmphasis { SELECTED, CURRENT_MONTH, CURRENT_YEAR, ADJACENT_YEAR, NORMAL }
+
+internal fun visitCalendarMonthCellEmphasisFor(
+    isSelected: Boolean,
+    isCurrentMonth: Boolean,
+    isAdjacentYearCell: Boolean,
+    isCurrentYearBeingViewed: Boolean
+): VisitCalendarMonthCellEmphasis = when {
+    isSelected -> VisitCalendarMonthCellEmphasis.SELECTED
+    isCurrentMonth -> VisitCalendarMonthCellEmphasis.CURRENT_MONTH
+    isAdjacentYearCell -> VisitCalendarMonthCellEmphasis.ADJACENT_YEAR
+    isCurrentYearBeingViewed -> VisitCalendarMonthCellEmphasis.CURRENT_YEAR
+    else -> VisitCalendarMonthCellEmphasis.NORMAL
+}
+
+/** YEAR_PICKER 한 칸의 색상 우선순위: 선택 > 실제 현재 연도 > decade 안 > decade 밖(연한 구분). */
+internal enum class VisitCalendarYearCellEmphasis { SELECTED, CURRENT_YEAR, IN_DECADE, OUT_OF_DECADE }
+
+internal fun visitCalendarYearCellEmphasisFor(
+    isSelected: Boolean,
+    isCurrentYear: Boolean,
+    isInDecade: Boolean
+): VisitCalendarYearCellEmphasis = when {
+    isSelected -> VisitCalendarYearCellEmphasis.SELECTED
+    isCurrentYear -> VisitCalendarYearCellEmphasis.CURRENT_YEAR
+    isInDecade -> VisitCalendarYearCellEmphasis.IN_DECADE
+    else -> VisitCalendarYearCellEmphasis.OUT_OF_DECADE
+}
+
 /** MONTH_PICKER/YEAR_PICKER 수직 swipe가 어느 방향으로 이동할지 결정하는 순수 판정. */
 internal enum class VisitCalendarSwipeStep { NEXT, PREVIOUS, NONE }
 
@@ -343,6 +378,12 @@ private val VisitCalendarAdjacentPeriodColor = InkSecondary.copy(alpha = 0.4f)
 private val VisitCalendarCurrentPeriodMarkerColor = InkSecondary.copy(alpha = 0.16f)
 private val VisitCalendarCurrentPeriodMarkerSize = 26.dp
 
+// 연한 원(marker)은 "정확한 위치", 색상은 "현재 연도에 속한 시간대"라는 다른 의미를 맡는다.
+// 실제 현재 월/연도에는 방문일 marker와 같은 계열(VisitFillColorToday, "오늘" 테마)을 그대로
+// 재사용해 또렷하게, MONTH_PICKER에서 "올해 전체"를 은근하게 알릴 때는 같은 색을 훨씬 낮은
+// alpha로만 써서 실제 현재 월보다 한 단계 약하게 만든다. 새 색상 팔레트를 추가하지 않는다.
+private val VisitCalendarCurrentYearMonthTintColor = VisitFillColorToday.copy(alpha = 0.5f)
+
 @Composable
 private fun VisitCalendarCurrentPeriodMarker() {
     Box(
@@ -439,6 +480,12 @@ private fun VisitCalendarMonthPicker(
                     val isNextYear = year != pickerYear
                     val isHighlighted = year == displayedMonth.year && month == displayedMonth.monthValue
                     val isCurrent = isCurrentMonthCell(year, month, today)
+                    val emphasis = visitCalendarMonthCellEmphasisFor(
+                        isSelected = isHighlighted,
+                        isCurrentMonth = isCurrent,
+                        isAdjacentYearCell = isNextYear,
+                        isCurrentYearBeingViewed = pickerYear == today.year
+                    )
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -452,10 +499,12 @@ private fun VisitCalendarMonthPicker(
                         Text(
                             text = month.toString(),
                             textAlign = TextAlign.Center,
-                            color = when {
-                                isHighlighted -> InkPrimary
-                                isNextYear -> VisitCalendarAdjacentPeriodColor
-                                else -> InkSecondary
+                            color = when (emphasis) {
+                                VisitCalendarMonthCellEmphasis.SELECTED -> InkPrimary
+                                VisitCalendarMonthCellEmphasis.CURRENT_MONTH -> VisitFillColorToday
+                                VisitCalendarMonthCellEmphasis.CURRENT_YEAR -> VisitCalendarCurrentYearMonthTintColor
+                                VisitCalendarMonthCellEmphasis.ADJACENT_YEAR -> VisitCalendarAdjacentPeriodColor
+                                VisitCalendarMonthCellEmphasis.NORMAL -> InkSecondary
                             },
                             fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
                             fontSize = 13.sp
@@ -485,6 +534,11 @@ private fun VisitCalendarYearPicker(
                     val inDecade = isYearWithinDecade(year, decadeStart)
                     val isHighlighted = year == highlightYear
                     val isCurrent = isCurrentYearCell(year, today)
+                    val emphasis = visitCalendarYearCellEmphasisFor(
+                        isSelected = isHighlighted,
+                        isCurrentYear = isCurrent,
+                        isInDecade = inDecade
+                    )
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -498,10 +552,11 @@ private fun VisitCalendarYearPicker(
                         Text(
                             text = year.toString(),
                             textAlign = TextAlign.Center,
-                            color = when {
-                                isHighlighted -> InkPrimary
-                                inDecade -> InkSecondary
-                                else -> VisitCalendarAdjacentPeriodColor
+                            color = when (emphasis) {
+                                VisitCalendarYearCellEmphasis.SELECTED -> InkPrimary
+                                VisitCalendarYearCellEmphasis.CURRENT_YEAR -> VisitFillColorToday
+                                VisitCalendarYearCellEmphasis.IN_DECADE -> InkSecondary
+                                VisitCalendarYearCellEmphasis.OUT_OF_DECADE -> VisitCalendarAdjacentPeriodColor
                             },
                             fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
                             fontSize = 12.sp

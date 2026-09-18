@@ -673,6 +673,15 @@ fun GalleryScreen(
                         }
                     }
 
+                    // 작은 레트로 탁상시계 + 커피잔. 검색·정렬 아이콘이 있는 타이틀 Row와
+                    // 겹치지 않게 그 아래 별도 줄에, 화면 폭을 다 차지하지 않고 시작 쪽에
+                    // 조용히 둔다(시계 자체 폭은 GalleryRetroClock 내부에서 58%로 제한).
+                    GalleryRetroClock(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
+
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
             }

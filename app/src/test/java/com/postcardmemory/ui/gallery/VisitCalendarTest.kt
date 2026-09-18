@@ -257,6 +257,69 @@ class VisitCalendarTest {
         assertFalse(isCurrentYearVisibleInYearPicker(decadeStart = 2050, today = today))
     }
 
+    // 77일차 추가: 연한 원(marker)="정확한 위치", 색상="현재 연도에 속한 시간대" — 서로 다른
+    // 의미의 색상 우선순위(선택 > 실제 현재 월 > 현재 연도 소속 월 > 다음 해 > 일반).
+
+    @Test fun monthCellEmphasisPrioritizesSelectedOverEverythingElse() {
+        assertEquals(
+            VisitCalendarMonthCellEmphasis.SELECTED,
+            visitCalendarMonthCellEmphasisFor(
+                isSelected = true,
+                isCurrentMonth = true,
+                isAdjacentYearCell = true,
+                isCurrentYearBeingViewed = true
+            )
+        )
+    }
+
+    @Test fun monthCellEmphasisPrioritizesActualCurrentMonthOverAdjacentYearDimming() {
+        // 다음 해 버퍼 칸(pickerYear+1의 1~4월)에 우연히 오늘이 걸리는 경우에도
+        // "실제 현재 월"이 "다음 해라 연하게" 규칙보다 우선해야 한다.
+        assertEquals(
+            VisitCalendarMonthCellEmphasis.CURRENT_MONTH,
+            visitCalendarMonthCellEmphasisFor(
+                isSelected = false,
+                isCurrentMonth = true,
+                isAdjacentYearCell = true,
+                isCurrentYearBeingViewed = false
+            )
+        )
+    }
+
+    @Test fun monthCellEmphasisFallsBackThroughAdjacentYearThenCurrentYearThenNormal() {
+        assertEquals(
+            VisitCalendarMonthCellEmphasis.ADJACENT_YEAR,
+            visitCalendarMonthCellEmphasisFor(false, false, isAdjacentYearCell = true, isCurrentYearBeingViewed = true)
+        )
+        assertEquals(
+            VisitCalendarMonthCellEmphasis.CURRENT_YEAR,
+            visitCalendarMonthCellEmphasisFor(false, false, isAdjacentYearCell = false, isCurrentYearBeingViewed = true)
+        )
+        assertEquals(
+            VisitCalendarMonthCellEmphasis.NORMAL,
+            visitCalendarMonthCellEmphasisFor(false, false, isAdjacentYearCell = false, isCurrentYearBeingViewed = false)
+        )
+    }
+
+    @Test fun yearCellEmphasisPrioritizesSelectedThenCurrentYearThenDecadeMembership() {
+        assertEquals(
+            VisitCalendarYearCellEmphasis.SELECTED,
+            visitCalendarYearCellEmphasisFor(isSelected = true, isCurrentYear = true, isInDecade = true)
+        )
+        assertEquals(
+            VisitCalendarYearCellEmphasis.CURRENT_YEAR,
+            visitCalendarYearCellEmphasisFor(isSelected = false, isCurrentYear = true, isInDecade = false)
+        )
+        assertEquals(
+            VisitCalendarYearCellEmphasis.IN_DECADE,
+            visitCalendarYearCellEmphasisFor(isSelected = false, isCurrentYear = false, isInDecade = true)
+        )
+        assertEquals(
+            VisitCalendarYearCellEmphasis.OUT_OF_DECADE,
+            visitCalendarYearCellEmphasisFor(isSelected = false, isCurrentYear = false, isInDecade = false)
+        )
+    }
+
     @Test fun visitCalendarPaddedCellsAlwaysFillsSixFullWeeksWithoutInventingRealDates() {
         listOf(
             YearMonth.of(2026, 9), // 평범한 5주

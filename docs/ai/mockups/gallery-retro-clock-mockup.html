@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>레트로 탁상시계 목업 — 77일차 추가 v2</title>
+<style>
+  :root {
+    --paper-canvas: #F4ECDE;
+    --paper-tray: #E8DCC6;
+    --paper-divider: #DBCBB0;
+    --ink-primary: #1A1324;
+    --ink-secondary: #5B5046;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 16px;
+    background: #ddd;
+    font-family: -apple-system, "Noto Sans KR", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+  }
+  h2 { font-size: 14px; color: #333; margin: 0 0 8px; }
+  .note { font-size: 12px; color: #666; margin: 0 0 12px; max-width: 390px; line-height: 1.5; }
+  .phone {
+    width: 390px;
+    background: var(--paper-canvas);
+    border: 1px solid #999;
+  }
+  .top-title-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    gap: 8px;
+  }
+  .top-title-row .menu { width: 20px; height: 20px; color: var(--ink-secondary); }
+  .top-title-row .title { font-size: 18px; font-weight: 600; color: var(--ink-primary); flex: 1; }
+  .top-title-row .icon { width: 20px; height: 20px; color: var(--ink-secondary); }
+  .divider { height: 1px; background: var(--paper-divider); }
+
+  /* ── 시계+커피잔 행 ── */
+  .shelf-row {
+    display: flex;
+    align-items: flex-end;
+    padding: 6px 16px 10px;
+    gap: 10px;
+  }
+  .shelf-row.with-line { border-bottom: none; }
+  .shelf-line-wrap { padding: 0 16px 10px; }
+  .shelf-line { height: 1px; background: var(--paper-divider); opacity: 0.6; margin-top: 2px; }
+
+  /* ── 시계 바디 ── */
+  .clock {
+    width: 60%;
+    background: var(--paper-tray);
+    border-radius: 12px;
+    padding: 3px;
+  }
+  .clock-screen {
+    background: rgba(91, 80, 70, 0.10); /* InkSecondary 10% alpha over PaperTray, production과 동일 */
+    border-radius: 9px;
+    padding: 7px 9px 6px;
+  }
+  .time-row {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+  }
+  .ampm {
+    margin-left: 6px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--ink-secondary);
+    font-weight: 600;
+    align-self: center;
+  }
+  .ampm.digital { font-size: 9px; }
+  .screen-divider {
+    height: 0.5px;
+    background: var(--paper-divider);
+    margin: 4px 0 3px;
+  }
+  .date-row {
+    font-size: 9px;
+    letter-spacing: 0.6px;
+    color: var(--ink-secondary);
+    font-family: "Courier New", monospace;
+    text-align: left;
+  }
+
+  /* ── 커피잔 ── */
+  .coffee {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    color: var(--ink-secondary);
+  }
+
+  /* ══════════════ 7세그먼트 숫자 ══════════════ */
+  .digits { display: flex; align-items: baseline; }
+  .digit-group { display: flex; }
+  .digit {
+    position: relative;
+    --dw: 15px;
+    --dh: 26px;
+    --dt: 3.4px;
+    width: var(--dw);
+    height: var(--dh);
+    margin-right: 1.6px;
+  }
+  .digit.small { --dw: 10px; --dh: 17px; --dt: 2.4px; }
+  .seg {
+    position: absolute;
+    background: var(--ink-primary);
+  }
+  .seg.off { background: rgba(26, 19, 36, 0.09); } /* 꺼진 세그먼트도 아주 흐리게 남겨 진짜 LCD 유령상 느낌 */
+
+  .seg-h { left: calc(var(--dt) * 0.45); width: calc(var(--dw) - var(--dt) * 0.9); height: var(--dt);
+    clip-path: polygon(0% 50%, 22% 0%, 78% 0%, 100% 50%, 78% 100%, 22% 100%); }
+  .seg-a { top: 0; }
+  .seg-g { top: calc(50% - var(--dt) / 2); }
+  .seg-d { bottom: 0; }
+
+  .seg-v { width: var(--dt); height: calc(50% - var(--dt) * 0.68);
+    clip-path: polygon(50% 0%, 100% 22%, 100% 78%, 50% 100%, 0% 78%, 0% 22%); }
+  .seg-f { left: 0; top: calc(var(--dt) * 0.34); }
+  .seg-b { right: 0; top: calc(var(--dt) * 0.34); }
+  .seg-e { left: 0; bottom: calc(var(--dt) * 0.34); }
+  .seg-c { right: 0; bottom: calc(var(--dt) * 0.34); }
+
+  .colon { display: flex; flex-direction: column; justify-content: center; align-self: center; height: 26px; margin: 0 2px; gap: 5px; }
+  .colon.small { height: 17px; gap: 3px; }
+  .colon-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-primary); }
+  .colon.small .colon-dot { width: 2px; height: 2px; }
+
+  .variant-label { display:inline-block; background:#333; color:#fff; font-size:11px; padding:2px 8px; border-radius:4px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div>
+  <span class="variant-label">확정안 — 얇은 선반선 공유 + PM은 ss 옆 고정 간격(우측 끝 정렬 제거)</span>
+  <div class="phone">
+    <div class="top-title-row">
+      <svg class="menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <div class="title">포스트카드 메모리</div>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <div class="shelf-line-wrap">
+      <div class="shelf-row with-line">
+        <div class="clock" id="clockB"></div>
+        <svg class="coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M4 9 h13 v6 a5 5 0 0 1 -5 5 h-3 a5 5 0 0 1 -5 -5 z"/>
+          <path d="M17 10.5 h2.2 a2.3 2.3 0 0 1 0 4.6 h-2.2" />
+          <path d="M8.3 6 q1.4 -1.6 0 -3.2 q-1.4 -1.6 0 -3.2" opacity="0.5" transform="translate(0,3.2)"/>
+          <path d="M12 6 q1.4 -1.6 0 -3.2 q-1.4 -1.6 0 -3.2" opacity="0.5" transform="translate(0,3.2)"/>
+        </svg>
+      </div>
+      <div class="shelf-line"></div>
+    </div>
+    <div class="divider"></div>
+  </div>
+</div>
+
+<div>
+  <span class="variant-label">숫자 클로즈업 (0~9, 큰 크기)</span>
+  <div class="phone" style="padding:16px; display:flex; justify-content:center;">
+    <div class="digit-group" id="digitSample"></div>
+  </div>
+</div>
+
+<script>
+// 7세그 on/off 패턴: a,b,c,d,e,f,g 순서
+const SEG = {
+  '0': [1,1,1,1,1,1,0],
+  '1': [0,1,1,0,0,0,0],
+  '2': [1,1,0,1,1,0,1],
+  '3': [1,1,1,1,0,0,1],
+  '4': [0,1,1,0,0,1,1],
+  '5': [1,0,1,1,0,1,1],
+  '6': [1,0,1,1,1,1,1],
+  '7': [1,1,1,0,0,0,0],
+  '8': [1,1,1,1,1,1,1],
+  '9': [1,1,1,1,0,1,1],
+};
+const NAMES = ['a','b','c','d','e','f','g'];
+
+function buildDigit(ch, small) {
+  const wrap = document.createElement('div');
+  wrap.className = 'digit' + (small ? ' small' : '');
+  const pattern = SEG[ch] || SEG['8'];
+  NAMES.forEach((name, i) => {
+    const seg = document.createElement('div');
+    const isHoriz = (name === 'a' || name === 'g' || name === 'd');
+    seg.className = 'seg ' + (isHoriz ? 'seg-h' : 'seg-v') + ' seg-' + name + (pattern[i] ? '' : ' off');
+    wrap.appendChild(seg);
+  });
+  return wrap;
+}
+
+function buildColon(small) {
+  const c = document.createElement('div');
+  c.className = 'colon' + (small ? ' small' : '');
+  c.innerHTML = '<div class="colon-dot"></div><div class="colon-dot"></div>';
+  return c;
+}
+
+function renderClock(elId) {
+  const clock = document.getElementById(elId);
+  clock.innerHTML = '<div class="clock-screen"></div>';
+  const screen = clock.querySelector('.clock-screen');
+
+  const timeRow = document.createElement('div');
+  timeRow.className = 'time-row';
+
+  const hh = document.createElement('div'); hh.className = 'digits';
+  hh.appendChild(buildDigit('0', false));
+  hh.appendChild(buildDigit('5', false));
+  hh.appendChild(buildColon(false));
+  hh.appendChild(buildDigit('4', false));
+  hh.appendChild(buildDigit('9', false));
+
+  const ss = document.createElement('div'); ss.className = 'digits';
+  ss.style.marginLeft = '6px';
+  ss.appendChild(buildDigit('3', true));
+  ss.appendChild(buildDigit('2', true));
+
+  const ampm = document.createElement('div');
+  ampm.className = 'ampm digital';
+  ampm.textContent = 'PM';
+
+  timeRow.appendChild(hh);
+  timeRow.appendChild(ss);
+  timeRow.appendChild(ampm);
+
+  const divider = document.createElement('div'); divider.className = 'screen-divider';
+  const dateRow = document.createElement('div'); dateRow.className = 'date-row';
+  dateRow.textContent = '2026 SEP 18 FRI';
+
+  screen.appendChild(timeRow);
+  screen.appendChild(divider);
+  screen.appendChild(dateRow);
+}
+
+renderClock('clockB');
+
+const sample = document.getElementById('digitSample');
+sample.style.transform = 'scale(2.4)';
+sample.style.transformOrigin = 'left center';
+'0123456789'.split('').forEach(ch => sample.appendChild(buildDigit(ch, false)));
+</script>
+
+</body>
+</html>
