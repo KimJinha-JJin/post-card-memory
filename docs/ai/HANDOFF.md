@@ -202,9 +202,12 @@ production 수정 12 + 신설 6:
 
 ## Git 상태
 
-- commit: **미실행** (사용자 승인 대기)
-- push: **미실행** (사용자 승인 대기)
-- 종료 시점 HEAD `a0352b6`, local == origin, 위 변경은 전부 working tree에만 있음
+사용자가 실기기 QA 통과("실기기 확인완료!") 후 commit·push를 요청해 실행했다.
+
+- commit: **완료** — `3300edb` "Harden draft, exit-save, group-open, calendar, image and path safety" (31 파일, +1798 / −128). `git add .`/`-A` 없이 31개 파일을 명시 stage했고, stage 직후 unstaged diff가 비어 있음을 확인해 staged 내용이 작업트리와 정확히 일치함을 검증했다.
+- push: **완료** — `origin/feature/photo-sticker` (`a0352b6..3300edb`). push 후 `git fetch` → `git rev-list --left-right --count` 결과 `0 0`(local == origin).
+- 기존 무관 untracked(`.codex-config.candidate.toml`, `.kotlin/`)는 stage하지 않았고 그대로 남아 있다.
+- 이 Git 절 갱신 자체는 78일차와 동일한 관례에 따라 별도 후속 commit으로 기록한다.
 
 ## 후속 후보 (승인된 작업 아님)
 
