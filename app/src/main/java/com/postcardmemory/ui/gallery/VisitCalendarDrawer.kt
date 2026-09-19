@@ -91,12 +91,25 @@ private val WeekendSunday = SealInkRed
 private val VisitCalendarOrnamentColor = InkSecondary.copy(alpha = 0.29f)
 private val VisitCalendarBottomOrnamentColor = InkSecondary.copy(alpha = 0.39f)
 
-/** 공휴일 데이터가 없어 요일 기본색만 적용한다. 대체공휴일 포함 지원은 STOP 상태다. */
-internal fun visitDateColor(date: LocalDate): Color = when (date.dayOfWeek) {
+/**
+ * 요일 하나에 대한 기본 글자색. 날짜 칸([visitDateColor])과 상단 요일 머리글이 주말색을
+ * 따로 판정하다 어긋나지 않도록 한 곳에서만 계산한다.
+ */
+internal fun visitDayOfWeekColor(dayOfWeek: DayOfWeek): Color = when (dayOfWeek) {
     DayOfWeek.SATURDAY -> WeekendSaturday
     DayOfWeek.SUNDAY -> WeekendSunday
     else -> InkSecondary
 }
+
+/** 공휴일 데이터가 없어 요일 기본색만 적용한다. 대체공휴일 포함 지원은 STOP 상태다. */
+internal fun visitDateColor(date: LocalDate): Color = visitDayOfWeekColor(date.dayOfWeek)
+
+// 일요일 시작 7칸 머리글. 매 recomposition마다 새로 만들 이유가 없어 파일 상수로 둔다.
+private val VISIT_CALENDAR_WEEKDAY_HEADERS = listOf(
+    "일" to DayOfWeek.SUNDAY, "월" to DayOfWeek.MONDAY, "화" to DayOfWeek.TUESDAY,
+    "수" to DayOfWeek.WEDNESDAY, "목" to DayOfWeek.THURSDAY, "금" to DayOfWeek.FRIDAY,
+    "토" to DayOfWeek.SATURDAY
+)
 
 // 방문일 채움 색. 지시된 정확한 값(#16A7A1)을 그대로 쓴다 — 요일색과 달리 무디게 낮추지 않는다.
 internal val VisitFillColor = Color(0xFF16A7A1)
@@ -367,6 +380,24 @@ private fun VisitCalendarPickerHeaderRow(
             )
         }
     }
+}
+
+/**
+ * picker 창 밖에 오늘이 있을 때만 헤더 아래에 뜨는 조용한 복귀 링크. 탭하면 보기 창만
+ * 오늘이 포함되게 옮길 뿐 navLevel도 실제 선택(`displayedMonth`)도 바꾸지 않는다.
+ * CALENDAR 레벨의 "오늘"(표시 월 자체를 되돌리고 햅틱까지 울림)과는 의미가 다른 동작이라,
+ * 생김새가 같아도 두 handler를 하나로 합치지 않는다.
+ */
+@Composable
+private fun VisitCalendarPickerTodayReturnLink(label: String, onReturnToToday: () -> Unit) {
+    Text(
+        text = label,
+        color = InkSecondary,
+        fontSize = 9.sp,
+        modifier = Modifier
+            .padding(top = 1.dp)
+            .clickable(onClick = onReturnToToday)
+    )
 }
 
 // 다음 해로 넘어가는 4칸을 구분하는 정도의 낮은 대비. 새 회색 토큰을 추가하지 않고 기존
@@ -731,11 +762,15 @@ private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>
 internal fun MonthlyVisitCalendar(
     visitedEpochDays: Set<Long>,
     totalVisitDays: Int? = null,
-    today: LocalDate = remember { LocalDate.now() },
+    today: LocalDate = rememberTodayDate(),
     initialMonth: YearMonth = YearMonth.from(today),
     navLevel: VisitCalendarNavLevel = VisitCalendarNavLevel.CALENDAR,
     onNavLevelChange: (VisitCalendarNavLevel) -> Unit = {}
 ) {
+    // [initialMonth]는 이름 그대로 "처음 열 때의 월"이다. rememberSaveable에 key를 주지
+    // 않는 것이 의도인데, 자정을 넘겨 [today]가 바뀌어도 사용자가 보고 있던 월이 현재
+    // 월로 끌려가면 안 되기 때문이다 — 자정에 갱신되는 건 "현재 날짜 기준"(marker·색·
+    // 복귀 링크)뿐이고 탐색 위치는 그대로 둔다. key를 추가하면 그 원칙이 깨진다.
     var displayedMonth by rememberSaveable(stateSaver = VisitCalendarMonthSaver) {
         mutableStateOf(initialMonth)
     }
@@ -821,19 +856,11 @@ internal fun MonthlyVisitCalendar(
                         }
                         VisitCalendarTopOrnament()
                         Row(Modifier.fillMaxWidth()) {
-                            listOf(
-                                "일" to DayOfWeek.SUNDAY, "월" to DayOfWeek.MONDAY, "화" to DayOfWeek.TUESDAY,
-                                "수" to DayOfWeek.WEDNESDAY, "목" to DayOfWeek.THURSDAY, "금" to DayOfWeek.FRIDAY,
-                                "토" to DayOfWeek.SATURDAY
-                            ).forEach { (label, dow) ->
+                            VISIT_CALENDAR_WEEKDAY_HEADERS.forEach { (label, dow) ->
                                 Text(
                                     label,
                                     Modifier.weight(1f),
-                                    color = when (dow) {
-                                        DayOfWeek.SUNDAY -> WeekendSunday
-                                        DayOfWeek.SATURDAY -> WeekendSaturday
-                                        else -> InkSecondary
-                                    },
+                                    color = visitDayOfWeekColor(dow),
                                     fontSize = 10.sp,
                                     textAlign = TextAlign.Center
                                 )
@@ -866,13 +893,9 @@ internal fun MonthlyVisitCalendar(
                         // 조용한 복귀 링크를 보여준다 — 오늘이 이미 보이면(칸 안 marker로 충분)
                         // 굳이 중복 표시하지 않는다.
                         if (!isCurrentMonthVisibleInMonthPicker(pickerYear, todayYearMonth)) {
-                            Text(
-                                text = "오늘 ${todayYearMonth.year}년 ${todayYearMonth.monthValue}월 →",
-                                color = InkSecondary,
-                                fontSize = 9.sp,
-                                modifier = Modifier
-                                    .padding(top = 1.dp)
-                                    .clickable(onClick = { pickerYear = todayYearMonth.year })
+                            VisitCalendarPickerTodayReturnLink(
+                                label = "오늘 ${todayYearMonth.year}년 ${todayYearMonth.monthValue}월 →",
+                                onReturnToToday = { pickerYear = todayYearMonth.year }
                             )
                         }
                         VisitCalendarTopOrnament()
@@ -906,13 +929,9 @@ internal fun MonthlyVisitCalendar(
                             onStepDown = onStepDown
                         )
                         if (!isCurrentYearVisibleInYearPicker(decadeStart, todayYearMonth)) {
-                            Text(
-                                text = "오늘 ${todayYearMonth.year}년 →",
-                                color = InkSecondary,
-                                fontSize = 9.sp,
-                                modifier = Modifier
-                                    .padding(top = 1.dp)
-                                    .clickable(onClick = { pickerYear = todayYearMonth.year })
+                            VisitCalendarPickerTodayReturnLink(
+                                label = "오늘 ${todayYearMonth.year}년 →",
+                                onReturnToToday = { pickerYear = todayYearMonth.year }
                             )
                         }
                         VisitCalendarTopOrnament()

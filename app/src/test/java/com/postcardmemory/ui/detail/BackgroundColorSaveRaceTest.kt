@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,6 +35,20 @@ import org.junit.Test
  *   구간. 완료 순서를 뒤섞으려면 Mutex 진입 *전*에 둬야 한다.
  * - afterWrite: withContext(Dispatchers.IO) 블록이 끝나고 다시 메인으로
  *   복귀하기까지의 구간. 이 사이에 사용자가 색을 한 번 더 고를 수 있다.
+ *
+ * 파일 수명주기: [FakeFileSystem]은 한동안 아무도 호출하지 않는 죽은 계측이었다.
+ * delete()가 한 번도 실행되지 않아 `deletedFiles`가 영원히 비어 있었고, 그 결과
+ * "지워지지 않았다"는 단언들이 전부 무조건 참이었다(78일차 감사에서 발견).
+ * 지금은 [FakeViewModel.saveBackgroundImagePath]가 교체 성공 후 옛 파일을 정리하도록
+ * 연결돼 있어(실제 [com.postcardmemory.utils.PostcardImageStorage.deleteIfOwnedByApp]가
+ * 맡기로 한 역할), 삭제가 실제로 일어나고 기록된다. 그래서 다른 테스트의 "이 파일은
+ * 지워지지 않았다"가 비로소 실패할 수 있는 단언이 된다 — 계측이 살아 있음은
+ * `replacingBackgroundImage_deletesOnlyTheReplacedFile`가 직접 보장한다.
+ *
+ * 정리 규칙이 캡처한 경로를 그대로 지우지 않고 커밋된 상태를 다시 확인하는 이유는
+ * production 주석("호출 당시 캡처한 경로만 보고 지우면 그 사이 다시 참조된 파일을
+ * 지울 수 있다")과 같고, 그 사고는
+ * `staleImageReplacement_doesNotDeleteAFileTheCommittedStateStillReferences`가 잡는다.
  *
  * 참고: 현재 앱에서 backgroundImagePath를 non-null로 만드는 UI 경로는 없다
  * (호출자가 없던 updateBackgroundImage/removeBackgroundImage는 dead code
@@ -178,6 +193,10 @@ class BackgroundColorSaveRaceTest {
         ): Job {
             val currentUi = ui ?: return Job().apply { complete() }
 
+            // 교체 대상 파일은 호출 시점에 캡처한다 — 실제 정리 헬퍼
+            // (PostcardImageStorage.deleteIfOwnedByApp)도 "교체 전 경로"를 받는다.
+            val replacedPath = currentUi.backgroundImagePath
+
             ui = currentUi.copy(
                 backgroundImagePath = imagePath
             )
@@ -189,12 +208,26 @@ class BackgroundColorSaveRaceTest {
             return scope.launch {
                 beforeWrite()
 
+                var committedPath: String? = null
+                var committed = false
+
                 styleWriteMutex.withLock {
                     val latest = ui ?: return@withLock
                     room.updateBackground(
                         colorArgb = latest.backgroundColorArgb,
                         imagePath = latest.backgroundImagePath
                     )
+                    committedPath = latest.backgroundImagePath
+                    committed = true
+                }
+
+                // 교체가 실제로 커밋된 뒤에만 옛 파일을 정리한다. 캡처한
+                // replacedPath를 그대로 지우지 않고 커밋된 상태가 아직 그 경로를
+                // 참조하는지 다시 확인하는데, 이게 production 주석이 경고하는
+                // 지점이다 — "호출 당시 캡처한 경로만 보고 지우면 그 사이 다시
+                // 참조된 파일을 지울 수 있다".
+                if (committed && replacedPath != null && replacedPath != committedPath) {
+                    files.delete(replacedPath)
                 }
             }
         }
@@ -273,7 +306,10 @@ class BackgroundColorSaveRaceTest {
         assertEquals(PATH_NEW, vm.ui?.backgroundImagePath)
         assertEquals(PATH_NEW, vm.room.backgroundImagePath)
         assertTrue(vm.files.exists(PATH_NEW))
-        assertTrue(vm.files.deletedFiles.isEmpty())
+        // 교체된 PATH_OLD가 정리되는 건 경로 저장의 정상 동작이다. 지켜야 하는 건
+        // "실패한 색 저장이 최신 PATH_NEW까지 끌고 가지 않는다"쪽이다.
+        assertEquals(listOf(PATH_OLD), vm.files.deletedFiles)
+        assertFalse(PATH_NEW in vm.files.deletedFiles)
     }
 
     // ---- 4. 배경색 저장 실패가 더 최신 배경색을 되돌리면 안 된다 ----
@@ -420,6 +456,54 @@ class BackgroundColorSaveRaceTest {
             listOf("background=($COLOR_NEW,null)"),
             vm.room.writeLog
         )
+    }
+
+    // ---- 10. 계측 자체가 살아 있는지: 교체는 실제로 옛 파일을 지운다 ----
+
+    @Test
+    fun replacingBackgroundImage_deletesOnlyTheReplacedFile() = runBlocking {
+        val vm = FakeViewModel(initialImagePath = PATH_OLD)
+
+        vm.saveBackgroundImagePath(this, PATH_NEW).join()
+
+        // 이 단언이 통과해야 다른 테스트의 "지워지지 않았다"가 의미를 갖는다 —
+        // 삭제가 애초에 일어날 수 없는 계측이면 그 단언들은 항상 참일 뿐이다.
+        assertEquals(listOf(PATH_OLD), vm.files.deletedFiles)
+        assertFalse(vm.files.exists(PATH_OLD))
+        assertTrue(vm.files.exists(PATH_NEW))
+        assertEquals(PATH_NEW, vm.room.backgroundImagePath)
+    }
+
+    // ---- 11. 옛 파일 정리가 "다시 참조된" 파일을 지우면 안 된다 ----
+
+    @Test
+    fun staleImageReplacement_doesNotDeleteAFileTheCommittedStateStillReferences() = runBlocking {
+        val vm = FakeViewModel(initialImagePath = PATH_OLD)
+        val letReplacementProceed = CompletableDeferred<Unit>()
+
+        // 1. PATH_OLD -> PATH_NEW 교체가 시작된다(교체 대상으로 PATH_OLD를 캡처한 채 멈춤).
+        val replaceJob = vm.saveBackgroundImagePath(
+            scope = this,
+            imagePath = PATH_NEW,
+            beforeWrite = { letReplacementProceed.await() }
+        )
+
+        // 2. 그 사이 사용자가 PATH_OLD로 되돌리고, 그 저장이 먼저 커밋된다.
+        vm.saveBackgroundImagePath(this, PATH_OLD).join()
+
+        // 3. 멈춰 있던 교체가 뒤늦게 커밋된다.
+        letReplacementProceed.complete(Unit)
+        replaceJob.join()
+
+        // 커밋된 상태는 다시 PATH_OLD를 가리킨다. 캡처해 둔 PATH_OLD를 그대로
+        // 지웠다면 지금 화면이 쓰는 파일이 사라진다 — production 주석이 경고하는
+        // 바로 그 사고다.
+        assertEquals(PATH_OLD, vm.room.backgroundImagePath)
+        assertEquals(PATH_OLD, vm.ui?.backgroundImagePath)
+        assertFalse(PATH_OLD in vm.files.deletedFiles)
+        assertTrue(vm.files.exists(PATH_OLD))
+        // 반대로 아무도 참조하지 않게 된 PATH_NEW는 정리돼도 된다.
+        assertFalse(vm.files.exists(PATH_NEW))
     }
 
     private companion object {

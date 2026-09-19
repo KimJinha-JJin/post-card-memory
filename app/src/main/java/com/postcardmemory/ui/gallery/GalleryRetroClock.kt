@@ -62,12 +62,19 @@ private val RETRO_CLOCK_DOW_KOREAN = mapOf(
  * 셋의 글자 크기는 서로 다르게 쓰기 위해 미리 분리해 둔다. */
 internal data class RetroClockTimeText(val hourMinute: String, val second: String, val meridiem: String)
 
+/**
+ * 24시 → 12시 변환. 자정(0시)=12, 정오(12시)=12로 접히는 경계가 핵심이라, 화면 표시
+ * ([retroClockTimeTextFor])와 접근성 설명([retroClockAccessibilityDescriptionFor])이
+ * 서로 다른 값을 말하는 일이 없도록 한 곳에서만 계산한다.
+ */
+private fun retroClockHour12(hour: Int): Int = when (val h = hour % 12) {
+    0 -> 12
+    else -> h
+}
+
 /** 12시간제 변환. 자정(0시)=12AM, 정오(12시)=12PM 경계를 포함해 순수 함수로 검증 가능하다. */
 internal fun retroClockTimeTextFor(time: LocalTime): RetroClockTimeText {
-    val hour12 = when (val h = time.hour % 12) {
-        0 -> 12
-        else -> h
-    }
+    val hour12 = retroClockHour12(time.hour)
     val hourMinute = "${hour12.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')}"
     val second = time.second.toString().padStart(2, '0')
     val meridiem = if (time.hour < 12) "AM" else "PM"
@@ -84,10 +91,7 @@ internal fun retroClockDateTextFor(date: LocalDate): String {
 
 /** 화면에는 영어 약어를 쓰지만 접근성 설명은 자연스러운 한국어 한 문장으로 제공한다. */
 internal fun retroClockAccessibilityDescriptionFor(dateTime: LocalDateTime): String {
-    val hour12 = when (val h = dateTime.hour % 12) {
-        0 -> 12
-        else -> h
-    }
+    val hour12 = retroClockHour12(dateTime.hour)
     val meridiemKo = if (dateTime.hour < 12) "오전" else "오후"
     val dowKo = RETRO_CLOCK_DOW_KOREAN.getValue(dateTime.dayOfWeek)
     return "현재 시간 ${meridiemKo} ${hour12}시 ${dateTime.minute}분 ${dateTime.second}초, " +
@@ -177,6 +181,10 @@ private fun SevenSegmentColon(height: Dp, dotSize: Dp, gap: Dp, color: Color) {
     }
 }
 
+// 숫자가 얹히는 저채도 LCD 패널. 새 색을 만들지 않고 InkSecondary를 아주 낮은 alpha로
+// 깔아 크림색 바디([PaperTray])와 "화면" 영역만 구분한다.
+private val RetroClockPanelColor = InkSecondary.copy(alpha = 0.10f)
+
 // 큰 자리(hh:mm)와 작은 자리(ss) 크기. 목업에서 확인한 비율을 그대로 옮겼다.
 private val RetroClockLargeDigitWidth = 15.dp
 private val RetroClockLargeDigitHeight = 26.dp
@@ -203,7 +211,7 @@ private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String
             // 바디 폭 제약을 없앤 의미가 사라지고 v2와 같은 배너 폭으로 되돌아간다.
             modifier = Modifier
                 .width(IntrinsicSize.Min)
-                .background(InkSecondary.copy(alpha = 0.10f), RoundedCornerShape(10.dp))
+                .background(RetroClockPanelColor, RoundedCornerShape(10.dp))
                 .padding(start = 10.dp, end = 10.dp, top = 13.dp, bottom = 1.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -327,6 +335,9 @@ private val RetroClockCoffeeCupIcon: ImageVector =
         }
     }.build()
 
+// 시계 바디 옆 커피잔 크기. 바디보다 확실히 작아 "동반자"로 읽히는 선.
+private val RETRO_CLOCK_CUP_SIZE = 22.dp
+
 /**
  * 메인 갤러리 상단의 작은 레트로 디지털 탁상시계 + 커피잔. 네온·유광·그림자·badge·장식문구
  * 없이, "hh:mm은 크게, ss·AM/PM은 작지만 같은 가로선, 날짜는 가장 작게 아래 줄"이라는 정보
@@ -356,8 +367,6 @@ private val RetroClockCoffeeCupIcon: ImageVector =
  * lifecycle-aware recomposer 위에서 돌아 백그라운드 진입 시 자동으로 멈추므로 별도 lifecycle
  * 처리를 추가하지 않았다.
  */
-private val RETRO_CLOCK_CUP_SIZE = 22.dp
-
 @Composable
 internal fun GalleryRetroClock(modifier: Modifier = Modifier) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }

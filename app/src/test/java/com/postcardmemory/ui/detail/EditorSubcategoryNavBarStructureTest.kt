@@ -1,6 +1,6 @@
 package com.postcardmemory.ui.detail
 
-import java.io.File
+import com.postcardmemory.testsupport.readStructureTestSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,19 +20,8 @@ import org.junit.Test
  */
 class EditorSubcategoryNavBarStructureTest {
 
-    private fun readSource(candidates: List<String>): String {
-        val file = candidates
-            .map { File(it) }
-            .firstOrNull { it.exists() }
-            ?: error(
-                "소스 파일을 찾을 수 없음(cwd=${File(".").absolutePath}). " +
-                    "candidates=$candidates"
-            )
-        return file.readText()
-    }
-
     private val detailScreenText: String by lazy {
-        readSource(
+        readStructureTestSource(
             listOf(
                 "src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt",
                 "app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt"
@@ -41,7 +30,7 @@ class EditorSubcategoryNavBarStructureTest {
     }
 
     private val bottomTabBarText: String by lazy {
-        readSource(
+        readStructureTestSource(
             listOf(
                 "src/main/java/com/postcardmemory/ui/detail/EditorBottomTabBar.kt",
                 "app/src/main/java/com/postcardmemory/ui/detail/EditorBottomTabBar.kt"

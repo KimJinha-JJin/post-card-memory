@@ -11,7 +11,7 @@ import kotlin.math.roundToInt
 /**
  * 미래 엽서 기능의 날짜 판정을 전부 이 파일에 모은다. 앱 전체가 capturedAt과
  * 동일하게 epoch millis로 저장하고 표시 시점에 ZoneId.systemDefault()로
- * 변환하는 관례([PostcardDetailRow], [GalleryScreen])를 그대로 따른다.
+ * 변환하는 관례([GalleryScreen])를 그대로 따른다.
  */
 
 /** epochMillis가 속한 날짜의 자정(해당 타임존 기준) epoch millis. */

@@ -16,7 +16,14 @@ data class PondRipple(
     val lifespanMillis: Long = 700L
 )
 
-/** 한 엽서가 발사되어 주변 엽서를 밀어낼 때 발생하는 충격 이벤트. */
+/**
+ * 한 엽서가 발사되어 주변 엽서를 밀어낼 때 발생하는 충격 이벤트.
+ *
+ * [sequence]는 아무도 값을 읽지 않지만 지워선 안 된다 — `lastImpulse`가
+ * `mutableStateOf`(기본 structural equality)라, 같은 카드를 같은 자리에서 다시
+ * 발사하면 나머지 필드가 전부 같아 "변경 없음"으로 무시된다. 발사마다 1씩 올라가는
+ * 이 값이 두 충격을 서로 다른 값으로 만들어 구독자에게 반드시 전달되게 한다.
+ */
 data class PondImpulse(
     val sourceId: Long,
     val center: Offset,
@@ -62,10 +69,6 @@ class PondController {
     fun pruneRipples(nowMillis: Long) {
         if (ripples.isEmpty()) return
         ripples.removeAll { nowMillis - it.bornAtMillis > it.lifespanMillis }
-    }
-
-    fun clearRipples() {
-        ripples.clear()
     }
 
     fun notifyLaunch(sourceId: Long, centerInWindow: Offset) {

@@ -1,3 +1,408 @@
+# HANDOFF — 78일차: 코드 클린 데이 + 자정 갱신 버그 + 장례식 + 무효 테스트 수리 + 고아 파일 조사
+
+확인일: 2026-09-19. 수동 표준 모드. 사용자 제공 78일차 "코드 클린 데이" 지시서에 따라 피코(Claude Code)가 실측→기준선→감사→저위험 정리→검증 순으로 진행했어. **새 기능·새 UI·디자인 변경 없음.** 이어서 사용자가 "78일차 후속 작업지시서"(1차 감사에서 발견한 자정 갱신 버그 수정 + 2차 클리닝)를 붙여넣어 같은 세션에서 계속 진행했어. 1차 결과는 되돌리지 않고 그대로 보존했고, 후속에서 **실제 동작 결함 1건을 수정**했어. 그 뒤 세 번째 지시서("시간 경계 버그 감사 + 죽은 코드의 장례식")로 시간 경계 staleness 2건을 마저 판정하고 저장소 전체 죽은 코드 감사를 했어. 마지막으로 네 번째 지시서("무효 테스트 수리 + 방문 정의 조사 + 잔여 코드 판정")로 **통과하지만 아무것도 지키지 않던 테스트를 실제로 실패할 수 있는 테스트로 고쳤어**. 마지막으로 다섯 번째 지시서("고아 이미지 파일 조사")로 이미지 파일의 수명을 끝까지 추적했고, **조사 결과 수정할 것이 없다는 결론**이 나왔어(근거는 아래). 실기기 smoke QA 대기, commit·push 미실행.
+
+## 시작 Git 상태 (실측)
+
+branch `feature/photo-sticker`, 시작 HEAD `f104cad`, local == origin (ahead 0 / behind 0), tracked working tree clean. **77일차 세션의 PC 강제종료로 유실된 변경은 없음** — 77일차 작업은 `fdbc1b1`+`f104cad` 두 커밋에 전부 반영돼 있고 working tree에 미커밋 잔여물 없음. 기존 무관 untracked(`.codex-config.candidate.toml`, `.kotlin/`)는 건드리지 않음.
+
+## 기준선 (오늘 실제 실행, 과거 값 재사용 아님)
+
+- `compileDebugKotlin` + `testDebugUnitTest`: **BUILD SUCCESSFUL**
+- **677건 전부 통과 / 실패 0 / 에러 0 / skip 0** (test-results XML 직접 집계, 72 클래스)
+- 경고 18건 전부 기존 것: Room Migration `db` 파라미터명 13건(`PostcardDatabase.kt`), deprecated API 5건(`CameraScreen.kt` 4, `DetailScreen.kt` 1). 최근 변경 파일엔 경고 0건.
+
+## 리팩토링 사전 감사 결과
+
+**dead code: 최근 변경 영역엔 없음.** 77일차 추가 심볼 25개 전부 실사용, unused import 0건(`getValue`/`setValue`·alias import는 전부 필요), 주석처리된 옛 구현 0건, TODO/FIXME 0건, 옛 58% 폭 제한 코드 잔재 0건(주석에만 남아 있었음 — 아래에서 수정).
+
+### 실제로 정리한 것 (A: 저위험, 동작 보존 확인)
+
+production 3파일:
+
+1. `GalleryScreen.kt` — **주석-코드 불일치 수정**. "시계 폭은 GalleryRetroClock 내부에서 58%로 제한"이라 적혀 있었지만 v3에서 그 제한을 완전히 제거했음. 현재 실제 동작(`IntrinsicSize.Min`으로 바디가 글자 폭에 맞춰 닫힘)을 설명하도록 고침. 코드 변경 없음.
+2. `GalleryRetroClock.kt` — `RETRO_CLOCK_CUP_SIZE` 선언이 `GalleryRetroClock`의 KDoc과 함수 선언 **사이에 끼어 있어** 시계 전체를 설명하는 KDoc이 엉뚱하게 그 상수에 붙어 있었음. 상수를 KDoc 위로 옮김(값·순서 의존성 없음).
+3. `GalleryRetroClock.kt` — 12시간제 변환식(`hour % 12`, 0→12)이 `retroClockTimeTextFor`와 `retroClockAccessibilityDescriptionFor`에 **완전 중복**돼 화면 표시와 접근성 설명이 갈라질 수 있었음. `retroClockHour12()` private 순수 함수로 통합.
+4. `GalleryRetroClock.kt` — LCD 패널색만 인라인 `InkSecondary.copy(alpha = 0.10f)`로 남아 같은 파일의 색 명명 규칙(`RetroClockSegmentOffColor` 등)에서 이탈해 있었음. `RetroClockPanelColor`로 명명(값 동일).
+5. `VisitCalendarDrawer.kt` — MONTH_PICKER/YEAR_PICKER의 "오늘 복귀 링크"가 스타일·동작까지 **완전히 같은 사본 2개**였음. `VisitCalendarPickerTodayReturnLink` 공용 composable로 추출. **CALENDAR 레벨의 "오늘"(표시 월 자체를 되돌리고 햅틱까지 울림)은 의미가 다른 동작이라 의도적으로 합치지 않았고, 그 이유를 KDoc에 남김**(11절 원칙 보존).
+6. `VisitCalendarDrawer.kt` — 요일→주말색 매핑이 `visitDateColor(date)`와 상단 요일 머리글의 인라인 `when (dow)` **두 곳에 중복**. `visitDayOfWeekColor(dayOfWeek)`로 통합하고 `visitDateColor`가 이를 위임하게 함. 요일 머리글 `listOf(...)`도 매 recomposition 재생성 대신 파일 상수 `VISIT_CALENDAR_WEEKDAY_HEADERS`로.
+
+테스트 16파일(신규 1 + 수정 15):
+
+7. `private fun readSource(candidates: List<String>)`가 **바이트 단위로 동일한 사본 15개**로 복제돼 있었음. `testsupport/StructureTestSource.kt`의 `readStructureTestSource()` 하나로 통합하고, 불필요해진 `import java.io.File`도 각 파일에서 제거. **-207 / +43줄**, assertion은 단 하나도 바꾸지 않음.
+
+### 의도적으로 보류한 것 (B: 중위험)
+
+- `vibrateGalleryFab` / `vibrateVisitCalendarTodayReturn` / `vibrateIntroPostmark` 3종 통합 — 각 호출부가 의도적으로 다른 강도(10ms/90, 14ms/120, 24ms/175)로 튜닝됐고 주석에 근거가 남아 있음. 3파일 교차 수정이라 오늘 범위 밖.
+- `extractBalancedCall` ×4, `readSource` 변형 ~9개 — 시그니처가 서로 달라 호출부 의미까지 확인해야 함.
+
+### 오늘 금지로 분류한 것 (C: 고위험)
+
+- **구조 테스트 129건 / 24파일이 production 소스 텍스트를 읽어 검증** — 전체 677건의 19%. 지시서 27절이 말한 "implementation detail 결합"의 최대 사례이고, 리팩토링의 실질적 브레이크다. 근본 원인은 Compose UI 테스트 하네스 부재이고 해결하려면 새 dependency가 필요 → **STOP, 후속 후보로만 기록**.
+- `DetailScreen.kt`(6422줄) / `DetailViewModel.kt`(4529줄) — 제1~10차 감사로 2026-08-08 공식 종료된 영역. 재분해하지 않음.
+- Room Migration `db` 파라미터명 경고 13건 — AGENTS 5절 보호 대상. 손대지 않음.
+- `CameraScreen.kt` deprecated API 경고 4건(`ArrowBack`, `LocalLifecycleOwner`, `rememberTransformableState`) — 범위 밖 + UI 영향 가능.
+
+## Compose 상태 / recomposition 구조 감사
+
+- **시계 ticker는 건강함**: `now` state가 `GalleryRetroClock` 내부 `remember`에만 있고 그 composable 안에서만 읽히므로, 매초 무효화되는 건 시계 scope뿐이고 `GalleryScreen` 전체는 재구성되지 않음. `LaunchedEffect`가 lifecycle-aware recomposer 위에서 돌아 백그라운드에서 자동 정지. 별도 조치 불필요.
+- **달력 상태 소유권도 건강함**: `displayedMonth`(선택)와 `pickerYear`(보기 창)는 의도적으로 분리돼 있고(9절 원칙), `decadeStart`·`todayYearMonth`·`isCurrentMonth`는 저장하지 않고 파생 계산만 함 — 중복 state 없음. `navLevel`은 `VisitCalendarDrawer`가 단일 소유하고 hoisting으로 내려줌.
+- **발견(오늘 수정 안 함)**: `MonthlyVisitCalendar`의 `today: LocalDate = remember { LocalDate.now() }`는 key 없는 `remember`라 composition이 살아 있는 동안 갱신되지 않음. 앱을 켜 둔 채 자정을 넘기면 **옆의 시계는 새 날짜로 넘어가는데 달력의 "오늘" marker/색은 어제에 머문다**. 영향은 작지만 실재하는 동작 차이이고, 고치려면 갱신 방식에 제품 판단이 필요해 후속 후보로만 남김.
+
+## 테스트 인벤토리 (오늘 실제 집계)
+
+- **전체 실행 건수 677 / 실패 0 / 에러 0 / skip 0**, 테스트 클래스 72개
+- **소스 `@Test` 수 677 = runner 실행 677건으로 정확히 일치** — parameterized test·`@RunWith`·`@Ignore` 전무라 1:1이며, 지시서 46절이 우려한 두 숫자의 괴리는 이 저장소에 존재하지 않음
+- source set: `test`(unit) 677건 / `androidTest`(instrumented) 7건 4파일 — **androidTest는 실기기 보호 원칙(AGENTS 5절)상 실행하지 않았고, 미실행으로 기록**
+- 기능 영역별(패키지 기준): `ui/detail` 330건(36파일) / `utils` 152건(15) / `ui/gallery` 103건(10) / `ui/intro` 37건(2) / `ui/components` 31건(5) / `ui/futuremail` 19건(1) / `data` 4건(2) / 루트 1건(1)
+- 가장 큰 파일: `PostcardOverlayExportLogicTest` 52건, `PostcardEditDraftTest` 29, `VisitCalendarTest` 28, `MaskingTapeItemTest` 25, `PostcardDraftStorageTest` 24
+- 가장 테스트가 많은 영역: `ui/detail`(전체의 49%) — 프로젝트에서 가장 복잡한 영역이라 자연스러운 분포로 판단
+
+### 테스트 품질 감사
+
+- **implementation detail 결합**: 위 C항목의 구조 테스트 129건. 통과한다고 좋은 테스트는 아니지만, 이 프로젝트에선 Compose UI 하네스의 대체재 역할을 하고 있어 일괄 삭제 대상이 아님. 후속에서 하네스 도입을 검토할 때 함께 정리할 후보.
+- **fixture/helper 중복**: `readSource` 15개 사본 → 정리 완료. `extractBalancedCall` 4개는 보류.
+- **obsolete 후보**: `ExampleUnitTest.addition_isCorrect`(`assertEquals(4, 2 + 2)`)는 Android Studio 템플릿 잔재로 이 앱의 요구사항을 전혀 보호하지 않음. 다만 삭제 이득이 사실상 0이고 30절의 "애매하면 유지" 기준에 따라 **유지**하고 기록만 남김.
+- **경계값 공백(후속 후보)**: 시계의 "다음 초 경계까지 delay" 계산(`1000 - nano/1_000_000`)이 `LaunchedEffect` 안에 인라인이라 순수 함수로 검증 불가. 현재 로직에 실제 결함은 없어 오늘 손대지 않음.
+- 테스트 이름은 전반적으로 `대상_조건_기대` 형태로 읽히며, 일괄 rename이 필요한 모호 사례는 없었음.
+
+## 문서-코드 정합성 감사 (36절)
+
+- 77일차 HANDOFF의 기술 내용은 현재 코드와 일치. 기록된 "677건"도 오늘 재실행 결과와 일치.
+- 유일한 불일치는 `GalleryScreen.kt`의 58% 주석이었고 위에서 수정함.
+- `docs/ai/mockups/gallery-retro-clock-mockup.html`: 같은 폴더에 74~77일차 목업 6개가 커밋돼 유지되는 **레퍼런스 컬렉션**이고, 7세그먼트 글리프의 설계 근거 자료라 일회성 찌꺼기로 볼 근거 없음 → **유지, 조치 없음**(34절 판단).
+
+## 자동 검증 (정리 후)
+
+- `compileDebugKotlin`: **BUILD SUCCESSFUL**(1차 후 1회, 자정 수정 후 2회). 장례식 뒤에는 resource merge·packaging까지 포함한 **`assembleDebug` 전체 빌드로 재검증 — BUILD SUCCESSFUL**, 내가 만진 파일에서 신규 경고 0건.
+- 중간에 자정 ticker를 공용 파일로 옮기는 스크립트가 `MonthlyVisitCalendar` 선언을 한 줄 중복시켜 컴파일이 1회 깨졌고(`assembleDebug` 실패), 중복 줄을 제거해 복구한 뒤 다시 전체 빌드로 확인했다.
+- 전체 unit test: 장례식 후에도 **683건 전부 통과 / 실패 0 / 에러 0**, 클래스 72개(삭제한 production 코드에 걸린 테스트가 없었다는 확인). 1차 정리 직후 **677건 전부 통과**(기준선과 완전히 동일 — 테스트를 지우지도 늘리지도 않음). 자정 버그 수정 후 회귀 테스트 6건을 더해 **최종 683건 전부 통과 / 실패 0 / 에러 0**, 클래스 72개. 소스 `@Test` 683 = runner 683으로 여전히 일치.
+- `git diff --check`: 통과(기존 LF→CRLF 경고만)
+- 전체 diff 재검토 완료: production 변경은 색상값·크기·간격·문자열이 **전부 동일**하고 순수 추출·이동·주석뿐. 테스트 변경은 assertion 무변경.
+- **미검증**: (1) 실제 화면 렌더링 결과 동일성 — Compose UI 테스트 하네스가 없어 자동 확인 불가. (2) **실제 자정 통과 시의 화면 갱신** — 순수 함수(대기 시간 계산)와 판정 로직은 테스트로 덮었지만, `LaunchedEffect`가 실기기에서 실제로 자정에 깨어 화면을 다시 그리는지는 자동 검증 불가. 지시서 13절에 따라 **기기 날짜를 강제로 바꾸지 않았고**, 자연스럽게 자정을 넘길 때 확인할 항목으로 남긴다.
+
+## 후속 — 자정 갱신 버그 수정 (실제 동작 결함)
+
+1차 감사에서 발견만 하고 남겨뒀던 항목을 사용자 지시로 이어서 수정했어.
+
+**증상**: 앱을 켜 둔 채 자정을 넘기면 같은 화면 안에서 현재 날짜 기준이 갈라졌다. 레트로 시계는 매초 `LocalDateTime.now()`를 다시 읽어 새 날짜로 넘어가는데, 방문 달력의 "오늘" marker·오늘 채움색·picker의 현재 월/연도 판정·오늘 복귀 링크는 전날에 머물렀다.
+
+**원인**: `MonthlyVisitCalendar(today: LocalDate = remember { LocalDate.now() })` — key 없는 `remember`라 composition이 살아 있는 동안 한 번 잡은 값이 갱신되지 않았다. 호출부는 `VisitCalendarDrawer` 한 곳뿐이고 `today`를 넘기지 않아, 이 기본값이 곧 전체 동작이었다.
+
+**수정 방식**: 기본값을 `rememberTodayDate()`로 교체.
+
+- 시계처럼 매초 깨우지 않고 **다음 자정까지 한 번만 기다린다**(하루 1회). 고빈도 polling 없음.
+- 대기 시간은 순수 함수 `millisUntilNextMidnight(now: LocalDateTime)`로 분리 — 정확히 자정이어도 0이 아닌 하루치를 돌려줘 바쁜 루프를 막는다. **덕분에 새 dependency나 시간 주입(Clock/time provider) 없이 단위 테스트가 가능해졌다.**
+- 깨어날 때마다 실제 현재 시각을 다시 읽으므로 기기 절전으로 타이머가 늦게 깨도 그 시점의 올바른 날짜로 스스로 맞춰진다.
+- `LaunchedEffect`는 Activity의 lifecycle-aware recomposer 위에서 돌아 별도 lifecycle 처리 불필요.
+- **시계의 1초 ticker와 상태를 합치지 않았다** — 갱신 주기와 UI 생명주기가 달라, 중복 제거를 이유로 강제 통합하지 않는다는 지시서 5·6절 판단.
+
+**자정 이후 바뀌는 것**: 오늘 marker, 오늘 채움색(`VisitFillColorToday`), MONTH_PICKER/YEAR_PICKER의 현재 월·연도 강조, 오늘 복귀 링크 노출 조건과 문구, CALENDAR 레벨 "오늘" 버튼의 목표 월.
+
+**자정 이후 바뀌지 않는 것**: 사용자가 보던 월(`displayedMonth`), picker 위치(`pickerYear`), `navLevel`, 방문 기록, 색 팔레트, 햅틱, 월 이동 애니메이션, swipe, 오늘 복귀 동작의 의미. 이 둘은 `displayedMonth`/`pickerYear`가 **key 없는 `rememberSaveable`**이라 구조적으로 보장되며, 미래에 누가 key를 추가해 원칙을 깨지 않도록 그 이유를 코드 주석으로 남겼다.
+
+### 2차 클리닝 (이번 수정에 닿은 범위만)
+
+닿은 코드를 다시 훑었고 **새로 생긴 중복은 없었다**: 중복 `LocalDate.now()` 없음(`rememberTodayDate` 내부의 초기값·갱신 2회가 전부), 중복 current date 계산 없음(`todayYearMonth`를 한 번 계산해 전부 재사용), 불필요한 state 없음, magic number 없음. 실제로 추가한 정리는 위의 `rememberSaveable` 의도 주석 1건.
+
+### 추가한 테스트 (+6, 677 → 683)
+
+`VisitCalendarTest`에 자정 회귀 방지 6건:
+
+- `millisUntilNextMidnight` 카운트다운(23:59 / 밀리초 단위 / 정오)
+- **정확히 자정일 때 0이 아닌 하루치**를 돌려주는지(바쁜 루프 방지) + 월말·윤년 경계에서 항상 양수
+- 월 경계(9/30 23:59:59)·연 경계(12/31 23:59:59) 카운트다운
+- 날짜가 하루 넘어가면 현재 월 판정이 함께 넘어가는지(9/30 → 10/1)
+- 새해 자정에 현재 연도 판정이 넘어가는지(2026/12/31 → 2027/1/1)
+- 넘어간 날짜가 picker 창 밖으로 나가면 오늘 복귀 링크 조건이 켜지는지(2026년 picker의 버퍼 끝 2027/4/30 → 5/1)
+
+> 테스트 작성 중 내 예상이 틀린 게 하나 있었어: 2026년 MONTH_PICKER는 다음 해 1~4월을 버퍼로 보여주므로 2027년 1월은 아직 **창 안**이라 새해 자정만으로는 링크가 뜨지 않아. 실제 경계(2027/4/30 → 5/1)로 고쳐서 검증했어.
+
+### 시간 주입 판단 (지시서 11절)
+
+`Clock`/time provider 도입은 **하지 않았다.** 대기 시간 계산을 순수 함수로 떼어내는 것만으로 이번 결함의 회귀 보호가 가능했고, 앱 전역 time abstraction·모든 `LocalDate.now()` 교체·DI 확장은 오늘 범위를 넘는다(STOP 기준). `LocalDate.now()` 자체를 주입 가능하게 만드는 건 후속 후보로만 남김.
+
+### 같은 부류로 새로 발견한 것 (오늘 수정 안 함)
+
+- `GalleryScreen.kt`의 `GalleryDensityPage`: `val year = remember { YearMonth.now().year }` — 같은 staleness 패턴이고 경계는 **연말**이다. 다만 기억밀도 화면은 이번 수정이 닿지 않았고 UI freeze 대상이라, 연 경계에서 어떻게 동작해야 하는지도 제품 판단이 필요해 후속 후보로만 기록.
+- `MainActivity.kt`: `VisitHistoryStorage.loadMonth(..., YearMonth.now())`가 `LaunchedEffect(Unit)`으로 프로세스당 1회만 실행 — 앱을 켜 둔 채 **달을 넘기면** 새 달의 방문 집합이 로드되지 않을 수 있다. 방문 기록 데이터 흐름이라 별도 조사·승인이 필요(AGENTS 5절 데이터 보호 영역).
+
+## 추가 — 시간 경계 감사 2건 판정
+
+### GalleryDensityPage 기준 연도 → **실제 버그, 수정함**
+
+- **판정 근거**: 이 화면에는 연도 선택 UI가 전혀 없다(좌우 pager + 점 indicator뿐, indicator에는 contentDescription도 없음). 따라서 `year`는 "사용자가 고른 연도"가 아니라 순수하게 "지금 몇 년인가"다 — 지시서 3절이 경계한 두 의미의 혼동이 애초에 성립하지 않는다.
+- **증상**: `remember { YearMonth.now().year }`가 key 없는 remember라, 앱을 켜 둔 채 연말 자정을 넘기면 제목("2026년")과 12칸 화단이 지난해에 머문다. 프로세스를 다시 시작하면 정상으로 돌아오므로, 지금 동작은 설계가 아니라 사고다.
+- **조치**: 달력과 같은 기준인 `rememberTodayDate().year`로 교체. 디자인·레이아웃·색은 전혀 건드리지 않았다.
+- **제품적 귀결(보고 대상)**: 연말 자정을 넘기면 화단이 새해 기준으로 바뀌어 한동안 비어 보인다. 프로세스 재시작 시 어차피 그렇게 동작하므로 기존 동작과 일치하지만, "지난해 화단을 계속 보고 싶다"가 의도라면 연도 선택 UI가 필요한 별개 기능이 된다.
+
+### MainActivity `loadMonth(YearMonth.now())` → **수정하지 않음 (제품 판단 필요 + 데이터 영역)**
+
+조사해 보니 이건 단순 staleness가 아니라 "방문"의 정의 문제였다.
+
+- `visitedEpochDays`는 **현재 월 하나만** 담는다. 그래서 달력에서 다른 달로 넘어가면 원래부터 방문 채움이 안 보인다 — 자정과 무관한 기존 설계 경계다.
+- 앱을 켜 둔 채 월 경계를 넘겨도 사용자가 보던 달(`displayedMonth`)은 그대로라 화면은 여전히 정확하다. 어긋나는 건 새 달로 이동했을 때뿐이다.
+- 더 근본적으로 `recordTodayVisit`도 `AppIntroState.todayVisit != null`이면 건너뛰어 **프로세스당 한 번만** 실행된다(코드 주석에도 "프로세스 시작마다 한 번만"이라 명시). 즉 앱을 켜 둔 채 자정을 넘기면 **새 날의 방문 자체가 기록되지 않는다.**
+- 따라서 이건 "방문 = 앱을 실행한 단위인가, 날짜 단위인가"라는 제품 정의 문제이고, 손대면 `filesDir/visits` 기록과 `totalVisitDays` 집계에 직접 영향을 준다. AGENTS 5절(사용자 데이터 보호) + 지시서 25절 STOP에 해당해 **조사 결과만 남기고 수정하지 않음.**
+
+## 죽은 코드의 장례식
+
+저장소 전체를 ui/data/utils/resources/tests로 나눠 감사했다. 이름 기반 스캔 두 벌을 교차 검증한 뒤, 후보마다 정의 위치·production 참조·test 참조·resource 참조·git history를 개별 확인했다.
+
+### ⚰️ 사망 확정 (삭제함)
+
+| 대상 | 삭제 이유 |
+|---|---|
+| `GalleryComingSoonPage` (GalleryScreen.kt, 27줄) | "미구현 보기" placeholder인데 76일차에 보기가 6종→2종으로 줄며 둘 다 구현됨 — 미구현 상태 자체가 사라짐. 호출부는 `7d2f476`에서 제거됐고 함수만 남았다. |
+| `GalleryDetailList` (GalleryScreen.kt, 82줄) | 76일차에 삭제된 "세부 기록 보기"의 본체. 호출 0. 구조 테스트는 오히려 `"세부 기록 보기"` 문자열의 **부재**를 검증 중이라 방향이 일치한다. |
+| `PostcardDetailRow.kt` (파일 전체, 97줄) | 유일한 실제 호출부가 위 `GalleryDetailList`였다. 남은 참조는 `FutureMailLogic`의 KDoc 링크 하나뿐이라 그 링크도 정리. |
+| `import ... lazy.items as lazyColumnItems` | 위 삭제로 유일 사용처 소멸. |
+| `PondController.clearRipples()` | 호출 0. `reset()`이 `ripples.clear()` + `lastImpulse = null`로 상위 집합이고 실제로 쓰인다. |
+| `GalleryViewModel.isDeleting` (public StateFlow 1줄) | 구독자 0. 삭제 재진입을 막는 내부 가드 `_isDeleting`은 그대로 유지했다(데이터 안전 장치라 손대지 않음). |
+| `PostcardImageStorage.copyToAppStorage` + private `getFileExtension` (108줄) | URI를 원본 확장자 그대로 복사하던 옛 사진 반입 경로. `7b3edd9`(사진 편집 UI 단순화)에서 마지막 호출부가 사라졌고, 지금은 `ImageUtils`가 정사각형으로 크롭해 같은 `filesDir/postcards/`에 저장한다. 메서드 참조(`::`)·test 모두 0. **이미 저장된 사용자 파일은 이 함수와 무관하게 그대로 남는다.** |
+| 위 삭제로 죽은 import 4개 | `Uri`/`IOException`/`UUID`(PostcardImageStorage), `LazyListState`(GalleryScreen). |
+
+### 🩺 생사불명 (보류)
+
+| 대상 | 보류 이유 |
+|---|---|
+| **템플릿 기능 전체** — `PostcardTemplateRow.kt`(341줄), `BuiltInTemplates.kt`, `PostcardTemplateStorage`, `Repository/Dao.updatePostcardTemplateStyle` | **어떤 화면에서도 진입점이 없다**(`DetailScreen.kt`에 "Template" 문자열 0건). 그런데 DAO·Repository·저장소·내장 템플릿 데이터·테스트(`PostcardTemplateTest`, `BuiltInTemplatesTest`, `PostcardTemplateStorageTest`)는 전부 살아 있고 Room 컬럼까지 얽혀 있다. 이건 "남은 찌꺼기"가 아니라 **UI가 연결되지 않은 기능 한 벌**이라, 미완성인지 의도적으로 내려둔 것인지 사용자 판단 없이는 묻을 수 없다. 25절 STOP(DB schema·사용 여부 판단 불가). |
+| `GalleryPageFormat.label` | `GalleryComingSoonPage`를 묻으면 독자가 0이 된다. 다만 76일차가 이 enum 파일을 직접 고쳐 쓰면서도 `label`은 남겼고("월별 보기"/"기억 밀도 보기"), 저장되는 enum의 생성자를 바꾸는 일이라 보류. 점 indicator에 contentDescription이 없는 접근성 공백을 메울 때 자연스럽게 쓰일 자리이기도 하다. |
+| `textStickerColors` (Color.kt) | 코드 참조 0. 글자색이 고정 팔레트에서 커스텀 컬러 피커로 옮겨가며 남은 것으로 보이나, 같은 파일 `sealSelectableInkColors`의 주석이 "흰색 제외" 규칙의 근거로 이 목록을 인용하고 있어(팔레트 설계 의도 기록) 지우려면 그 문서화를 어디로 옮길지 함께 정해야 한다. |
+| `ExampleUnitTest.addition_isCorrect` | 12절 재판정 결과도 1차와 같다 — 제품을 전혀 보호하지 않는 템플릿 테스트가 맞지만, 삭제 이득이 사실상 0이고 "단독 1건 때문에 별도 구조 변경은 하지 않는다"는 12절 단서에 맞춰 유지. |
+
+### 👻 유령처럼 보였으나 현역 (건드리지 않음)
+
+| 대상 | 실제 역할 |
+|---|---|
+| `PondImpulse.sequence` | **아무도 값을 읽지 않는데 지우면 기능이 깨진다.** `lastImpulse`가 `mutableStateOf`(기본 structural equality)라, 이 값이 없으면 같은 카드를 같은 자리에서 다시 발사할 때 모든 필드가 같아 "변경 없음"으로 무시된다. 발사마다 증가하는 이 값이 두 충격을 구분해 구독자에게 전달되게 한다. → **그 이유를 KDoc에 명시해 다음 청소 때 오해받지 않게 했다.** |
+| `provideDatabase`, `providePostcardDao` | Hilt `@Provides` — 생성 코드가 호출. |
+| `onImageSaved`(CameraX), `createOutline`(Shape), `isSelectableDate`(SelectableDates), `onSensorChanged`/`onAccuracyChanged`(SensorEventListener) | 전부 프레임워크 인터페이스 `override`. 이름으로 호출되지 않을 뿐 현역. |
+| 모든 `@Test` 함수 | JUnit이 reflection으로 호출 — 이름 기반 스캔에서 대량으로 "미사용"으로 잡히지만 전부 현역. |
+| resource 11개 전부 | `ic_camera_button`·seal 4종·launcher 아이콘·`file_paths`·`app_name` 모두 Kotlin/XML/Manifest에서 실제 참조 확인. **미사용 resource 0건.** |
+
+### ⚠️ 죽은 코드인 줄 알았는데 테스트 구멍이었던 것 (삭제하지 않음, 보고)
+
+`BackgroundColorSaveRaceTest`의 `FakeFileSystem.delete()`가 **한 번도 호출되지 않는다.** 그런데 이 함수가 `deletedFiles`에 값을 넣는 유일한 경로이고, 테스트 4곳이 `assertTrue(vm.files.deletedFiles.isEmpty())`로 단언한다 — 즉 **그 4개 단언은 무조건 참이라 절대 실패할 수 없다.** 배경색 저장 경합 중 배경 이미지 파일이 지워지지 않는지를 지키는 척하지만, production이 파일을 다 지워도 통과한다.
+
+77일차 "막스 33일차" 사건과 같은 부류(테스트가 요구사항이 아니라 자기 자신을 보호)이고, 하필 데이터 안전 영역이다. 죽은 코드로 묻으면 4개 단언이 빈 껍데기인 채 남으므로 **삭제하지 않고 그대로 뒀다.** fake를 실제 삭제 경로에 연결하는 건 새 테스트 작성이고, 연결했을 때 실패한다면 production 결함 조사로 이어지므로 별도 작업으로 남긴다.
+
+### 삭제 요약
+
+- production 코드: **약 316줄 삭제**(파일 1개 제거 포함), 정리된 import 5개, KDoc 링크 1개 정리
+- test 코드 삭제: **0줄** (삭제 기준을 확실히 만족하는 대상이 없었음)
+- resource 삭제: **0개** (전부 현역)
+- 주석 처리된 옛 구현·TODO·FIXME: **0건**(main 전체 재확인)
+
+## BackgroundColorSaveRaceTest 수리 — 무효 단언 실효화
+
+### 실제 원인
+
+`FakeFileSystem.delete()`가 어디서도 호출되지 않았다. 이 함수가 `deletedFiles`를 채우는 **유일한** 경로였으므로 `deletedFiles`는 영원히 빈 리스트였고, `assertTrue(deletedFiles.isEmpty())` 4건은 무조건 참이었다. 같은 이유로 `existingFiles`에서 제거하는 경로도 없어 `assertTrue(files.exists(...))` 5건도 항상 참이었다 — **FakeFileSystem 전체가 죽은 계측이었다.**
+
+원인을 production까지 따라가 보니 더 근본적인 사실이 나왔다: **`PostcardImageStorage.deleteIfOwnedByApp`는 production 호출부가 0개다.** 즉 지금 앱에는 배경 이미지 파일을 지우는 경로가 아예 없고, replica는 그 "삭제 없음"을 하드코딩해 재현하고 있었다. 그래서 production에 삭제가 생기더라도 replica는 그대로라 테스트가 잡아주지 못하는 구조였다.
+
+### 수정 방식
+
+production `updateBackgroundColor`의 주석이 위험 지점을 이미 정확히 명명하고 있다 — *"호출 당시 캡처한 경로만 보고 지우면 그 사이 다시 참조된 파일을 지울 수 있다."* 이 문장이 지키려는 사고를 replica가 실제로 재현하도록 연결했다.
+
+`FakeViewModel.saveBackgroundImagePath`(경로 컬럼에 쓰는 저장의 대역)가 **교체 성공 후 옛 파일을 정리**하게 했다 — 실제 `deleteIfOwnedByApp`가 맡기로 한 바로 그 역할이다. 정리 규칙은 캡처한 경로를 그대로 지우지 않고 **Mutex 안에서 커밋된 상태가 아직 그 경로를 참조하는지 다시 확인**한 뒤에만 지운다.
+
+- `deletedFiles`에 테스트가 직접 값을 넣지 않는다. 삭제는 저장 흐름이 실행돼야만 일어난다.
+- assertion만 바꾸거나 무조건 통과하는 조건으로 교체하지 않았다.
+
+### 무효 단언 4건 처리
+
+| 위치 | 수정 전 | 수정 후 |
+|---|---|---|
+| 1 `colorSave_preservesExistingImagePathAndFile` | `deletedFiles.isEmpty()` (항상 참) | 그대로 두되, 이제 **삭제가 일어날 수 있는 계측** 위에서의 단언이라 실제 의미를 가진다 |
+| 2 `staleColorSave_doesNotWipeNewerImagePath` | 〃 | 〃 (교체 대상이 null이라 삭제가 없는 게 맞다) |
+| 3 `failedColorSave_doesNotRollbackNewerImagePath` | 〃 (사실과 다름) | **`assertEquals(listOf(PATH_OLD), deletedFiles)` + `assertFalse(PATH_NEW in deletedFiles)`** — 교체된 옛 파일 정리는 정상 동작이고, 지켜야 할 건 최신 파일이 안 지워지는 것 |
+| 6 `cancelledColorSave_...` | 〃 | 그대로(경로 저장이 없는 시나리오라 삭제 0이 맞다) |
+
+### 추가한 테스트 2건 (9 → 11)
+
+- `replacingBackgroundImage_deletesOnlyTheReplacedFile` — **계측 자체가 살아 있음을 보증한다.** 교체 시 옛 파일이 실제로 삭제되고 기록된다. 이 테스트가 없으면 다른 테스트의 "지워지지 않았다"는 다시 공허해진다.
+- `staleImageReplacement_doesNotDeleteAFileTheCommittedStateStillReferences` — production 주석이 경고하는 사고를 그대로 재현한다. PATH_OLD→PATH_NEW 교체가 멈춰 있는 사이 사용자가 PATH_OLD로 되돌리고 먼저 커밋되면, 뒤늦게 커밋한 교체가 캡처해 둔 PATH_OLD를 지우면 안 된다.
+
+### 실패 가능성 실증 (지시서 5·7절)
+
+구조 분석만으로 끝내지 않고 **실제로 실패하는지 확인했다.** replica의 정리 규칙만 일시적으로 순진한 버전(`replacedPath != committedPath` 검사 제거 = production 주석이 경고하는 바로 그 형태)으로 바꿔 실행했더니:
+
+```text
+tests=11 failures=1
+실패: staleImageReplacement_doesNotDeleteAFileTheCommittedStateStillReferences
+```
+
+즉 잘못된 삭제가 발생하면 테스트가 실제로 깨진다. 확인 후 즉시 원복했고(`TEMP` 잔재 0건), production 코드는 이 실증 과정에서 **전혀 건드리지 않았다.**
+
+### FakeFileSystem 주변 추가 감사 (지시서 6·20절)
+
+같은 파일 안의 계측을 주석 제외 토큰 집계로 전수 확인했다. `delete`·`exists`·`existingFiles`·`deletedFiles`·`writeLog`·`errors`·`afterWrite`가 **모두 실제로 구동**된다(`writeLog`는 이미 test 9가 단언 중이었다). 남은 무효 계측 없음. 프로젝트 전체 재감사는 하지 않았다.
+
+## 방문 정의 조사 (수정 없음)
+
+### 현재 production이 가장 가까운 정의: **A — "방문 = 앱을 (새로) 연 날"**
+
+코드와 주석이 일관되게 "**연다**"는 말을 쓴다. 추정이 아니라 문서의 실제 표현이다.
+
+- `recordVisit` KDoc: "같은 날 **다시 열면**", "하루에 여러 번 **열어도**", "어제에 이어 **열면**"
+- `TodayVisit` KDoc: "**이번 실행이** 오늘의 첫 방문", "소인은 앱을 **열 때마다** 찍히지만"
+- `AppIntroScreen` KDoc: "소인은 앱을 **열 때마다** 찍히지만 진동은 이때만"
+- `MainActivity`: "방문 판정은 **프로세스당 정확히 한 번만** 하면 되므로(하루 1회 판정 자체는 저장된 날짜가 보장한다)"
+
+### 구조상 드러난 틈
+
+마지막 주석이 핵심이다. "프로세스당 한 번"이 옳으려면 **"새 날 = 새 프로세스"**가 성립해야 하는데, 앱을 켜 둔 채 자정을 넘기면 그 전제가 깨진다. 그 날은 방문 판정이 아예 다시 실행되지 않는다.
+
+정의 A를 엄격히 적용하면 "사용자가 앱을 새로 연 적이 없으니 새 방문이 아니다"가 맞다. 다만 그 날 하루 종일 앱을 써도 기록되지 않고, `currentStreakDays`가 끊길 수 있다(day1에 열어두고 day2를 넘긴 뒤 day3에 재실행 → 간격 2일로 판정돼 연속이 1로 리셋). 이건 정의의 문제이지 계산 버그가 아니다.
+
+**중요**: 78일차의 달력 자정 갱신 수정 때문에 이 틈이 **눈에 보이게 됐다**. 이전에는 달력이 어제를 "오늘"로 표시해 어긋남이 가려졌지만, 지금은 자정 직후 달력이 새 날을 "오늘"로 정확히 표시하면서 그 칸에 방문 표시가 없다. 동작이 나빠진 게 아니라 원래 있던 틈이 정직하게 드러난 것이다.
+
+### 가능한 정의와 영향
+
+| | A. 앱을 새로 연 날 (현재) | B. 그 날짜에 앱이 실행 상태였던 날 | C. 그 날짜에 실제 사용자 활동이 있었던 날 |
+|---|---|---|---|
+| 자정 통과 | 새 방문 아님 | 자정 순간 새 방문 | resume/조작 시 새 방문 |
+| `totalVisitDays` | 현행 유지 | 켜두기만 해도 증가 | 실제 사용일만 증가 |
+| `currentStreakDays` | 켜둔 날은 끊길 수 있음 | 끊김 사라짐 | 사용한 날 기준 유지 |
+| `visit_record.txt` | 변화 없음 | 자정 타이머가 기록 추가 | foreground 진입에 기록 추가 |
+| history marker | 〃 | 새 날 marker 추가 | 〃 |
+| Intro 소인·진동 | 다음 실행 때 | 인트로를 안 봤는데 방문만 쌓임(소인과 불일치) | 〃 |
+| 33일차 이스터에그 | 실행한 날만 카운트 | 도달이 빨라짐 | 중간 |
+| 방문 달력 | 현행 | 자정 직후 칸이 채워짐 | 조작 시 채워짐 |
+
+B는 "인트로를 보지 않았는데 방문이 쌓인다"는 소인 개념과의 충돌이, C는 "활동"의 정의(resume? 탭? 저장?)가 새로 필요하다는 비용이 있다.
+
+### 이번 작업에서 방문 동작 수정 여부 → **수정 안 함**
+
+`recordTodayVisit`·`visitedEpochDays`·history marker·`totalVisitDays` 모두 그대로다. 사용자 결정 후 별도 작업.
+
+## 잔여 생사불명 코드 최종 판정
+
+### `GalleryPageFormat.label` → ⚰️ **사망 확정, 삭제**
+
+- production 직접 참조 0(유일 독자였던 `GalleryComingSoonPage`를 장례식에서 제거), test 참조 0, resource 참조 0
+- **저장값 영향 없음을 구조로 확인**: `PageFormatSaver`가 `save = { it.name }` / `restore = valueOf(saved)`로 **enum 상수 이름**만 저장한다. 생성자 인자는 직렬화에 전혀 관여하지 않으므로 `label` 제거는 기존 저장값 복원에 무영향이다.
+- 다른 `.label` 호출부들은 전부 다른 enum(pattern/layout/style/type)이라 무관.
+- 조치: `label` 파라미터와 두 상수의 문자열 인자 제거.
+
+### `textStickerColors` → ⚰️ **사망 확정, 삭제**
+
+- 코드 참조 0. 글자색은 고정 팔레트가 아니라 `PostcardCustomColorPicker`(자유 색상 선택)로 옮겨갔다 — `TextStickerDetailScreen`이 `PostcardCustomColorPicker`를 직접 쓰고, 고정 팔레트로 남은 건 외곽선용 `textStickerOutlineColors`뿐이다.
+- 16절 기준 적용: 주석이 값의 존재 이유는 아니다. runtime 역할 0이므로 삭제하고, 이 목록을 인용하던 `sealSelectableInkColors` 주석에서 "흰색 제외" 규칙 자체는 남기고 인용만 걷어냈다.
+
+### 덤으로 드러난 것 — `pastelColors` ⚰️ 삭제
+
+`textStickerColors`를 지우고 연쇄를 확인하다 발견했다. 엽서 배경색 고정 팔레트인데 참조 0이고, 배경색도 `PostcardCustomColorPicker`로 옮겨간 상태다. **장례식 1차에서 놓친 이유가 교훈적이다** — 이름 기반 스캔이 `textStickerColors` 주석 안의 `pastelColors`라는 글자를 참조로 세어 살아 있는 것처럼 보였다. 이번엔 주석을 제거한 뒤 집계해 잡았다. `Color.kt` 전체를 같은 방식으로 재집계했고 다른 0-참조 값은 없다.
+
+## 이번 회차 검증
+
+- `assembleDebug`(resource merge·packaging 포함) + `testDebugUnitTest`: **BUILD SUCCESSFUL**, 신규 경고 0
+- 관련 테스트 `BackgroundColorSaveRaceTest`: **11건 전부 통과**(9 → +2)
+- 전체 unit test: **685건 전부 통과 / 실패 0 / 에러 0**, 클래스 72, 소스 `@Test` 685 = runner 685
+- `git diff --check`: 통과
+- 실패 가능성 실증: 정리 규칙을 일시 약화 → 1건 실패 확인 → 원복
+
+## 고아 이미지 파일 조사 (production 변경 없음)
+
+`deleteIfOwnedByApp` 호출부 0이 실제로 고아 파일을 만드는지 끝까지 추적했다. **결론: 앞으로 새 고아 파일이 생기는 경로는 없다.** 그 함수가 안 불리는 이유는 정리가 빠져서가 아니라 **그 함수가 맡던 기능 자체가 앱에서 사라졌기 때문**이다.
+
+### 이미지 종류별 수명 지도
+
+| 이미지 | 저장 | 교체 | 제거 | 파일 수명 | 판정 |
+|---|---|---|---|---|---|
+| **중심 사진** `imagePath` | 엽서 생성 시 `CameraViewModel` → `ImageUtils` → `filesDir/postcards/` | **기능 없음** — `imagePath`를 UPDATE하는 Dao/Repository 쿼리가 **아예 존재하지 않는다**(전 소스 확인) | 개별 제거 없음 | 엽서 삭제 시 `PostcardDeletionManager`가 정리 | **정상** |
+| **배경 이미지** `backgroundImagePath` | **non-null로 설정하는 호출부가 없다** — 실사용에서 항상 null | 해당 없음 | 해당 없음 | 파일이 애초에 생기지 않음 | **정상(해당 없음)** |
+| **사진 스티커 원본** | `PhotoStickerImageStorage.copyToStickerOriginalStorage`(DetailViewModel 2곳) | 스티커 교체·삭제 시 `deleteOriginalIfUnreferenced`(DetailViewModel 2곳) | 〃 | 참조 확인 후 삭제 | **정상** |
+| **마스킹테이프 사진** | `MaskingTapePhotoStorage.copyToMaskingTapePhotoStorage` | `deleteIfUnreferenced`(DetailViewModel 2곳) | 〃 | 참조 확인 후 삭제 | **정상** |
+| **누끼 디렉터리** `sticker_bgs/<id>/`, `draft_sticker_bgs/<id>/`, `sticker_originals/<id>/` | DetailViewModel | — | — | 엽서 삭제 시 `PostcardDeletionManager`가 id별 디렉터리 재귀 삭제 | **정상** |
+| **임시 파일** `postcards_temp/` | 내보내기·편집 중간 산출물 | — | 앱 시작 시 `PostcardTempCleanup.cleanup`(`PostCardMemoryApp`에서 호출) | 자동 정리 | **정상** |
+
+### 경합 안전성 (지시서 12절) — 이미 구현돼 있다
+
+수리한 테스트가 경고하는 규칙(*삭제 직전에 현재 상태가 그 파일을 다시 참조하는지 확인*)이 살아 있는 삭제 경로에 **전부 이미 들어가 있다**:
+
+- `PhotoStickerImageStorage.deleteOriginalIfUnreferenced`: ① `scheme == "file"` 확인 → ② 경로가 `sticker_originals/` 하위인지(소유권) → ③ `remainingStickers`에 같은 원본을 쓰는 스티커가 남아 있지 않은지(참조) → 셋 다 통과해야 삭제
+- `MaskingTapePhotoStorage.deleteIfUnreferenced`: 같은 3단 구조
+- `PostcardDeletionManager.cleanupPostcardOwnedAssets`: DB에 저장된 경로도 실제 filesDir 하위인지 확인한 뒤에만 삭제하고, 아니면 `failedAssets`에 사유와 함께 남기고 건드리지 않음
+
+즉 과잉 삭제 위험도 현재 구조에서는 보이지 않는다.
+
+### `deleteIfOwnedByApp` 최종 판정 → **B. 과거 구조의 잔재이며 현재는 다른 삭제 경로가 존재**
+
+- production 호출 수: **0**(메서드 참조 `::`도 0). test 참조 7건.
+- 원래 역할: 중심 사진 교체 성공 후 이전 파일 정리(KDoc에 그렇게 적혀 있다).
+- 사라진 이유: 중심 사진 교체 기능이 `ee5749d`에서 추가됐다가 **`7b3edd9`("Simplify photo editing UI into layout and edit panels")에서 제거**되면서 호출부가 같이 사라졌다. 지금은 `imagePath`를 바꾸는 경로 자체가 없다.
+- 현재 실제 역할: 없음. 다만 같은 "앱 소유 파일만 삭제" 판정을 `deleteOriginalIfUnreferenced`·`deleteIfUnreferenced`·`cleanupPostcardOwnedAssets`가 **각자 따로 구현**하고 있다(공용화 후보이지 이번 범위 아님).
+- **조치: 삭제하지 않음.** 지시서 26절의 삭제 조건 중 "테스트 참조 없음"을 만족하지 않는다(전용 테스트 7건 존재). 기능이 되살아나면 그대로 쓸 수 있는, 검증된 안전 헬퍼다.
+
+### `OrphanFileDiagnostics` 최종 판정 → **개발 진단 도구 / 미연결**
+
+- 호출 위치: **production 0건.** 테스트(`OrphanFileDiagnosticsTest`)에서만 9회 호출.
+- 검사 대상: `postcards/`(중심 사진), `postcard_backgrounds/`(배경), `sticker_bgs/`·`sticker_originals/`·`masking_tape_photos/`·`draft_sticker_bgs/`(id별 디렉터리), 꾸미기 상태 파일 디렉터리들.
+- 비교 기준: Room의 `imagePath`/`backgroundImagePath` 집합과 살아 있는 postcardId 집합.
+- 실제 역할: **진단만 한다.** 클래스 KDoc에 "파일을 지우거나 옮기지 않는다 — 삭제는 이 도구가 하지 않는 별도 작업이다"라고 명시돼 있고 구현도 목록만 만든다. 사용자에게 노출되는 화면·로그 출력도 없다.
+- **조치: 삭제하지 않음.** dead code가 아니라 "아직 아무 데도 연결하지 않은 진단 도구"다. 연결 여부는 제품 판단이고, 16·22절이 금지한 전역 청소기/저장공간 화면과 얽히므로 이번 범위 밖.
+
+### 고아 파일 발생 가능성 정리
+
+| 시나리오 | 판정 |
+|---|---|
+| A. 배경 이미지 교체 | **해당 없음** — 배경 이미지를 설정하는 경로 자체가 없다 |
+| B. 배경 이미지 제거 | **해당 없음** — 〃 |
+| C. 중심 사진 교체 | **해당 없음** — 교체 기능이 없다(`imagePath` UPDATE 쿼리 부재) |
+| D. 중심 사진 제거 | **해당 없음** — 개별 제거 없음 |
+| E. 엽서 삭제 | **정상** — `PostcardDeletionManager`가 중심/배경/누끼/원본/상태 파일까지 정리하고, 실패는 `failedAssets`로 보고 |
+| F. 저장 실패·취소·경합 | **정상** — 실패해도 기존 파일을 지우지 않는다(저장 성공 전 삭제 없음). 경합은 위 3단 확인으로 보호 |
+| G. 같은 이미지 재선택 | **정상** — 참조가 남아 있으면 `stillReferenced`로 삭제 안 함 |
+| H. 저장 중 앱 종료 | **정상** — 임시 파일은 `postcards_temp/`에 남고 다음 실행 시 `PostcardTempCleanup`이 정리 |
+
+**과잉 삭제 위험: 현재 구조에서 발견되지 않음.**
+
+### 기존 고아 파일 (이미 생겼을 가능성) → **처리하지 않음**
+
+`postcard_backgrounds/` 디렉터리는 **어떤 production 코드도 더 이상 쓰지 않는다**(쓰는 곳은 `OrphanFileDiagnostics`의 스캔 대상 지정과 테스트뿐). 과거 배경 이미지 기능이 살아 있던 시절 실기기에 파일이 남아 있을 수 있고, 중심 사진 교체 기능이 있던 시기에 `postcards/`에 교체된 옛 파일이 남았을 수도 있다.
+
+- 17절대로 "앞으로 생기지 않게"와 "이미 생긴 것"을 분리했다. 앞으로는 생기지 않는 것이 확인됐다.
+- 기존 파일은 **왜 존재하는지 확실히 모르기 때문에 광역 청소하지 않는다**(16절). 실기기에서 삭제 실험도 하지 않았다.
+- 필요하다면 `OrphanFileDiagnostics`를 디버그 경로에 한 번 연결해 **읽기 전용으로 목록만** 확인하는 것이 다음 단계 후보다(삭제 기능 신설은 별개 사안).
+
+### 이번 회차 변경
+
+**production 코드 변경 0줄. 테스트 변경 0줄. 삭제한 dead code 0건.** 지시서 14절의 수정 조건("고아 파일이 생기는 것이 명백한 경우")이 성립하지 않아 조사·보고로 끝냈다. 26절의 추가 dead code 삭제 조건도 `deleteIfOwnedByApp`(테스트 참조 있음)·`OrphanFileDiagnostics`(진단 도구) 모두 만족하지 않았다.
+
+검증은 트리 무변경 상태에서 재확인: `assembleDebug` + `testDebugUnitTest` **BUILD SUCCESSFUL, 685건 전부 통과**, `git diff --check` 통과.
+
+## 실기기 smoke QA
+
+**대기 중.** 변경이 UI 렌더링 경로(달력 요일 머리글 색, picker 복귀 링크, 시계 패널색·커피잔 크기 상수, 달력 `today` 공급 방식)에 닿았고 그 결과는 자동 검증으로 확인할 수 없음. **기존 동작 보존만** 최소 확인 요청 — 기기 날짜 조작이나 전체 앱 자연 QA 반복은 요구하지 않음.
+
+## Git
+
+**commit 미실행 / push 미실행** — 실기기 smoke QA 후 사용자 승인 대기.
+
+## 남은 위험
+
+- 실기기에서 달력·시계의 시각적 동일성 미확인(위 QA로 해소 예정)
+- 실제 자정 통과 시 달력 갱신은 자연 발생 확인 대상(기기 날짜 조작 안 함)
+- 앱을 켜 둔 채 자정을 넘기면 **새 날의 방문 자체가 기록되지 않음**(제품 정의 문제, 미수정)
+- 템플릿 기능 한 벌이 UI 미연결 상태로 존재 — 미완성/보류 여부 미확정
+- 실기기에 **과거 기능이 남긴 고아 파일**이 있을 수 있음(`postcard_backgrounds/`, 교체 시절의 `postcards/`) — 앞으로 생기지는 않지만 기존 파일은 미확인·미처리
+- `OrphanFileDiagnostics`가 만들어져 있으나 아무 데도 연결돼 있지 않아, 실제 기기 상태를 확인할 수단이 현재 없음
+- 방문 정의가 미확정이라 자정 이후 방문 기록·연속 방문 끊김이 남아 있음
+
+## 다음 작업 후보 (승인된 실행 아님)
+
+1. **"방문"의 정의 확정**(위 A/B/C 표) 후 자정 이후 방문 기록·월 집합 재로드 작업
+2. **템플릿 기능을 살릴지 묻을지 결정** — UI 미연결 상태의 기능 한 벌(341줄 UI + 저장소 + DAO + Room 컬럼 + 테스트)
+3. `OrphanFileDiagnostics`를 디버그 경로에 **읽기 전용으로만** 연결해 실기기의 기존 고아 파일 실태 확인(삭제 기능 신설은 별개 사안)
+4. 앱 소유 파일 판정("filesDir 하위인가")이 `deleteIfOwnedByApp`·`deleteOriginalIfUnreferenced`·`deleteIfUnreferenced`·`cleanupPostcardOwnedAssets` 네 곳에 각자 구현돼 있음 — 공용화 검토
+4. `vibrate*` 3종 공용화 검토
+5. Compose UI 테스트 하네스 도입 검토 + 구조 테스트 129건 정리(새 dependency 필요 → 별도 승인 사안)
+
+---
+
 # HANDOFF — 77일차 추가: 달력 현재연도 색상 + 레트로 탁상시계
 
 확인일: 2026-09-18. 수동 표준 모드. 77일차 본작업(`baef7a0`) 이후 사용자가 "77일차 추가 수정 작업지시서"(A. 현재 연도에 해당하는 달력 항목 색상 보강, B. 메인 갤러리 상단 레트로 디지털 탁상시계 추가)를 붙여넣어 피코(Claude Code)가 구현했어. **세션 도중 PC 강제종료로 중단됨** — 새 세션에서 branch/HEAD/git status/git diff/HANDOFF를 먼저 확인하고, 크래시난 세션의 로그 파일을 직접 읽어 이 작업이 실제로 지시받은 범위였는지(특히 A항목이 사용자 기억에 없다고 한 부분) 대조 검증한 뒤 이어서 진행했어. **실기기 QA 전부 통과(A·B 및 시계 후속 폴리싱 2건 포함), 사용자가 "커밋하고 푸시해줘"로 명시적으로 요청.**

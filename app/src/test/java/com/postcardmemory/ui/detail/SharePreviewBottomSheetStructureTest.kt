@@ -1,5 +1,6 @@
 package com.postcardmemory.ui.detail
 
+import com.postcardmemory.testsupport.readStructureTestSource
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,19 +28,8 @@ import org.junit.Test
  */
 class SharePreviewBottomSheetStructureTest {
 
-    private fun readSource(candidates: List<String>): String {
-        val file = candidates
-            .map { File(it) }
-            .firstOrNull { it.exists() }
-            ?: error(
-                "소스 파일을 찾을 수 없음(cwd=${File(".").absolutePath}). " +
-                    "candidates=$candidates"
-            )
-        return file.readText()
-    }
-
     private val componentText: String by lazy {
-        readSource(
+        readStructureTestSource(
             listOf(
                 "src/main/java/com/postcardmemory/ui/detail/SharePreviewBottomSheet.kt",
                 "app/src/main/java/com/postcardmemory/ui/detail/SharePreviewBottomSheet.kt"
@@ -48,7 +38,7 @@ class SharePreviewBottomSheetStructureTest {
     }
 
     private val detailScreenText: String by lazy {
-        readSource(
+        readStructureTestSource(
             listOf(
                 "src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt",
                 "app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt"

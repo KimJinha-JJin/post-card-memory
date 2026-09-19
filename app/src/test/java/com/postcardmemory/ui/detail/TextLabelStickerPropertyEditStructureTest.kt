@@ -1,6 +1,6 @@
 package com.postcardmemory.ui.detail
 
-import java.io.File
+import com.postcardmemory.testsupport.readStructureTestSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -27,19 +27,8 @@ import org.junit.Test
  */
 class TextLabelStickerPropertyEditStructureTest {
 
-    private fun readSource(candidates: List<String>): String {
-        val file = candidates
-            .map { File(it) }
-            .firstOrNull { it.exists() }
-            ?: error(
-                "소스 파일을 찾을 수 없음(cwd=${File(".").absolutePath}). " +
-                    "candidates=$candidates"
-            )
-        return file.readText()
-    }
-
     private val textStickerText: String by lazy {
-        readSource(
+        readStructureTestSource(
             listOf(
                 "src/main/java/com/postcardmemory/ui/detail/TextStickerDetailScreen.kt",
                 "app/src/main/java/com/postcardmemory/ui/detail/TextStickerDetailScreen.kt"
@@ -48,7 +37,7 @@ class TextLabelStickerPropertyEditStructureTest {
     }
 
     private val labelStickerText: String by lazy {
-        readSource(
+        readStructureTestSource(
             listOf(
                 "src/main/java/com/postcardmemory/ui/detail/LabelStickerDetailScreen.kt",
                 "app/src/main/java/com/postcardmemory/ui/detail/LabelStickerDetailScreen.kt"

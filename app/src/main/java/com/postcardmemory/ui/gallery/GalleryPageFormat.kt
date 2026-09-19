@@ -14,9 +14,8 @@ package com.postcardmemory.ui.gallery
  * 정렬과 무관하다.
  */
 enum class GalleryPageFormat(
-    val label: String,
     val sortAffectsOrder: Boolean = false
 ) {
-    MONTHLY("월별 보기", sortAffectsOrder = true),
-    DENSITY("기억 밀도 보기")
+    MONTHLY(sortAffectsOrder = true),
+    DENSITY
 }

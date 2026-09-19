@@ -43,8 +43,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items as lazyColumnItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -674,8 +672,9 @@ fun GalleryScreen(
                     }
 
                     // 작은 레트로 탁상시계 + 커피잔. 검색·정렬 아이콘이 있는 타이틀 Row와
-                    // 겹치지 않게 그 아래 별도 줄에, 화면 폭을 다 차지하지 않고 시작 쪽에
-                    // 조용히 둔다(시계 자체 폭은 GalleryRetroClock 내부에서 58%로 제한).
+                    // 겹치지 않게 그 아래 별도 줄에 둔다. 아래 fillMaxWidth는 시계가 놓이는
+                    // 자리의 폭일 뿐이고, 시계 바디 자체는 내부 글자 폭에 맞춰 스스로 닫힌다
+                    // (GalleryRetroClockFace의 IntrinsicSize.Min) — 폭을 여기서 제한하지 않는다.
                     GalleryRetroClock(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1759,33 +1758,6 @@ private fun GalleryPageIndicator(
     }
 }
 
-/**
- * 아직 구현되지 않은 보기 형식의 최소 placeholder(21절 — 구조 확인용
- * 최소 placeholder만 두고 대량으로 가짜 UI를 만들지 않는다). 카드나 배경
- * 박스 없이 안내 문구 하나만 둔다.
- */
-@Composable
-private fun GalleryComingSoonPage(
-    format: GalleryPageFormat,
-    paddingValues: PaddingValues
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GalleryPaperWhite)
-            .padding(paddingValues),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "${format.label}는 곧 만나볼 수 있어요.",
-            fontSize = 15.sp,
-            color = InkSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        )
-    }
-}
-
 internal data class GalleryMemoryDensityMonth(
     val yearMonth: YearMonth,
     val postcards: List<Postcard>
@@ -1861,7 +1833,10 @@ private fun GalleryDensityPage(
     postcards: List<Postcard>,
     paddingValues: PaddingValues
 ) {
-    val year = remember { YearMonth.now().year }
+    // 이 화면에는 연도 선택 UI가 없다 — year는 "사용자가 고른 연도"가 아니라 순수하게
+    // "지금 몇 년인가"다. 그래서 앱을 켜 둔 채 연말 자정을 넘기면 제목과 12칸이 지난해에
+    // 머무는 문제가 있었고, 방문 달력과 같은 자정 기준([rememberTodayDate])을 쓴다.
+    val year = rememberTodayDate().year
     val months = remember(postcards, year) {
         memoryDensityMonthsForYear(postcards, year)
     }
@@ -2271,88 +2246,6 @@ internal fun calendarCellsFor(yearMonth: YearMonth): List<LocalDate?> {
     }
 
     return cells
-}
-
-@Composable
-private fun GalleryDetailList(
-    postcards: List<Postcard>,
-    selectedIds: Set<Long>,
-    paddingValues: PaddingValues,
-    listState: LazyListState,
-    onItemClick: (Long) -> Unit,
-    onItemLongClick: (Long) -> Unit
-) {
-    val monthSections = remember(postcards) {
-        monthSectionsFor(postcards)
-    }
-
-    LazyColumn(
-        state = listState,
-        contentPadding = PaddingValues(
-            top = paddingValues.calculateTopPadding(),
-            bottom = paddingValues.calculateBottomPadding() + 88.dp
-        ),
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GalleryPaperWhite)
-    ) {
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = 16.dp,
-                        vertical = 10.dp
-                    )
-            ) {
-                Text(
-                    text = "날짜",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = GraphiteAccent,
-                    modifier = Modifier.width(96.dp)
-                )
-
-                Text(
-                    text = "내용",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = GraphiteAccent
-                )
-            }
-
-            HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
-        }
-
-        monthSections.forEach { section ->
-            item(key = "month_${section.yearMonth}") {
-                GalleryMonthHeader(
-                    yearMonth = section.yearMonth,
-                    postcardCount = section.postcards.size
-                )
-            }
-
-            lazyColumnItems(
-                items = section.postcards,
-                key = { postcard ->
-                    postcard.id
-                }
-            ) { postcard ->
-                PostcardDetailRow(
-                    postcard = postcard,
-                    isSelected = postcard.id in selectedIds,
-                    onClick = {
-                        onItemClick(postcard.id)
-                    },
-                    onLongClick = {
-                        onItemLongClick(postcard.id)
-                    }
-                )
-
-                HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
-            }
-        }
-    }
 }
 
 /**

@@ -52,7 +52,6 @@ class GalleryViewModel @Inject constructor(
             )
 
     private val _isDeleting = MutableStateFlow(false)
-    val isDeleting: StateFlow<Boolean> = _isDeleting
 
     /** 삭제 결과 요약 메시지(성공/부분 실패/전체 실패)를 한 번만 전달하는 이벤트. */
     private val _deletionMessages = Channel<String>(Channel.BUFFERED)

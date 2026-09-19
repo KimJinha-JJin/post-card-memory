@@ -9,6 +9,7 @@ import com.postcardmemory.ui.theme.SealInkNavy
 import com.postcardmemory.ui.theme.SealInkRed
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
 import org.junit.Assert.*
 import org.junit.Test
@@ -334,5 +335,87 @@ class VisitCalendarTest {
             // 채운 칸은 전부 빈 칸이어야 한다 — 실제 날짜를 만들어내지 않는다.
             padded.drop(real.size).forEach { assertNull(it) }
         }
+    }
+
+    // ── 자정 갱신 회귀 방지 (78일차 후속) ────────────────────────────────
+    // 앱을 켜 둔 채 자정을 넘기면 시계는 새 날짜인데 달력의 "오늘"만 어제에 머물렀다.
+    // 원인은 달력이 today를 key 없는 remember로 한 번만 붙잡아 둔 것이었고, 수정 후에는
+    // millisUntilNextMidnight만큼 기다렸다가 스스로 다시 읽는다. 아래는 그 대기 시간
+    // 계산과, "날짜가 하루 넘어가면 현재 기준 판정도 새 날짜를 쓴다"는 의미를 고정한다.
+
+    @Test fun millisUntilNextMidnightCountsDownToTheUpcomingDayBoundary() {
+        assertEquals(
+            60_000L,
+            millisUntilNextMidnight(LocalDateTime.of(2026, 9, 19, 23, 59, 0))
+        )
+        assertEquals(
+            500L,
+            millisUntilNextMidnight(LocalDateTime.of(2026, 9, 19, 23, 59, 59, 500_000_000))
+        )
+        assertEquals(
+            12L * 60 * 60 * 1000,
+            millisUntilNextMidnight(LocalDateTime.of(2026, 9, 19, 12, 0, 0))
+        )
+    }
+
+    @Test fun millisUntilNextMidnightAtExactMidnightWaitsAFullDayInsteadOfZero() {
+        // 0을 돌려주면 대기 루프가 자정에 바쁜 루프로 돌아버린다 — 항상 양수여야 한다.
+        val atMidnight = millisUntilNextMidnight(LocalDateTime.of(2026, 9, 19, 0, 0, 0))
+        assertEquals(24L * 60 * 60 * 1000, atMidnight)
+        listOf(
+            LocalDateTime.of(2026, 9, 19, 0, 0, 0),
+            LocalDateTime.of(2026, 12, 31, 23, 59, 59),
+            LocalDateTime.of(2028, 2, 28, 0, 0, 0) // 윤년 2월 28일 -> 29일
+        ).forEach { assertTrue(millisUntilNextMidnight(it) > 0L) }
+    }
+
+    @Test fun millisUntilNextMidnightCrossesMonthAndYearBoundaries() {
+        assertEquals(
+            1_000L,
+            millisUntilNextMidnight(LocalDateTime.of(2026, 9, 30, 23, 59, 59))
+        )
+        assertEquals(
+            1_000L,
+            millisUntilNextMidnight(LocalDateTime.of(2026, 12, 31, 23, 59, 59))
+        )
+    }
+
+    @Test fun currentPeriodJudgmentsFollowTheNewDateOnceTheDayRollsOver() {
+        // 월말 자정 통과: 9/30 -> 10/1. 현재 기준이 갱신되면 "현재 월"도 함께 넘어가야 한다.
+        val lastDayOfSeptember = YearMonth.from(LocalDate.of(2026, 9, 30))
+        val firstDayOfOctober = YearMonth.from(LocalDate.of(2026, 10, 1))
+
+        assertTrue(isCurrentMonthCell(2026, 9, lastDayOfSeptember))
+        assertFalse(isCurrentMonthCell(2026, 10, lastDayOfSeptember))
+
+        assertFalse(isCurrentMonthCell(2026, 9, firstDayOfOctober))
+        assertTrue(isCurrentMonthCell(2026, 10, firstDayOfOctober))
+    }
+
+    @Test fun currentYearJudgmentsFollowTheNewDateAcrossNewYearMidnight() {
+        // 연말 자정 통과: 2026-12-31 -> 2027-01-01.
+        val newYearsEve = YearMonth.from(LocalDate.of(2026, 12, 31))
+        val newYearsDay = YearMonth.from(LocalDate.of(2027, 1, 1))
+
+        assertTrue(isCurrentYearCell(2026, newYearsEve))
+        assertFalse(isCurrentYearCell(2027, newYearsEve))
+
+        assertFalse(isCurrentYearCell(2026, newYearsDay))
+        assertTrue(isCurrentYearCell(2027, newYearsDay))
+
+        // 해가 바뀌어도 2026년 MONTH_PICKER는 다음 해 1~4월을 버퍼로 보여주므로 2027년
+        // 1월은 아직 창 안이다 — 링크가 바로 뜨지는 않는다.
+        assertTrue(isCurrentMonthVisibleInMonthPicker(2026, newYearsEve))
+        assertTrue(isCurrentMonthVisibleInMonthPicker(2026, newYearsDay))
+    }
+
+    @Test fun todayReturnLinkAppearsWhenTheRolledOverDateLeavesTheVisiblePickerWindow() {
+        // 2026년 MONTH_PICKER가 보여주는 마지막 버퍼 칸은 2027년 4월이다. 그 달의 마지막 날
+        // 자정을 넘기면 오늘이 창 밖으로 나가므로 "오늘 ...로" 복귀 링크가 나타나야 한다.
+        val lastVisibleBufferMonth = YearMonth.from(LocalDate.of(2027, 4, 30))
+        val firstMonthOutsideWindow = YearMonth.from(LocalDate.of(2027, 5, 1))
+
+        assertTrue(isCurrentMonthVisibleInMonthPicker(2026, lastVisibleBufferMonth))
+        assertFalse(isCurrentMonthVisibleInMonthPicker(2026, firstMonthOutsideWindow))
     }
 }
