@@ -1,5 +1,7 @@
 package com.postcardmemory.ui.gallery
 
+import com.postcardmemory.utils.millisUntilNextMidnight
+
 import androidx.compose.ui.graphics.Color
 import com.postcardmemory.ui.detail.LABEL_STICKER_DARK_TEXT_ARGB
 import com.postcardmemory.ui.detail.LABEL_STICKER_LIGHT_TEXT_ARGB

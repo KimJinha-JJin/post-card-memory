@@ -193,6 +193,7 @@ import com.postcardmemory.ui.futuremail.isSelectableFutureMailDate
 import com.postcardmemory.ui.futuremail.localStartOfDayToMaterialDatePickerUtcMillis
 import com.postcardmemory.ui.futuremail.materialDatePickerUtcMillisToLocalStartOfDay
 import com.postcardmemory.ui.futuremail.startOfDayMillis
+import com.postcardmemory.ui.gallery.rememberTodayDate
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.SunsetGold
@@ -1791,7 +1792,11 @@ fun DetailScreen(
     val sealedPostcard = postcard
     if (sealedPostcard != null && sealedPostcard.futureMailState == FUTURE_MAIL_STATE_SENT) {
         val deliverAtMillis = sealedPostcard.futureMailDeliverAt
-        val now = remember { System.currentTimeMillis() }
+        // 도착 여부와 D-day는 자정 기준 날짜 비교라(FutureMailLogic), 날짜가
+        // 바뀔 때만 시각을 다시 읽으면 충분하다. key 없는 remember로 두면 앱을
+        // 켜 둔 채 자정을 넘겼을 때 봉인 화면이 어제에 머문다.
+        val today = rememberTodayDate()
+        val now = remember(today) { System.currentTimeMillis() }
 
         val arrived = remember(deliverAtMillis, now) {
             deliverAtMillis != null && isFutureMailArrived(deliverAtMillis, now)

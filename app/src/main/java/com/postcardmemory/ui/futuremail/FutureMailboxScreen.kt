@@ -166,9 +166,9 @@ private fun FutureMailGroupCard(
             .format(Instant.ofEpochMilli(group.deliverAtMillis).atZone(ZoneId.systemDefault()))
     }
 
-    val daysLeft = remember(group.deliverAtMillis) {
-        daysUntilFutureMail(group.deliverAtMillis, System.currentTimeMillis())
-    }
+    // 화면에서 시각을 다시 읽지 않는다 — 도착 여부·진행률과 같은 기준으로
+    // 그룹이 만들어질 때 함께 계산된 값을 그대로 쓴다(자정 경계 일치).
+    val daysLeft = group.daysLeft
 
     Column(
         modifier = Modifier

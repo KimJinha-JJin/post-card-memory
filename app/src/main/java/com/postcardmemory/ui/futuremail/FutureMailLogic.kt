@@ -86,11 +86,18 @@ internal fun localStartOfDayToMaterialDatePickerUtcMillis(
         .toInstant()
         .toEpochMilli()
 
-/** 우체통 화면에 표시할, 같은 도착일끼리 묶인 배송 그룹 하나. */
+/**
+ * 우체통 화면에 표시할, 같은 도착일끼리 묶인 배송 그룹 하나.
+ *
+ * [arrived]·[progressPercent]·[daysLeft]는 모두 이 그룹을 만든 시점의
+ * **같은 nowMillis** 하나로 계산한다. 화면에서 D-day만 따로 다시 계산하면
+ * 자정을 넘겼을 때 "진행률은 새 날짜, D-day는 어제"처럼 갈라진다.
+ */
 data class FutureMailGroup(
     val deliverAtMillis: Long,
     val arrived: Boolean,
     val progressPercent: Int,
+    val daysLeft: Long,
     val postcardIds: List<Long>
 ) {
     val count: Int get() = postcardIds.size
@@ -153,6 +160,7 @@ fun buildFutureMailGroups(
                 deliverAtMillis = deliverAtDay,
                 arrived = isFutureMailArrived(deliverAtDay, nowMillis, zone),
                 progressPercent = progressPercent,
+                daysLeft = daysUntilFutureMail(deliverAtDay, nowMillis, zone),
                 postcardIds = group.map { it.id }
             )
         }

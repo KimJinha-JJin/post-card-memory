@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStream
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -230,23 +231,50 @@ object ImageUtils {
             "postcard_${System.currentTimeMillis()}.jpg"
         )
 
-        FileOutputStream(outputFile).use { outputStream ->
-            val saved = finalBitmap.compress(
+        writeOrDeletePartialFile(outputFile) { outputStream ->
+            finalBitmap.compress(
                 Bitmap.CompressFormat.JPEG,
                 92,
                 outputStream
             )
-
-            if (!saved) {
-                throw IllegalStateException(
-                    "정사각형 사진을 저장하지 못했습니다."
-                )
-            }
-
-            outputStream.flush()
         }
 
         return outputFile
+    }
+
+    /**
+     * [outputFile]에 [write]로 내용을 쓰되, 쓰다가 실패하면 **만들다 만
+     * 파일을 남기지 않는다**.
+     *
+     * 예전에는 compress가 false를 돌려주거나 도중에 예외가 나면 0바이트이거나
+     * 반쯤 쓰인 JPEG가 postcards/ 에 그대로 남았다. 그 파일은 DB가 참조하지
+     * 않으므로 어느 화면에도 나타나지 않고, 지워주는 주체도 없는 고아가 된다.
+     *
+     * [write]가 false를 돌려주는 것도 실패로 본다(Bitmap.compress의 실패
+     * 신호). 예외는 정리 후 그대로 다시 던져 호출부가 실패를 알 수 있게 한다.
+     *
+     * internal: Bitmap 없이 순수 JUnit에서 이 정리 규칙만 직접 검증하기 위함.
+     */
+    internal fun writeOrDeletePartialFile(
+        outputFile: File,
+        write: (OutputStream) -> Boolean
+    ) {
+        try {
+            FileOutputStream(outputFile).use { outputStream ->
+                val saved = write(outputStream)
+
+                if (!saved) {
+                    throw IllegalStateException(
+                        "정사각형 사진을 저장하지 못했습니다."
+                    )
+                }
+
+                outputStream.flush()
+            }
+        } catch (failure: Throwable) {
+            outputFile.delete()
+            throw failure
+        }
     }
 
     /**

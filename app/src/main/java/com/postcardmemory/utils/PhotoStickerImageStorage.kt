@@ -228,13 +228,9 @@ object PhotoStickerImageStorage {
             File(
                 context.filesDir,
                 ORIGINALS_DIRECTORY_NAME
-            ).canonicalFile
-
-        if (
-            !targetFile.path.startsWith(
-                originalsRoot.path
             )
-        ) {
+
+        if (!isInsideDirectory(originalsRoot, targetFile)) {
             return
         }
 

@@ -15,6 +15,7 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenter
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
+import com.postcardmemory.di.ExitSaveScope
 import com.postcardmemory.ui.components.BACK_MESSAGE_MAX_LENGTH
 import com.postcardmemory.ui.components.BACK_POSTSCRIPT_MAX_LENGTH
 import com.postcardmemory.ui.components.withBackMessage
@@ -29,6 +30,7 @@ import com.postcardmemory.utils.PostcardDeletionManager
 import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.deserializeDoodleStroke
+import com.postcardmemory.utils.isInsideDirectory
 import com.postcardmemory.utils.serialize as serializeDoodleStroke
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,6 +42,7 @@ import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -252,7 +255,14 @@ sealed interface PhotoColorExtractionState {
 class DetailViewModel @Inject constructor(
     private val repository: PostcardRepository,
     private val deletionManager: PostcardDeletionManager,
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    /**
+     * 화면 이탈 직전의 마지막 초안 저장 전용 scope. viewModelScope는
+     * navigation 직후 ViewModelStore.clear()로 취소되므로, 상한 시간을
+     * 넘긴 저장이 여기서 끝까지 진행될 수 있도록 ViewModel보다 오래 사는
+     * scope를 주입받는다([ExitSaveScope] 참고).
+     */
+    @param:ExitSaveScope private val exitSaveScope: CoroutineScope
 ) : ViewModel() {
 
     private val _postcard =
@@ -2260,9 +2270,7 @@ class DetailViewModel @Inject constructor(
                     // 폐기/성공 시점)가 정리하므로 여기서 지우지 않는다.
                     if (
                         deleteCacheSourceAfterCopy &&
-                        srcFile.path.startsWith(
-                            stickerCacheDir.path
-                        )
+                        isInsideDirectory(stickerCacheDir, srcFile)
                     ) {
                         srcFile.delete()
                     }
@@ -3654,19 +3662,32 @@ class DetailViewModel @Inject constructor(
      * 여기서는 완료 여부만 기다리면 된다(join은 예외를 전파하지 않는다). 혹시
      * 모를 비정상적 지연으로 navigation이 무기한 멈추지 않도록 상한 시간을 둔다.
      *
+     * **상한 시간의 의미**: 여기 있는 모든 상한 시간은 "얼마나 기다릴지"만
+     * 제한하며 "저장을 취소할지"를 정하지 않는다. style-save Job들은
+     * viewModelScope에 있으므로 join()을 끊어도 Job 자체는 취소되지 않는다.
+     * 반면 초안 flush는 예전에 이 대기 coroutine 안에서 직접 실행돼
+     * 상한 시간이 저장까지 함께 취소했고, debounce Job은 이미 cancel한
+     * 뒤라 재시도하는 주체도 없어 사용자의 마지막 편집이 사라질 수 있었다.
+     * 그래서 초안 flush만 exitSaveScope(ViewModel보다 오래 사는 scope)에서
+     * 실행하고 여기서는 join만 기다린다
+     * ([launchSaveAndAwaitWithUiTimeout] 참고).
+     *
      * 마지막으로 stickerCleanupCandidates/maskingTapePhotoCleanupCandidates도
      * 여기서 함께 정리한다(awaitStickerCleanupSweep/
      * awaitMaskingTapePhotoCleanupSweep) — onCleared()는 viewModelScope가
      * 이미 취소된 뒤 호출되므로 그 안에서 정리를 시도하면 아무 파일도
-     * 지워지지 않는다.
+     * 지워지지 않는다. 이 둘은 "이미 아무도 참조하지 않는 파일 삭제"라
+     * 중간에 끊겨도 사용자 데이터가 사라지지 않으므로(다음 정리 기회에 다시
+     * 후보가 된다) 위 저장들과 달리 상한 시간이 지나면 그대로 중단한다 —
+     * 상한을 두지 않으면 파일시스템이 느릴 때 navigation이 무기한 멈춘다.
      *
      * draftAutosaveJob(초안 자동저장 debounce)은 위 style-save Job 목록과
      * 별개다 — flushDraftNow()가 ON_STOP(백그라운드 전환)에서 이미 하는
      * 것과 동일하게, 아직 debounce 대기 중인 초안 저장이 있으면 그 debounce를
-     * 건너뛰고 즉시 persistDraftNow()를 직접 호출해 완료를 기다린다. 단순히
-     * draftAutosaveJob을 join()하면 남은 debounce 시간(최대
-     * DRAFT_AUTOSAVE_DEBOUNCE_MS)만큼 불필요하게 기다리게 되므로, 대신
-     * flushDraftNow()와 같은 방식으로 즉시 실행한다.
+     * 건너뛰고 즉시 persistDraftNow()를 실행한다. 단순히 draftAutosaveJob을
+     * join()하면 남은 debounce 시간(최대 DRAFT_AUTOSAVE_DEBOUNCE_MS)만큼
+     * 불필요하게 기다리게 되므로, 대신 flushDraftNow()와 같은 방식으로 즉시
+     * 실행한다.
      */
     suspend fun awaitPendingStyleSaves() {
         val pendingJobs =
@@ -3700,13 +3721,18 @@ class DetailViewModel @Inject constructor(
 
         if (draftAutosaveJob?.isActive == true) {
             draftAutosaveJob?.cancel()
-            withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS.milliseconds) {
+            launchSaveAndAwaitWithUiTimeout(
+                saveScope = exitSaveScope,
+                timeoutMillis = PENDING_STYLE_SAVE_TIMEOUT_MS
+            ) {
                 persistDraftNow()
             }
         }
 
-        awaitStickerCleanupSweep()
-        awaitMaskingTapePhotoCleanupSweep()
+        withTimeoutOrNull(PENDING_STYLE_SAVE_TIMEOUT_MS.milliseconds) {
+            awaitStickerCleanupSweep()
+            awaitMaskingTapePhotoCleanupSweep()
+        }
     }
 
     fun resetLayoutUpdateState() {
@@ -3815,22 +3841,18 @@ class DetailViewModel @Inject constructor(
             File(
                 context.cacheDir,
                 "photo_stickers"
-            ).canonicalFile
+            )
         val stickerPersistDir =
             File(
                 context.filesDir,
                 "sticker_bgs"
-            ).canonicalFile
+            )
         val targetFile =
             file.canonicalFile
 
         if (
-            targetFile.path.startsWith(
-                stickerCacheDir.path
-            ) ||
-            targetFile.path.startsWith(
-                stickerPersistDir.path
-            )
+            isInsideDirectory(stickerCacheDir, targetFile) ||
+            isInsideDirectory(stickerPersistDir, targetFile)
         ) {
             targetFile.delete()
         }

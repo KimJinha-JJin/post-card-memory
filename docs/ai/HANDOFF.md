@@ -1,3 +1,220 @@
+# HANDOFF — 78일차 후속: 안정성 보강 (데이터 보존 · 실패 복구 · 시간 경계)
+
+확인일: 2026-09-19. 수동 표준 모드. 사용자 제공 "78일차 안정성 보강 수정지시서"(P0 2건 / P1 3건 / P2 1건 / P3 1건)에 따라 항목별로 `조사 → 최소 수정 → 회귀 테스트 → 컴파일 확인`을 하나씩 끝내고 마지막에 전체 검증했어. **새 기능·UI·디자인 변경 없음, Room schema/Migration 변경 없음, 새 dependency 없음.** 실기기 smoke QA 대기, commit·push 미실행(사용자 승인 대기).
+
+## 시작 Git 상태 (실측)
+
+branch `feature/photo-sticker`, 시작 HEAD `a0352b6`, `git fetch` 후 local == origin (0/0), tracked working tree clean. 기존 무관 untracked(`.codex-config.candidate.toml`, `.kotlin/`)는 건드리지 않음. 감사 보고서의 값과 실제가 일치했음.
+
+> 이 세션에서 내장 Task 도구(`TaskCreate` 등)가 제공되지 않아 진행 안내로 대체했음(`CLAUDE.md` 내장 Task 운영 절의 기능 부재 규정 적용).
+
+## P0-1 — 초안 읽기 실패를 "손상"으로 오인해 삭제하던 문제
+
+**기존 위험**: `PostcardDraftStorage.loadDraft`가 `runCatching { file.readText() }.getOrNull()`이 null이면 곧바로 초안 파일과 `draft_sticker_bgs/<postcardId>/`(누끼 PNG 폴더)를 **지웠다**. 파일 잠금·저장소 일시 오류 같은 일시적 I/O 실패와 실제 손상을 구분하지 못해, 한 번 읽기에 실패하면 사용자의 편집 초안이 영구 삭제됐다.
+
+**수정**: 세 경우를 분리했다.
+
+- 파일 없음 → 초안 없음(null), 아무것도 지우지 않음 (기존과 동일)
+- **읽기 실패(예외) → 아무것도 지우지 않고 이번 진입만 복원을 건너뜀(null)**. 내용을 한 글자도 못 봤으므로 손상 판정 자체가 불가능하다는 근거를 KDoc에 남김
+- 내용을 읽었는데 파싱 실패 → **기존 격리(삭제) 정책 그대로 유지**. 잘못된 UTF-8은 `readText`가 던지지 않고 U+FFFD로 치환하고, 잘린 파일도 파싱에서 걸리므로 실제 손상은 전부 이쪽 경로로 들어온다
+
+`invalidateDraftFile` fallback(빈 내용 덮어쓰기 → 다음 loadDraft가 파싱 실패로 정리)도 파싱 경로라 그대로 동작한다.
+
+**회귀 테스트**: `PostcardDraftStorageTest` 24 → 29건. 일시적 실패는 `loadDraft(filesDir, id) { throw IOException(...) }`로 **실제 주입**(production 기본값을 쓰는 테스트 seam 파라미터 추가). seam 없이 production 기본 경로만 쓰는 검증도 하나 넣었다(초안 경로를 디렉터리로 만들어 `readText`가 실제로 실패하게 함).
+
+**실패 가능성 실증(§33)**: 수정 전 동작(`file.delete()` + `deleteRecursively()`)으로 되돌려 실행 → 새 테스트 **4건이 정확히 실패**, 손상 초안 격리 테스트는 그대로 통과. 이후 수정본 복구하고 TEMP 잔재 0건 확인 후 전체 재검증.
+
+## P0-2 — 화면 이탈 상한 시간이 "대기"가 아니라 "저장"을 취소하던 문제
+
+**조사 결과(§8: timeout 시 무엇이 취소되는가)** — `awaitPendingStyleSaves()` 안의 세 덩어리는 성질이 전부 달랐다.
+
+| 대상 | 실행 위치 | 상한 시간이 취소하는 것 |
+|---|---|---|
+| style-save Job 19개 | `viewModelScope.launch` | **join(대기)만**. Job은 안 죽는다 |
+| 초안 flush(`persistDraftNow`) | 대기 coroutine에서 **직접 suspend 호출** | **저장 자체**가 취소됨 ← 실제 버그 |
+| cleanup sweep 2개 | 대기 coroutine에서 직접 호출, **상한 없음** | 아무것도 안 끊음 → navigation 무한 대기 가능 |
+
+즉 KDoc이 약속한 "navigation이 무기한 멈추지 않도록 상한을 둔다"는 sweep 두 개에는 애초에 적용되지 않았고, 반대로 초안 flush에는 과하게 적용돼 있었다. 게다가 flush 직전 `draftAutosaveJob?.cancel()`을 이미 했기 때문에 재시도할 주체도 없어 **마지막 편집이 그대로 유실**됐다.
+
+**수정** (숫자를 늘리는 대신 생명주기를 분리):
+
+1. `di/ExitSaveScopeModule.kt` — `@ExitSaveScope`로 한정한 `@Singleton CoroutineScope(SupervisorJob() + Dispatchers.Default)`. **이탈 직전 마지막 저장 전용**이며 남용 금지를 KDoc에 명시. `GlobalScope` 아님, 새 dependency 아님
+2. `ui/detail/ExitSaveTimeout.kt` — `launchSaveAndAwaitWithUiTimeout(saveScope, timeoutMillis, save)`. 저장을 `saveScope`에서 띄우고 `join()`만 상한으로 끊는다. 반환값 false는 "실패"가 아니라 "아직 진행 중이라 기다리지 않고 돌아간다"는 뜻
+3. `awaitPendingStyleSaves()` — 초안 flush를 이 함수로 교체. cleanup sweep 두 개는 **상한 안으로** 넣음(이미 아무도 참조하지 않는 파일 삭제라 끊겨도 데이터 손실이 없고 다음 기회에 다시 후보가 됨)
+
+**회귀 테스트**: `ExitSaveTimeoutTest` 4건. production 함수를 직접 호출한다(replica 아님). 상한 초과 시 대기는 끝나지만 저장은 완료되는 것, 대기하던 coroutine을 실제로 취소해도 저장이 살아남는 것을 검증. **수정 전 구조(`withTimeoutOrNull { save() }`)를 그대로 재현한 테스트를 함께 두어** 그 형태에서는 저장이 취소돼 영구 유실된다는 사실을 실행 가능한 형태로 못박음.
+
+**남은 부분(미해소, 의도적)**: style-save Job 19개는 여전히 `viewModelScope`에 있어, 상한을 넘기면 navigation 직후 ViewModelStore.clear()로 취소된다. 19개를 한꺼번에 다른 scope로 옮기는 것은 각 Job의 취소 의미(덮어쓰기 저장의 선행 취소 등)까지 재검토해야 해서 이번 최소 수정 범위를 넘는다 → **후속 후보**.
+
+## P1-3 — 미래 엽서 묶음 부분 개봉과 재시도 차단
+
+**기존 위험**: `openArrivedGroup`이 `postcardIds.forEach { repository.openFutureMail(id) }`로 id마다 따로 열었고, 개봉 중 표시 해제(`_openingDeliverAtMillis -= ...`)가 루프 뒤 일반 문장이었다. 중간에 예외가 나면 (a) 앞의 몇 장만 열린 상태로 남고 (b) 표시가 해제되지 않아 **같은 묶음을 다시 시도할 수 없었다**.
+
+**수정**:
+
+- `PostcardDao.openFutureMail(id)` → `openFutureMailGroup(ids: List<Long>)`로 교체. `WHERE id IN (:ids)` **단일 UPDATE**라 SQLite가 문장 단위로 원자적으로 처리한다 — transaction 블록이나 schema 변경 없이 묶음 원자성 확보. 단일 id 경로는 `listOf(id)`와 동치라 남겨두지 않음(같은 일을 하는 두 경로 제거)
+- `ui/futuremail/FutureMailOpeningGuard.kt` 신설 — `beginOrSkip(key)`(연타 차단, coroutine 띄우기 전 동기 호출)와 `releasingAfter(key) { ... }`(**finally에서 반드시 해제**, 예외는 그대로 재전파). 해제를 호출부의 성실함에 맡기지 않고 함수 안에 가둠. UI 스레드/IO 스레드 양쪽 접근이라 `MutableStateFlow.update`로 원자 갱신
+
+**테스트**: `FutureMailOpeningGuardTest` 6건(성공/예외/취소 해제, 실패 후 재시도 가능, 다른 그룹 간섭 없음) + `FutureMailGroupOpenAtomicityStructureTest` 2건(id별 루프 재도입 차단, DAO 단일 UPDATE).
+
+**미검증(명시)**: "하나 실패 → 전체 rollback"의 실제 DB 동작은 Room in-memory DB가 필요해 instrumented test 영역이고, 실기기 계측은 `AGENTS.md` 5절로 금지 → **미실행으로 기록**. 근거는 SQLite 단일 문장 원자성과 위 구조 테스트.
+
+## P1-4 — 방문 달력이 앱 시작 월의 기록만 들고 있던 문제
+
+**기존 동작**: `MainActivity`가 `VisitHistoryStorage.loadMonth(filesDir, YearMonth.now())`로 **현재 월 하나만** 읽어 `visitedEpochDays`로 내려줬다. 달력은 어느 달로든 이동할 수 있는데 집합은 그대로여서, 8월에 실제로 방문한 기록이 디스크에 있어도 8월로 이동하면 빈 달로 보였다.
+
+**수정**:
+
+- `MonthlyVisitCalendar`에 `LaunchedEffect(displayedMonth, todayYearMonth)`를 두어 **표시 월이 바뀌면 그 달의 marker만** `VisitHistoryStorage.loadMonth`로 읽는다(IO dispatcher). 한 달은 marker 파일 최대 31개 stat이라 이동할 때마다 읽어도 싸다
+- 같은 drawer 세션에서 왔다 갔다 할 때 표시가 깜빡이지 않도록 읽어온 달만 `mutableStateMapOf`에 기억한다 — **세션 한정 memo이지 영구 캐시 architecture가 아니다**(§19)
+- 어느 집합을 쓸지는 순수 함수 `visitedDaysForMonth(month, currentMonth, currentMonthVisitedDays, loadedByMonth)`로 분리. 아직 못 읽은 달은 **빈 집합**을 준다 — 다른 달 집합을 흘려보내지 않는다
+
+**유지한 것**: `displayedMonth`/`pickerYear`의 key 없는 `rememberSaveable`(탐색 위치 보존), today marker·색·햅틱·swipe·오늘 복귀 의미, `recordTodayVisit`의 정의 — 전부 손대지 않음.
+
+**테스트**: `VisitCalendarMonthLoadingTest` 8건. 규칙 판정 4건 + 실제 marker 파일을 `TemporaryFolder`에 만들고 `loadMonth`로 읽어 9월→8월→9월 왕복을 확인하는 2건 + 과거 월 grid에 오늘이 포함되지 않아 today 표시와 방문 표시가 섞이지 않음 2건.
+
+## P1-5 — 이미지 파일 생성 후 DB 커밋 실패 시 고아 파일
+
+**기존 위험 두 가지**:
+
+- `ImageUtils.cropToStampRatio`: `compress`가 false를 돌려주거나 도중에 예외가 나면 0바이트/반쯤 쓰인 JPEG가 `postcards/`에 남았다
+- `CameraViewModel.saveCroppedPhoto`: 파일 생성 성공 후 `insertPostcard` 실패나 coroutine 취소 시 생성 파일이 남았다. 게다가 `catch (exception: Exception)`이 `CancellationException`까지 삼켰고, 정리 `finally`의 `withContext(Dispatchers.IO)`는 취소된 coroutine에서 즉시 다시 취소돼 **촬영 임시 파일조차 지우지 못했다**
+
+**수정**:
+
+- `ImageUtils.writeOrDeletePartialFile(outputFile, write)` — 쓰기 실패(false 반환 또는 예외) 시 출력 파일을 지우고 예외를 재전파. `internal`이라 Bitmap 없이 순수 JUnit에서 검증 가능
+- `utils/ProvisionalFile.kt`의 `withProvisionalFile(produce, commit)` — **커밋 전까지 파일은 임시 소유**라는 규칙을 한 곳에 못박음. commit 실패·취소 시 `NonCancellable`에서 삭제. `produce` 자체가 실패하면 만든 게 없으므로 아무것도 안 지운다
+- `saveCroppedPhoto`가 이 helper를 사용. `CancellationException`을 별도로 잡아 **에러 화면을 띄우지 않고 재전파**하고, 촬영 임시 파일 정리도 `NonCancellable + Dispatchers.IO`로 옮겨 취소 시에도 실제로 지워지게 함
+
+**사용자 원본 보호**: 지우는 대상은 앱이 이번 호출에서 만든 `filesDir/postcards/postcard_*.jpg`와 앱 자신의 촬영 임시 파일 `filesDir/postcards_temp/temp_*.jpg`뿐. 외부 갤러리 URI·사용자 원본은 이 경로에 들어오지 않는다.
+
+**테스트**: `ProvisionalFileTest` 9건. 커밋 성공 시 유지 / 실패 시 삭제+재전파 / 취소 시 삭제 / **실제 Job 취소**로도 삭제 / produce 실패 시 남의 파일 안 건드림 / compress false·예외 시 부분 파일 제거 / 정상 쓰기 시 내용 보존.
+
+## P2-6 — 미래 우체통 자정 경계
+
+**§26 먼저 확인한 것 — `deliverAtMillis`의 의미**: 발송 시 `materialDatePickerUtcMillisToLocalStartOfDay`로 변환하고 그룹화 시 `startOfDayMillis`로 재정규화하므로 **로컬 타임존 자정**이다. 그리고 도착(`isFutureMailArrived`)·D-day(`daysUntilFutureMail`)·진행률(`futureMailProgressPercent`)이 **전부 자정 기준 날짜 비교**이고 시:분을 보는 판정은 프로젝트에 없다. → **갱신 주기는 "자정마다 한 번"이면 충분**하고, 시각 단위 ticker는 불필요하다(테스트로도 고정: 같은 날 안에서는 시각이 바뀌어도 그룹 결과가 완전히 동일).
+
+**수정**:
+
+- `utils/DayBoundary.kt` 신설. 78일차에 만든 순수 함수 `millisUntilNextMidnight`를 `ui/gallery/GalleryCurrentDate.kt`에서 여기로 **옮기고**(중복 구현을 만들지 않기 위해), 같은 함수를 쓰는 `dayBoundaryTicks(): Flow<Unit>`를 추가. 구독 즉시 1회 방출 후 자정마다 1회 — polling 아님. `rememberTodayDate()`(Compose)와 `dayBoundaryTicks()`(Flow)가 **같은 경계 함수를 공유**하므로 화면과 ViewModel의 날짜가 갈라지지 않는다
+- `FutureMailboxViewModel.groups` — Room Flow 단독 `map` → `combine(Room Flow, dayBoundaryTicks())`. DB가 그대로여도 자정이 지나면 다시 판정한다. `WhileSubscribed(5000)` 안이라 화면을 안 보면 ticker도 멈춘다
+- `FutureMailGroup`에 `daysLeft: Long` 추가, `buildFutureMailGroups`가 `arrived`/`progressPercent`와 **같은 nowMillis 하나로** 계산. `FutureMailboxScreen`은 화면에서 시각을 다시 읽지 않고 이 값을 그대로 쓴다(§27의 "D-day / progress 동일 기준")
+- `DetailScreen`의 봉인된 미래 엽서 화면 — `val now = remember { System.currentTimeMillis() }` → `rememberTodayDate()`를 key로 삼아 날짜가 바뀔 때만 시각을 다시 읽음
+
+**테스트**: `DayBoundaryTest` 4건(즉시 방출, 경계마다 반복 방출, 정확히 자정일 때 하루치 대기, 두 소비자가 같은 경계 함수 공유) + `FutureMailTimeBoundaryTest` 9건(같은 날 안에서 시각 무관 / 자정 통과 시 arrived 전환·daysLeft 감소·progress 전진 / daysLeft와 arrived가 같은 now 기반 / 도착 후 0 이하 + 100% / ViewModel·화면·상세화면이 실제로 새 기준을 쓰는지).
+
+## P3-7 — 파일 소유권 prefix 판정
+
+**조사 결과** — `startsWith`를 쓰는 7곳 중 **이미 안전한 2곳**과 **경계 확인이 없는 5개 지점**으로 갈렸다.
+
+| 위치 | 상태 |
+|---|---|
+| `PostcardImageStorage.deleteIfOwnedByApp` | 👻 이미 안전 (`canonicalPath + File.separator`) — 손대지 않음 |
+| `PostcardDeletionManager.cleanupPostcardOwnedAssets` | 👻 이미 안전 (동일) — 손대지 않음 |
+| `PhotoStickerImageStorage.deleteOriginalIfUnreferenced` | ⚠️ 수정 |
+| `MaskingTapePhotoStorage.deleteIfUnreferenced` | ⚠️ 수정 |
+| `DetailViewModel.deleteStickerCacheFile` (cache/persist 2곳) | ⚠️ 수정 |
+| `DetailViewModel.persistStickerBackground`의 캐시 원본 삭제 가드 | ⚠️ 수정 (canonical화도 안 하고 있었음) |
+
+**수정**: `utils/AppFileOwnership.kt`의 `isInsideDirectory(root, file)` 하나로 통합. canonical 변환 후 `filePath[rootPath.length] == File.separatorChar`까지 확인한다. root 그 자체는 false(디렉터리는 자산 파일이 아니다), canonical 변환 실패 시 안전한 쪽인 false, 파일 존재 여부는 보지 않음(삭제 가드는 존재 확인보다 먼저 소유권을 물어야 함).
+
+**테스트**: `AppFileOwnershipTest` 10건 — 하위 파일/중첩 하위 허용, root 자체 거부, 이름만 비슷한 sibling 디렉터리·sibling 파일 거부, `../`로 빠져나가는 경로 거부, 나갔다 다시 들어오는 경로 허용, 무관 경로 거부, 부모 거부, 아직 없는 파일도 경로만으로 판정.
+
+**의도적으로 안 한 것**: 이미 올바른 2곳은 건드리지 않았다. 같은 규칙의 구현이 두 벌 남았지만, `PostcardDeletionManager`는 삭제 경로 한복판이라 동작이 옳은 코드를 이번 안정성 수정에 섞지 않았다 → **후속 후보**(78일차 후속 후보 #4와 동일 항목).
+
+## 위험도 재평가 (§36)
+
+| 항목 | 감사 등급 | 실측 후 | 근거 |
+|---|---|---|---|
+| P0-1 | 높음 | **높음 유지** | 일시적 I/O 한 번에 사용자 초안 + 누끼 파일이 영구 삭제. 실증으로 4건 실패 확인 |
+| P0-2 | 높음 | **높음 유지, 단 원인이 다름** | "2초가 짧다"가 아니라 상한과 저장의 생명주기 결합이 원인. 숫자를 키웠으면 안 고쳐졌다 |
+| P1-3 | 중간 | **중간 유지** | 부분 개봉 + 재시도 영구 차단. 다만 개봉 자체가 멱등이라 데이터 손상은 아니고 상태 불일치 |
+| P1-4 | 중간 | **중간 → 낮음~중간** | 데이터는 안전하고 **표시만** 누락. 다만 사용자 눈에는 "내 방문 기록이 사라졌다"로 보여 체감은 큼 |
+| P1-5 | 중간 | **중간 유지 + 발견 1건 추가** | 고아 파일 외에, 취소 시 촬영 임시 파일도 안 지워지고 있었음(`CancellationException`을 일반 오류로 삼킴) |
+| P2-6 | 중간 | **중간 유지** | 날짜 단위 갱신으로 충분함을 확인해 수정 범위가 줄었음 |
+| P3-7 | 낮음 | **낮음 유지** | 실제로 `sticker_originals_backup` 같은 형제 디렉터리를 만드는 코드는 현재 없음. 방어적 수정 |
+
+## 추가 발견 (이번에 고치지 않음)
+
+- `DetailViewModel.promoteDraftStickerBackgrounds`의 주석이 "onCleared()가 화면 이탈 시 cacheDir/photo_stickers를 정리하므로"라고 하는데, `onCleared()`는 더 이상 캐시를 정리하지 않는다(같은 파일의 onCleared KDoc이 그 변경을 설명함). **주석-코드 불일치 1건** — 동작에는 영향 없어 이번 안정성 수정에 섞지 않음
+- `awaitPendingStyleSaves()`의 style-save Job 19개는 상한 초과 시 여전히 ViewModel 소멸과 함께 취소됨(P0-2 항목 참조)
+
+## 의도적으로 건드리지 않은 영역 (§34)
+
+템플릿 기능 존폐, `ExampleUnitTest`, 방문 정의 A/B/C 결정(`recordTodayVisit` 무변경), `OrphanFileDiagnostics` UI 연결, 새 저장공간 관리 UI, 대규모 architecture 변경, 새 dependency, Room schema/Migration.
+
+## 변경 파일
+
+production 수정 12 + 신설 6:
+
+| 파일 | 이유 |
+|---|---|
+| `utils/PostcardDraftStorage.kt` | P0-1 읽기 실패와 손상 분리 |
+| `di/ExitSaveScopeModule.kt` (신설) | P0-2 이탈 저장 전용 scope |
+| `ui/detail/ExitSaveTimeout.kt` (신설) | P0-2 대기/저장 생명주기 분리 |
+| `ui/detail/DetailViewModel.kt` | P0-2 scope 주입·flush 교체·sweep 상한, P3-7 소유권 판정 3곳 |
+| `data/PostcardDao.kt` / `data/PostcardRepository.kt` | P1-3 묶음 단일 UPDATE |
+| `ui/futuremail/FutureMailOpeningGuard.kt` (신설) | P1-3 finally 보장 가드 |
+| `ui/futuremail/FutureMailboxViewModel.kt` | P1-3 가드·묶음 개봉, P2-6 자정 combine |
+| `ui/gallery/VisitCalendarDrawer.kt` | P1-4 표시 월 로딩 + 선택 규칙 |
+| `utils/ImageUtils.kt` | P1-5 부분 출력 파일 제거 |
+| `utils/ProvisionalFile.kt` (신설) | P1-5 커밋 전 임시 소유 규칙 |
+| `ui/camera/CameraViewModel.kt` | P1-5 provisional 정리 + 취소 처리 |
+| `utils/DayBoundary.kt` (신설) | P2-6 자정 경계 공유(순수 함수 이동 + tick Flow) |
+| `ui/gallery/GalleryCurrentDate.kt` | P2-6 옮긴 함수 재사용 |
+| `ui/futuremail/FutureMailLogic.kt` | P2-6 `daysLeft`를 그룹에 포함 |
+| `ui/futuremail/FutureMailboxScreen.kt` | P2-6 화면에서 시각 재조회 제거 |
+| `ui/detail/DetailScreen.kt` | P2-6 봉인 화면 날짜 기준 |
+| `utils/AppFileOwnership.kt` (신설) | P3-7 경계 확인 소유권 판정 |
+| `utils/PhotoStickerImageStorage.kt` / `utils/MaskingTapePhotoStorage.kt` | P3-7 적용 |
+
+테스트 신설 7파일 / 수정 2파일(`PostcardDraftStorageTest` +5, `VisitCalendarTest` import), androidTest 1파일(`PostcardBackSaveTest` 생성자 인자 추가 — 계측 테스트라 **실행하지 않음**).
+
+## 자동 검증 (오늘 실제 실행)
+
+- `assembleDebug`: **BUILD SUCCESSFUL**, `app-debug.apk` 생성 확인
+- `testDebugUnitTest`: **741건 / 실패 0 / 에러 0 / skip 0**, 80 클래스 (test-results XML 직접 집계)
+- 소스 `@Test` 수 **741 = runner 741** 정확히 일치 (79 파일 / 80 클래스 — `FutureMailOpeningGuardTest.kt` 한 파일에 클래스 2개)
+- 기준선 685 → **741 (+56)**
+- `git diff --check`: clean (새 파일 포함 확인. `ProvisionalFileTest` EOF 빈 줄 1건 발견 후 수정)
+- 경고: 기존 18건 그대로, 새로 추가된 경고 없음
+- **P0-1 실패 실증**: 수정 전 동작 복원 → 새 테스트 4건 실패 확인 → 수정본 복구 → TEMP 잔재 0건 → 전체 재검증 741/0
+
+## 실기기 QA — **통과** (사용자 "실기기 확인완료!")
+
+자동 검증으로 확인할 수 없는 것: 실제 Room DB 위에서의 묶음 개봉, 실제 filesDir의 marker 파일 읽기, 실제 navigation/ViewModel 소멸 타이밍, CameraX 촬영 경로. 최소 확인 항목:
+
+1. 상세 편집(스티커/도장 등) 후 **즉시 뒤로가기** → 다시 들어갔을 때 마지막 수정이 남아 있는가
+2. 미래 우체통에서 같은 날짜 묶음 **열어보기** → 전부 갤러리로 돌아오는가, 메시지가 1회만 뜨는가
+3. 방문 달력에서 **과거 월로 이동** → 그 달에 실제로 방문한 날에 marker가 보이는가, 다시 현재 월로 오면 정상인가
+4. 새 사진 촬영·저장 → 정상 생성/표시되는가
+
+**기기 날짜 변경 금지** — 시간 경계는 자동 테스트로만 검증했다.
+
+사용자가 위 4개 항목을 실기기에서 확인하고 "실기기 확인완료!"로 통과 보고했다(2026-09-19).
+
+## 미검증 / 남은 위험
+
+- **자정 자연 통과 시 실제 갱신**(방문 달력·기억밀도·미래 우체통·봉인 상세) — 기기 날짜 조작 금지라 자연 발생 확인만 가능. 재개 조건: 앱을 켜 둔 채 실제 자정을 넘긴 뒤 각 화면 확인
+- **묶음 개봉의 DB 원자성** — instrumented test 필요, 실기기 보호 원칙으로 미실행
+- **style-save Job 19개의 ViewModel 소멸 시 취소** — P0-2에서 초안 flush만 해결, 나머지는 미해소
+- `androidTest` 7건 — 이번에도 미실행(실기기 보호)
+
+## Git 상태
+
+- commit: **미실행** (사용자 승인 대기)
+- push: **미실행** (사용자 승인 대기)
+- 종료 시점 HEAD `a0352b6`, local == origin, 위 변경은 전부 working tree에만 있음
+
+## 후속 후보 (승인된 작업 아님)
+
+1. `awaitPendingStyleSaves()`의 style-save Job 19개를 이탈 후에도 완료되는 scope로 옮길지 — 각 Job의 취소 의미 재검토 필요
+2. `isInsideDirectory`를 이미 올바른 2곳(`deleteIfOwnedByApp`, `cleanupPostcardOwnedAssets`)까지 통합할지
+3. `promoteDraftStickerBackgrounds`의 onCleared 관련 주석-코드 불일치 1건 정리
+4. (78일차에서 이월) 방문 정의 A/B/C 결정, 템플릿 기능 존폐, `OrphanFileDiagnostics` 읽기 전용 연결, `vibrate*` 3종 통합, Compose UI 테스트 하네스(새 dependency 필요)
+
+---
+
 # HANDOFF — 78일차: 코드 클린 데이 + 자정 갱신 버그 + 장례식 + 무효 테스트 수리 + 고아 파일 조사
 
 확인일: 2026-09-19. 수동 표준 모드. 사용자 제공 78일차 "코드 클린 데이" 지시서에 따라 피코(Claude Code)가 실측→기준선→감사→저위험 정리→검증 순으로 진행했어. **새 기능·새 UI·디자인 변경 없음.** 이어서 사용자가 "78일차 후속 작업지시서"(1차 감사에서 발견한 자정 갱신 버그 수정 + 2차 클리닝)를 붙여넣어 같은 세션에서 계속 진행했어. 1차 결과는 되돌리지 않고 그대로 보존했고, 후속에서 **실제 동작 결함 1건을 수정**했어. 그 뒤 세 번째 지시서("시간 경계 버그 감사 + 죽은 코드의 장례식")로 시간 경계 staleness 2건을 마저 판정하고 저장소 전체 죽은 코드 감사를 했어. 마지막으로 네 번째 지시서("무효 테스트 수리 + 방문 정의 조사 + 잔여 코드 판정")로 **통과하지만 아무것도 지키지 않던 테스트를 실제로 실패할 수 있는 테스트로 고쳤어**. 마지막으로 다섯 번째 지시서("고아 이미지 파일 조사")로 이미지 파일의 수명을 끝까지 추적했고, **조사 결과 수정할 것이 없다는 결론**이 나왔어(근거는 아래). 실기기 smoke QA 대기, commit·push 미실행.

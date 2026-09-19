@@ -10,7 +10,9 @@ import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.ui.detail.DetailViewModel
 import com.postcardmemory.utils.PostcardDeletionManager
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -24,7 +26,12 @@ class PostcardBackSaveTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private fun viewModel(dao: PostcardDao): DetailViewModel {
         val repository = PostcardRepository(dao)
-        return DetailViewModel(repository, PostcardDeletionManager(context, repository), context)
+        return DetailViewModel(
+            repository,
+            PostcardDeletionManager(context, repository),
+            context,
+            CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        )
     }
 
     @Test fun delayedFailedBodySaveCannotUndoNewTextAndTimeSurvivesReload() = runBlocking {

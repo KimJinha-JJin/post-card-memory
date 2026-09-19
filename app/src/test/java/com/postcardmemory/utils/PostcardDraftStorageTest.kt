@@ -2,6 +2,7 @@ package com.postcardmemory.utils
 
 import com.postcardmemory.ui.detail.PostcardEditDraft
 import java.io.File
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -409,6 +410,107 @@ class PostcardDraftStorageTest {
 
         assertNull(loaded)
         assertFalse(ownedFile.exists())
+        assertFalse(draftBgDir.exists())
+    }
+
+    // ── 78일차 P0-1: 읽기 실패를 손상으로 오인해 초안을 지우던 위험 ──
+    // 예전 구현은 readText가 던지기만 하면 초안 파일과 초안 소유 누끼
+    // 폴더를 지웠다. 아래 테스트들은 그 구현으로 되돌리면 전부 실패한다.
+
+    @Test
+    fun loadDraft_transientReadFailure_keepsDraftFileAndReturnsNull() {
+        val filesDir = tempFolder.newFolder("files")
+        assertTrue(PostcardDraftStorage.saveDraftAtomically(filesDir, draft(31L)))
+
+        val draftFile = PostcardDraftStorage.draftFile(filesDir, 31L)
+        val before = draftFile.readText()
+
+        val loaded = PostcardDraftStorage.loadDraft(filesDir, 31L) {
+            throw IOException("일시적 읽기 실패")
+        }
+
+        assertNull(loaded)
+        assertTrue(draftFile.exists())
+        assertEquals(before, draftFile.readText())
+    }
+
+    @Test
+    fun loadDraft_transientReadFailure_keepsDraftOwnedStickerBackgroundDir() {
+        val filesDir = tempFolder.newFolder("files")
+        assertTrue(PostcardDraftStorage.saveDraftAtomically(filesDir, draft(32L)))
+
+        val draftBgDir = PostcardDraftStorage.draftStickerBackgroundDir(filesDir, 32L)
+        draftBgDir.mkdirs()
+        val ownedFile = File(draftBgDir, "sticker-1.png")
+        ownedFile.writeText("fake-png-bytes")
+
+        val loaded = PostcardDraftStorage.loadDraft(filesDir, 32L) {
+            throw IOException("일시적 읽기 실패")
+        }
+
+        assertNull(loaded)
+        assertTrue(draftBgDir.exists())
+        assertTrue(ownedFile.exists())
+        assertEquals("fake-png-bytes", ownedFile.readText())
+    }
+
+    @Test
+    fun loadDraft_afterTransientReadFailure_nextSuccessfulReadStillRestoresTheDraft() {
+        val filesDir = tempFolder.newFolder("files")
+        assertTrue(PostcardDraftStorage.saveDraftAtomically(filesDir, draft(33L, revision = 7L)))
+
+        assertNull(
+            PostcardDraftStorage.loadDraft(filesDir, 33L) {
+                throw IOException("일시적 읽기 실패")
+            }
+        )
+
+        // 지우지 않았으므로 다음 진입에서 초안이 그대로 살아나야 한다.
+        val recovered = PostcardDraftStorage.loadDraft(filesDir, 33L)
+
+        assertNotNull(recovered)
+        assertEquals(33L, recovered!!.postcardId)
+        assertEquals(7L, recovered.revision)
+    }
+
+    @Test
+    fun loadDraft_readFailureFromRealFilesystem_keepsDraftOwnedStickerBackgroundDir() {
+        // seam 없이 production 기본 경로만으로도 같은 보호가 걸리는지 확인한다.
+        // 초안 경로가 디렉터리면 exists()는 true지만 readText()는 실패한다.
+        val filesDir = tempFolder.newFolder("files")
+        val draftDir = File(filesDir, "drafts/edit_state")
+        draftDir.mkdirs()
+
+        val unreadable = File(draftDir, "34.draft.txt")
+        assertTrue(unreadable.mkdir())
+
+        val draftBgDir = PostcardDraftStorage.draftStickerBackgroundDir(filesDir, 34L)
+        draftBgDir.mkdirs()
+        val ownedFile = File(draftBgDir, "sticker-1.png")
+        ownedFile.writeText("fake-png-bytes")
+
+        assertNull(PostcardDraftStorage.loadDraft(filesDir, 34L))
+
+        assertTrue(draftBgDir.exists())
+        assertTrue(ownedFile.exists())
+    }
+
+    @Test
+    fun loadDraft_corruptedContentPolicyIsUnchangedByTheReadFailureFix() {
+        // 실제 손상(내용을 읽었는데 파싱 불가)은 기존대로 격리된다.
+        val filesDir = tempFolder.newFolder("files")
+        val draftDir = File(filesDir, "drafts/edit_state")
+        draftDir.mkdirs()
+        val corruptFile = File(draftDir, "35.draft.txt")
+        corruptFile.writeText("garbage")
+
+        val draftBgDir = PostcardDraftStorage.draftStickerBackgroundDir(filesDir, 35L)
+        draftBgDir.mkdirs()
+        File(draftBgDir, "sticker-1.png").writeText("fake-png-bytes")
+
+        assertNull(PostcardDraftStorage.loadDraft(filesDir, 35L))
+
+        assertFalse(corruptFile.exists())
         assertFalse(draftBgDir.exists())
     }
 }

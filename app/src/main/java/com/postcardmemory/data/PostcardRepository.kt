@@ -30,10 +30,11 @@ class PostcardRepository @Inject constructor(
         )
     }
 
-    suspend fun openFutureMail(
-        id: Long
+    /** 같은 도착일 묶음을 한 번에(원자적으로) 개봉한다. */
+    suspend fun openFutureMailGroup(
+        ids: List<Long>
     ) {
-        dao.openFutureMail(id)
+        dao.openFutureMailGroup(ids)
     }
 
     suspend fun insertPostcard(

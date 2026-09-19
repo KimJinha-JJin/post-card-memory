@@ -89,9 +89,25 @@ object PostcardDraftStorage {
         postcardId: Long
     ): PostcardEditDraft? = loadDraft(context.filesDir, postcardId)
 
+    /**
+     * 초안을 읽는다. "읽지 못했다"와 "내용이 손상됐다"를 구분한다.
+     *
+     * - 파일 없음: 초안 없음(null). 아무것도 지우지 않는다.
+     * - 읽기 실패(I/O 예외): 파일 잠금, 저장소 일시 오류 등 다음 진입에서
+     *   성공할 수 있는 상황이다. 내용을 한 글자도 보지 못했으므로 손상
+     *   여부를 판정할 수 없고, 따라서 초안 파일과 초안 소유 누끼 폴더를
+     *   **지우지 않는다**. 이번 진입만 복원을 건너뛰고(null) 초안은 그대로
+     *   남아 다음 진입에서 복원될 수 있다.
+     * - 내용을 읽었는데 파싱 실패: 실제 손상이다. 무한 복구 팝업을 막기 위해
+     *   기존 정책대로 즉시 격리(삭제)한다.
+     *
+     * [readDraftText]는 순수 JUnit에서 일시적 읽기 실패를 실제로 주입하기
+     * 위한 테스트 seam이다. production 호출부는 기본값을 그대로 쓴다.
+     */
     internal fun loadDraft(
         filesDir: File,
-        postcardId: Long
+        postcardId: Long,
+        readDraftText: (File) -> String = { it.readText(Charsets.UTF_8) }
     ): PostcardEditDraft? {
         val file = draftFile(filesDir, postcardId)
 
@@ -100,12 +116,11 @@ object PostcardDraftStorage {
         }
 
         val text = runCatching {
-            file.readText(Charsets.UTF_8)
+            readDraftText(file)
         }.getOrNull()
 
         if (text == null) {
-            file.delete()
-            draftStickerBackgroundDir(filesDir, postcardId).deleteRecursively()
+            // 읽기 실패 != 손상. 사용자 초안을 보존한 채 복원만 건너뛴다.
             return null
         }
 

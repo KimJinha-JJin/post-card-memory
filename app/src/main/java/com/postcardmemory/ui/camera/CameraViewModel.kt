@@ -17,13 +17,16 @@ import androidx.lifecycle.viewModelScope
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.utils.ImageUtils
+import com.postcardmemory.utils.withProvisionalFile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -252,45 +255,61 @@ class CameraViewModel @Inject constructor(
                 val capturedAt =
                     System.currentTimeMillis()
 
-                val croppedFile =
-                    withContext(Dispatchers.IO) {
-                        ImageUtils.cropToStampRatio(
-                            context = context,
-                            sourceFile = sourceFile,
-                            zoom = zoom,
-                            offsetX = offsetX,
-                            offsetY = offsetY,
-                            viewportSize = viewportSize
-                        )
-                    }
+                /*
+                 * 잘라낸 파일은 DB가 그 경로를 커밋하기 전까지 "임시 소유"다.
+                 * insert가 실패하거나 화면 이탈로 coroutine이 취소되면 그 파일을
+                 * 참조할 주체가 영원히 없으므로 withProvisionalFile이 지운다.
+                 * 커밋에 성공하면 소유권이 DB로 넘어가 더는 건드리지 않는다.
+                 */
+                val savedImagePath =
+                    withProvisionalFile(
+                        produce = {
+                            withContext(Dispatchers.IO) {
+                                ImageUtils.cropToStampRatio(
+                                    context = context,
+                                    sourceFile = sourceFile,
+                                    zoom = zoom,
+                                    offsetX = offsetX,
+                                    offsetY = offsetY,
+                                    viewportSize = viewportSize
+                                )
+                            }
+                        },
+                        commit = { croppedFile ->
+                            val dateFormatter =
+                                SimpleDateFormat(
+                                    "yyyy-MM-dd",
+                                    Locale.getDefault()
+                                )
 
-                val dateFormatter =
-                    SimpleDateFormat(
-                        "yyyy-MM-dd",
-                        Locale.getDefault()
-                    )
+                            val postcard =
+                                Postcard(
+                                    imagePath =
+                                        croppedFile.absolutePath,
+                                    title =
+                                        dateFormatter.format(capturedAt),
+                                    capturedAt =
+                                        capturedAt
+                                )
 
-                val postcard =
-                    Postcard(
-                        imagePath =
-                            croppedFile.absolutePath,
-                        title =
-                            dateFormatter.format(capturedAt),
-                        capturedAt =
-                            capturedAt
-                    )
+                            withContext(Dispatchers.IO) {
+                                repository.insertPostcard(
+                                    postcard
+                                )
+                            }
 
-                withContext(Dispatchers.IO) {
-                    repository.insertPostcard(
-                        postcard
+                            croppedFile.absolutePath
+                        }
                     )
-                }
 
                 _captureState.value =
                     CaptureState.Success(
-                        imagePath =
-                            croppedFile.absolutePath
+                        imagePath = savedImagePath
                     )
+            } catch (cancellation: CancellationException) {
+                // 취소는 저장 실패가 아니다. 에러 화면을 띄우지 않고 그대로
+                // 전파하되, 아래 finally에서 촬영 임시 파일은 반드시 정리한다.
+                throw cancellation
             } catch (exception: Exception) {
                 _captureState.value =
                     CaptureState.Error(
@@ -298,7 +317,13 @@ class CameraViewModel @Inject constructor(
                             ?: "우표 사진을 저장하지 못했습니다."
                     )
             } finally {
-                withContext(Dispatchers.IO) {
+                /*
+                 * NonCancellable: 취소로 여기 왔을 때 평범한 withContext는
+                 * 즉시 다시 취소돼 아무것도 지우지 못한다. 정리 자체가 짧은
+                 * 파일 삭제 한 번이라 취소 불가로 돌려도 안전하다. 지우는
+                 * 대상은 앱이 만든 촬영 임시 파일(postcards_temp/)뿐이다.
+                 */
+                withContext(NonCancellable + Dispatchers.IO) {
                     if (sourceFile.exists()) {
                         sourceFile.delete()
                     }

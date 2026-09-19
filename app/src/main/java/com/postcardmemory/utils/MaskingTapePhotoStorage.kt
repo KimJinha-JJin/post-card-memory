@@ -151,13 +151,9 @@ object MaskingTapePhotoStorage {
             File(
                 context.filesDir,
                 PHOTOS_DIRECTORY_NAME
-            ).canonicalFile
-
-        if (
-            !targetFile.path.startsWith(
-                photosRoot.path
             )
-        ) {
+
+        if (!isInsideDirectory(photosRoot, targetFile)) {
             return
         }
 

@@ -60,17 +60,25 @@ interface PostcardDao {
         deliverAt: Long
     )
 
-    /** 개봉: 상태를 되돌리는 것뿐, 파일/이미지 등 어떤 자산도 건드리지 않는다. */
+    /**
+     * 개봉: 상태를 되돌리는 것뿐, 파일/이미지 등 어떤 자산도 건드리지 않는다.
+     *
+     * 같은 도착일 묶음은 한 번의 UPDATE로 연다. 예전에는 id마다 따로
+     * UPDATE를 보내서, 중간에 하나가 실패하면 앞의 몇 장만 열린 상태로
+     * 남았다. SQLite는 단일 문장을 그 자체로 원자적으로 처리하므로 이
+     * 형태에서는 전부 열리거나 전혀 열리지 않는다 — 별도 transaction
+     * 블록이나 schema 변경 없이 묶음 원자성이 확보된다.
+     */
     @Query(
         """
         UPDATE postcards
         SET futureMailState = 'NONE',
             futureMailDeliverAt = NULL
-        WHERE id = :id
+        WHERE id IN (:ids)
         """
     )
-    suspend fun openFutureMail(
-        id: Long
+    suspend fun openFutureMailGroup(
+        ids: List<Long>
     )
 
     @Insert(

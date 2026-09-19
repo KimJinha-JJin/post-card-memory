@@ -38,6 +38,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,10 +69,13 @@ import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.SealInkNavy
 import com.postcardmemory.ui.theme.SealInkRed
+import com.postcardmemory.utils.VisitHistoryStorage
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // 방문한 날짜마다 작게 찍히는 얼굴 도장. 짧은 후보만 써서 좁은 날짜 cell 폭을 넘기지 않는다.
 // 공휴일 데이터가 없어(73일차 조사) 요일 기본색만 적용하고 공휴일 우선순위는 보류한다.
@@ -691,6 +695,29 @@ internal fun visitCalendarPaddedCells(month: YearMonth): List<LocalDate?> {
     return if (cells.size >= targetSize) cells else cells + List(targetSize - cells.size) { null }
 }
 
+/**
+ * 지금 그리는 [month]에 찍을 방문 표시를 고른다.
+ *
+ * 앱을 켤 때 읽어 둔 집합([currentMonthVisitedDays])은 **그 달의 것**이므로
+ * 다른 달을 그릴 때 그대로 쓰면 안 된다. 다른 달은 그 달을 실제로 읽어온
+ * 결과([loadedByMonth])만 쓰고, 아직 못 읽었으면 빈 집합을 준다 — 여기서
+ * 다른 달 집합을 흘려보내면 없는 방문이 찍히거나 있는 방문이 사라진다.
+ *
+ * epochDay는 절대 날짜라 다른 달 값이 섞여도 이 달 칸과는 애초에 매칭되지
+ * 않지만, "왜 안 섞이는지"를 우연에 맡기지 않으려고 규칙을 명시해 둔다.
+ */
+internal fun visitedDaysForMonth(
+    month: YearMonth,
+    currentMonth: YearMonth,
+    currentMonthVisitedDays: Set<Long>,
+    loadedByMonth: Map<YearMonth, Set<Long>>
+): Set<Long> =
+    if (month == currentMonth) {
+        currentMonthVisitedDays
+    } else {
+        loadedByMonth[month].orEmpty()
+    }
+
 /** 한 달 분량의 날짜 grid만 그린다. AnimatedContent가 이 composable 전체를 슬라이드시킨다. */
 @Composable
 private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>, today: LocalDate) {
@@ -781,6 +808,23 @@ internal fun MonthlyVisitCalendar(
     val isCurrentMonth = displayedMonth == todayYearMonth
     val decadeStart = decadeStartFor(pickerYear)
     val context = LocalContext.current
+
+    // [visitedEpochDays]는 앱을 켠 달 하나만 담고 있다. 달력은 어느 달로든
+    // 이동할 수 있으므로, 지금 보고 있는 달의 방문 기록을 그때 읽어온다.
+    // 한 달은 marker 파일 최대 31개 stat이라 이동할 때마다 읽어도 싸고,
+    // 같은 drawer 세션에서 왔다 갔다 할 때 표시가 깜빡이지 않도록 읽어온
+    // 달만 기억해 둔다(세션 한정 memo이지 영구 캐시가 아니다).
+    val loadedVisitsByMonth = remember { mutableStateMapOf<YearMonth, Set<Long>>() }
+
+    LaunchedEffect(displayedMonth, todayYearMonth) {
+        if (displayedMonth == todayYearMonth || loadedVisitsByMonth.containsKey(displayedMonth)) {
+            return@LaunchedEffect
+        }
+        val loaded = withContext(Dispatchers.IO) {
+            VisitHistoryStorage.loadMonth(context.filesDir, displayedMonth)
+        }
+        loadedVisitsByMonth[displayedMonth] = loaded
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         AnimatedContent(
@@ -873,7 +917,16 @@ internal fun MonthlyVisitCalendar(
                             modifier = Modifier.fillMaxWidth().clipToBounds(),
                             label = "visitCalendarMonthGrid"
                         ) { month ->
-                            VisitCalendarMonthGrid(month, visitedEpochDays, today)
+                            VisitCalendarMonthGrid(
+                                month = month,
+                                visitedEpochDays = visitedDaysForMonth(
+                                    month = month,
+                                    currentMonth = todayYearMonth,
+                                    currentMonthVisitedDays = visitedEpochDays,
+                                    loadedByMonth = loadedVisitsByMonth
+                                ),
+                                today = today
+                            )
                         }
                     }
                     VisitCalendarNavLevel.MONTH_PICKER -> {
