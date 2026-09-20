@@ -1,3 +1,122 @@
+# HANDOFF — 79일차 후속: 테스트 안전망 품질 보강
+
+확인일: 2026-09-20(같은 날, 79일차 본 작업 직후). 수동 표준 모드. "아직 80일차가 아니다"라고 명시한 79일차 후속 작업지시서에 따라, 79일차에 새로 추가한 instrumentation 4건의 assertion/실행 가능성을 감사하고, migration fixture를 강화했다. **새 기능·UI·navigation 없음. Room schema/DB version/DAO 계약 변경 없음. 새 dependency 없음. production 코드 변경 없음**(오늘도 androidTest/test 파일만 수정).
+
+## 시작 Git 실측 (79일차 본 작업 보고값을 다시 확인)
+
+```yaml
+branch: feature/photo-sticker
+HEAD: 6b9a7da (동일, 오늘도 커밋 없었음)
+ahead/behind: 0/0
+staged: 없음
+tracked: 78일차부터 이어진 31파일 + docs/ai/HANDOFF.md(79일차 기록) — 오늘 손대지 않음
+untracked: .codex-config.candidate.toml, .kotlin/(기존, 보호) + PostcardBackgroundColorSaveRaceTest.kt, PostcardFullMigrationChainTest.kt(79일차 본 작업에서 신규)
+```
+
+79일차 본 작업 보고값과 정확히 일치했다.
+
+## §2 숫자 정정 — replica는 25건 그대로다
+
+79일차 HANDOFF에 "나머지 22건"이라는 표현이 있었는데 산수가 틀렸다(`BackgroundColorSaveRaceTest`에서 겹치는 건 2건뿐이라 나머지는 9건, 총 23건이어야 함). **더 중요한 사실**: replica는 삭제되거나 대체된 적이 없다 — 25건 전부 오늘도 그대로 있고, `PostcardBackgroundColorSaveRaceTest`의 2건은 **추가 production coverage**일 뿐이다. 정확한 표현으로 위 79일차 섹션의 해당 문단을 고쳤다: "나머지 23건(`BackgroundColorSaveRaceTest` 나머지 9, `DetailScreenExitSaveGuaranteeTest` 8, `DetailScreenExitSaveLossTest` 3, `StyleSaveRaceTest` 3)".
+
+## §4 신규 instrumentation 4건 코드 감사 — 진짜 문제 하나 발견
+
+`PostcardBackgroundColorSaveRaceTest.kt`, `PostcardFullMigrationChainTest.kt`를 감사 체크리스트(이름=assertion 일치, production 실제 호출, Fake가 핵심 로직을 대신하지 않는지, cleanup 보장, wall-clock 의존 여부, assertion 강도)로 다시 읽었다.
+
+### 발견: `failedColorSave_doesNotRollbackNewerColor`는 실제로 "실패"가 아니라 "취소" 경로를 탄다
+
+production `DetailViewModel.updateBackgroundColor`를 다시 읽으니(§6), 매 호출이 시작할 때
+
+```kotlin
+backgroundColorSaveJob?.cancel()
+backgroundColorSaveJob = viewModelScope.launch { ... }
+```
+
+를 실행한다 — **이전 저장 Job 자체를 취소**한다. 내가 처음 쓴 테스트는 "오래된 저장이 `release.await()`에서 멈춰 있다가, 풀려나면 IOException을 던진다"는 구조였는데, 실제로는 두 번째 `updateBackgroundColor` 호출이 실행되는 순간 첫 번째 Job이 `release.complete()`를 기다리다 **그 자리에서 취소**돼 버린다 — 내가 주입하려던 IOException에 도달하기 전에 `catch (CancellationException) { throw exception }` 경로로 빠진다. 즉 테스트 이름과 실제로 실행되는 코드 경로가 어긋나 있었다(§4 체크리스트 첫 항목이 정확히 겨냥한 문제).
+
+**비교로 확인한 사실**: 같은 종류의 `StyleSaveRaceTest`(JVM replica) 쪽 `FakeViewModel.saveFieldA`는 이미 `fieldASaveJob?.cancel()`을 포함하고 있어 production과 일치하고, 그래서 그 파일은 "취소는 실패가 아니다" 시나리오(`cancelledIndividualSave_doesNotRecordError_doesNotRollbackNewerValue`)를 따로 두고 있다. 반면 `BackgroundColorSaveRaceTest`(JVM replica)의 `FakeViewModel.updateBackgroundColor`에는 이 취소 로직이 없다 — 그래서 그 replica의 `failedColorSave_doesNotRollbackNewerColor`/`staleColorSave_afterCommit_doesNotRewriteNewerColor`는 "두 저장이 서로 독립적으로 동시에 진행되다 하나가 실패한다"는, production에서 두 번의 실제 `updateBackgroundColor` 호출만으로는 재현되지 않는 구조를 가정하고 있다. **이건 반드시 틀린 테스트는 아니다** — Mutex+재읽기 메커니즘 자체가 (취소 로직이 나중에 제거되더라도) 여전히 옳게 동작하는지를 보는, 더 방어적인 "메커니즘 단위" 테스트로 볼 수 있다. 다만 **instrumentation은 실제로 도달 가능한 호출 경로만 주장해야 하므로** 이 불일치를 instrumentation 쪽에서 그대로 반복하지 않았다.
+
+### 조치: instrumentation 테스트를 실제 경로에 맞게 다시 씀 (production은 건드리지 않음)
+
+§6 지침대로 "production이 테스트 가정과 다르면 테스트를 현실에 맞춰 고친다"를 따랐다 — production 동작은 올바르고(취소가 stale write를 막는 것 자체가 안전 장치), 잘못된 건 내 테스트의 가정이었다.
+
+- `failedColorSave_doesNotRollbackNewerColor` → **`staleInFlightColorSave_isCancelledAndNeverReachesTheDatabase`**로 다시 작성. 이름 그대로: 아직 커밋되지 않은 오래된 저장이 새 저장으로 인해 취소되고, **실제로 DB에 쓰인 색 목록**(`actuallyWrittenColors`)이 최신 색 하나뿐임을 직접 확인한다 — "예외 없이 끝났다"가 아니라 진짜 결과값을 본다(§5 요구사항).
+- `staleNeverReleases`는 절대 `complete()`되지 않는 Deferred다 — 만약 취소가 실제로 안 된다면 production의 `PENDING_STYLE_SAVE_TIMEOUT_MS`(2초, `DetailViewModel.kt:72`) 안에 `awaitPendingStyleSaves()`가 타임아웃하고 이후 assertion이 실패로 드러난다. 고정 `delay()`로 경합을 만들지 않았다(§5).
+- `afterFailure_nextColorSaveSucceedsNormally`는 두 호출을 **순차적으로**(첫 호출이 `awaitPendingStyleSaves()`로 완전히 끝난 뒤 두 번째 호출) 실행해서 취소 이슈가 없다 — 감사 결과 그대로 둬도 되는 테스트로 확인했다.
+- 두 테스트 모두 `db.close()`/`vm.viewModelScope.cancel()`을 finally에서 보장하고, in-memory Room이라 임시 파일이 남지 않는다.
+- **production bug는 발견하지 못했다** — production의 cancel-on-relaunch 자체는 의도된 동작이고 올바르게 안전하다. §7의 수정 조건("실제 잘못된 동작이 명확")에 해당하는 사례가 없어 production은 전혀 건드리지 않았다.
+
+### migration 테스트(§8~11) 강화
+
+- **v2→v3**: 기존엔 행 1개만 확인했다. 이제 **행 2개**(하나는 `location` NULL)를 넣고, 표 재생성 후 `getAllPostcards().first().size == 2`(row count 보존), 그리고 최종 새 행 insert 후 `size == 3`까지 확인한다. PK(`id`)·핵심 텍스트/시간/위치·backfill 값(`4294966263`/`null`) 검증은 기존 그대로 유지.
+- **v14→v15**: 기존엔 폐기값(`'AIRY'`) 정규화 하나만 봤다. 이제 같은 fixture에 **현재도 유효한 값(`'POLAROID'`, id=2)을 함께 심어서**, `UPDATE ... WHERE layoutStyle NOT IN (...)`가 폐기값만 정확히 골라내고 유효값은 그대로 두는지 함께 확인한다 — 조건이 너무 넓어지는 회귀(유효값까지 덮어씀)와 너무 좁아지는 회귀(폐기값을 놓침) 둘 다 이 한 테스트가 잡는다.
+- fixture 근거는 여전히 초기 커밋 원본 소스 + production Migration 객체 자체뿐, 상상한 값 없음(§12).
+- 두 테스트 모두 최종적으로 `MIGRATION_18_19`까지 실제로 열어 v19 도달과 최신 DAO read를 확인한다(§11) — v2→v3 테스트는 추가로 최신 DAO write(`updatePostcardBackMessage`)와 DB 재오픈 후 재확인까지 포함.
+
+### 컴파일/실행
+
+```yaml
+assembleDebugAndroidTest: BUILD SUCCESSFUL (수정 후 재검증)
+실제 실행: 미실행(아래 emulator 조사 참고)
+```
+
+## §13~14 emulator 환경 한 단계 더 확인 — 여전히 STOP
+
+```yaml
+system-images 디렉터리: 없음
+cmdline-tools(avdmanager/sdkmanager): 설치 안 됨
+설치된 것: platform-tools, platforms, build-tools, emulator 바이너리(이미지 없이는 실행 불가)
+```
+
+AVD를 만들려면 system image 다운로드 + cmdline-tools 설치가 먼저 필요하다 — §14의 STOP 조건("system image 다운로드 필요")에 정확히 해당해 오늘도 emulator 생성을 진행하지 않았다. instrumentation 10건은 오늘도 **미실행**.
+
+## §18 replica ↔ production coverage mapping
+
+| replica 파일 | 총 건수 | production 직접 연결 coverage |
+|---|---:|---|
+| `BackgroundColorSaveRaceTest` | 11 | 2건(`PostcardBackgroundColorSaveRaceTest`) — stale-저장 취소, 실패 후 재저장 |
+| `StyleSaveRaceTest` | 3 | 없음 |
+| `DetailScreenExitSaveGuaranteeTest` | 8 | 없음(`PostcardBackSaveTest`가 다른 필드=back message/postscript로 exit-save 보장의 일부를 이미 실증하지만, 이 replica가 겨냥하는 슬라이더류 필드 자체는 아님) |
+| `DetailScreenExitSaveLossTest` | 3 | 없음(위와 동일) |
+
+## §19 다음 production 전환 후보 — 이번엔 추가하지 않음
+
+우선순위 1위 `StyleSaveRace`(개별 슬라이더 저장, 예: `saveStampPhotoScale`)는 `PostcardBackgroundColorSaveRaceTest`와 거의 같은 fixture(같은 `styleWriteMutex`, 같은 gated-DAO 패턴)로 재사용 가능해 보였지만, §20("emulator 실행도 못 한 상태에서 테스트를 더 만들지 않는다")에 따라 **오늘은 추가하지 않았다** — 이미 추가한 4건도 아직 실행 검증이 안 된 상태라 안전망을 더 쌓기보다 지금 있는 것부터 확실히 하는 쪽을 택했다.
+
+## §21 낮은 비용 약점 — 1건 강화
+
+- `VisitRecordTest.parseVisitRecord_toleratesTrailingNewline`의 `assertNotNull(parseVisitRecord(...))`를 `assertEquals(record, parseVisitRecord(...))`로 강화 — null 여부만이 아니라 날짜/누적일/연속일 값 자체가 훼손 없이 파싱되는지 확인한다. 관련 JVM test로 재검증(통과).
+- `ExitSaveTimeoutTest`/`DayBoundaryTest`의 wall-clock 의존은 79일차 본 작업에서 이미 조사해 여유 폭이 충분(8배 이상, 또는 하한만 검사)하다고 판단했고 오늘 다시 봐도 같은 결론 — 수정하지 않았다.
+- "예외 없음만 확인하는 테스트 8건"은 78일차부터 이월된 카탈로그 항목인데 오늘 위치를 다시 특정하지 못했다 — 새로 찾는 작업은 후속으로 남긴다.
+
+## 79일차 후속 최종 자동 검증
+
+```yaml
+JVM unit test: 750 tests / 81 files / failures 0 / errors 0 / skipped 0
+assembleDebug: BUILD SUCCESSFUL
+assembleDebugAndroidTest: BUILD SUCCESSFUL (수정된 4건 포함 10건 컴파일 재확인)
+connectedDebugAndroidTest: 미실행(emulator 없음, §13~14)
+git diff --check: 통과(기존 LF→CRLF 안내만)
+```
+
+## 사용자 확인 / Git
+
+- production 변경 0건, 사용자 눈에 보이는 변화 없음 — 실기기 QA 불필요.
+- **미검증**: 오늘 고친 instrumentation 4건이 실제로(특히 취소 타이밍) 통과하는지는 여전히 에뮬레이터가 있어야 확인 가능. 새로 강화한 migration 2건의 row-count/유효값-보존 assertion도 마찬가지.
+- commit: 미실행·미승인
+- push: 미실행·미승인
+- 종료 HEAD/upstream: `6b9a7da`, ahead/behind `0/0`(오늘도 커밋 없음)
+- 78일차 tracked 31파일 + 기존 untracked 2개는 오늘도 보존.
+
+## 후속 후보 (승인된 작업 아님)
+
+1. emulator 준비 후 instrumentation 10건 전체 실행 — 특히 오늘 고친 `staleInFlightColorSave_isCancelledAndNeverReachesTheDatabase`가 실제로 2초 타임아웃 안에 통과하는지가 최우선 확인 대상.
+2. `BackgroundColorSaveRaceTest`(JVM replica)에 `fieldASaveJob?.cancel()`과 대응하는 취소 로직이 빠져 있다는 점을 문서화하거나, `StyleSaveRaceTest`처럼 취소 시나리오를 별도로 추가하는 안 검토(오늘은 손대지 않음 — replica 자체 수정은 이번 감사 범위 밖).
+3. §19에서 미룬 `StyleSaveRace` production coverage 추가(instrumentation 10건 실제 실행 확인 후).
+4. "예외 없음만 확인하는 테스트 8건" 재식별.
+
+---
+
 # HANDOFF — 79일차 테스트 실효성 보강 (replica 우선순위 전환 + migration chain)
 
 확인일: 2026-09-20. 수동 표준 모드. 사용자 제공 "79일차 테스트 실효성 보강 및 안정성 2차" 작업지시서에 따라 DetailViewModel replica 25건 분류, Room migration 1→18 공백 조사, instrumentation 6건 실행 가능성 확인을 수행했어. **새 기능·새 UI·navigation 없음. Room schema/DB version/DAO 계약 변경 없음. 새 dependency 없음.** production 코드는 전혀 건드리지 않았고, 오늘 변경은 전부 androidTest 신규 테스트 파일 2개 추가다.
@@ -47,7 +166,7 @@ emulator -list-avds: AVD 없음(에뮬레이터 자체가 구성돼 있지 않�
 - `BackgroundColorSaveRaceTest`(JVM replica) 11건 중 이 두 시나리오와 겹치는 부분의 production 연결 대응이다. `saveBackgroundImagePath`가 겨냥하는 경로 컬럼 경합(replica 3건)은 **오늘 그 값을 쓰는 실제 UI 호출자가 없어**(replica 자체 주석이 이미 명시) 실제 호출 경로를 꾸며내지 않고 미전환으로 남겼다.
 - **실행 결과**: 미실행(에뮬레이터 없음). `assembleDebugAndroidTest`로 컴파일만 검증했다 — 타이밍 로직이 실제로 통과하는지는 에뮬레이터가 생기기 전까지 미확인이다.
 - **replica는 삭제하지 않았다.** 새 instrumentation 테스트가 실제로 통과하는 것을 확인하지 못한 상태에서 유일한 안전망(JVM replica)을 줄이면 순간적으로 안전망이 비는 위험이 있다 — §8 "가능하면 새 테스트의 실효성을 실증한다" 조건(mutation으로 실패 재현)도 실행 없이는 만족할 수 없었다.
-- 나머지 22건(`DetailScreenExitSaveGuaranteeTest` 8, `DetailScreenExitSaveLossTest` 3, `StyleSaveRaceTest` 3, `BackgroundColorSaveRaceTest` 나머지 8)은 오늘 손대지 않고 분류 C로 남겼다 — 각각의 KDoc이 이미 "Context/Room/Hilt 제약, StyleSaveRaceTest와 동일" 계열의 정확한 설명을 갖고 있어 문서 수정도 하지 않았다.
+- **[79일차 후속 정정] replica는 25건 그대로 유지했다(삭제 0, 대체 제거 0).** 위 2건은 기존 replica를 지우거나 대체한 게 아니라 **별도 production coverage를 추가**한 것이다. 나머지 23건(`BackgroundColorSaveRaceTest` 나머지 9, `DetailScreenExitSaveGuaranteeTest` 8, `DetailScreenExitSaveLossTest` 3, `StyleSaveRaceTest` 3)은 오늘 손대지 않고 분류 C로 남겼다 — 각각의 KDoc이 이미 "Context/Room/Hilt 제약, StyleSaveRaceTest와 동일" 계열의 정확한 설명을 갖고 있어 문서 수정도 하지 않았다.
 
 ## Room migration 1→18 공백 조사
 
@@ -113,7 +232,7 @@ git diff --check: 통과(오류 없음, 기존 LF→CRLF 안내만)
 ## 후속 후보 (승인된 작업 아님)
 
 1. 안전한 emulator 구성 후 오늘 추가한 4건 포함 instrumentation 10건 전체 실제 실행.
-2. `DetailScreenExitSaveGuaranteeTest`(8)·`DetailScreenExitSaveLossTest`(3)·`StyleSaveRaceTest`(3)·`BackgroundColorSaveRaceTest` 나머지 8건도 같은 gated-DAO instrumentation 패턴으로 production 연결 테스트 추가 검토(실행 검증 가능해진 뒤).
+2. `DetailScreenExitSaveGuaranteeTest`(8)·`DetailScreenExitSaveLossTest`(3)·`StyleSaveRaceTest`(3)·`BackgroundColorSaveRaceTest` 나머지 9건도 같은 gated-DAO instrumentation 패턴으로 production 연결 테스트 추가 검토(실행 검증 가능해진 뒤).
 3. `saveBackgroundImagePath` 경로 컬럼 경합은 실제 UI 호출자가 생기기 전까지 production instrumentation 전환 보류.
 4. Migration v2→v3 표 재생성 직후의 중간 상태(`postcards_new`) 자체를 별도로 검증하는 세분화 테스트.
 5. (78일차 이월) `createComposeRule` v2 전환, Robolectric 도입 여부 결정, lifecycle/navigation 41건 구조 테스트 실제 행동 테스트 전환.

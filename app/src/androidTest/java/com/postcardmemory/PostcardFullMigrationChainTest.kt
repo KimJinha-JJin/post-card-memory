@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardDatabase
 import java.util.UUID
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -77,6 +78,13 @@ class PostcardFullMigrationChainTest {
                         VALUES (1, 'legacy-photo', 'legacy-title', 1000, '옛 장소')
                         """.trimIndent()
                     )
+                    // location이 NULL인 행도 표 재생성(2→3)의 INSERT ... SELECT를 그대로 통과하는지 함께 확인한다.
+                    db.execSQL(
+                        """
+                        INSERT INTO postcards (id, imagePath, title, capturedAt, location)
+                        VALUES (2, 'legacy-photo-2', 'legacy-title-2', 2000, NULL)
+                        """.trimIndent()
+                    )
                     db.version = 1
                 }
             }
@@ -106,12 +114,19 @@ class PostcardFullMigrationChainTest {
 
             val dao = room.postcardDao()
             val old = checkNotNull(dao.getPostcardById(1)) // Room이 이 시점에 최종 schema를 검증한다.
+            val oldSecond = checkNotNull(dao.getPostcardById(2))
 
-            // 원래 v1 값은 그대로 보존된다.
+            // 표 재생성(2→3)이 행을 늘리거나 줄이지 않는다.
+            assertEquals(2, dao.getAllPostcards().first().size)
+
+            // 원래 v1 값은 그대로 보존된다(PK 포함).
             assertEquals("legacy-photo", old.imagePath)
             assertEquals("legacy-title", old.title)
             assertEquals(1000L, old.capturedAt)
             assertEquals("옛 장소", old.location)
+            assertEquals("legacy-photo-2", oldSecond.imagePath)
+            assertEquals(2000L, oldSecond.capturedAt)
+            assertNull(oldSecond.location)
 
             // 2→3의 하드코딩 backfill: 옛 행은 모두 이 값으로 채워진다(MIGRATION_2_3 참고).
             assertEquals(4294966263L, old.backgroundColorArgb)
@@ -140,6 +155,7 @@ class PostcardFullMigrationChainTest {
 
             val newId = dao.insertPostcard(Postcard(imagePath = "new-photo", title = "new-title"))
             assertNotNull(dao.getPostcardById(newId))
+            assertEquals(3, dao.getAllPostcards().first().size)
 
             room.close()
             room = Room.databaseBuilder(context, PostcardDatabase::class.java, name).build()
@@ -156,9 +172,12 @@ class PostcardFullMigrationChainTest {
      * layoutStyle이 STAMP/POLAROID 2종으로 통합되기 전(v5→v6 시절 STANDARD 기본값,
      * 이후 AIRY 등 폐기값)에 저장된 옛 값이 14→15에서 실제로 정규화되는지 확인한다.
      * v14 상태까지는 production MIGRATION_1_2..MIGRATION_13_14를 그대로 실행해
-     * 도달하고, 그 위에 옛 폐기값 'AIRY'를 직접 심는다.
+     * 도달하고, 그 위에 옛 폐기값 'AIRY'와 현재도 유효한 'POLAROID'를 함께 심어
+     * UPDATE의 WHERE 조건(`NOT IN (...)`)이 폐기값만 정확히 골라내는지 확인한다
+     * — 조건이 너무 넓어져 유효값까지 덮어쓰는 회귀와, 너무 좁아져 폐기값을
+     * 놓치는 회귀를 한 테스트에서 함께 잡는다.
      */
-    @Test fun migration14to15NormalizesLegacyLayoutStyleValue() = runBlocking {
+    @Test fun migration14to15NormalizesLegacyLayoutStyleValueButKeepsValidOnesIntact() = runBlocking {
         val name = "day79_v14chain_${UUID.randomUUID()}.db"
         var room: PostcardDatabase? = null
         try {
@@ -168,6 +187,12 @@ class PostcardFullMigrationChainTest {
                         """
                         INSERT INTO postcards (id, imagePath, title, capturedAt, location)
                         VALUES (1, 'legacy-photo', 'legacy-title', 1000, NULL)
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO postcards (id, imagePath, title, capturedAt, location)
+                        VALUES (2, 'legacy-photo-2', 'legacy-title-2', 2000, NULL)
                         """.trimIndent()
                     )
                     PostcardDatabase.MIGRATION_1_2.migrate(db)
@@ -183,8 +208,9 @@ class PostcardFullMigrationChainTest {
                     PostcardDatabase.MIGRATION_11_12.migrate(db)
                     PostcardDatabase.MIGRATION_12_13.migrate(db)
                     PostcardDatabase.MIGRATION_13_14.migrate(db)
-                    // v14 상태에 폐기된 레이아웃 값을 직접 심는다.
+                    // v14 상태에 폐기값(id=1)과 현재도 유효한 값(id=2)을 함께 심는다.
                     db.execSQL("UPDATE postcards SET layoutStyle = 'AIRY' WHERE id = 1")
+                    db.execSQL("UPDATE postcards SET layoutStyle = 'POLAROID' WHERE id = 2")
                     db.version = 14
                 }
             }
@@ -201,6 +227,9 @@ class PostcardFullMigrationChainTest {
 
             val normalized = checkNotNull(room.postcardDao().getPostcardById(1))
             assertEquals("STAMP", normalized.layoutStyle)
+            // WHERE 조건이 너무 넓어져 유효한 값까지 덮어쓰지는 않는다.
+            val unaffected = checkNotNull(room.postcardDao().getPostcardById(2))
+            assertEquals("POLAROID", unaffected.layoutStyle)
         } finally {
             room?.close()
             context.deleteDatabase(name)

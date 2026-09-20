@@ -261,7 +261,8 @@ class VisitRecordTest {
     fun parseVisitRecord_toleratesTrailingNewline() {
         val record = VisitRecord(day("2026-09-11"), 43, 12)
 
-        assertNotNull(parseVisitRecord(record.serialize() + "\n"))
+        // null이 아님만 보던 기존 assertion을 강화 — 값 자체가 훼손 없이 그대로 살아남는지 확인한다.
+        assertEquals(record, parseVisitRecord(record.serialize() + "\n"))
     }
 
     @Test
