@@ -48,9 +48,6 @@ class PostcardBackRenderingTest {
             bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
             assertTrue("text and divider must actually be rendered", pixels.count { it != pixels[0] } > 1000)
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            java.io.File(context.cacheDir, "day66-back-qa.png").outputStream().use {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-            }
             val file = PostcardImageExporter.exportBackForSharing(context, -66, bitmap).getOrThrow()
             try {
                 val decoded = BitmapFactory.decodeFile(file.path)

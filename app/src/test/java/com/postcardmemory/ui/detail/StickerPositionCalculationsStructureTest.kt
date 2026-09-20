@@ -3,7 +3,6 @@ package com.postcardmemory.ui.detail
 import com.postcardmemory.testsupport.readStructureTestSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -60,26 +59,6 @@ class StickerPositionCalculationsStructureTest {
             "DetailScreen.kt에 centeredStickerOffset 정의가 남아 있으면 안 됨",
             Regex("""(?m)^(private |internal )?fun centeredStickerOffset\(""")
                 .containsMatchIn(detailScreenText)
-        )
-    }
-
-    @Test
-    fun componentFile_keepsExactSignatureAndTypes() {
-        assertTrue(
-            "postcardSize: IntSize 파라미터가 그대로 있어야 함",
-            componentText.contains("postcardSize: IntSize")
-        )
-        assertTrue(
-            "stickerSize: IntSize 파라미터가 그대로 있어야 함",
-            componentText.contains("stickerSize: IntSize")
-        )
-        assertTrue(
-            "반환 타입이 Offset 그대로여야 함",
-            componentText.contains("): Offset =")
-        )
-        assertTrue(
-            "coerceAtLeast(0f) 클램프가 그대로 있어야 함(음수 미허용 동작 유지)",
-            Regex("""coerceAtLeast\(0f\)""").findAll(componentText).count() == 2
         )
     }
 

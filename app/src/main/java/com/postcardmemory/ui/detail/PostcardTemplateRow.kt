@@ -1,5 +1,11 @@
 package com.postcardmemory.ui.detail
 
+/*
+ * 템플릿 기능은 현재 "휴면"이다 — 화면 진입점은 없지만 데이터 계층이 온전히
+ * 살아 있어 지우지 않는다. 판정 근거와 되살리기 조건은
+ * [com.postcardmemory.ui.detail.PostcardTemplate] 파일 맨 위에 한 번만 적어 뒀다.
+ */
+
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background

@@ -38,9 +38,15 @@ object VisitRecordStorage {
     internal fun recordTodayVisit(
         filesDir: File,
         nowMillis: Long = System.currentTimeMillis(),
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        readRecordText: (File) -> String = { it.readText(Charsets.UTF_8) }
     ): TodayVisit {
-        val previous = load(filesDir)
+        val stored = readStoredRecord(filesDir, readRecordText)
+        if (stored is StoredVisitRecord.Unreadable) {
+            return TodayVisit(record = null, isFirstVisitToday = false)
+        }
+
+        val previous = (stored as? StoredVisitRecord.Present)?.record
         val updated = recordVisit(previous, visitEpochDay(nowMillis, zone))
 
         // 같은 날 다시 열었으면 recordVisit이 previous를 그대로 돌려준다.
@@ -58,15 +64,54 @@ object VisitRecordStorage {
         )
     }
 
-    /** 읽을 수 없거나 형식이 깨졌으면 null. 이 경우 오늘이 첫 방문으로 다시 시작된다. */
-    internal fun load(filesDir: File): VisitRecord? {
-        val text =
-            runCatching {
-                visitRecordFile(filesDir).readText(Charsets.UTF_8)
-            }.getOrNull() ?: return null
+    /**
+     * 저장된 방문 기록을 읽은 결과. "기록이 없다"와 "읽지 못했다"를 구분하기
+     * 위해서만 존재한다 — 둘 다 null로 뭉뚱그리면 일시적인 읽기 실패가
+     * 새 사용자와 똑같이 취급돼 기존 누적 방문일이 1로 덮어써진다
+     * ([com.postcardmemory.utils.PostcardDraftStorage.loadDraft]에서 초안에
+     * 적용한 것과 같은 구분).
+     */
+    internal sealed interface StoredVisitRecord {
+        /** 아직 방문 기록 파일이 없다. 오늘이 진짜 첫 방문이다. */
+        object Absent : StoredVisitRecord
 
-        return parseVisitRecord(text)
+        /** 파일은 읽었다. [record]가 null이면 내용이 손상돼 해석할 수 없었다는 뜻. */
+        data class Present(val record: VisitRecord?) : StoredVisitRecord
+
+        /** 파일은 있는데 읽지 못했다(파일 잠금, 저장소 일시 오류 등). */
+        object Unreadable : StoredVisitRecord
     }
+
+    /**
+     * 세 경우를 구분한다.
+     *
+     * - 파일 없음 → [StoredVisitRecord.Absent]. 첫 실행이다.
+     * - 읽기 실패 → [StoredVisitRecord.Unreadable]. 내용을 한 글자도 보지
+     *   못했으므로 손상 여부조차 판정할 수 없다. 기존 파일을 그대로 두고
+     *   이번 실행만 기록을 건너뛴다. 다음 실행에서 정상적으로 읽히면
+     *   원래 숫자가 그대로 돌아온다.
+     * - 읽었지만 형식이 깨짐 → [StoredVisitRecord.Present]`(null)`. 기존
+     *   정책 그대로 오늘이 첫 방문으로 다시 시작한다.
+     *
+     * [readRecordText]는 순수 JUnit에서 일시적 읽기 실패를 실제로 주입하기
+     * 위한 이음매이며, production은 항상 기본값을 쓴다.
+     */
+    internal fun readStoredRecord(
+        filesDir: File,
+        readRecordText: (File) -> String = { it.readText(Charsets.UTF_8) }
+    ): StoredVisitRecord {
+        val file = visitRecordFile(filesDir)
+        if (!file.exists()) return StoredVisitRecord.Absent
+
+        val text = runCatching { readRecordText(file) }.getOrNull()
+            ?: return StoredVisitRecord.Unreadable
+
+        return StoredVisitRecord.Present(parseVisitRecord(text))
+    }
+
+    /** 읽을 수 없거나 형식이 깨졌으면 null. 읽기 실패와 손상을 구분해야 하면 [readStoredRecord]를 쓴다. */
+    internal fun load(filesDir: File): VisitRecord? =
+        (readStoredRecord(filesDir) as? StoredVisitRecord.Present)?.record
 
     /**
      * 임시 파일에 먼저 쓰고 rename하는 검증된 원자적 저장

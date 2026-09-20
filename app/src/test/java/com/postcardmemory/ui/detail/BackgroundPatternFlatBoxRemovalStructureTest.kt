@@ -12,8 +12,8 @@ import org.junit.Test
  * "직접 고르기"의 인라인 펼침(AnimatedVisibility + 색상 탭 하단 삽입)도
  * 제거하고 별도 Dialog로 옮겼다([[StickerItemFlatBoxRemovalStructureTest]]
  * 참고 — 그 시점엔 배경 패턴이 계속 DecorationPresetTile을 쓴다고
- * 전제했었다). Compose UI 테스트 인프라가 없는 프로젝트 관례에 따라
- * 소스 텍스트 기준으로 다음을 고정한다.
+ * 전제했었다). `src/test` JVM 환경에는 Robolectric이 없어 Composable을
+ * 직접 렌더링할 수 없으므로 소스 텍스트 기준으로 다음을 고정한다.
  */
 class BackgroundPatternFlatBoxRemovalStructureTest {
 

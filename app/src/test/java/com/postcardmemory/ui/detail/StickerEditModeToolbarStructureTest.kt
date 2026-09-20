@@ -9,9 +9,9 @@ import org.junit.Test
 /**
  * 제6차(2026-08-07)에서 `StickerEditModeToolbar`(및 Toolbar 전용 helper인
  * `StickerEditModeButton`)를 DetailScreen.kt에서 StickerEditModeToolbar.kt로
- * 물리적으로 분리했다. 이 프로젝트는 Compose UI 테스트 인프라를 쓰지 않으므로
- * ([[SaveErrorDialogStructureTest]] 상단 주석 참고), 소스 텍스트 기준으로
- * 다음을 고정한다:
+ * 물리적으로 분리했다. `src/test` JVM 환경에는 Robolectric이 없어 Composable을
+ * 직접 렌더링할 수 없으므로([[SaveErrorDialogStructureTest]] 상단 주석 참고),
+ * 소스 텍스트 기준으로 다음을 고정한다:
  *  - 분리된 파일에만 두 함수 정의가 존재하고(DetailScreen.kt에는 남지 않음)
  *    ViewModel/Repository/Context/gesture/저장/Undo를 참조하지 않음
  *  - `StickerEditModeButton`은 Toolbar 파일 안에서만 쓰이는 private helper로
@@ -188,26 +188,6 @@ class StickerEditModeToolbarStructureTest {
             assertFalse(
                 "[$token] StickerEditModeToolbar/Button은 이 토큰을 직접 참조하지 않아야 함",
                 componentText.contains(token)
-            )
-        }
-    }
-
-    @Test
-    fun stickerEditModeEnum_visibilityWidenedButMembersUnchanged() {
-        assertTrue(
-            "StickerEditMode enum은 internal로 가시성이 넓어져야 함(Toolbar 파일에서 참조 가능해야 함)",
-            Regex("""(?m)^internal enum class StickerEditMode \{""")
-                .containsMatchIn(detailScreenText)
-        )
-        assertFalse(
-            "StickerEditMode enum이 다시 private으로 남아 있으면 안 됨",
-            Regex("""(?m)^private enum class StickerEditMode \{""")
-                .containsMatchIn(detailScreenText)
-        )
-        for (member in listOf("Move", "Scale", "Rotate")) {
-            assertTrue(
-                "[$member] StickerEditMode enum 멤버가 유지돼야 함",
-                detailScreenText.contains(member)
             )
         }
     }

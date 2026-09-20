@@ -240,6 +240,47 @@ class PostcardOverlayExportLogicTest {
         assertTrue(size.width >= 1)
     }
 
+    // 마스킹테이프처럼 가로·세로 기준 크기가 다른 오버레이용 오버로드.
+    // 78일차 전까지는 "선언이 정확히 2개인지"와 "파라미터 문자열이 그대로인지"를
+    // 소스 텍스트로만 보고 있었고 실제 계산은 아무도 확인하지 않았다. 아래
+    // 세 건이 그 두 구조 테스트를 대체한다 — 오버로드가 사라지거나 파라미터가
+    // 바뀌면 컴파일이 깨지고, 계산이 바뀌면 값으로 잡힌다.
+
+    @Test
+    fun rectangularFallbackSize_scalesWidthAndHeightIndependently() {
+        val size = computeFallbackOverlaySize(
+            basePxWidth = 300f,
+            basePxHeight = 80f,
+            scale = 0.5f
+        )
+
+        assertEquals(150, size.width)
+        assertEquals(40, size.height)
+    }
+
+    @Test
+    fun rectangularFallbackSize_keepsTheAspectItWasGiven_notSquare() {
+        val size = computeFallbackOverlaySize(
+            basePxWidth = 400f,
+            basePxHeight = 100f,
+            scale = 1f
+        )
+
+        assertTrue("가로·세로가 같아지면 마스킹테이프가 정사각형으로 찌그러진다", size.width != size.height)
+    }
+
+    @Test
+    fun rectangularFallbackSize_neverCollapsesEitherSideToZero() {
+        val size = computeFallbackOverlaySize(
+            basePxWidth = 300f,
+            basePxHeight = 80f,
+            scale = 0f
+        )
+
+        assertTrue(size.width >= 1)
+        assertTrue(size.height >= 1)
+    }
+
     // ---- createSealOverlayForExport: 정책 일치 + fallback ----
 
     private fun seal(

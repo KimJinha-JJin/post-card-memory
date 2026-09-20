@@ -1,5 +1,28 @@
 package com.postcardmemory.ui.detail
 
+/*
+ * ## 템플릿 기능은 현재 "휴면"이다 (78일차 호적 조사 판정)
+ *
+ * UI 진입점은 2026-08-28 커밋 `7b3edd9`("Simplify photo editing UI into
+ * layout and edit panels")에서 사진 탭을 정리하며 사라졌다. 그 커밋은
+ * 템플릿 **데이터 계층은 그대로 둔다**고 명시했고, 실제로 모델·직렬화·
+ * 내장 템플릿·파일 저장소·미리보기가 전부 온전하게 남아 있다. 죽은 코드가
+ * 아니라 화면만 떼어낸 상태다.
+ *
+ * 지우지 않는 이유는 두 가지다.
+ *
+ * 1. 2026-07-24 ~ 2026-08-28 사이에 사용자가 저장한 템플릿 파일이 기기의
+ *    `filesDir/postcard_templates/` 에 그대로 남아 있을 수 있다. 읽는 코드를
+ *    지우면 그 파일들을 되살릴 방법이 영영 없어진다(지우는 경로도 없다).
+ * 2. 기능 계층이 하나로 완결돼 있어, 나중에 화면만 다시 붙이면 복구된다.
+ *
+ * Room에는 템플릿 전용 Entity나 컬럼이 없다 — `updatePostcardTemplateStyle`은
+ * 엽서가 원래 갖고 있는 스타일 컬럼들을 한 번에 갱신할 뿐이다. 따라서 이
+ * 판정은 schema/Migration과 무관하다.
+ *
+ * 되살리기로 정하기 전에는 여기에 화면·메뉴·navigation을 새로 붙이지 않는다.
+ */
+
 import com.postcardmemory.data.Postcard
 import java.util.UUID
 

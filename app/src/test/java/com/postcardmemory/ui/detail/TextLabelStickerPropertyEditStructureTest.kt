@@ -15,8 +15,9 @@ import org.junit.Test
  * 테이프→문자색과 동일한 규칙(labelStickerTextColorArgbFor)으로 테두리색의
  * 밝기에서 자동으로 정하도록 단순화했다 — 사용자가 고르는 색은 테두리색
  * 하나뿐이다.
- * Compose UI 테스트 인프라가 없는 프로젝트 관례([[StickerEditModeToolbarStructureTest]]
- * 참고)에 따라 소스 텍스트 기준으로 다음을 고정한다:
+ * `src/test` JVM 환경에는 Robolectric이 없어 Composable을 직접 렌더링할 수
+ * 없으므로([[StickerEditModeToolbarStructureTest]] 참고), 소스 텍스트 기준으로
+ * 다음을 고정한다:
  *  - 두 패널의 공개 시그니처에 개별 색상/스타일 콜백이 더 이상 없음
  *  - 색상/스타일 편집 UI(TextStickerColorPickerSection/LabelTapeStyleRow)는
  *    선언 1곳 + Add/Create·Edit Dialog 호출로만 존재함

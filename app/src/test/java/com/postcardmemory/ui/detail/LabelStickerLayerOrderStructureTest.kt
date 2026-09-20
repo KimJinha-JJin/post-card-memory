@@ -8,9 +8,9 @@ import org.junit.Test
 /**
  * 라벨은 "이미 꾸며놓은 종이 위에 나중에 붙이는 물리적인 스티커"라 낙서보다
  * 위에 그려져야 하고, 미리보기와 저장 이미지가 같은 순서를 가져야 한다.
- * 이 프로젝트는 Compose UI 테스트 인프라를 쓰지 않으므로
- * (StickerPositionCalculationsStructureTest 상단 주석 참고) 두 렌더 경로의
- * 소스 텍스트에서 호출 순서를 고정한다.
+ * `src/test` JVM 환경에는 Robolectric이 없어 두 렌더 경로를 직접 띄울 수
+ * 없으므로(StickerPositionCalculationsStructureTest 상단 주석 참고), 소스
+ * 텍스트에서 호출 순서를 고정한다.
  *
  * 한쪽만 고쳐서 "화면에서는 라벨이 위인데 공유 이미지에서는 낙서가 위"인
  * 상태가 되는 것을 막는 것이 이 테스트의 목적이다.

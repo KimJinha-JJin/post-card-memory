@@ -29,15 +29,7 @@ object PostcardImageStorage {
 
         val file = File(path)
 
-        val isWithinFilesDir =
-            runCatching {
-                val root =
-                    filesDir.canonicalPath +
-                            File.separator
-                file.canonicalPath.startsWith(root)
-            }.getOrDefault(false)
-
-        if (isWithinFilesDir && file.exists()) {
+        if (isInsideDirectory(filesDir, file) && file.exists()) {
             file.delete()
         }
     }

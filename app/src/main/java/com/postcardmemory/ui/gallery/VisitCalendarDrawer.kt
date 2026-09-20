@@ -811,6 +811,8 @@ internal fun MonthlyVisitCalendar(
 
     // [visitedEpochDays]는 앱을 켠 달 하나만 담고 있다. 달력은 어느 달로든
     // 이동할 수 있으므로, 지금 보고 있는 달의 방문 기록을 그때 읽어온다.
+    // 읽기 전용이다 — 달력을 넘기는 것으로 방문이 생기지는 않는다
+    // (방문을 만드는 규칙은 [com.postcardmemory.utils.VisitRecord] 참고).
     // 한 달은 marker 파일 최대 31개 stat이라 이동할 때마다 읽어도 싸고,
     // 같은 drawer 세션에서 왔다 갔다 할 때 표시가 깜빡이지 않도록 읽어온
     // 달만 기억해 둔다(세션 한정 memo이지 영구 캐시가 아니다).

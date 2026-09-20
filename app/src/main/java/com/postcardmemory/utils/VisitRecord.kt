@@ -5,6 +5,24 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
+ * ## 이 앱에서 "방문"의 정의 (canonical)
+ *
+ * **방문 = 그 날짜에 앱을 새로 연 기록.** 여기서만 정의하고, 방문을 세거나
+ * 보여주는 모든 곳([VisitRecordStorage], [VisitHistoryStorage],
+ * [com.postcardmemory.ui.intro.AppIntroScreen]의 소인,
+ * [com.postcardmemory.ui.gallery.VisitCalendarDrawer]의 달력)이 이 정의를
+ * 따른다. 세부는 세 가지다.
+ *
+ * - **하루에 여러 번 열어도 1회다.** 같은 날 두 번째 실행부터는 총 방문일도
+ *   연속 방문일도 늘지 않고 파일도 다시 쓰지 않는다.
+ * - **판정은 프로세스당 한 번이다.** 화면을 오갈 때마다가 아니라 앱을 새로
+ *   실행할 때 한 번 판정한다([com.postcardmemory.MainActivity]).
+ * - **앱을 켜 둔 채 자정을 넘기는 것만으로는 새 방문이 생기지 않는다.**
+ *   9월 19일에 실행해 켜 둔 채 20일 00:00을 지나도 20일 방문은 만들어지지
+ *   않는다. 다음 날 앱을 새로 열어야 20일 방문이 된다. 화면 표시(달력의
+ *   "오늘", 미래 우체통 D-day)는 자정에 갱신되지만 그건 **기존 기록을
+ *   보여주는 일**이지 기록을 만드는 일이 아니다.
+ *
  * 앱을 하루 처음 열었다는 흔적 하나. 출석 점수나 보상이 아니라 "그날
  * 엽서함에 들렀다"는 기록 자체가 목적이므로, 담는 값은 세 개뿐이다.
  *
@@ -14,9 +32,10 @@ import java.time.ZoneId
  * 어긋날 수 있기 때문이다(엽서 [com.postcardmemory.data.Postcard.capturedAt]은
  * "그 사진을 찍은 순간"이라 millis가 맞지만, 방문일은 순간이 아니라 날짜다).
  *
- * [currentStreakDays]는 이번 작업에서 저장만 하고 화면에 노출하지 않는다 —
- * 연속이 끊겼다는 표현은 사용자를 압박하므로, 인트로에는 절대 줄지 않는
- * [totalVisitDays]만 보여준다.
+ * [currentStreakDays]는 저장만 하고 어떤 화면에도 노출하지 않는다(의도된
+ * 제품 결정이다) — 연속이 끊겼다는 표현은 사용자를 압박하므로, 인트로에는
+ * 절대 줄지 않는 [totalVisitDays]만 보여준다. 저장은 계속 하므로 나중에
+ * 쓰기로 정하면 과거 기록이 남아 있다.
  */
 data class VisitRecord(
     val lastVisitEpochDay: Long,
@@ -25,7 +44,10 @@ data class VisitRecord(
 )
 
 /**
- * 오늘 방문을 기록한 결과. [record]는 기록 뒤의 상태이고,
+ * 오늘 방문을 기록한 결과. [record]는 기록 뒤의 상태이며, 기존 파일을
+ * 일시적으로 읽지 못해 누적값을 알 수 없을 때만 null이다. 이때 UI는 신규
+ * 방문(1회)으로 추정하지 않고 방문 숫자와 소인을 숨긴다.
+ *
  * [isFirstVisitToday]는 **이번 실행이 오늘의 첫 방문이어서 기록이 실제로 새로
  * 남았는지**를 뜻한다 — 같은 날 두 번째 실행부터는 false다.
  *
@@ -33,7 +55,7 @@ data class VisitRecord(
  * 때마다 찍히지만 도장이 닿는 진동은 그날 처음 찍힐 때만 울리는 데 쓴다.
  */
 data class TodayVisit(
-    val record: VisitRecord,
+    val record: VisitRecord?,
     val isFirstVisitToday: Boolean
 )
 

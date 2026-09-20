@@ -10,9 +10,9 @@ import org.junit.Test
  * 62일차 2차: 월별 보기가 단일 스크롤 컨테이너(`LazyVerticalGrid` +
  * `GridItemSpan`으로 전체 폭 헤더 삽입) 구조를 유지하고, 월 섹션마다
  * 둥근 카드/배경을 다시 씌우지 않는지(작업지시서 22절 — 상자덮기식 UI
- * 금지) 고정한다. Compose UI 테스트 인프라가 없는 프로젝트 관례
- * (DialogPreviewFlatContainerStructureTest.kt 참고)에 따라 소스 텍스트
- * 기준으로 검사한다.
+ * 금지) 고정한다. `src/test` JVM 환경에는 Robolectric이 없어 Composable을
+ * 직접 렌더링할 수 없으므로(DialogPreviewFlatContainerStructureTest.kt 참고),
+ * 소스 텍스트 기준으로 검사한다.
  */
 class GalleryMonthlyGridStructureTest {
 

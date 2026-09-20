@@ -1,6 +1,5 @@
 package com.postcardmemory.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,11 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -47,7 +43,6 @@ import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.SunsetGold
-import com.postcardmemory.ui.theme.SurfaceGray
 
 @Composable
 fun EditorUndoRedoButtons(
@@ -202,64 +197,15 @@ fun EditorSlider(
 }
 
 /**
- * 스티커·도장 패널의 보조 행동(복제·삭제·회전 등)에 쓰는 가벼운 외곽선 버튼.
- *
- * 사진·배경·텍스트 패널의 보조 버튼과 같은 인상(둥근 12dp, 얇은 테두리,
- * 아이콘+라벨)을 컬렉션 패널에서도 공유한다. 일반 행동은 기본색을,
- * 위험 행동(삭제)은 borderColor·contentColor에 DangerRed 계열을 넘겨 쓴다.
- */
-@Composable
-fun EditorOutlineButton(
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    contentColor: Color = BrutalBlack,
-    borderColor: Color = SurfaceGray
-) {
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, borderColor),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = contentColor
-        ),
-        contentPadding = PaddingValues(
-            horizontal = 16.dp,
-            vertical = 10.dp
-        ),
-        modifier = modifier
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-
-            Spacer(modifier = Modifier.size(6.dp))
-        }
-
-        Text(
-            text = text,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-/**
  * 선택된 객체의 contextual action(수정·삭제·복제·배경제거·레이어 순서 등)을
  * 위한 평면 텍스트 Action. 53일차 제8차 파일럿: Action이라는 이유만으로
  * 매번 둥근 버튼 Box(배경·테두리·shape)로 감싸지 않는다 — 텍스트 자체가
  * Action으로 읽히도록 하고, 클릭 영역·typography·disabled/destructive
- * 색상만 유지한다. 배경/테두리가 없으므로 EditorOutlineButton과 달리
+ * 색상만 유지한다. 배경/테두리가 없으므로 예전의 둥근 외곽선 버튼과 달리
  * 개별 그림자·카드 인상이 남지 않는다.
  *
- * EditorOutlineButton은 이 컴포저블과 별개로 그대로 유지된다 — 낙서 등
- * 아직 옮기지 않은 화면은 계속 EditorOutlineButton을 쓴다.
+ * 편집기의 모든 화면이 이 문법으로 옮겨졌고(낙서 포함), 마지막까지 남아
+ * 있던 `EditorOutlineButton`은 호출부가 0이 되어 78일차에 삭제했다.
  */
 @Composable
 fun EditorTextAction(

@@ -51,12 +51,6 @@ internal fun cleanupPostcardOwnedAssets(
     val missing = mutableListOf<String>()
     val failed = mutableListOf<AssetDeletionFailure>()
 
-    fun isWithinFilesDir(file: File): Boolean =
-        runCatching {
-            val root = filesDir.canonicalPath + File.separator
-            file.canonicalPath.startsWith(root)
-        }.getOrDefault(false)
-
     fun deleteFile(assetName: String, file: File) {
         if (!file.exists()) {
             missing += assetName
@@ -93,7 +87,7 @@ internal fun cleanupPostcardOwnedAssets(
 
     // 1. 기본 이미지 — DB에 저장된 경로라 실제로 앱 내부 경로인지 확인 후 삭제.
     val imageFile = File(postcard.imagePath)
-    if (isWithinFilesDir(imageFile)) {
+    if (isInsideDirectory(filesDir, imageFile)) {
         deleteFile("image", imageFile)
     } else {
         failed += AssetDeletionFailure(
@@ -109,7 +103,7 @@ internal fun cleanupPostcardOwnedAssets(
         missing += "backgroundImage"
     } else {
         val backgroundFile = File(backgroundPath)
-        if (isWithinFilesDir(backgroundFile)) {
+        if (isInsideDirectory(filesDir, backgroundFile)) {
             deleteFile("backgroundImage", backgroundFile)
         } else {
             failed += AssetDeletionFailure(

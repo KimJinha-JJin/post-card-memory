@@ -11,8 +11,9 @@ import org.junit.Test
  * 자리의 `+ 추가` 하나로 시작하고, 실제 테이프는 각 생성창에서 `저장`을
  * 눌렀을 때만 만들어지는 구조를 고정한다.
  *
- * Compose UI 테스트 인프라가 없는 프로젝트 관례([[EditorSubcategoryNavBarStructureTest]]
- * 참고)에 따라 소스 텍스트 기준으로 검사한다.
+ * `src/test` JVM 환경에는 Robolectric이 없어 Composable을 직접 렌더링할 수
+ * 없으므로([[EditorSubcategoryNavBarStructureTest]] 참고) 소스 텍스트 기준으로
+ * 검사한다.
  */
 class MaskingTapeCreationGrammarStructureTest {
 

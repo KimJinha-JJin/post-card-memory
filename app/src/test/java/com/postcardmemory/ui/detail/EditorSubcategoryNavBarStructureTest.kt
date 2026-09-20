@@ -15,8 +15,9 @@ import org.junit.Test
  * 사진 탭 2단 구조 개편부터는 사진 탭의 레이아웃/사진 편집 선택도, 이어진 배경
  * UI 개편부터는 배경 탭의 색상/패턴 선택도 같은 역할이라 같은 컴포저블을
  * 재사용한다 — 다섯 호출부 모두 각자의 페이지 조건 안에서만 렌더돼야 한다.
- * Compose UI 테스트 인프라가 없는 프로젝트 관례([[StickerEditModeToolbarStructureTest]]
- * 참고)에 따라 소스 텍스트 기준으로 다음을 고정한다.
+ * `src/test` JVM 환경에는 Robolectric이 없어 Composable을 직접 렌더링할 수
+ * 없으므로([[StickerEditModeToolbarStructureTest]] 참고) 소스 텍스트 기준으로
+ * 다음을 고정한다.
  */
 class EditorSubcategoryNavBarStructureTest {
 

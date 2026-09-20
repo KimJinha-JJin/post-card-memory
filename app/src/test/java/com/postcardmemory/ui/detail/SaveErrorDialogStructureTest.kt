@@ -10,11 +10,13 @@ import org.junit.Test
  * 저장 에러(및 내보내기 성공) 안내 다이얼로그 4종의 현재 구조를 소스 텍스트 기준으로
  * 고정한다.
  *
- * 이 프로젝트는 Compose UI 테스트 인프라(androidx.compose.ui:ui-test)나
- * Robolectric을 쓰지 않는다(다른 *LogicTest.kt 상단 주석 참고 — DetailScreen/
- * DetailViewModel을 직접 인스턴스화할 수 없음). 따라서 다이얼로그를 실제로
- * 렌더링해 클릭 이벤트를 검증할 수 없다. 대신 소스를 텍스트로 읽어 구조적
- * 불변식을 고정한다.
+ * 이 JVM unit test 소스 세트에서는 다이얼로그를 실제로 렌더링해 클릭 이벤트를
+ * 검증할 수 없다 — Robolectric이 없어 DetailScreen/DetailViewModel을 직접
+ * 인스턴스화할 수 없기 때문이다(다른 *LogicTest.kt 상단 주석 참고).
+ * `androidx.compose.ui:ui-test-junit4`는 프로젝트에 들어와 있지만 androidTest
+ * 전용이라 instrumented 실행이 필요하고, 그 실행 조건은
+ * [com.postcardmemory.testsupport.readStructureTestSource]에 정리해 뒀다.
+ * 그래서 여기서는 소스를 텍스트로 읽어 구조적 불변식을 고정한다.
  *
  * 제3차(2026-08-07)에서 7개 다이얼로그의 AlertDialog UI를 공통 Composable
  * `SaveResultAlertDialog`(SaveResultAlertDialog.kt)로 추출했다. 56일차 사진

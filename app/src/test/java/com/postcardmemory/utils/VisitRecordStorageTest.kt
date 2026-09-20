@@ -1,6 +1,7 @@
 package com.postcardmemory.utils
 
 import java.io.File
+import java.io.IOException
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -38,6 +39,8 @@ class VisitRecordStorageTest {
             zone = seoul
         )
 
+    private fun TodayVisit.knownRecord(): VisitRecord = requireNotNull(record)
+
     @Test
     fun load_withNoFileYet_isNull() {
         assertNull(VisitRecordStorage.load(filesDir()))
@@ -47,10 +50,10 @@ class VisitRecordStorageTest {
     fun recordTodayVisit_firstRun_writesFirstVisitAndPersistsIt() {
         val recorded = recordAt("2026-09-11T09:00:00")
 
-        assertEquals(day("2026-09-11"), recorded.record.lastVisitEpochDay)
-        assertEquals(1, recorded.record.totalVisitDays)
-        assertEquals(1, recorded.record.currentStreakDays)
-        assertEquals(recorded.record, VisitRecordStorage.load(filesDir()))
+        assertEquals(day("2026-09-11"), recorded.knownRecord().lastVisitEpochDay)
+        assertEquals(1, recorded.knownRecord().totalVisitDays)
+        assertEquals(1, recorded.knownRecord().currentStreakDays)
+        assertEquals(recorded.knownRecord(), VisitRecordStorage.load(filesDir()))
     }
 
     // ---- 오늘의 첫 방문인지(닿는 순간 진동을 울릴지) ----
@@ -110,9 +113,9 @@ class VisitRecordStorageTest {
         recordAt("2026-09-11T09:00:00")
         val second = recordAt("2026-09-11T21:30:00")
 
-        assertEquals(1, second.record.totalVisitDays)
-        assertEquals(1, second.record.currentStreakDays)
-        assertEquals(second.record, VisitRecordStorage.load(filesDir()))
+        assertEquals(1, second.knownRecord().totalVisitDays)
+        assertEquals(1, second.knownRecord().currentStreakDays)
+        assertEquals(second.knownRecord(), VisitRecordStorage.load(filesDir()))
     }
 
     @Test
@@ -121,9 +124,9 @@ class VisitRecordStorageTest {
         recordAt("2026-09-12T09:00:00")
         val third = recordAt("2026-09-13T09:00:00")
 
-        assertEquals(3, third.record.totalVisitDays)
-        assertEquals(3, third.record.currentStreakDays)
-        assertEquals(third.record, VisitRecordStorage.load(filesDir()))
+        assertEquals(3, third.knownRecord().totalVisitDays)
+        assertEquals(3, third.knownRecord().currentStreakDays)
+        assertEquals(third.knownRecord(), VisitRecordStorage.load(filesDir()))
     }
 
     @Test
@@ -132,9 +135,9 @@ class VisitRecordStorageTest {
         recordAt("2026-09-12T09:00:00")
         val afterGap = recordAt("2026-09-20T09:00:00")
 
-        assertEquals(3, afterGap.record.totalVisitDays)
-        assertEquals(1, afterGap.record.currentStreakDays)
-        assertEquals(afterGap.record, VisitRecordStorage.load(filesDir()))
+        assertEquals(3, afterGap.knownRecord().totalVisitDays)
+        assertEquals(1, afterGap.knownRecord().currentStreakDays)
+        assertEquals(afterGap.knownRecord(), VisitRecordStorage.load(filesDir()))
     }
 
     @Test
@@ -142,9 +145,9 @@ class VisitRecordStorageTest {
         val lateNight = recordAt("2026-09-11T23:59:00")
         val justAfterMidnight = recordAt("2026-09-12T00:00:30")
 
-        assertEquals(1, lateNight.record.totalVisitDays)
-        assertEquals(2, justAfterMidnight.record.totalVisitDays)
-        assertEquals(2, justAfterMidnight.record.currentStreakDays)
+        assertEquals(1, lateNight.knownRecord().totalVisitDays)
+        assertEquals(2, justAfterMidnight.knownRecord().totalVisitDays)
+        assertEquals(2, justAfterMidnight.knownRecord().currentStreakDays)
         assertTrue(justAfterMidnight.isFirstVisitToday)
     }
 
@@ -157,8 +160,8 @@ class VisitRecordStorageTest {
 
         val recorded = recordAt("2026-09-11T09:00:00")
 
-        assertEquals(1, recorded.record.totalVisitDays)
-        assertEquals(recorded.record, VisitRecordStorage.load(filesDir()))
+        assertEquals(1, recorded.knownRecord().totalVisitDays)
+        assertEquals(recorded.knownRecord(), VisitRecordStorage.load(filesDir()))
     }
 
     // ---- 다른 데이터를 건드리지 않는다 ----
@@ -196,5 +199,109 @@ class VisitRecordStorageTest {
 
         assertTrue(file.exists())
         assertFalse(leftoverTemp.exists())
+    }
+
+    // ---- 읽기 실패는 손상이 아니다(누적 방문일 보존) ----
+    //
+    // 읽기 실패를 "기록 없음"과 같이 취급하면 recordVisit(null, today)가
+    // 새 기록(총 1일)을 만들고 그대로 저장돼, 잠깐의 I/O 실패 한 번으로
+    // 사용자의 누적 방문일이 영구히 사라진다. 아래 테스트들은 실제
+    // 예외를 주입해 그 경로를 재현한다(항상 참인 fake 상태가 아니다).
+
+    private fun recordAtFailingRead(text: String): TodayVisit =
+        VisitRecordStorage.recordTodayVisit(
+            filesDir = filesDir(),
+            nowMillis = millisAt(text),
+            zone = seoul,
+            readRecordText = { throw IOException("일시적 읽기 실패") }
+        )
+
+    @Test
+    fun recordTodayVisit_readFailure_keepsTheStoredRecordUntouched() {
+        recordAt("2026-09-11T09:00:00")
+        recordAt("2026-09-12T09:00:00")
+        recordAt("2026-09-13T09:00:00")
+        val before = VisitRecordStorage.visitRecordFile(filesDir()).readText()
+
+        recordAtFailingRead("2026-09-14T09:00:00")
+
+        assertEquals(before, VisitRecordStorage.visitRecordFile(filesDir()).readText())
+        assertEquals(3, VisitRecordStorage.load(filesDir())?.totalVisitDays)
+    }
+
+    @Test
+    fun recordTodayVisit_readFailure_isNotReportedAsTheFirstVisitOfTheDay() {
+        recordAt("2026-09-11T09:00:00")
+
+        val unreadable = recordAtFailingRead("2026-09-12T09:00:00")
+
+        assertFalse(unreadable.isFirstVisitToday)
+        assertNull("알 수 없는 누적값을 신규 방문 1회로 만들면 안 됨", unreadable.record)
+    }
+
+    @Test
+    fun recordTodayVisit_afterATransientReadFailure_theNextRunResumesFromTheRealCount() {
+        recordAt("2026-09-11T09:00:00")
+        recordAt("2026-09-12T09:00:00")
+
+        recordAtFailingRead("2026-09-13T09:00:00")
+        val recovered = recordAt("2026-09-13T21:00:00")
+
+        assertEquals(3, recovered.knownRecord().totalVisitDays)
+        assertEquals(3, recovered.knownRecord().currentStreakDays)
+        assertTrue(recovered.isFirstVisitToday)
+    }
+
+    @Test
+    fun recordTodayVisit_readFailureOnARealUnreadableFile_stillKeepsTheRecord() {
+        // 이음매 없이 production 기본 경로만 쓰는 검증: 기록 파일 자리를
+        // 디렉터리로 만들어 readText가 실제로 실패하게 한다.
+        recordAt("2026-09-11T09:00:00")
+        val file = VisitRecordStorage.visitRecordFile(filesDir())
+        file.delete()
+        assertTrue(file.mkdirs())
+
+        val recorded = VisitRecordStorage.recordTodayVisit(
+            filesDir = filesDir(),
+            nowMillis = millisAt("2026-09-12T09:00:00"),
+            zone = seoul
+        )
+
+        assertFalse(recorded.isFirstVisitToday)
+        assertNull(recorded.record)
+        assertTrue(file.isDirectory)
+    }
+
+    @Test
+    fun readStoredRecord_separatesMissingFromUnreadableFromCorrupt() {
+        assertEquals(
+            VisitRecordStorage.StoredVisitRecord.Absent,
+            VisitRecordStorage.readStoredRecord(filesDir())
+        )
+
+        recordAt("2026-09-11T09:00:00")
+        assertEquals(
+            VisitRecordStorage.StoredVisitRecord.Unreadable,
+            VisitRecordStorage.readStoredRecord(filesDir()) { throw IOException("boom") }
+        )
+
+        VisitRecordStorage.visitRecordFile(filesDir()).writeText("깨진 내용")
+        assertEquals(
+            VisitRecordStorage.StoredVisitRecord.Present(null),
+            VisitRecordStorage.readStoredRecord(filesDir())
+        )
+    }
+
+    @Test
+    fun recordTodayVisit_corruptFile_stillStartsOver_soTheFixDidNotWidenPreservation() {
+        // 읽기 실패만 보존 대상이다. 내용을 읽었는데 해석할 수 없으면
+        // 기존 정책대로 오늘이 첫 방문으로 다시 시작한다.
+        recordAt("2026-09-11T09:00:00")
+        VisitRecordStorage.visitRecordFile(filesDir()).writeText("깨진 내용")
+
+        val recorded = recordAt("2026-09-12T09:00:00")
+
+        assertTrue(recorded.isFirstVisitToday)
+        assertEquals(1, recorded.knownRecord().totalVisitDays)
     }
 }
