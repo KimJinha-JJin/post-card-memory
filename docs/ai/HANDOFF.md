@@ -1,3 +1,486 @@
+# HANDOFF — 79일차 테스트 실효성 보강 (replica 우선순위 전환 + migration chain)
+
+확인일: 2026-09-20. 수동 표준 모드. 사용자 제공 "79일차 테스트 실효성 보강 및 안정성 2차" 작업지시서에 따라 DetailViewModel replica 25건 분류, Room migration 1→18 공백 조사, instrumentation 6건 실행 가능성 확인을 수행했어. **새 기능·새 UI·navigation 없음. Room schema/DB version/DAO 계약 변경 없음. 새 dependency 없음.** production 코드는 전혀 건드리지 않았고, 오늘 변경은 전부 androidTest 신규 테스트 파일 2개 추가다.
+
+## 시작 Git 상태 (실측)
+
+```yaml
+branch: feature/photo-sticker
+HEAD: 6b9a7da0955362d08833388b46c405db511ecb1e
+upstream: origin/feature/photo-sticker
+ahead/behind: 0/0
+staged: 없음
+working tree: 78일차부터 이어진 tracked 변경 31파일(위 78일차 섹션 그대로, 오늘 손대지 않음) + 기존 untracked .codex-config.candidate.toml, .kotlin/
+```
+
+78일차 마지막 참고값과 정확히 일치했다. 기존 tracked/untracked는 읽기만 하고 수정하지 않았다.
+
+## 기준선 (작업 전 재확인)
+
+```yaml
+JVM unit test: 750 tests / 81 files / failures 0 / errors 0 / skipped 0
+assembleDebug: BUILD SUCCESSFUL
+assembleDebugAndroidTest: BUILD SUCCESSFUL
+```
+
+78일차 HANDOFF 값과 동일 — 신규 변경과 섞일 기존 실패는 없었다.
+
+## emulator / 실기기 확인
+
+```yaml
+adb devices: 빈 목록(연결된 기기 없음)
+emulator -list-avds: AVD 없음(에뮬레이터 자체가 구성돼 있지 않음)
+```
+
+§17 기준대로 새 AVD 생성·이미지 다운로드는 오늘 범위 밖으로 두고, instrumentation 6건 + 오늘 추가한 4건 모두 **미실행**으로 기록한다(연결된 기기는 없었고, 있었어도 실사용 기기 조작은 금지). 대체 검증은 `assembleDebugAndroidTest` 컴파일 성공.
+
+## DetailViewModel replica 25건 분류
+
+4개 파일(`BackgroundColorSaveRaceTest` 11 / `DetailScreenExitSaveGuaranteeTest` 8 / `DetailScreenExitSaveLossTest` 3 / `StyleSaveRaceTest` 3) 전수를 읽었다. **25건 전부 자기 KDoc이 이미 정확하게 명시하고 있었다** — `DetailViewModel`은 `android.content.Context`(`@ApplicationContext` Hilt 주입), `android.graphics.Bitmap`, `android.util.Log`를 직접 쓰고, `app/build.gradle.kts`에 `testOptions.unitTests.isReturnDefaultValues`가 설정돼 있지 않아 순수 JVM `src/test`에서 인스턴스화하면 `Log.d` 등에서 즉시 "not mocked"로 실패한다. 즉 **25건 모두 분류 C**(JVM 불가, instrumentation에서만 production 직접 호출 가능)이고, A/B로 "바로 전환 가능"한 항목은 0건이었다 — 원인이 각 파일 이름이 아니라 `DetailViewModel` 생성자 자체의 Context 의존이라 전부 같은 결론이다.
+
+다만 `PostcardBackSaveTest`(기존 instrumentation)가 이미 증명하듯 `DetailViewModel(repository, deletionManager, context, scope)`를 **androidTest에서는** Hilt 없이 직접 생성할 수 있고, 실제 Room in-memory DB + `object : PostcardDao by dao { override suspend fun ... }` 델리게이트로 개별 DAO 메서드만 실패/지연시키는 패턴이 이미 이 저장소에 정착돼 있다. §6 우선순위(최신 저장 우선 > 화면 이탈 생존 > 실패 rollback > background color race > style race)에 따라 **가장 위험한 항목 하나(배경색 저장 경합)만** 오늘 이 패턴으로 실제 production 테스트를 추가했다.
+
+### 추가: `PostcardBackgroundColorSaveRaceTest`(androidTest, 신규 2건)
+
+- `failedColorSave_doesNotRollbackNewerColor`: 실제 `DetailViewModel.updateBackgroundColor`를 실제 Room + 첫 호출만 실패하는 gated DAO로 두 번 연속 호출해, 늦게 실패한 저장이 그사이 커밋된 최신 색을 되돌리지 않는지 확인.
+- `afterFailure_nextColorSaveSucceedsNormally`: 실패 후 다음 정상 저장이 그대로 커밋되는지 확인.
+- `BackgroundColorSaveRaceTest`(JVM replica) 11건 중 이 두 시나리오와 겹치는 부분의 production 연결 대응이다. `saveBackgroundImagePath`가 겨냥하는 경로 컬럼 경합(replica 3건)은 **오늘 그 값을 쓰는 실제 UI 호출자가 없어**(replica 자체 주석이 이미 명시) 실제 호출 경로를 꾸며내지 않고 미전환으로 남겼다.
+- **실행 결과**: 미실행(에뮬레이터 없음). `assembleDebugAndroidTest`로 컴파일만 검증했다 — 타이밍 로직이 실제로 통과하는지는 에뮬레이터가 생기기 전까지 미확인이다.
+- **replica는 삭제하지 않았다.** 새 instrumentation 테스트가 실제로 통과하는 것을 확인하지 못한 상태에서 유일한 안전망(JVM replica)을 줄이면 순간적으로 안전망이 비는 위험이 있다 — §8 "가능하면 새 테스트의 실효성을 실증한다" 조건(mutation으로 실패 재현)도 실행 없이는 만족할 수 없었다.
+- 나머지 22건(`DetailScreenExitSaveGuaranteeTest` 8, `DetailScreenExitSaveLossTest` 3, `StyleSaveRaceTest` 3, `BackgroundColorSaveRaceTest` 나머지 8)은 오늘 손대지 않고 분류 C로 남겼다 — 각각의 KDoc이 이미 "Context/Room/Hilt 제약, StyleSaveRaceTest와 동일" 계열의 정확한 설명을 갖고 있어 문서 수정도 하지 않았다.
+
+## Room migration 1→18 공백 조사
+
+`app/schemas/`에는 `18.json`/`19.json`만 있다(`exportSchema=true`는 2026-08-31 "Add migration baseline" 커밋에서 처음 켜졌다 — 그 전 버전은 애초에 schema 자산이 생성된 적이 없다, 삭제된 게 아니다). v1~v17은 상상으로 채우지 않고 **초기 커밋(`8d95bc35`, 2026-06-27)의 `Postcard.kt`/`PostcardDatabase.kt` 원본**에서 v1 schema(`id INTEGER PK AUTOINCREMENT, imagePath TEXT NOT NULL, title TEXT NOT NULL, capturedAt INTEGER NOT NULL, location TEXT`)를 그대로 확인했다. 이후 v1→v18 사이 19개 Migration을 전부 읽고 분류했다:
+
+```yaml
+1→2: ADD COLUMN(message). 저위험.
+2→3: 표 재생성(CREATE postcards_new → INSERT ... SELECT → DROP → RENAME) +
+     backgroundColorArgb/backgroundImagePath 하드코딩 backfill(4294966263 / NULL).
+     이번 조사에서 찾은 유일한 구조 변경 + 값 backfill 구간 → 최우선 위험.
+3→4 ~ 13→14: 전부 ADD COLUMN + DEFAULT. 저위험(기존 행에도 소급 적용).
+14→15: UPDATE로 layoutStyle 폐기값(예: 옛 AIRY/MAGAZINE)을 'STAMP'로 정규화.
+       열 추가가 아니라 기존 값을 실제로 바꾸는 유일한 구간 → 두 번째 위험.
+15→16 ~ 18→19: ADD COLUMN + DEFAULT, KDoc에 "기존 행 소급 적용" 이미 명시. 저위험.
+```
+
+### 추가: `PostcardFullMigrationChainTest`(androidTest, 신규 2건)
+
+새 fixture나 새 dependency 없이(room-testing 미사용, `androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory` + `SupportSQLiteOpenHelper`는 이미 Room runtime의 전이 의존성) production `MIGRATION_x_y` 객체 자체를 fixture로 재사용했다.
+
+- `migrateFromVersion1PreservesLegacyDataThroughFullChain`: 손으로 만든 v1 raw table에 옛 행 1건을 넣고 `Room.databaseBuilder(...).addMigrations(1_2 ... 18_19)`로 전체 체인을 실행 → `imagePath`/`title`/`capturedAt`/`location` 원본 보존, 2→3의 하드코딩 backfill값(`backgroundColorArgb=4294966263`, `backgroundImagePath=null`) 확인, 3→18 사이 모든 ADD COLUMN 기본값이 옛 행에 소급 적용됨을 확인, 이후 최신 DAO write(`updatePostcardBackMessage`)와 새 행 insert, DB 재오픈 후 재확인까지 검증.
+- `migration14to15NormalizesLegacyLayoutStyleValue`: `MIGRATION_1_2`~`MIGRATION_13_14`를 실제 코드로 순차 실행해 v14 상태를 만든 뒤 폐기값 `'AIRY'`를 직접 심고, `MIGRATION_14_15`부터 열어 `layoutStyle`이 `'STAMP'`로 정규화되는지 확인.
+- **실행 결과**: 미실행(에뮬레이터 없음). `assembleDebugAndroidTest` 컴파일 성공으로 API 사용(`FrameworkSQLiteOpenHelperFactory`, `SupportSQLiteOpenHelper.Configuration/Callback`, 각 `MIGRATION_x_y.migrate()` 직접 호출)까지는 타입 수준에서 검증했지만, 마이그레이션 SQL이 실제 SQLite에서 그대로 실행되는지는 미확인이다.
+- **남은 공백**: v2 재생성 직후(`postcards_new`) 상태 자체를 별도로 들여다보는 테스트는 아니다 — 최종 v19 결과값만 확인한다. 더 세분화된 중간 상태 검증은 후속 후보로 남긴다.
+
+## Instrumentation 현황 (갱신)
+
+```yaml
+기존: 6 tests / 3 files (PostcardBackMigrationTest 1, PostcardBackRenderingTest 3, PostcardBackSaveTest 2)
+오늘 추가: 4 tests / 2 files (PostcardBackgroundColorSaveRaceTest 2, PostcardFullMigrationChainTest 2)
+최종: 10 tests / 5 files
+실제 실행: 미실행(에뮬레이터 없음, adb devices 빈 목록)
+대체 검증: assembleDebugAndroidTest 성공(10건 전부 컴파일 확인)
+```
+
+## lifecycle/navigation, Robolectric, 구조 테스트, flaky 후보
+
+- **lifecycle/navigation 공백**: 78일차 조사와 달라진 사실 없음(Compose BOM/Robolectric 구성 미변경) — 78일차 섹션의 판정을 그대로 유지한다. 오늘 별도 재조사하지 않았다.
+- **Robolectric**: 오늘도 도입하지 않음(§20, 새 dependency는 STOP 대상). 필요성 판단도 78일차와 동일.
+- **구조 테스트 148건**: 오늘 손대지 않음(§21 "메인 아님", 시간을 replica/migration에 우선 배분). 분류·개수 변화 없음.
+- **flaky 후보 조사**: `ExitSaveTimeoutTest`(`saveSlowerThanTheTimeout...`, `saveSurvivesEvenWhen...`)는 timeout 50ms vs 실제 delay 400ms(8배 여유), `oldShape...`는 withTimeoutOrNull 50ms vs delay 400ms(8배 여유) — 실제 wall-clock 기반이지만 여유 폭이 넓어 낮은 위험으로 판단해 수정하지 않았다. `DayBoundaryTest.ticksKeepComingOnceEachBoundary`의 `elapsed >= 90L`은 하한만 검사해 느린 환경일수록 오히려 통과하기 쉬운 구조라 안전하다고 판단, 수정하지 않았다.
+- **약한 assertion 후보**: 오늘 조사하지 않음(§25 최저 우선순위, 시간 배분상 제외).
+
+## 79일차 최종 자동 검증
+
+```yaml
+JVM unit test: 750 tests / 81 files / failures 0 / errors 0 / skipped 0 (변화 없음 — 오늘 변경은 androidTest만)
+assembleDebug: BUILD SUCCESSFUL
+assembleDebugAndroidTest: BUILD SUCCESSFUL (신규 4건 포함 10건 컴파일 확인)
+instrumentation 실제 실행: 미실행(에뮬레이터 없음)
+git diff --check: 통과(오류 없음, 기존 LF→CRLF 안내만)
+```
+
+## 사용자 확인 / Git
+
+- **자동 검증으로 충분(오늘 변경분)**: 오늘 production 코드 변경이 없고, 추가한 androidTest 4건은 컴파일 검증만 가능한 상태로 정직하게 "미실행"으로 남겼다. 사용자 눈에 보이는 앱 동작 변화가 없어 실기기 QA를 만들지 않았다.
+- **미검증·위험**: 새로 추가한 4개 instrumentation 테스트가 실제로 통과하는지는 에뮬레이터가 준비되기 전까지 확인할 수 없다 — 컴파일 성공은 타입 수준 검증일 뿐 타이밍/SQL 실행 검증이 아니다.
+- commit: 미실행·미승인
+- push: 미실행·미승인
+- 종료 기준 HEAD/upstream: `6b9a7da`, ahead/behind `0/0`(오늘 커밋 없음이라 78일차와 동일)
+- 78일차부터 이어진 tracked 변경 31파일과 기존 untracked `.codex-config.candidate.toml`, `.kotlin/`는 오늘도 그대로 보존했다.
+
+## 후속 후보 (승인된 작업 아님)
+
+1. 안전한 emulator 구성 후 오늘 추가한 4건 포함 instrumentation 10건 전체 실제 실행.
+2. `DetailScreenExitSaveGuaranteeTest`(8)·`DetailScreenExitSaveLossTest`(3)·`StyleSaveRaceTest`(3)·`BackgroundColorSaveRaceTest` 나머지 8건도 같은 gated-DAO instrumentation 패턴으로 production 연결 테스트 추가 검토(실행 검증 가능해진 뒤).
+3. `saveBackgroundImagePath` 경로 컬럼 경합은 실제 UI 호출자가 생기기 전까지 production instrumentation 전환 보류.
+4. Migration v2→v3 표 재생성 직후의 중간 상태(`postcards_new`) 자체를 별도로 검증하는 세분화 테스트.
+5. (78일차 이월) `createComposeRule` v2 전환, Robolectric 도입 여부 결정, lifecycle/navigation 41건 구조 테스트 실제 행동 테스트 전환.
+
+---
+
+# HANDOFF — 78일차 패코 잔여 안정성 마감
+
+확인일: 2026-09-19. 수동 표준 모드. 직전 78일차 미커밋 working tree를 그대로 이어받아 방문 기록 읽기 실패 표시, instrumentation 현황, 구조 테스트 분류, UI 테스트 기반, 파일 소유권 판정 중복, 휴면 코드 문서를 현재 저장소 기준으로 재검증했어. 새 기능·새 UI·navigation·Room/Migration·dependency 변경은 없다.
+
+## 시작 Git 상태 (실측)
+
+```yaml
+branch: feature/photo-sticker
+HEAD: 6b9a7da0955362d08833388b46c405db511ecb1e
+upstream: origin/feature/photo-sticker
+ahead/behind: 0/0
+staged: 없음
+working tree: 직전 78일차 tracked 변경 20파일 + 기존 untracked .claude/, .codex-config.candidate.toml, .kotlin/
+```
+
+기존 tracked 변경은 사용자 작업으로 보존하고 그 위에서 이어갔다. 기존 untracked는 읽거나 수정·삭제·stage하지 않았다.
+
+## 방문 기록 read 실패 표시
+
+- **기존 동작**: `VisitRecordStorage.readStoredRecord()`는 파일 없음/읽기 실패/손상을 구분해 읽기 실패 때 디스크를 보존했지만, `recordTodayVisit()` 반환값은 `recordVisit(null, today)`가 만든 총 1회의 임시 기록이었다. `MainActivity`가 이 값을 Intro와 Gallery 달력으로 전달해, 같은 실행에서 `1번째 방문`과 `오늘까지 1번 만났어요~!`가 거짓으로 보일 수 있었다.
+- **수정**: `TodayVisit.record`를 nullable로 바꾸고 `StoredVisitRecord.Unreadable`이면 `record=null`, `isFirstVisitToday=false`를 반환한다. 기존 UI 두 곳은 이미 null일 때 숫자·소인을 비우므로 별도 UI 문법을 만들지 않았다. 파일 없음과 읽었지만 손상된 파일의 기존 “1회로 새로 시작” 정책은 유지했다.
+- **복구**: 다음 프로세스 실행에서 정상 read가 되면 보존된 누적값을 이어 방문을 기록한다. 같은 프로세스에서 재시도하지 않는 기존 “프로세스당 한 번” 정책도 유지했다.
+- **테스트**: 실제 파일에 누적 2회를 저장한 뒤 `IOException`을 주입해 `record == null`, 기존 파일 내용 보존, 다음 정상 read 때 총 3회/연속 3회 복구를 검증했다. Intro/Gallery 소비 경로의 nullable 전달도 compile로 확인했다.
+
+## Instrumentation 현황
+
+```yaml
+시작: 7 tests / 4 files
+삭제: 1 test / 1 file  # Android Studio 기본 package-name ExampleInstrumentedTest
+최종: 6 tests / 3 files
+runner: androidx.test.runner.AndroidJUnitRunner
+실행: 미실행
+대체 검증: :app:assembleDebugAndroidTest 성공
+```
+
+| 파일 | 수 | 보호 대상 | 필요한 환경 / 판정 |
+|---|---:|---|---|
+| `PostcardBackMigrationTest` | 1 | 실제 v18 schema에서 v19 migration, 구 데이터 보존·신규 쓰기 | Android SQLite/Room 필요. 고유 DB를 만들고 finally에서 삭제하므로 emulator 가능, 실사용 기기 불필요 |
+| `PostcardBackRenderingTest` | 3 | 공용 뒷면 compositor PNG, read-only UI semantics, 장문 fitting | Compose UI·Android graphics/MediaStore 필요. emulator 가능. 검증에 쓰지 않고 cache에 남기던 `day66-back-qa.png` 생성은 제거 |
+| `PostcardBackSaveTest` | 2 | 지연 저장 실패 경합, 추신 저장 실패 rollback | Android Main dispatcher + Room in-memory 필요. emulator 가능, 실사용 기기 불필요 |
+
+연결된 대상은 emulator가 아니라 실사용 `SM-S936N` 한 대뿐이었다. 설치/테스트 APK lifecycle과 실제 앱 데이터 위험 때문에 계측 실행은 강행하지 않았다. 세 파일 모두 androidTest APK 컴파일은 성공했다. `PostcardBackRenderingTest`의 기존 `createComposeRule` v1 API에는 deprecation 경고가 있으나 현재 실패는 아니며, v2는 coroutine 스케줄 의미가 달라 별도 테스트 이관 후보로 남긴다.
+
+## 구조 테스트 재집계
+
+production 소스 텍스트를 읽어 단언하는 메서드를 다시 셌다. 순수 행동 테스트와 구조 테스트가 한 파일에 섞인 `FutureMailOpeningGuardTest`, `FutureMailTimeBoundaryTest`, `VisitDayBoundaryDefinitionTest`는 메서드별로 분리했고, 직접 `File(...).readText()`를 쓰는 파일과 `AppIntroVisitPostmarkStructureTest`도 포함했다.
+
+```yaml
+이번 세션 시작/최종: 148 tests / 28 files
+현재 분류:
+  실제 요구사항 보호: 60
+  구현 모양 고정: 47
+  행동 테스트 대체 가능: 0
+  UI 하네스 필요: 41
+합계: 148
+```
+
+직전 미커밋 배치에서 시작 149건 중 저가치 4건을 제거하고 행동 테스트 4건으로 교체했으며, 자정 경계의 구조 불변식 3건을 추가해 148건이 된 산식도 현재 diff와 일치한다. 이번 이어받기 시점에는 새 dependency 없이 순수 production API로 더 바꿀 “행동 대체 가능” 항목이 0건이라 추가 삭제를 만들지 않았다. 대신 8개 KDoc의 틀린 “Compose UI 테스트 인프라 없음” 표현을 “`src/test` JVM에 Robolectric 없음”으로 바로잡았다.
+
+## Compose UI / lifecycle 기반
+
+```yaml
+Compose BOM: 2026.04.01
+androidTest: androidx.ui.test.junit4 + androidx.ui.test.manifest + Espresso 3.5.1 + AndroidX JUnit 1.1.5
+기존 Compose UI test: PostcardBackRenderingTest 3건
+JVM unit: JUnit 4.13.2
+Robolectric: 없음
+```
+
+따라서 instrumentation 쪽 렌더링·semantics·단순 상태 표시는 가능하지만 현재 안전한 emulator가 없어 실행하지 못한다. ViewModel 제거, coroutine cancellation, process lifetime 같은 lifecycle의 실제 자동 검증은 여전히 Robolectric 추가 또는 더 복잡한 instrumentation fixture가 필요하다. 이번 STOP 범위라 dependency나 테스트 architecture는 바꾸지 않았다.
+
+## 파일 소유권 판정
+
+- `PhotoStickerImageStorage`, `MaskingTapePhotoStorage`, `DetailViewModel`은 이미 `isInsideDirectory(root, file)`를 공유했다.
+- `PostcardImageStorage.deleteIfOwnedByApp`와 `PostcardDeletionManager.cleanupPostcardOwnedAssets`만 canonical path + separator 경계라는 완전히 같은 정책을 로컬로 복제하고 있었다. 두 곳을 기존 helper로 통합했다.
+- 허용 root는 각 호출부가 그대로 넘기고, 정규화 실패 시 false, root 자체 false, sibling prefix 거부 정책도 동일하다. 삭제 대상·순서·참조 판정은 바꾸지 않았다.
+- `OrphanFileDiagnostics`의 canonical path 사용은 삭제 소유권이 아니라 참조 집합 비교라 의미가 달라 공용화하지 않았다.
+- `AppFileOwnershipTest`, `PostcardImageStorageTest`, `PostcardDeletionManagerTest`를 함께 실행해 내부/외부/형제 prefix/`..` 경계를 재검증했다.
+
+## 휴면 코드 / 예제 테스트
+
+- 템플릿 기능: **휴면 유지**. 화면 진입점 없음, 사용자 템플릿 파일 가능성과 완결된 데이터 계층은 유지. 현재 KDoc이 이 상태·보존 이유·UI 복원 금지를 정확히 설명하므로 추가 production 변경 없음.
+- `OrphanFileDiagnostics`: **읽기 전용 개발 진단 도구 / 휴면 유지**. production 호출 0, 삭제·이동 없음이 KDoc에 명확해 추가 변경 없음.
+- `ExampleUnitTest`: 삭제 상태 유지 확인.
+- `ExampleInstrumentedTest`: package name만 비교하는 Android Studio 기본 예제로 제품 회귀를 보호하지 않아 삭제.
+
+## 이전 안정성 수정 8건 회귀
+
+초안 read 실패 보존, 화면 이탈 저장 scope, 미래 우체통 그룹 단일 개봉/실패 후 재시도, 표시 월 방문 load, provisional 사진 실패 cleanup, 미래 우체통 날짜 경계, 파일 경로 경계, visit record read 실패 보존 코드를 현재 tree에서 다시 확인했다. 관련 12개 JVM test class를 묶어 실행했고 모두 통과했다. 실제 Room transaction rollback과 Activity/ViewModel 파괴 lifecycle은 위 환경 공백 때문에 구조/순수 로직 검증까지만 완료했다.
+
+## 최종 자동 검증
+
+```yaml
+시작 unit test: 750 / 81 files
+unit 삭제/추가: 0 / 0
+최종 unit test: 750 / 81 files
+전체 unit XML: 750 tests, failures 0, errors 0, skipped 0
+:app:assembleDebug: BUILD SUCCESSFUL
+:app:assembleDebugAndroidTest: BUILD SUCCESSFUL
+instrumentation 실행: 미실행 (emulator 없음, 연결 대상은 실사용 기기)
+git diff --check: 통과 (오류 없음, 기존 LF→CRLF 안내만)
+```
+
+첫 sandbox 내부 Gradle 시도들은 `foojay-resolver` plugin artifact를 해석하지 못해 코드 실행 전 실패했다. 동일 명령을 승인된 로컬 Gradle/JBR 환경에서 다시 실행해 성공했으므로 코드 실패와 분리한다.
+
+## 사용자 확인 / Git
+
+- **자동 검증으로 충분**: 일시적인 방문 파일 읽기 실패는 정상 사용으로 의도적으로 만들기 어렵고 production 파일 조작은 금지라 실제 파일 기반 JVM 실패 주입으로 검증했다. 정상 read 경로는 기존 동작과 계산을 바꾸지 않았고 전체 unit/build가 통과했으므로 이번 잔여 작업 자체에 필수 실기기 QA는 없다. instrumentation 6건은 사용자 실기기가 아니라 안전한 emulator가 준비되면 실행해야 한다.
+- commit: 미실행·미승인
+- push: 미실행·미승인
+- 종료 전 기준 HEAD/upstream: `6b9a7da`, ahead/behind `0/0`
+- 기존 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/` 보존
+
+## 후속 후보 (승인된 작업 아님)
+
+1. 안전한 emulator 구성 후 instrumentation 6건 실행.
+2. `createComposeRule` v2 전환 영향 조사와 deterministic synchronization 보강.
+3. Robolectric 도입 여부 결정 후 lifecycle/Compose 구조 테스트 41건의 실제 행동 테스트 전환 검토(새 dependency라 별도 승인 필요).
+
+---
+
+# HANDOFF — 78일차 최종 정비: 코드베이스 호적등본
+
+> 아래는 이번 잔여 작업 직전 독립 작업 단위의 당시 기록이야. 당시의 “후속 후보·미수정·7건” 표기는 맨 위 최신 섹션에서 해결·재집계된 항목이 있으므로, 현재 상태 판단에는 위 최신 섹션을 우선한다.
+
+확인일: 2026-09-19. 수동 표준 모드. 사용자 제공 "78일차 최종 정비 작업지시서(코드베이스 호적등본)"에 따라 방문 정의 확정 · 템플릿 존폐 판정 · 구조 테스트 재집계와 저위험 교체 · UI 테스트 공백 실측 · 잔여 코드 호적 분류를 수행했어. **새 기능·UI·navigation 없음, Room schema/Migration 변경 없음, 새 dependency 없음.**
+
+> 이 세션에서도 내장 Task 도구(`TaskCreate` 등)가 제공되지 않아 진행 안내로 대체했음.
+
+## 시작 Git 상태 (실측)
+
+branch `feature/photo-sticker`, 시작 HEAD `6b9a7da`, `git fetch` 후 local == origin (0/0), tracked working tree clean. 기존 무관 untracked(`.codex-config.candidate.toml`, `.kotlin/`)는 건드리지 않음.
+
+## 직전 안정성 7건 회귀 확인 (§33)
+
+P0-1 초안 읽기 실패 보존 / P0-2 이탈 저장 lifetime(`ExitSaveScopeModule`·`ExitSaveTimeout`) / P1-3 묶음 개봉(`openFutureMailGroup`·`FutureMailOpeningGuard`) / P1-4 과거 월 방문 로딩(`visitedDaysForMonth`) / P1-5 고아 파일(`ProvisionalFile`·`writeOrDeletePartialFile`) / P2-6 자정 경계(`DayBoundary`) / P3-7 파일 소유권(`AppFileOwnership`) — **7건 모두 현재 HEAD에 그대로 살아 있음. 회귀 없음.** 재설계하지 않았음.
+
+## 방문 정의 — canonical 확정
+
+**방문 = 그 날짜에 앱을 새로 연 기록.** 기존 제품 문법 그대로이며 이번에 바꾸지 않았다. 정의를 `VisitRecord.kt` 맨 위에 한 번만 명문화했고, 세부 세 가지를 못박았다.
+
+- 하루에 여러 번 열어도 1회 (같은 날 재실행은 디스크 쓰기 0회)
+- 판정은 **프로세스당 한 번** (`MainActivity`의 `AppIntroState.todayVisit == null` holder)
+- **앱을 켜 둔 채 자정을 넘기는 것만으로는 새 방문이 생기지 않는다.** 화면 표시(달력 "오늘", 우체통 D-day)가 자정에 갱신되는 것은 **기존 기록을 보여주는 일**이지 만드는 일이 아니다.
+
+`recordTodayVisit`의 정의·계산식은 손대지 않았다.
+
+### 정합성 감사 결과 (§5)
+
+| 소비자 | 쓰는 값 | 정의 일치 |
+|---|---|---|
+| 인트로 소인 "N번째 방문" | `VisitRecord.totalVisitDays` | 일치 |
+| 인트로 milestone / 33일차 이스터에그 | `totalVisitDays` | 일치 |
+| 달력 "오늘까지 N번 만났어요~!" | `totalVisitDays` | 일치 |
+| 달력 날짜 칠하기 | `VisitHistoryStorage` marker 파일 | **세는 대상이 다름(의도)** |
+| `currentStreakDays` | 저장만 하고 **어떤 화면에도 노출 안 함** | 의도된 제품 결정 |
+
+달력에 칠해진 칸 수 < "N번 만났어요"의 N일 수 있다. marker 저장소는 도입 이후 관측한 날짜만 갖고 있고 `totalVisitDays`는 그 전부터 누적됐기 때문이다. **버그가 아니며** 이제 `VisitHistoryStorage` KDoc에 그 이유가 적혀 있다.
+
+`currentStreakDays` KDoc의 "이번 작업에서 저장만 하고"라는 시점 의존 표현을 시점 무관 문장으로 고쳤다.
+
+### 새로 발견한 실제 버그 — 방문 기록 읽기 실패 시 누적 방문일 소실 (수정함)
+
+**기존 위험**: `VisitRecordStorage.load()`가 `runCatching { readText() }.getOrNull()`로 **"파일 없음"과 "읽지 못함"을 구분하지 않았다.** 파일 잠금·저장소 일시 오류로 한 번만 읽기에 실패해도 `recordVisit(null, today)`가 새 기록(총 1일)을 만들고 **그대로 저장돼 사용자의 누적 방문일이 영구히 사라졌다.** P0-1(초안)과 정확히 같은 계열의 결함이다.
+
+**수정** (§38 저위험·영향 명확 기준으로 이번 범위에서 처리):
+
+- `StoredVisitRecord` sealed interface로 세 경우를 분리 — `Absent`(파일 없음) / `Unreadable`(읽기 실패) / `Present(record?)`(읽었음, null이면 손상)
+- 읽기 실패면 **저장하지 않고** `isFirstVisitToday = false`. 다음 실행에서 정상적으로 읽히면 원래 숫자가 그대로 돌아온다
+- **손상(파싱 실패) 정책은 기존 그대로** 오늘이 첫 방문으로 재시작. 보존 범위를 넓히지 않았다
+- 공개 API 시그니처·`recordVisit` 계산식·저장 형식 전부 무변경
+
+**알려진 한계(의도, 미수정)**: 읽기에 실패한 그 실행에 한해 인트로 소인이 "1번째 방문"으로 보인다. 숨기려면 `recordTodayVisit`가 nullable을 반환하고 `MainActivity`가 그걸 처리해야 하는데, 그건 표시 방식에 대한 제품 결정이라 이번 범위 밖 → 후속 후보. **디스크는 손대지 않으므로 데이터 손실은 없다.**
+
+**회귀 테스트**: `VisitRecordStorageTest` 15 → 21건. 일시적 실패는 `readRecordText = { throw IOException(...) }`로 **실제 주입**(production 기본값을 쓰는 테스트 seam), 그리고 seam 없이 기록 파일 자리를 디렉터리로 만들어 `readText`가 진짜 실패하게 하는 검증도 하나 넣었다.
+
+**실패 가능성 실증**: `Unreadable` 반환을 수정 전 동작(`Present(null)`)으로 임시 되돌려 실행 → 새 테스트 **5건이 정확히 실패**, 손상 재시작 테스트(`..._soTheFixDidNotWidenPreservation`)는 그대로 통과. 이후 복구하고 재검증.
+
+### 자정 경계 회귀 테스트 (§8)
+
+`VisitDayBoundaryDefinitionTest` 신설 (4건). 보장의 출처를 먼저 분명히 했다 — 저장소 자체는 자정을 넘겨 **다시 호출되면** 새 방문을 만드는 게 맞고(`recordTodayVisit_justBeforeAndAfterLocalMidnight_countsAsTwoDays`가 이미 고정), 따라서 "자정만 통과했을 때 새 방문 없음"은 **자정 신호를 받는 쪽이 방문 기록 API를 부르지 않는다**는 사실에서만 나온다. 그 사실을 실제 소스에서 검사한다.
+
+- 자정 신호 소비자 목록(`FutureMailboxViewModel`, `DetailScreen`, `GalleryScreen`, `VisitCalendarDrawer`)이 실제와 맞는지 먼저 확인 → 목록이 낡아 검사가 조용히 비는 것을 막음
+- 그 4개 파일 어디에도 `recordTodayVisit(` / `VisitHistoryStorage.recordDate(`가 없음
+- 유일한 기록 지점 `MainActivity`는 자정 신호를 쓰지 않고 프로세스당 1회 holder로 가름
+- (행동) 같은 날 자정 직전에 다시 열어도 기록이 늘지 않음
+
+**기기 날짜는 바꾸지 않았다.**
+
+## 템플릿 기능 — **휴면(dormant)** 판정
+
+| 항목 | 실측 결과 |
+|---|---|
+| 마지막 UI 진입점 | **2026-08-28 `7b3edd9`** "Simplify photo editing UI into layout and edit panels"에서 제거. 커밋 메시지가 "Template data ... unchanged"라고 **명시** |
+| production 호출 | `PostcardTemplateSection` / `PostcardTemplateStorage` / `BuiltInTemplates` / `applyTemplateStyle` / `toTemplateStyle` 모두 **호출부 0** |
+| Room 영향 | **전용 Entity·컬럼 없음.** `updatePostcardTemplateStyle`은 엽서가 원래 가진 스타일 컬럼들을 갱신할 뿐 → schema/Migration과 무관 |
+| 기존 사용자 데이터 | **있을 수 있음.** 2026-07-24 ~ 08-28 사이 저장한 템플릿이 기기 `filesDir/postcard_templates/`에 남아 있고, 지우는 경로도 없다 |
+| 보호 중인 테스트 | 27건 (`PostcardTemplateTest` 15 / `PostcardTemplateStorageTest` 7 / `BuiltInTemplatesTest` 5) |
+
+→ **§11.C 휴면 기능**. 삭제하지 않는다. 기능 계층(모델·직렬화·내장 템플릿·파일 저장소·미리보기)이 완결된 채 화면만 떼어낸 상태이고, 코드를 지우면 기기에 남은 사용자 템플릿 파일을 되살릴 방법이 사라진다. 판정 근거와 되살리기 조건을 `PostcardTemplate.kt` 맨 위에 한 번 적고 나머지 3개 파일에는 한 줄 포인터만 뒀다. **UI는 새로 붙이지 않았다(§12).**
+
+## 구조 테스트 — 실제 재집계와 4분류
+
+과거 보고값 "129건 / 24파일"을 재사용하지 않고 다시 셌다. 판정 기준: **production 소스 텍스트를 읽어 단언하는 테스트**(공용 helper 경유 + `File("src/main/...")` 직접 읽기 양쪽 포함).
+
+```yaml
+구조 테스트 시작: 149건 / 27파일   # 전체 741건 중. 과거 "129/24"와 다름 — 직접 읽기 방식 파일이 집계에서 빠져 있었음
+  실제 요구사항 보호:   57
+  구현 모양 고정:       48
+  행동 테스트 대체 가능: 3
+  UI 하네스 필요:       41
+삭제: 4
+행동 테스트로 교체: 4건 제거 → 행동 4건 추가 + 대체 불가 영역의 새 구조 테스트 3건 추가
+최종 구조 테스트: 148건 / 28파일
+```
+
+4분류 기준과 대표 예:
+
+1. **실제 요구사항 보호 (57)** — Migration 등록 연속성, 저장 경합 mutex, 확정 저장 시 undo 히스토리 정리, 미리보기/exporter 레이어 순서 일치, 봉인 엽서가 내용을 넘겨받지 않음, 소인이 총 방문일만 보여주고 연속일 압박 표현을 쓰지 않음, 방문 판정 1회/프로세스. §17에 따라 유지.
+2. **구현 모양 고정 (48)** — `declares...ExactlyOnce`, `noLongerDeclares...`, `hasExactly{N}CallSites`, `takesExpectedCoreParameters`. 리팩토링만 해도 깨진다. 다만 호출부 개수 검사는 "실수로 호출부를 지움"이라는 실제 회귀를 잡으므로 대체 수단 없이 삭제하지 않았다.
+3. **행동 테스트 대체 가능 (3)** — 전부 이번에 교체함(아래).
+4. **UI 하네스 필요 (41)** — 렌더링·제스처·애니메이션·접근성 터치 타깃처럼 실제 화면 없이는 확인 불가.
+
+### 실제로 교체한 4건
+
+| 제거 | 이유 | 대체 |
+|---|---|---|
+| `StickerEditModeToolbarStructureTest.stickerEditModeEnum_visibilityWidenedButMembersUnchanged` | **사실상 항상 참이었음** — 4000줄짜리 `DetailScreen.kt` 전체에 "Move"/"Scale"/"Rotate"가 있는지만 봄 | **신설** `StickerEditModeTest` 1건: `StickerEditMode.entries`를 직접 읽어 구성·순서 고정. 멤버를 지우면 컴파일이 깨지고, `private`으로 좁히면 테스트 소스가 컴파일되지 않음 |
+| `OverlayFallbackSizeStructureTest.componentFile_declaresComputeFallbackOverlaySizeExactlyTwice` | 선언 개수만 셈 | **추가** `PostcardOverlayExportLogicTest` 3건: 직사각형 오버로드(마스킹테이프용)의 실제 계산 검증. 그동안 이 오버로드는 **행동 검증이 하나도 없었다** |
+| `OverlayFallbackSizeStructureTest.componentFile_keepsExactSignatureAndTypes` | 파라미터 문자열 검사 | 같은 위 — 이름 붙인 인자로 호출하므로 시그니처가 **컴파일로** 고정됨 |
+| `StickerPositionCalculationsStructureTest.componentFile_keepsExactSignatureAndTypes` | 파라미터 문자열 검사 | 기존 `StickerPositionCalculationsTest` 4건 + `PostcardOverlayExportLogicTest`가 이미 같은 함수를 이름 붙인 인자로 호출 중 → 중복 |
+
+§36의 질문("이 테스트가 없으면 어떤 실제 회귀를 놓치는가?")에 네 건 모두 답이 "함수 이름/줄 모양이 바뀌는 것"뿐이었다.
+
+### 구조 테스트 helper 감사 (§19)
+
+`testsupport/StructureTestSource.kt`는 건강함 — 경로 후보 2개(모듈 루트/저장소 루트), 못 찾으면 cwd와 후보를 붙여 **즉시 실패**(조용한 통과 없음), 중복 helper 없음. 로직은 건드리지 않았고 KDoc의 사실만 고쳤다(아래).
+
+## UI 자동 테스트 공백 — 실측 결과가 기존 통념과 달랐음
+
+여러 테스트 KDoc이 "이 프로젝트는 Compose UI 테스트 인프라(androidx.compose.ui:ui-test)를 쓰지 않는다"고 적고 있었는데 **사실이 아니다.**
+
+```yaml
+androidx.compose.ui:ui-test-junit4:   이미 있음 (androidTestImplementation)
+androidx.compose.ui:ui-test-manifest: 이미 있음 (debugImplementation)
+실제 사용:                            PostcardBackRenderingTest가 createComposeRule/onNodeWithText 사용 중
+JVM unit test 쪽 하네스(Robolectric):  없음  <-- 진짜 공백은 여기
+새 dependency 필요 여부:               Compose UI test는 불필요 / Robolectric 도입은 별도 승인 필요
+```
+
+정확한 상태: **없는 것은 `src/test`(JVM) 쪽 하네스다.** `src/androidTest`에서는 Composable 렌더링도 ViewModel 인스턴스화도 이미 된다. 다만 instrumented 실행이 필요하고, 실사용 기기 계측은 `AGENTS.md` 5절로 금지, emulator는 미구성 → **지금 당장 확인할 수 있는 유일한 수단이 소스 텍스트**라서 구조 테스트가 존재한다.
+
+이 정확한 사실을 공용 helper `StructureTestSource.kt` KDoc에 한 번 적고, 아티팩트 이름까지 대며 틀리게 단언하던 `SaveErrorDialogStructureTest` KDoc을 고쳤다. **남은 정리**: 다른 약 8개 테스트 파일이 여전히 "Compose UI 테스트 인프라가 없는 프로젝트 관례"라는 느슨한 표현을 쓴다 — 틀린 아티팩트 이름을 대지는 않지만 정확하지 않음 → 후속 후보(주석-only).
+
+### UI 자동화가 없어 놓치는 영역 (§21)
+
+실제 렌더링 결과, 클릭/제스처, navigation, lifecycle, recomposition, semantics, 접근성 터치 타깃, 화면을 띄운 채 자정 통과. **unit test로 이미 충분히 보호되는 영역과는 구분됨** — 순수 계산(오프셋·크기·진행률·날짜 경계), 직렬화/파싱, 파일 저장소 원자성·소유권, Flow 조립 규칙은 전부 행동 테스트가 덮고 있다.
+
+## instrumentation 현황 (§24)
+
+7건 / 4파일. 실기기에서 실행하지 않았고(정적 감사만), 실행에는 emulator가 필요하다.
+
+| 파일 | 건수 | 검증 대상 | 보호 가치 |
+|---|---|---|---|
+| `PostcardBackMigrationTest` | 1 | 실제 v18 DB에서 migration 후 보존 + 신규 쓰기 | **높음** (사용자 데이터) |
+| `PostcardBackRenderingTest` | 3 | 공유 PNG 풀해상도 합성, 빈 뒷면에 placeholder 없음, 긴 본문 측정 | 높음 (미리보기/내보내기 일치) |
+| `PostcardBackSaveTest` | 2 | 저장 실패가 최신 텍스트를 되돌리지 못함, 실패 후 영구 텍스트 복원 | **높음** (저장 경합) |
+| `ExampleInstrumentedTest` | 1 | `packageName == "com.postcardmemory"` | 낮음 (템플릿 잔재) |
+
+## ExampleUnitTest 최종 재판 (§26·§27) — **사망 확정, 삭제**
+
+`assertEquals(4, 2 + 2)`. 앱 코드 호출 0, `.github` 없음(CI 없음 → smoke 역할 없음), 문서 참조는 HANDOFF의 "유지" 판정 기록뿐(참조가 아니라 판정문), 750건의 다른 테스트가 테스트 인프라를 훨씬 강하게 증명함. 1·2차 감사에서 "삭제 이득 0"으로 유지했으나 이번 지시의 "문화재 특별대우 없이" 기준에 따라 **삭제**.
+
+`ExampleInstrumentedTest`(androidTest)는 §26이 지목한 대상이 아니라 그대로 뒀다 → 후속 후보.
+
+## 잔여 코드 호적 분류 (§28~32)
+
+| 대상 | 판정 | 근거 / 조치 |
+|---|---|---|
+| `OrphanFileDiagnostics` | **휴면** | production 호출 0이지만 완결된 읽기 전용 진단 계층 + 테스트 다수. UI 연결은 의도적 비범위. 삭제 안 함 |
+| 템플릿 6파일 | **휴면** | 위 참조. KDoc으로 이유 기록 |
+| `EditorOutlineButton` | **사망 → 삭제** | production 호출 **0**. 참조하던 구조 테스트 2곳은 모두 `assertFalse(...)`(= 쓰지 말 것) 또는 KDoc. KDoc이 "낙서 등 아직 옮기지 않은 화면은 계속 쓴다"고 **거짓 주장**하고 있었는데, 낙서는 55일차에 이미 이전됨. 함수 + 전용 import 5개 삭제 |
+| `VisitRecord.currentStreakDays` | **호환성/의도된 보류** | 저장은 되지만 화면 노출 0. 압박 표현 회피가 이유. KDoc에 시점 무관 문장으로 명시 |
+| `vibrateGalleryFab` / `vibrateVisitCalendarTodayReturn` / `vibrateIntroPostmark` | **현역 3개** | 각 파일 `private`, 강도·길이가 서로 다름. 통합은 후속 후보(강도 차이 보존 확인 필요) |
+
+## 변경 파일과 이유
+
+**production (9)**
+
+- `utils/VisitRecordStorage.kt` — 읽기 실패와 손상 분리(데이터 보존). **이번 유일한 동작 변경**
+- `utils/VisitRecord.kt` — canonical 정의 명문화, 시점 의존 표현 제거
+- `utils/VisitHistoryStorage.kt` — `totalVisitDays`와 세는 대상이 다른 이유 명시
+- `ui/gallery/VisitCalendarDrawer.kt` — 달력 월 로딩이 읽기 전용임을 명시(표시 != 기록 생성)
+- `ui/detail/PostcardTemplate.kt` — 휴면 판정 근거 전문
+- `ui/detail/BuiltInTemplates.kt` / `ui/detail/PostcardTemplateRow.kt` / `utils/PostcardTemplateStorage.kt` — 휴면 포인터 한 줄
+- `ui/components/EditorSharedControls.kt` — `EditorOutlineButton` 삭제 + 거짓 KDoc 수정
+
+**test (10)**
+
+- `utils/VisitRecordStorageTest.kt` (15→21), `utils/VisitDayBoundaryDefinitionTest.kt` (신설 4), `ui/detail/StickerEditModeTest.kt` (신설 1), `ui/detail/PostcardOverlayExportLogicTest.kt` (+3)
+- `ui/detail/OverlayFallbackSizeStructureTest.kt` (5→3), `ui/detail/StickerPositionCalculationsStructureTest.kt` (5→4), `ui/detail/StickerEditModeToolbarStructureTest.kt` (10→9)
+- `testsupport/StructureTestSource.kt` / `ui/detail/SaveErrorDialogStructureTest.kt` — KDoc 사실 정정
+- `ExampleUnitTest.kt` — 삭제
+
+## 테스트 수 변화
+
+```yaml
+시작 unit test: 741건 / 80파일
+삭제:  5    # ExampleUnitTest 1 + 저가치 구조 테스트 4
+추가: 14    # 방문 읽기 실패 6, 자정 경계 정의 4, 직사각형 fallback 3, StickerEditMode 1
+최종 unit test: 750건 / 81파일   # 소스 @Test 수와 runner 실행 수가 정확히 일치
+구조 테스트: 149 -> 148
+행동 테스트: 592 -> 602
+```
+
+## 자동 검증 (오늘 실제 실행)
+
+- `assembleDebug` — **BUILD SUCCESSFUL**, `app/build/outputs/apk/debug/app-debug.apk` 생성
+- 전체 unit test — **750건, 실패 0 / 오류 0 / 건너뜀 0 / 81 클래스**
+- `compileDebugKotlin` — 성공 (dead code 삭제 직후 단독 확인, 미사용 import 정리 포함)
+- `git diff --check` — 통과
+- 항목별로 `수정 → 관련 테스트 → 컴파일` 순서를 지켰고, gradle 실행 중에는 소스를 편집하지 않았음
+
+## 실기기 QA 필요성
+
+**필요 (최소 smoke 1건)**. 이번 변경 대부분은 주석·테스트·dead code지만 `VisitRecordStorage`는 **production 동작 변경**이라 §44의 "테스트-only" 예외에 해당하지 않는다.
+
+- 대상 build: 이번 `assembleDebug` 산출 APK
+- 조작: 앱 실행 → 인트로 소인에 "N번째 방문" 표시 확인 → 갤러리 좌측 방문 달력 열어 "오늘까지 N번 만났어요~!"와 오늘 칸 표시 확인 → 앱 종료 후 재실행해 **같은 날 두 번째 실행에서 숫자가 늘지 않는지** 확인
+- 기대: 숫자가 이전과 동일하게 이어지고, 같은 날 재실행에 증가 없음
+- 자동 검증 한계: 정상 경로의 숫자 연속성은 단위 테스트로 덮여 있으나, 실제 기기의 기존 `visit_record.txt`가 새 코드로도 그대로 읽히는지는 그 파일이 있는 기기에서만 확인된다
+
+## 미검증 / 남은 위험
+
+- **자연적인 자정 통과** — 앱을 켜 둔 채 날짜가 바뀔 때 달력 "오늘"과 우체통 D-day가 실제로 갱신되는지. 기기 날짜 변경 금지(§25)라 자연 발생을 기다려야 함. 재개 조건: 앱을 켜 둔 채 자정을 넘긴 사용자 관찰
+- **묶음 개봉 부분 실패 rollback** (78일차 후속에서 이월) — Room in-memory DB가 필요한 instrumented 영역, 실기기 계측 금지
+- **instrumentation 7건 전부 미실행** — emulator 미구성. 정적 감사만 수행
+- **읽기 실패 실행의 인트로 표시** — 그 실행에 한해 "1번째 방문"으로 보임(디스크는 무사). 의도적 미수정
+- 다른 약 8개 테스트 파일의 "Compose UI 테스트 인프라가 없다"는 느슨한 표현
+
+## 이번 범위에서 STOP한 것 (§41)
+
+Room schema/migration, 데이터 변환, 새 dependency(Robolectric 포함), 새 navigation/UI, 템플릿 화면 복구, Compose test framework 신규 도입, 대규모 architecture 변경 — 전부 손대지 않음. 조사만 하고 구현하지 않았음.
+
+## Git 상태
+
+commit **미실행(사용자 승인 대기)**, push **미실행**. tracked 변경 19개(수정 16 / 신설 2 / 삭제 1), 기존 무관 untracked 2개는 그대로.
+
+## 후속 후보 (승인된 작업 아님)
+
+1. **Robolectric 도입 검토** — `src/test`에서 Composable/ViewModel을 다룰 수 있게 되면 "구현 모양 고정" 48건 중 상당수를 행동 테스트로 교체 가능. **새 dependency라 별도 승인 필요**
+2. emulator 구성 → instrumentation 7건 + 묶음 개봉 rollback 실제 검증
+3. 방문 기록 읽기 실패 시 인트로 숫자를 숨길지 결정(제품 표시 결정 + `recordTodayVisit` nullable화)
+4. `ExampleInstrumentedTest` 존폐 판정
+5. 나머지 테스트 파일의 "Compose UI 테스트 인프라" 표현 정정(주석-only)
+6. `vibrate*` 3종 통합(강도·길이 차이 보존 확인 필요)
+7. (78일차 후속에서 이월) `awaitPendingStyleSaves()`의 style-save Job 19개 scope 이전, `isInsideDirectory` 잔여 2곳 통합, `promoteDraftStickerBackgrounds`의 낡은 주석 수정
+8. 템플릿 기능 되살리기 여부 — **제품 결정**. 되살린다면 화면만 붙이면 됨
+
+---
+
 # HANDOFF — 78일차 후속: 안정성 보강 (데이터 보존 · 실패 복구 · 시간 경계)
 
 확인일: 2026-09-19. 수동 표준 모드. 사용자 제공 "78일차 안정성 보강 수정지시서"(P0 2건 / P1 3건 / P2 1건 / P3 1건)에 따라 항목별로 `조사 → 최소 수정 → 회귀 테스트 → 컴파일 확인`을 하나씩 끝내고 마지막에 전체 검증했어. **새 기능·UI·디자인 변경 없음, Room schema/Migration 변경 없음, 새 dependency 없음.** 실기기 smoke QA 대기, commit·push 미실행(사용자 승인 대기).
