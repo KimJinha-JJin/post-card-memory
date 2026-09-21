@@ -1,41 +1,39 @@
-# HANDOFF — 79일차 마감: 테스트 보호지도 + CI 조사
+# HANDOFF — 80일차: GitHub Actions CI 도입 완료
 
-확인일: 2026-09-20. 수동 표준 모드. 이번 승인 범위는 기존 감사 재사용, 기능별 보호지도 작성, CI 조사와 문서 정리였어. **79일차는 여기서 종료야. 다음 작업은 승인되지 않았어.**
+확인일: 2026-09-21. 수동 표준 모드. 이번 승인 범위는 최소 GitHub Actions CI 구축, 로컬 검증, 실제 GitHub 실행 확인, CI 관련 문서 갱신이었어. **emulator/instrumentation 실제 실행은 이 HANDOFF 이후 별도로 조사·판단 중이야.**
 
 ## 현재 결과
 
-- [테스트 보호지도](TEST-COVERAGE-MAP.md): 16개 기능을 강함·중간·약함으로 정리했어. 실제 production 직접 검사, Fake/replica, 구조 검사, Android·Compose 검사를 구분하고 수동 확인 지점을 적었어.
-- [CI 조사](CI-AUDIT-79.md): 현재 feature/photo-sticker push 시 JVM·앱 빌드·Android 테스트 빌드·instrumentation 자동 실행은 없어. 삭제된 과거 일회성 코드 수정 workflow 기록과 현재 테스트 CI 부재를 구분했어.
-- 기존 누적 HANDOFF는 [79일차 마감 전 원문](archive/HANDOFF-through-2026-09-20-before-close.md)에 보존했어. 과거의 미커밋·다음 행동 문구는 당시 기록이지 현재 승인이나 Git 상태가 아니야. 원문의 상대 링크는 원래 docs/ai/HANDOFF.md 위치 기준으로 작성됐다는 점에 유의해.
-- 이전 사고·복구와 미검증 이력은 삭제하거나 완료로 바꾸지 않았어. [9월 12일까지 원문](archive/HANDOFF-through-2026-09-12.md) 등 기존 archive도 그대로야.
+- 신규: [`.github/workflows/android-ci.yml`](../../.github/workflows/android-ci.yml). push/PR 시 `testDebugUnitTest` → `assembleDebug` → `assembleDebugAndroidTest`를 자동 실행해.
+- 79일차 결론("CI 없음")은 [CI-AUDIT-79.md](CI-AUDIT-79.md)에 그대로 보존했고, 80일차 도입 과정과 실제 실행 로그는 [CI-AUDIT-80.md](CI-AUDIT-80.md)에 새로 기록했어.
+- [TEST-COVERAGE-MAP.md](TEST-COVERAGE-MAP.md)의 "자동 실행 여부" 절만 80일차 상태로 갱신했어. 나머지 16개 기능 지도는 79일차 원문 그대로야.
+- 79일차 HANDOFF 원문은 [archive/HANDOFF-through-2026-09-20.md](archive/HANDOFF-through-2026-09-20.md)에 보존했어. Git blob hash가 이번 HEAD의 이전 HANDOFF.md와 동일한 `c9d412aa195038537d2d160519d73af6f5cd6dd1`임을 확인해 원문 전체 보존을 검증했어.
 
 ## 핵심 판단
 
-- JVM 750개는 계산·직렬화·파일 helper에서 실제 안전성과 상당 부분 연결돼. 그러나 실제 화면·Android·lifecycle 전체 보호와 같지는 않아.
-- 구조 148개는 형태 자체가 계약일 때 유효해. 화면의 반응을 대신 증명하지는 않아.
-- 핵심 DetailViewModel replica 25개는 설계 의도와 경합 규칙을 설명하는 자산이야. 삭제 대상으로 판단하지 않았고, 실제 production 검증 일부가 있는 경로와 따로 표시했어.
-- instrumentation 10개/5파일에는 Compose UI 3개가 포함돼. 존재·기존 컴파일 기록은 있지만 **최신 코드 기준 전체 실제 실행은 미검증**이야.
-- 현재 CI 평가: 매우 약함(검증 CI 없음). 테스트 존재와 push 때 자동 보호는 별개야.
+- CI 자체는 두 번의 실제 push로 검증했어. 1차(commit `e2a0fad`)는 SDK 설치 step이 존재하지 않는 패키지 id(`platforms;android-37`)를 원격에서 받으려다 실패했어 — Android SDK 분류, production과 무관.
+- 실패 직후 GitHub 공식 [runner-images 소프트웨어 목록](https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300)을 확인해, 이 CI가 쓰는 runner 이미지에 `android-37.0`/`build-tools 37.0.0`이 이미 내장돼 있음을 먼저 확인했어. 그 뒤 2차(commit `57748c7`)에서 불필요한 설치 명령을 제거하고 실측(`ls`) 확인으로 바꿔서 push했더니 runner 로그에서도 실제로 확인됐고, 3단계 모두 성공했어.
+- compileSdk 37은 오타나 잘못된 값이 아니라 실재하는 SDK야. 낮추지 않았어.
+- CI는 여전히 instrumentation 10건의 실제 emulator 실행은 하지 않아. `assembleDebugAndroidTest` 성공은 "테스트 코드가 최신 소스 기준으로 컴파일된다"는 것만 증명해.
 
 ## 검증·사용자 환경
 
-- 구현: 문서 정리 완료. production·테스트·Gradle·CI 파일 변경 없음.
-- 자동 검증: 전체 테스트·빌드는 재실행하지 않았어. git diff --check 통과, 새 안내 문서 3개의 로컬 링크 누락·줄 끝 공백 없음, 문서 외 tracked 변경·staged 변경 없음까지 확인했어.
-- 이력 보존: archive 파일의 Git blob hash가 기존 HEAD의 HANDOFF와 동일한 7a9203478d5f19e2b0d69b89df9d3f7d61f70dca야. 기존 원문 전체가 보존됐음을 확인했어.
-- 사용자 QA: 이번 문서-only 마감은 실기기 불필요. 지도에 적은 수동 확인은 향후 해당 기능 변경 시 참고할 사항이지 오늘 전부 수행하라는 요청이 아니야.
-- 기기 접근·설치·삭제·데이터 변경·SDK/emulator 구축 없음.
-- 저장소 밖 외부 CI 설정과 최신 instrumentation 전체 실행은 미확인. 이 미확인을 해결하려고 이번 범위를 확장하지 않아.
+- 구현: `.github/workflows/android-ci.yml` 신규 작성 2회 커밋(SDK step 최소 수정 1회 포함). production 코드, compileSdk, targetSdk, Gradle wrapper는 변경하지 않았어.
+- 로컬 자동 검증(작성 직후, push 전): `testDebugUnitTest` 성공(JVM `@Test` 750개, failures 0, errors 0), `assembleDebug` 성공, `assembleDebugAndroidTest` 성공. 두 번째 workflow 수정은 CI YAML만 바뀐 것이라 로컬 재실행은 생략했어.
+- **GitHub Actions 실제 실행: 확인 완료.** 1차 run [35562870949](https://github.com/KimJinha-JJin/post-card-memory/actions/runs/35562870949) 실패(SDK), 2차 run [35563162247](https://github.com/KimJinha-JJin/post-card-memory/actions/runs/35563162247) 성공(3단계 전부 `BUILD SUCCESSFUL`).
+- 사용자 QA: 이번 CI-only 변경은 실기기 불필요 — 사용자 앱 설치·데이터에 영향 없음.
+- 기기 접근·설치·삭제·데이터 변경·SDK/emulator 구축은 이번 범위에서 하지 않았어(문서 갱신 이후 별도 조사 예정).
 
 ## Git 스냅샷
 
 - 브랜치: feature/photo-sticker
-- 시작·종료 기준 HEAD: 7725ec5e82c7821b067b079dfe08f443b0da6674
-- 최근 3개: d968f3c → 6e5e37f → 7725ec5
-- 실제 원격 HEAD 일치 확인. local/origin ahead-behind: 0/0.
-- 시작 staged·tracked 변경 없음. 기존 untracked: .claude/, .codex-config.candidate.toml, .kotlin/. 모두 보존.
-- 이번 변경은 이 HANDOFF와 보호지도·CI 조사·이전 HANDOFF 보존본, 총 문서 4개뿐이야. stage하지 않았어.
-- commit: 미승인·미실행. push: 미승인·미실행. 위 원격 반영 확인은 기존 3개 코드 커밋에 대한 것이며 이번 문서가 원격에 있다는 뜻은 아니야.
+- 이번 세션 시작 HEAD: `82471674eb8c2f606c09f26036db7a10b0fb9b16` (79일차 종료 지점과 동일, 예상값과 실측 일치)
+- 이 HANDOFF 작성 시점 HEAD: `57748c7770b1b849b7365dce8a6705dda8780340` (commit `e2a0fad` → `57748c7`, 둘 다 push 완료·origin과 동기화)
+- local/origin ahead-behind: 0/0
+- 시작 시 기존 untracked: `.codex-config.candidate.toml`, `.kotlin/` — 이번 세션에서 그대로 보존, 수정·stage·commit 없음.
+- 이번 문서 갱신(`CI-AUDIT-80.md` 신규, `CI-AUDIT-79.md`/`TEST-COVERAGE-MAP.md`/`HANDOFF.md` 수정, 이전 HANDOFF archive 이동)은 아직 stage·commit하지 않았어.
+- commit: workflow 2건은 완료(`e2a0fad`, `57748c7`), 이번 문서 갱신은 미승인·미실행. push: workflow 2건은 완료, 문서는 미승인·미실행.
 
 ## 다음 행동
 
-79일차 마감 결과를 읽고 종료해. 최소 CI 구성과 Android 계측 실행 환경은 다음 작업 **후보**로만 남겨. 신규 테스트, workflow, emulator 작업을 시작하지 않아.
+문서 갱신 diff 검토 후 사용자 확인을 받아 문서만 별도 commit/push할지 판단해. 그 뒤 emulator 환경 실측(Android SDK 위치, emulator binary, sdkmanager/avdmanager, 설치된 system image, 기존 AVD, Android Studio Device Manager로 테스트 전용 AVD 생성 가능 여부)을 진행해. 안전하게 준비되면 instrumentation 10건(`connectedDebugAndroidTest`) 실행까지 이어가고, 대공사가 필요하면 여기서 종료해도 80일차는 이미 성공이야. 실사용 기기는 절대 사용하지 않아.

@@ -27,7 +27,7 @@
 | ViewModel / lifecycle: 화면 상태 수명 | 약함 | 예 | 일부 helper·계측 외에는 replica 중심 |
 | 실제 Compose interaction: 버튼·터치 | 약함 | 예 | 뒷면 표시 3건 외 상호작용 공백 |
 
-미확인 등급을 붙인 기능은 없어. 기존 감사로 공백을 판단할 근거는 있지만, **최신 instrumentation 실행 결과와 저장소 밖 외부 CI 설정은 미확인**이야. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
+미확인 등급을 붙인 기능은 없어. 기존 감사로 공백을 판단할 근거는 있지만, **최신 instrumentation(emulator) 실행 결과는 여전히 미확인**이야. 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
 
 ## 테스트를 읽는 기준
 
@@ -254,7 +254,17 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 ## 자동 실행 여부
 
-현재 `feature/photo-sticker` push에 연결된 테스트·빌드 CI는 없어. 750개 JVM 테스트와 10개 instrumentation이 존재하는 것과 자동으로 실행되는 것은 별개야. 현재는 사람이 직접 명령해야 실행돼. GitHub에는 삭제된 과거 일회성 코드 수정 workflow 기록이 남아 있지만 테스트 CI는 아니야. [CI 조사 상세](CI-AUDIT-79.md)를 확인해.
+**80일차부터 바뀐 사실:** `feature/photo-sticker`에 push하거나 pull request를 열면 GitHub Actions(`.github/workflows/android-ci.yml`)가 다음을 자동 실행하고, 실제로 통과를 확인했어(2026-09-21, run 35563162247).
+
+| 항목 | 자동 실행 | 근거 |
+|---|---|---|
+| JVM unit test 750개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | CI 성공 로그 |
+| `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
+| `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
+| instrumentation 10개 실제 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 emulator 실행은 여전히 미확인. |
+| lint | 아니오 | 오늘 범위 밖 |
+
+79일차에는 이 표의 모든 항목이 "아니오"였어. 79일차 조사와 80일차 도입 과정은 [CI-AUDIT-79.md](CI-AUDIT-79.md), [CI-AUDIT-80.md](CI-AUDIT-80.md)를 확인해. **instrumentation의 "컴파일 자동검증됨"과 "실제 emulator 실행"은 서로 다른 사실이니 혼동하면 안 돼.**
 
 ## 마지막 요약
 
@@ -281,6 +291,6 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 - navigation·ViewModel 제거·프로세스 lifecycle.
 - 실제 Compose 버튼·drag·키보드 상호작용.
 - 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
-- 최신 instrumentation 10건의 실제 실행과 push 시 자동 테스트.
+- 최신 instrumentation 10건의 실제(emulator) 실행. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어 — 위 "자동 실행 여부" 참고.
 
 테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 750개라는 숫자로 보장할 수는 없어.**
