@@ -18,10 +18,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Ensure required Android SDK packages
+      - name: Verify Android SDK platform/build-tools already present
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;37.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms"
+          ls "$ANDROID_HOME/build-tools"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
