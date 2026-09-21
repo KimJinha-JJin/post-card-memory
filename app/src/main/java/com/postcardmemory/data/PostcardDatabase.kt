@@ -49,7 +49,7 @@ abstract class PostcardDatabase : RoomDatabase() {
                             title TEXT NOT NULL,
                             capturedAt INTEGER NOT NULL,
                             location TEXT,
-                            message TEXT NOT NULL,
+                            message TEXT NOT NULL DEFAULT '',
                             backgroundColorArgb INTEGER NOT NULL,
                             backgroundImagePath TEXT
                         )
@@ -388,7 +388,7 @@ abstract class PostcardDatabase : RoomDatabase() {
                     database.execSQL(
                         """
                         ALTER TABLE postcards
-                        ADD COLUMN futureMailDeliverAt INTEGER DEFAULT NULL
+                        ADD COLUMN futureMailDeliverAt INTEGER
                         """.trimIndent()
                     )
                 }
@@ -411,7 +411,7 @@ abstract class PostcardDatabase : RoomDatabase() {
                     database.execSQL(
                         """
                         ALTER TABLE postcards
-                        ADD COLUMN envelopeStyle TEXT DEFAULT NULL
+                        ADD COLUMN envelopeStyle TEXT
                         """.trimIndent()
                     )
 

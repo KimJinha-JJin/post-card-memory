@@ -104,15 +104,16 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 ### 기능: Room database / migration
 
-- **보호 수준:** 중간.
+- **보호 수준:** 중간 (80일차부터 실제 emulator 실행으로 한 단계 더 검증됨).
 - **현재 보호하는 테스트:** `PostcardMigrationRegistrationStructureTest`, `PostcardBackMigrationTest`, `PostcardFullMigrationChainTest`.
-- **실제 production 직접 검증:** Android 계측 3건에 실제 migration SQL, 기존 행 보존, 최신 DAO 읽기·쓰기, 재개방 검사가 작성돼 있어.
+- **실제 production 직접 검증:** Android 계측 3건에 실제 migration SQL, 기존 행 보존, 최신 DAO 읽기·쓰기, 재개방 검사가 작성돼 있어. **80일차에 emulator(`PostcardMemory_Test`, API 37)에서 3건 전부 실제 실행해 통과 확인함.**
 - **간접 검증:** migration 선언·등록 연속성과 schema 파일 존재는 구조 검사. 형태 자체가 계약이라 유효한 안전망이야.
-- **현재 믿어도 되는 것:** migration 등록 누락 감시와 실제 SQL을 검사할 테스트 기반이 있어.
-- **아직 믿으면 안 되는 것:** 최신 전체 chain 실행 완료. v1은 과거 코드에서 복원한 수동 schema이고 중간 버전 모든 실제 사용자 데이터 조합을 대표하지 않아.
-- **수동 확인 필요:** 아니오 — SQL 보존 검증은 별도 Android 테스트 환경에서 자동으로 확인해야 해. 실사용 DB를 바꾸어 검증하지 않아. 최신 실행 부족은 미검증으로 유지해.
+- **현재 믿어도 되는 것:** migration 등록 누락 감시와 실제 SQL을 검사할 테스트 기반이 있고, 최신 코드 기준 1→19 전체 chain 실행이 실제로 통과함을 확인했어.
+- **아직 믿으면 안 되는 것:** v1은 과거 코드에서 복원한 수동 schema이고 중간 버전 모든 실제 사용자 데이터 조합을 대표하지 않아. 이 실행은 CI 자동 실행이 아니라 로컬 emulator에서의 1회성 수동 실행이라 push마다 자동 보호되지는 않아.
+- **80일차에 실제로 발견·수정한 버그:** `message`/`futureMailDeliverAt`/`envelopeStyle` 3개 컬럼의 migration SQL DEFAULT 선언이 entity/schema export와 어긋나 있었어. 버전 증가·새 migration 없이 기존 migration SQL 3줄만 최소 수정했고, 재실행으로 통과를 확인했어. 상세는 [CI-AUDIT-80.md](CI-AUDIT-80.md).
+- **수동 확인 필요:** 아니오 — SQL 보존 검증은 이제 실제 emulator 실행으로 확인됨. 다만 이 실행은 CI에 편입되지 않았으니 다음에 migration을 또 건드리면 다시 실제 emulator에서 확인해야 해.
 
-근거: [전체 migration 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardFullMigrationChainTest.kt), [18→19 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackMigrationTest.kt).
+근거: [전체 migration 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardFullMigrationChainTest.kt), [18→19 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackMigrationTest.kt), [migration 수정](../../app/src/main/java/com/postcardmemory/data/PostcardDatabase.kt).
 
 ### 기능: 뒷면 작성 / 저장 / 렌더링
 
@@ -238,10 +239,10 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 - **보호 수준:** 약함.
 - **현재 보호하는 테스트:** 뒷면 Compose UI 3개와 여러 UI 구조 검사.
-- **실제 production 직접 검증:** 뒷면 표시·캡처·글자 측정용 Compose를 실행하는 테스트가 있어. 최신 실제 실행은 미검증이야.
+- **실제 production 직접 검증:** 뒷면 표시·캡처·글자 측정용 Compose를 실행하는 테스트가 있어. **80일차에 emulator(API 37)에서 실제 실행해봤더니 3건 전부 `NoSuchMethodException: android.hardware.input.InputManager.getInstance`로 실패했어** — Espresso가 `onIdle` 처리 중 쓰는 reflection 호출이 이 최신 API 레벨과 아직 안 맞는 것으로 보여(test infrastructure 호환 문제, production 코드 문제 아님). 현재 이 3건은 실제로 통과하지 못하는 상태야.
 - **간접 검증:** **대부분의 편집 버튼·toolbar·picker·dialog는 구조 검사가 유일한 자동 방어선**이야.
-- **현재 믿어도 되는 것:** 선언·호출 형태가 유지되는지, 작성된 뒷면 계측의 검사 범위.
-- **아직 믿으면 안 되는 것:** 구조 검사 통과가 실제 클릭·drag·포커스·키보드·접근성·화면 크기별 정상 조작을 증명한다는 해석.
+- **현재 믿어도 되는 것:** 선언·호출 형태가 유지되는지, 작성된 뒷면 계측의 검사 범위(단, 현재 API 37 emulator에서는 이 3건 자체가 통과하지 못해).
+- **아직 믿으면 안 되는 것:** 구조 검사 통과가 실제 클릭·drag·포커스·키보드·접근성·화면 크기별 정상 조작을 증명한다는 해석. 뒷면 Compose UI 3건도 현재 API 37 환경에서는 실행 자체가 막혀 있어.
 - **수동 확인 필요:** 예 — 해당 변경의 실제 버튼과 gesture, 비활성 상태, 작은 화면·키보드 겹침 확인.
 
 근거: [Compose 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackRenderingTest.kt), [구조 검사의 한계와 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt).
@@ -261,10 +262,18 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 | JVM unit test 750개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
-| instrumentation 10개 실제 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 emulator 실행은 여전히 미확인. |
+| instrumentation 10개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. push/PR 자동 실행 기준으로는 여전히 미확인. |
 | lint | 아니오 | 오늘 범위 밖 |
 
-79일차에는 이 표의 모든 항목이 "아니오"였어. 79일차 조사와 80일차 도입 과정은 [CI-AUDIT-79.md](CI-AUDIT-79.md), [CI-AUDIT-80.md](CI-AUDIT-80.md)를 확인해. **instrumentation의 "컴파일 자동검증됨"과 "실제 emulator 실행"은 서로 다른 사실이니 혼동하면 안 돼.**
+79일차에는 이 표의 모든 항목이 "아니오"였어. 79일차 조사와 80일차 도입 과정은 [CI-AUDIT-79.md](CI-AUDIT-79.md), [CI-AUDIT-80.md](CI-AUDIT-80.md)를 확인해. **instrumentation의 "컴파일 자동검증됨"과 "CI에서 자동 실행됨"은 서로 다른 사실이니 혼동하면 안 돼.**
+
+**같은 날 추가로 확인된 사실 — instrumentation 10건 최초 실제 실행(CI 아님, 로컬 emulator):** 80일차에 사용자가 Android Studio에서 테스트 전용 AVD `PostcardMemory_Test`(API 37)를 직접 부팅했고, `adb devices -l`로 실사용 기기가 없고 `emulator-5554` 하나만 연결된 것을 실행 전마다 재확인한 뒤 로컬 Gradle(`connectedDebugAndroidTest`)로 10건을 처음 실제 실행했어.
+
+- **1차 결과: 5/10 성공.** `PostcardBackMigrationTest`(1/1), `PostcardBackSaveTest`(2/2), `PostcardBackgroundColorSaveRaceTest`(2/2)는 성공. `PostcardBackRenderingTest`(0/3)와 `PostcardFullMigrationChainTest`(0/2)는 실패.
+- `PostcardFullMigrationChainTest` 실패는 **재현 가능한 실제 production Room migration 버그**였어(`message`/`futureMailDeliverAt`/`envelopeStyle` 세 컬럼의 migration SQL DEFAULT 선언이 entity/schema export와 어긋남). `PostcardDatabase.kt`의 관련 3개 migration SQL을 최소 수정(버전 증가·새 migration 없음, 기존 데이터 영향 없음)한 뒤 재실행해 **2/2 통과**로 확인했어. 상세 원인·diff는 [CI-AUDIT-80.md](CI-AUDIT-80.md)에 있어.
+- `PostcardBackRenderingTest` 3건은 수정 전후 동일하게 실패해. 원인은 `NoSuchMethodException: android.hardware.input.InputManager.getInstance` — API 37이 최신 SDK라 현재 Espresso/androidx.test 버전과의 test infrastructure 호환 문제로 분류했고, production 문제가 아니라서 손대지 않았어.
+- **최종(수정 후) 재실행: 7/10 성공, 3/10 실패(test infrastructure), 0 skipped.** 이 3건은 위 165행 "실제 Compose interaction" 항목과 "Room database / migration" 항목의 등급·근거에 반영해야 할 최신 사실이야(아래 두 항목 참고).
+- 이 실행은 GitHub Actions CI가 아니라 **로컬**에서 사용자가 준비한 emulator 위에서 이뤄졌어 — 위 표의 "instrumentation이 CI에서 자동 실행"은 여전히 "아니오"인 게 맞아.
 
 ## 마지막 요약
 
@@ -291,6 +300,6 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 - navigation·ViewModel 제거·프로세스 lifecycle.
 - 실제 Compose 버튼·drag·키보드 상호작용.
 - 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
-- 최신 instrumentation 10건의 실제(emulator) 실행. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어 — 위 "자동 실행 여부" 참고.
+- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했어(7/10 성공, 3/10은 API 37/Espresso 환경 문제) — 위 "자동 실행 여부" 참고. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
 
 테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 750개라는 숫자로 보장할 수는 없어.**
