@@ -1,4 +1,67 @@
-# HANDOFF — 80일차 마감: GitHub Actions CI + emulator instrumentation 최초 실행 + Room migration 버그 수정
+# HANDOFF — 81일차 1·2단계 완료 / 3단계 workflow 안전 규칙 보강
+
+확인일: 2026-09-22. 수동 표준 모드. 81일차 1단계 Espresso/API 37 호환 개선과 2단계 삭제 오케스트레이션 보호 테스트는 commit·push·CI까지 완료됐어. 3단계는 그 결과를 프로젝트 공통 규칙과 workflow canonical source에 반영하고 설치 cache를 동기화한 문서-only 작업이며, **이번 3단계 commit/push는 사용자 승인 대기 상태야.**
+
+## 현재 상태 빠른 확인
+
+- 브랜치: `feature/photo-sticker`
+- 현재 HEAD와 origin: `da78619d384dd22a0ed2dcaf9ae213332ca1d909` / fetch 후 ahead·behind `0/0`
+- 시작 작업트리: tracked 변경 없음. 보호 untracked `.claude/`, `.codex-config.candidate.toml`, `.kotlin/`만 존재했고 모두 보존했어.
+- 80일차 migration 수정은 `61d8e54`로 이미 commit/push 완료됐어.
+- 81일차 1·2단계는 `da78619`(`Fix Espresso/API 37 test infra and add deletion orchestration guard tests`)로 commit/push 완료됐어.
+- 3단계 저장소 변경: `AGENTS.md`, `docs/ai/HANDOFF.md`. production·test·dependency·CI YAML 변경은 0건이야.
+- workflow canonical source는 7개 문서와 설치용 version marker를 갱신했고, 설치 cache `0.1.0+codex.20260922080652`에 정상 반영했어. source/cache 전체 16개 파일은 바이트 단위로 일치해.
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| 구현 | 1·2단계 완료 / 3단계 문서 보강 완료 | 실제 Git diff·commit과 canonical/cache 대조 |
+| 로컬 자동검증 | 실행 — 750/750 통과 | 피코의 1·2단계 완료 결과. 3단계는 docs-only라 재실행하지 않음 |
+| emulator instrumentation | 실행 — 13/13 통과 | 피코의 검증 전용 API 37 emulator 실행 결과 |
+| GitHub Actions CI | 실행 — 성공 | run `35701039918`, HEAD `da78619`; JVM unit·debug APK·instrumentation test compile 세 step 직접 재확인 |
+| 실기기 감각 QA | 불필요 | 1·2단계는 테스트 인프라·보호 테스트, 3단계는 문서-only. 실사용 기기 자동 검증 없음 |
+| commit | 1·2단계 완료 / 3단계 미실행 | 3단계 사용자 승인 대기 |
+| push | 1·2단계 완료 / 3단계 미실행 | 3단계 사용자 승인 대기 |
+
+## 81일차 1단계 — Espresso/API 37 호환 개선
+
+- 기존 `espresso-core 3.5.1`이 API 37에서 hidden API `InputManager.getInstance()`를 reflection으로 호출해 `NoSuchMethodException`이 발생했고, `PostcardBackRenderingTest` 3건이 assertion 전에 실패했어.
+- `espresso-core 3.7.0`, `androidx.test.ext:junit 1.3.0`으로 두 테스트 dependency만 최소 갱신했고 production/test 코드는 바꾸지 않았어.
+- hidden API 오류가 제거돼 rendering 3건이 실제 실행됐어. emulator가 `mWakefulness=Asleep`이면 draw pass가 없어 테스트의 `withTimeout(5_000)`이 발동할 수 있었고, 화면을 깨운 뒤 3/3 통과했어. 이 실패는 production이 아니라 `emulator / OS environment`로 분류해.
+- 장기 규칙은 특정 버전 숫자가 아니라 Compose·androidx.test·Espresso 세대, 대상 API 호환성, resolved classpath를 함께 확인하는 방식으로 남겼어.
+
+## 81일차 2단계 — 삭제 오케스트레이션 보호 검증
+
+- production `PostcardDeletionManager`는 DB 삭제가 성공한 뒤에만 파일 정리를 호출하고, DB 삭제 실패·예외 시 파일 정리 함수 자체를 호출하지 않아. production 버그와 production 변경은 없었어.
+- 신규 instrumentation `PostcardDeletionOrchestrationTest` 3건으로 `DB 실패 → 파일 삭제 0건·DB 행 유지`, `DB 성공 → 관련 파일 삭제`, `동일 삭제 2회 → 안전한 멱등성`을 실제 Room과 test 전용 filesDir에서 검증했고 3/3 통과했어.
+- 실패 주입은 `Room.inMemoryDatabaseBuilder`와 `object : PostcardDao by realDao { override ... throw ... }` 조합을 사용했어. production 구조를 테스트 편의로 바꾸지 않고 실제 Room 동작을 유지하면서 특정 DAO 메서드만 실패시킨 재사용 가능한 권장 패턴이야.
+
+### 삭제 위험 구분
+
+- 금지 위험: 사용자 파일은 삭제됐지만 DB 행이 남아 깨진 엽서가 되는 상태.
+- 설계상 수용한 약한 위험: DB 삭제 성공 뒤 파일 정리 전에 프로세스가 종료돼 DB 행은 없고 파일만 남는 고아 파일. 더 위험한 반대 상태를 피하기 위한 trade-off이며 읽기 전용 `OrphanFileDiagnostics`로 진단할 수 있어.
+- 이 구분은 고아 파일 자동 삭제 승인이나 실사용 기기 파괴 테스트 허용을 뜻하지 않아.
+
+## 81일차 3단계 — 공식 workflow로 승격한 규칙
+
+- 검증을 `로컬 자동검증`, `emulator instrumentation`, `GitHub Actions CI`, `실기기 감각 QA`로 분리하고 각각 실행·미실행·불필요·실행 불가를 기록해.
+- instrumentation 전 `adb devices -l`로 검증 전용 `emulator-*`만 존재하는지 확인하고, 물리 기기나 불명확한 대상이 보이면 자동 실행하지 않아.
+- draw·capture 계열은 필요 시 `adb shell dumpsys power`와 `mWakefulness`를 확인해 잠든 emulator의 draw 미발생을 production timeout과 구분해.
+- 실패를 test infrastructure, emulator/OS environment, fixture, timing/race, DB/migration, assertion, production으로 분류해.
+- 삭제·초기화 검증은 Fake, temporary directory, in-memory DB, 검증 전용 emulator를 우선하고 실사용 DB·엽서·사진·`filesDir`, `pm clear`, uninstall은 건드리지 않아.
+- push 뒤에는 실제 CI workflow step과 결과를 확인하고 실패를 skip, `continue-on-error`, 실패 step 제거로 숨기지 않아.
+
+## 3단계 변경·검증 상태
+
+- 저장소: `AGENTS.md`, `docs/ai/HANDOFF.md`만 변경. 앱 production/test/dependency/CI YAML 변경 없음.
+- canonical source: `SKILL.md`, `work-order-template.md`, `handoff-template.md`, `claude-code-execution-rules.md`, `codex-execution-rules.md`, `write-project-handoff/SKILL.md`, `write-project-handoff/references/handoff-template.md`, manifest version marker.
+- 설치 cache: `0.1.0+codex.20260922080652`, installed/enabled 확인.
+- source/cache: 전체 16개 파일 목록과 바이트 내용 일치.
+- 공식 skill/plugin validator: 검사 스크립트 자체는 실행했지만 현재 bundled Python에 `yaml` 모듈이 없어 validation 본문 진입 전 `ModuleNotFoundError`로 실행 불가. 별도 dependency 설치로 범위를 넓히지 않았어.
+- `git diff --check`와 최종 Git 상태는 3단계 완료보고에서 다시 확인해.
+
+---
+
+## 80일차 상세 기록 — GitHub Actions CI + emulator instrumentation 최초 실행 + Room migration 버그 수정
 
 확인일: 2026-09-21. 수동 표준 모드. 이번 승인 범위는 최소 GitHub Actions CI 구축, 로컬 검증, 실제 GitHub 실행 확인, CI 관련 문서 갱신, 그리고 사용자가 직접 준비한 테스트 전용 emulator에서의 instrumentation 10건 최초 실제 실행과 그 과정에서 발견된 Room migration 버그의 최소 수정이었어. **80일차는 여기서 종료야. 다음 작업은 승인되지 않았어.**
 

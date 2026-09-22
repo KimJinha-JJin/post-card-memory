@@ -128,6 +128,10 @@ ChatGPT가 상세 작업지시서 작성
 - 실기기에서 기본 금지: `connectedAndroidTest`, `connectedCheck`, instrumented test, 테스트 APK lifecycle을 발생시키는 task, uninstall, `pm uninstall`, `pm clear`, destructive migration, 데이터 초기화, package 제거 가능성이 있는 자동 task.
 - 명령의 설치/제거 동작을 모르면 실행하지 않고 STOP한다. "검증을 위해 필요함"은 예외 사유가 아니다.
 - 자동 계측 검증이 필요하면 emulator나 별도 테스트 환경을 사용한다. 실기기 검증은 사용자 수동 QA를 기본으로 하고, AI는 사용자가 명시적으로 승인한 일반 install/update, 일반 실행, READ-ONLY 상태 조회로만 관여한다.
+- instrumentation 실행 전 `adb devices -l`로 연결 대상을 실측한다. 검증 전용 `emulator-*`만 있는 경우에만 자동 실행할 수 있다. 물리 기기나 정체를 확정할 수 없는 대상이 함께 보이면 자동 instrumentation을 실행하지 않고 사용자 확인을 받는다.
+- `drawWithContent`, `graphicsLayer`, 화면 캡처나 렌더링 완료 대기가 필요한 emulator 테스트는 필요 시 `adb shell dumpsys power`로 `mWakefulness`를 확인한다. 화면이 `Asleep`이면 실제 draw pass가 없어 앱 timeout처럼 보일 수 있으므로, 검증 전용 emulator 화면만 깨운 뒤 재현 여부를 확인하고 이를 production 결함과 구분한다.
+- 삭제·초기화·파일 정리 검증은 Fake, temporary directory, in-memory DB와 검증 전용 emulator를 우선한다. 실사용 기기의 DB·엽서·사진·`filesDir` 조작, `pm clear`, uninstall은 검증 수단으로 사용하지 않는다.
+- 삭제 오케스트레이션은 `DB 삭제 성공 → 사용자 소유 파일 정리` 순서를 지킨다. DB 삭제 실패·예외 시 사용자 파일 삭제는 0건이어야 한다. `파일 삭제 + DB 행 잔존`은 금지해야 할 깨진 상태이고, DB 삭제 뒤 프로세스 종료 등으로 생길 수 있는 `DB 행 없음 + 파일 잔존`은 더 위험한 반대 상태를 피하기 위해 수용한 고아 파일 위험으로 구분한다. 고아 파일은 읽기 전용 `OrphanFileDiagnostics`로 진단하며, 진단 결과가 자동 삭제 승인을 뜻하지 않는다.
 
 ### 공통 효과 기반 실행 안전 원칙
 
@@ -224,6 +228,11 @@ STOP은 현재 승인에 포함되지 않은 새로운 위험·범위·제품 �
 - 비동기·경합 테스트는 고정 `delay()`보다 완료 순서를 결정적으로 통제하는 방식을 우선한다.
 - 구현 코드뿐 아니라 테스트 입력, Fake, gate 위치와 dispatcher 설정도 오류 후보로 검토한다.
 - 코드 실패와 Gradle, 네트워크, 권한, JDK, 파일 잠금 같은 실행환경 실패를 구분한다.
+- 검증 결과는 `로컬 자동검증`, `emulator instrumentation`, `GitHub Actions CI`, `실기기 감각 QA`로 분리하고 각 영역을 `실행`, `미실행`, `불필요`, `실행 불가` 중 하나로 기록한다. 한 영역의 성공을 다른 영역의 성공으로 확대하지 않는다.
+- 테스트 실패는 최소한 `test infrastructure`, `emulator / OS environment`, `fixture`, `timing / race`, `DB / migration`, `assertion`, `production`으로 분류한 뒤 수정 대상을 정한다. stack trace의 발생 위치와 timeout 값, production 코드의 timeout 값을 대조해 테스트 자체가 본문이나 assertion에 진입했는지도 확인한다.
+- Compose BOM·Compose UI test·`androidx.test`·Espresso처럼 함께 동작하는 테스트 dependency 일부를 변경할 때는 현재 해석된 dependency, 최신 안정 버전, 대상 OS/API 호환성, 실제 resolved classpath를 함께 확인한다. 특정 버전 숫자를 영구 규칙으로 고정하지 않는다.
+- 실제 Room 동작을 유지하면서 특정 DAO 실패만 재현해야 하면 `Room.inMemoryDatabaseBuilder`와 `object : Dao by realDao { override ... throw ... }` 위임 패턴을 권장 후보로 검토한다. 모든 테스트에 강제하거나 production 구조를 테스트 편의 때문에 바꾸지 않는다.
+- push가 승인되어 수행됐다면 현재 `.github/workflows/android-ci.yml`의 실제 step과 GitHub Actions 결과를 확인한다. 현재 workflow는 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 실행하며 instrumentation을 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.
 - 자동 테스트 결과와 사용자의 실기기 결과를 분리한다.
 - 자동 테스트 통과를 실기기 만족이나 버그가 전혀 없다는 뜻으로 과장하지 않는다.
 - commit 분리나 임시 편집을 수행했다면 최종 상태에서 전체 변경과 관련 테스트를 다시 확인한다.
