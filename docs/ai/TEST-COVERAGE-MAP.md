@@ -1,8 +1,8 @@
-# 테스트 보호지도 — 79일차 마감
+# 테스트 보호지도 — 82일차 최신화 (원본 79일차 마감)
 
-확인일: 2026-09-20 / 기준 브랜치: `feature/photo-sticker` / HEAD: `7725ec5e82c7821b067b079dfe08f443b0da6674`
+확인일: 2026-09-23 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / HEAD: `000e7cecfbda660f6d4f43f3355db14494479cb3`
 
-기존 78~79일차 감사와 이번 대화의 읽기 전용 감사 결과를 기능 중심으로 정리했어. 새 안정성 감사나 테스트 실행은 하지 않았어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
+기존 78~81일차 감사와 실제 실행 결과를 기능 중심으로 정리했고, 82일차에는 그중 현재 코드·검증 결과와 달라진 숫자·상태만 최신화했어. 82일차에도 새 안정성 감사나 테스트 실행은 하지 않았고, 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
 
 ## 먼저 읽는 지도
 
@@ -12,9 +12,9 @@
 |---|---|---|---|
 | 엽서 편집 데이터 / 초안 | 강함 | 아니오: 데이터·파일 단위 | 화면 이탈·재진입은 별도 항목 |
 | 상세 화면 저장 | 중간 | 예 | 실제 완료 버튼부터 저장·복원까지 공백 |
-| 배경색 / 스타일 저장 경합 | 중간 | 예 | 실제 연결 계측 일부 존재, 최신 실행 미검증 |
-| 파일 저장 / 삭제 | 중간 | 예: 전체 삭제 흐름 | 개별 파일 helper는 강함, DB 연계는 약함 |
-| Room database / migration | 중간 | 아니오: 별도 Android 자동검증 필요 | 최신 계측 전체 실제 실행 미검증 |
+| 배경색 / 스타일 저장 경합 | 중간 | 예 | 실제 연결 계측 2건 80~81일차 실행 통과, replica 25개는 여전히 별개 |
+| 파일 저장 / 삭제 | 중간 | 예: 전체 삭제 흐름 | 개별 파일 helper·DB 삭제 gate는 강함(81일차 instrumentation), 고아 파일 정리는 진단 전용 |
+| Room database / migration | 중간 | 아니오: 별도 Android 자동검증 필요 | emulator 실제 실행 확인(80일차), CI 자동 실행은 아직 없음 |
 | 뒷면 작성 / 저장 / 렌더링 | 중간 | 예 | 가장 구체적인 UI 계측이 있지만 최신 실행 부족 |
 | 앞면 preview / exporter | 중간 | 예 | 수치 계산은 직접 검사, 실제 그림 비교 부족 |
 | 방문 기록 / 달력 / 자정 처리 | 중간 | 예 | 계산·파일은 강함, 화면 갱신은 간접 검사 |
@@ -25,9 +25,9 @@
 | 앱 시작 | 약함 | 예 | 시작 흐름은 주로 구조 검사 |
 | navigation: 화면 이동 | 약함 | 예 | 실제 화면 이동 자동검증 없음 |
 | ViewModel / lifecycle: 화면 상태 수명 | 약함 | 예 | 일부 helper·계측 외에는 replica 중심 |
-| 실제 Compose interaction: 버튼·터치 | 약함 | 예 | 뒷면 표시 3건 외 상호작용 공백 |
+| 실제 Compose interaction: 버튼·터치 | 약함 | 예 | 뒷면 표시 3건(81일차 실제 실행 통과) 외 상호작용 공백 |
 
-미확인 등급을 붙인 기능은 없어. 기존 감사로 공백을 판단할 근거는 있지만, **최신 instrumentation(emulator) 실행 결과는 여전히 미확인**이야. 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
+미확인 등급을 붙인 기능은 없어. **instrumentation(emulator) 13건은 80~81일차에 검증 전용 emulator에서 실제로 실행해 13/13 통과를 확인했어 — 다만 이 실행은 로컬이고 GitHub Actions CI에는 아직 포함되지 않았어.** 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
 
 ## 테스트를 읽는 기준
 
@@ -44,11 +44,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 10건 안에 포함돼. 구조·replica 역시 JVM 750건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 750건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 750개, 테스트를 담은 파일 80개와 공용 helper 파일 1개야. 테스트 클래스 XML은 81개여서 과거 문서의 “81 files”와 소스 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 10개/5파일, Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 750개, 테스트를 담은 파일 80개와 공용 helper 파일 1개야. 테스트 클래스 XML은 81개여서 과거 문서의 “81 files”와 소스 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 13개/6파일(81일차에 `PostcardDeletionOrchestrationTest` 3건 추가), Compose UI는 3개, Robolectric은 없어.
 
-기존 JVM XML에는 750개 통과가 기록돼 있어. 이번 마감에서는 재실행하지 않았어. instrumentation은 **존재함 / 컴파일됨(기존 보고) / 최신 코드 기준 전체 실제 실행은 미검증**이야. 새 배경색·전체 migration 4건은 미실행 기록이 있고, 기존 뒷면 6건에는 과거 실행 이력이 있어. 과거 실행과 현재 수정본 검증을 동일하게 취급하지 않아.
+JVM 750개는 81일차에 실제로 재실행해 750/750 통과를 확인했고, 82일차에는 재검증 없이 그 결과를 그대로 썼어. instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어 — 존재·컴파일만이 아니라 실제 실행 결과야. 다만 이 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -80,9 +80,9 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 ### 기능: 배경색 / 스타일 저장 경합
 
-- **보호 수준:** 중간.
+- **보호 수준:** 중간 (계측 2건은 80~81일차 emulator 실행으로 통과 확인됨).
 - **현재 보호하는 테스트:** `BackgroundColorSaveRaceTest` 11개, `StyleSaveRaceTest` 3개, `BackgroundColorSaveJobStructureTest`, `PostcardBackgroundColorSaveRaceTest` 계측 2개.
-- **실제 production 직접 검증:** 실제 ViewModel·Room으로 오래된 배경색 저장 취소와 실패 후 다음 저장을 검사하는 테스트가 존재해. 최신 실행은 미검증이야.
+- **실제 production 직접 검증:** 실제 ViewModel·Room으로 오래된 배경색 저장 취소와 실패 후 다음 저장을 검사하는 테스트가 존재해. **`PostcardBackgroundColorSaveRaceTest` 2/2는 80~81일차 검증 전용 emulator(API 37)에서 실제로 통과했어.**
 - **간접 검증:** JVM replica는 최신 값 재읽기·취소·실패 복원 규칙을 설명해. 실제 배경색 코드의 이전 Job 취소 여부는 구조 검사도 있어.
 - **현재 믿어도 되는 것:** 경합 설계에 대한 실행 가능한 모형이 있고 production 연결 검사 일부가 작성돼 있어.
 - **아직 믿으면 안 되는 것:** replica 25개를 실제 ViewModel 통과 25개로 해석하는 것. 배경색 replica에는 production과 달리 이전 Job을 취소하지 않는 모형과 현재 UI 호출자가 없는 배경 이미지 교체 가정이 있어.
@@ -92,15 +92,15 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 ### 기능: 파일 저장 / 삭제
 
-- **보호 수준:** 중간 — 개별 파일 저장·소유권 판정은 강함, DB와 묶인 전체 삭제는 약함.
-- **현재 보호하는 테스트:** `AtomicFileReplaceTest`, `AppFileOwnershipTest`, `ProvisionalFileTest`, `PostcardDeletionManagerTest`, `OrphanFileDiagnosticsTest`, `PostcardTempCleanupTest`, 공유 캐시 정리 테스트.
-- **실제 production 직접 검증:** 실제 임시 파일로 교체·쓰기 실패·취소·소유 범위·엽서별 파일 정리·오래된 캐시 정리를 검사해.
-- **간접 검증:** `PostcardDeletionManagerTest`는 이름과 달리 파일 정리 helper를 호출해. 실제 DB 삭제 실패 후의 전체 순서는 검사하지 않아.
-- **현재 믿어도 되는 것:** 검증한 파일 경계와 실패 조건에서 다른 엽서 파일·앱 외부 경로를 보호하는 안전망.
-- **아직 믿으면 안 되는 것:** DB 삭제 성공 여부와 파일 삭제가 연결된 전체 과정, Android URI 권한·기기 파일시스템 모든 조건.
-- **수동 확인 필요:** 예 — 향후 삭제 변경 시 별도 테스트용 엽서의 삭제·나머지 엽서 표시 확인. 기존 소중한 데이터를 실패 재현용으로 쓰지 않아.
+- **보호 수준:** 중간 — 개별 파일 저장·소유권 판정과 DB 삭제 gate(81일차부터)는 강함, 고아 파일 정리는 진단 전용으로 약함.
+- **현재 보호하는 테스트:** `AtomicFileReplaceTest`, `AppFileOwnershipTest`, `ProvisionalFileTest`, `PostcardDeletionManagerTest`, `OrphanFileDiagnosticsTest`, `PostcardTempCleanupTest`, 공유 캐시 정리 테스트, `PostcardDeletionOrchestrationTest`(instrumentation, 81일차 신규).
+- **실제 production 직접 검증:** 실제 임시 파일로 교체·쓰기 실패·취소·소유 범위·엽서별 파일 정리·오래된 캐시 정리를 검사해. **81일차부터는 실제 Room + 실제 filesDir로 `DB 삭제 실패 → 파일 삭제 0건·DB 행 유지`, `DB 삭제 성공 → 소유 파일 실제 삭제`, `동일 삭제 재호출 → 멱등성 안전`까지 3건을 검증 전용 emulator에서 실제 실행해 3/3 통과를 확인했어.**
+- **간접 검증:** `PostcardDeletionManagerTest`는 이름과 달리 파일 정리 helper만 호출해(JVM, 실제 Room 없이 파일 helper만 검사).
+- **현재 믿어도 되는 것:** 검증한 파일 경계와 실패 조건에서 다른 엽서 파일·앱 외부 경로를 보호하는 안전망, 그리고 DB 삭제가 실패하면 사용자 파일이 절대 지워지지 않는다는 것.
+- **아직 믿으면 안 되는 것:** DB 삭제 성공 직후 파일 정리 전에 프로세스가 종료돼 생기는 고아 파일(DB 행 없음 + 파일 잔존)의 자동 방지 — 이건 설계상 수용한 약한 위험이고 `OrphanFileDiagnostics`는 읽기 전용 진단이지 자동 삭제가 아니야. Android URI 권한·기기 파일시스템 모든 조건도 아직 공백이야.
+- **수동 확인 필요:** 예 — 향후 삭제 변경 시 별도 테스트용 엽서의 삭제·나머지 엽서 표시 확인. DB 성공/실패 gate 자체는 이제 자동 재현되므로 그 부분을 사용자 수동 QA로 떠넘기지 않아.
 
-근거: [파일 정리 테스트 범위](../../app/src/test/java/com/postcardmemory/utils/PostcardDeletionManagerTest.kt), [실제 삭제 순서](../../app/src/main/java/com/postcardmemory/utils/PostcardDeletionManager.kt).
+근거: [파일 정리 테스트 범위](../../app/src/test/java/com/postcardmemory/utils/PostcardDeletionManagerTest.kt), [실제 삭제 순서](../../app/src/main/java/com/postcardmemory/utils/PostcardDeletionManager.kt), [DB-우선 삭제 gate 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardDeletionOrchestrationTest.kt).
 
 ### 기능: Room database / migration
 
@@ -117,12 +117,12 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 ### 기능: 뒷면 작성 / 저장 / 렌더링
 
-- **보호 수준:** 중간.
+- **보호 수준:** 중간 (81일차 emulator 실행으로 계측 4건 전부 통과 확인됨).
 - **현재 보호하는 테스트:** `PostcardBackFaceTest`, `PostcardWritingRecordTest`, `PostcardBackSaveTest`, `PostcardBackRenderingTest`.
-- **실제 production 직접 검증:** 문구·최초 작성 시각 규칙, 실제 ViewModel·Room 저장 실패/복원, Compose 뒷면 캡처, 공유 PNG·갤러리 출력의 Bitmap 동일성, 장문 fitting(글자가 들어가도록 크기 맞춤).
+- **실제 production 직접 검증:** 문구·최초 작성 시각 규칙, 실제 ViewModel·Room 저장 실패/복원, Compose 뒷면 캡처, 공유 PNG·갤러리 출력의 Bitmap 동일성, 장문 fitting(글자가 들어가도록 크기 맞춤). **`PostcardBackSaveTest`(2/2)와 `PostcardBackRenderingTest`(3/3)는 81일차 검증 전용 emulator(API 37)에서 실제로 통과했어.**
 - **간접 검증:** 계측의 DAO 대역은 특정 쓰기만 지연·실패시키며 핵심 저장 처리는 production이 수행해.
-- **현재 믿어도 되는 것:** 순수 작성 규칙은 직접 검사돼. Android 검증용 테스트도 구체적으로 존재해.
-- **아직 믿으면 안 되는 것:** 최신 계측 전체 통과, 실제 키보드 입력·커서·모든 글꼴 크기·모든 본문 형태.
+- **현재 믿어도 되는 것:** 순수 작성 규칙은 직접 검사돼. Android 검증용 테스트 4건도 최신 코드 기준으로 실제 통과했어.
+- **아직 믿으면 안 되는 것:** 실제 키보드 입력·커서·모든 글꼴 크기·모든 본문 형태 — 계측은 대표 시나리오만 검사해.
 - **수동 확인 필요:** 예 — 본문·추신 입력, 재진입, 장문 읽기, 현재 뒷면 공유 결과의 가독성 확인.
 
 근거: [뒷면 렌더링 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackRenderingTest.kt), [뒷면 저장 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackSaveTest.kt).
@@ -237,13 +237,14 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 ### 기능: 실제 Compose interaction — 버튼·터치 조작
 
-- **보호 수준:** 약함.
-- **현재 보호하는 테스트:** 뒷면 Compose UI 3개와 여러 UI 구조 검사.
-- **실제 production 직접 검증:** 뒷면 표시·캡처·글자 측정용 Compose를 실행하는 테스트가 있어. **80일차에 emulator(API 37)에서 실제 실행해봤더니 3건 전부 `NoSuchMethodException: android.hardware.input.InputManager.getInstance`로 실패했어** — Espresso가 `onIdle` 처리 중 쓰는 reflection 호출이 이 최신 API 레벨과 아직 안 맞는 것으로 보여(test infrastructure 호환 문제, production 코드 문제 아님). 현재 이 3건은 실제로 통과하지 못하는 상태야.
+- **보호 수준:** 약함 (뒷면 표시 3건은 81일차부터 실제 통과, 나머지 편집 상호작용은 여전히 공백).
+- **현재 보호하는 테스트:** 뒷면 Compose UI 3개(`PostcardBackRenderingTest`)와 여러 UI 구조 검사.
+- **실제 production 직접 검증:** 뒷면 표시·캡처·글자 측정용 Compose를 실행하는 테스트가 있어. 80일차 emulator(API 37) 첫 실행에서는 3건 전부 `NoSuchMethodException: android.hardware.input.InputManager.getInstance`로 실패했어(Espresso가 `onIdle` 처리 중 쓰는 hidden API가 이 API 레벨과 안 맞는 test infrastructure 문제, production 문제 아님). **81일차에 `espresso-core`를 3.5.1→3.7.0, `androidx.test.ext:junit`을 1.1.5→1.3.0으로 두 테스트 dependency만 올려 이 hidden API 호출을 제거했고, 검증 전용 emulator(API 37)에서 3/3 통과를 확인했어.**
 - **간접 검증:** **대부분의 편집 버튼·toolbar·picker·dialog는 구조 검사가 유일한 자동 방어선**이야.
-- **현재 믿어도 되는 것:** 선언·호출 형태가 유지되는지, 작성된 뒷면 계측의 검사 범위(단, 현재 API 37 emulator에서는 이 3건 자체가 통과하지 못해).
-- **아직 믿으면 안 되는 것:** 구조 검사 통과가 실제 클릭·drag·포커스·키보드·접근성·화면 크기별 정상 조작을 증명한다는 해석. 뒷면 Compose UI 3건도 현재 API 37 환경에서는 실행 자체가 막혀 있어.
+- **현재 믿어도 되는 것:** 선언·호출 형태가 유지되는지, 그리고 뒷면 Compose 표시·캡처·글자 측정 3건은 API 37 emulator에서 실제로 통과한다는 것.
+- **아직 믿으면 안 되는 것:** 구조 검사 통과가 실제 클릭·drag·포커스·키보드·접근성·화면 크기별 정상 조작을 증명한다는 해석. 뒷면 3건 외 나머지 편집 버튼·제스처는 여전히 자동 실행 검증이 없어.
 - **수동 확인 필요:** 예 — 해당 변경의 실제 버튼과 gesture, 비활성 상태, 작은 화면·키보드 겹침 확인.
+- **emulator 환경 메모:** draw/capture 계열 instrumentation은 emulator가 `mWakefulness=Asleep`이면 실제 draw pass가 없어 저장 timeout이 발생할 수 있어(production 문제 아님, `emulator / OS environment`). 실행 전 `adb shell dumpsys power`로 확인해.
 
 근거: [Compose 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackRenderingTest.kt), [구조 검사의 한계와 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt).
 
@@ -262,7 +263,7 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 | JVM unit test 750개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
-| instrumentation 10개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. push/PR 자동 실행 기준으로는 여전히 미확인. |
+| instrumentation 13개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
 | lint | 아니오 | 오늘 범위 밖 |
 
 79일차에는 이 표의 모든 항목이 "아니오"였어. 79일차 조사와 80일차 도입 과정은 [CI-AUDIT-79.md](CI-AUDIT-79.md), [CI-AUDIT-80.md](CI-AUDIT-80.md)를 확인해. **instrumentation의 "컴파일 자동검증됨"과 "CI에서 자동 실행됨"은 서로 다른 사실이니 혼동하면 안 돼.**
@@ -272,15 +273,17 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 - **1차 결과: 5/10 성공.** `PostcardBackMigrationTest`(1/1), `PostcardBackSaveTest`(2/2), `PostcardBackgroundColorSaveRaceTest`(2/2)는 성공. `PostcardBackRenderingTest`(0/3)와 `PostcardFullMigrationChainTest`(0/2)는 실패.
 - `PostcardFullMigrationChainTest` 실패는 **재현 가능한 실제 production Room migration 버그**였어(`message`/`futureMailDeliverAt`/`envelopeStyle` 세 컬럼의 migration SQL DEFAULT 선언이 entity/schema export와 어긋남). `PostcardDatabase.kt`의 관련 3개 migration SQL을 최소 수정(버전 증가·새 migration 없음, 기존 데이터 영향 없음)한 뒤 재실행해 **2/2 통과**로 확인했어. 상세 원인·diff는 [CI-AUDIT-80.md](CI-AUDIT-80.md)에 있어.
 - `PostcardBackRenderingTest` 3건은 수정 전후 동일하게 실패해. 원인은 `NoSuchMethodException: android.hardware.input.InputManager.getInstance` — API 37이 최신 SDK라 현재 Espresso/androidx.test 버전과의 test infrastructure 호환 문제로 분류했고, production 문제가 아니라서 손대지 않았어.
-- **최종(수정 후) 재실행: 7/10 성공, 3/10 실패(test infrastructure), 0 skipped.** 이 3건은 위 165행 "실제 Compose interaction" 항목과 "Room database / migration" 항목의 등급·근거에 반영해야 할 최신 사실이야(아래 두 항목 참고).
+- **최종(수정 후) 재실행: 7/10 성공, 3/10 실패(test infrastructure), 0 skipped.** 이 3건은 위 "실제 Compose interaction" 항목과 "Room database / migration" 항목의 등급·근거에 반영해야 할 최신 사실이었고(81일차에 해결, 아래 문단 참고), 각 항목에도 반영했어.
 - 이 실행은 GitHub Actions CI가 아니라 **로컬**에서 사용자가 준비한 emulator 위에서 이뤄졌어 — 위 표의 "instrumentation이 CI에서 자동 실행"은 여전히 "아니오"인 게 맞아.
+
+**81일차 추가 확인 — Espresso/API 37 수정 후 전량 재실행(CI 아님, 검증 전용 로컬 emulator):** `da78619`에서 `espresso-core`를 3.7.0으로, `androidx.test.ext:junit`을 1.3.0으로 올려 위 `PostcardBackRenderingTest` 3건 실패 원인이던 hidden API 호출을 제거했고, 같은 커밋에서 `PostcardDeletionOrchestrationTest` 3건(DB 삭제 실패 시 파일 미삭제·DB 행 유지, DB 삭제 성공 시 소유 파일 정리, 재호출 멱등성)을 추가했어. instrumentation 실행 전 `adb devices -l`로 검증 전용 `emulator-5554`만 연결된 걸 재확인했고, **13/13 전부 통과**했어 — `PostcardBackMigrationTest`(1/1), `PostcardFullMigrationChainTest`(2/2), `PostcardBackSaveTest`(2/2), `PostcardBackgroundColorSaveRaceTest`(2/2), `PostcardBackRenderingTest`(3/3), `PostcardDeletionOrchestrationTest`(3/3). 이 실행도 GitHub Actions CI가 아니라 로컬 검증 전용 emulator에서 이뤄졌고, `da78619`·`000e7ce` push 각각의 GitHub Actions run(`35701039918`, `35704566020`)은 JVM unit test·`assembleDebug`·`assembleDebugAndroidTest`(컴파일)만 성공을 확인했을 뿐 emulator instrumentation은 여전히 CI에 포함되지 않아.
 
 ## 마지막 요약
 
 ### 지금 테스트를 꽤 믿어도 되는 영역
 
 - 초안·꾸미기 데이터의 저장 형식과 옛 데이터 읽기.
-- 개별 파일의 덮어쓰기·실패 시 보존·소유 경계.
+- 개별 파일의 덮어쓰기·실패 시 보존·소유 경계, DB 삭제 성공/실패에 따른 파일 정리 gate(81일차 instrumentation).
 - 방문일·날짜·검색·달력·꾸미기 위치 같은 순수 계산.
 
 이 신뢰는 해당 테스트를 실행해 통과했을 때의 검사 범위에 한정돼. push 자체가 자동 검사를 해 주지는 않아.
@@ -300,6 +303,6 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 - navigation·ViewModel 제거·프로세스 lifecycle.
 - 실제 Compose 버튼·drag·키보드 상호작용.
 - 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
-- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했어(7/10 성공, 3/10은 API 37/Espresso 환경 문제) — 위 "자동 실행 여부" 참고. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
+- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
 
 테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 750개라는 숫자로 보장할 수는 없어.**
