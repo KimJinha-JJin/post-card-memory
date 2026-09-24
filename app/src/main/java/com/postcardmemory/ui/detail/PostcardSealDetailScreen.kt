@@ -70,7 +70,10 @@ fun SealPickerPanel(
     canUndoSeal: Boolean,
     canRedoSeal: Boolean,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isStampAiming: Boolean = false,
+    onStampSeal: () -> Unit = {},
+    onCancelStampAim: () -> Unit = {}
 ) {
     val selectedSeal =
         photoSeals.find { it.id == selectedSealId }
@@ -93,7 +96,7 @@ fun SealPickerPanel(
                 canRedo = canRedoSeal,
                 onUndo = onUndoSeal,
                 onRedo = onRedoSeal,
-                enabled = enabled,
+                enabled = enabled && !isStampAiming,
                 undoContentDescription = "실행 취소",
                 redoContentDescription = "다시 실행"
             )
@@ -107,6 +110,33 @@ fun SealPickerPanel(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        // 새 도장을 고른 뒤 엽서 위 +로 자리를 정하는 동안에는 목록 대신
+        // 안내 한 줄과 `취소 | 도장 찍기`만 둔다(편집|삭제와 같은 텍스트 액션 문법).
+        if (isStampAiming) {
+            EditorQuietHint(
+                text = "엽서를 눌러 자리를 고르고, 두 손가락으로 돌리거나 크기를 바꿔봐."
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EditorTextAction(
+                    text = "취소",
+                    onClick = onCancelStampAim,
+                    enabled = enabled
+                )
+
+                EditorActionDivider()
+
+                EditorTextAction(
+                    text = "도장 찍기",
+                    onClick = onStampSeal,
+                    enabled = enabled
+                )
+            }
+            return@Column
+        }
 
         // 붙인 도장 목록과 `+ 추가`를 한 줄에 둔다(라벨 스티커·마스킹테이프와
         // 같은 문법). 목록이 비어 있어도 이 줄과 `+ 추가`의 자리는 그대로라서

@@ -140,7 +140,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -1602,6 +1604,12 @@ fun DetailScreen(
         mutableStateOf(IntSize.Zero)
     }
 
+    // 도장 찍기(조준 + 신문지 손) 연출 상태. 화면에만 잠깐 있는 상태라 remember로만
+    // 두고, 화면을 떠나면 함께 사라진다 — 저장·복원·export에는 들어가지 않는다.
+    val sealStampSession = remember { SealStampSession() }
+    var postcardPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var detailRootPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+
     val baseStickerPx = with(LocalDensity.current) {
         STICKER_BASE_SIZE.toPx()
     }
@@ -1787,6 +1795,29 @@ fun DetailScreen(
 
     BackHandler(enabled = !isFocusPreviewMode) {
         navigateBackAfterPendingStyleSaves()
+    }
+
+    // 도장 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 조준을 접는다(도장 생성 없음).
+    LaunchedEffect(
+        customizationPagerState.currentPage,
+        isFocusPreviewMode,
+        isBackFace
+    ) {
+        if (
+            customizationPagerState.currentPage != SEAL_TAB_PAGE_INDEX ||
+            isFocusPreviewMode ||
+            isBackFace
+        ) {
+            sealStampSession.cancelAiming()
+        }
+    }
+
+    // 조준 중 뒤로가기는 조준만 취소한다. 손이 움직이는 짧은 동안에는 뒤로가기를
+    // 흘려보내 도장이 반쯤 찍힌 채 화면이 닫히지 않게 한다.
+    BackHandler(
+        enabled = sealStampSession.isAiming || sealStampSession.isStamping
+    ) {
+        sealStampSession.cancelAiming()
     }
 
     // 미래로 발송된 엽서는 직접 detail/{id} 딥링크로 들어오더라도 편집
@@ -2088,7 +2119,11 @@ fun DetailScreen(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned {
+                detailRootPositionInRoot = it.positionInRoot()
+            }
     ) {
     Box(
         modifier = Modifier
@@ -2170,6 +2205,9 @@ fun DetailScreen(
                             )
                             .onSizeChanged { size ->
                                 postcardPreviewSize = size
+                            }
+                            .onGloballyPositioned {
+                                postcardPositionInRoot = it.positionInRoot()
                             }
                             .pointerInput(
                                 selectedLayout,
@@ -4294,6 +4332,19 @@ fun DetailScreen(
                                 )
                             }
                         }
+
+                        val stampAim =
+                            sealStampSession.phase as? SealStampPhase.Aiming
+                        if (stampAim != null) {
+                            SealStampAimLayer(
+                                aim = stampAim,
+                                capturedAtMillis = pc.capturedAt,
+                                sealBaseSize = SEAL_BASE_SIZE,
+                                postcardSize = postcardPreviewSize,
+                                onMoveAim = sealStampSession::moveAim,
+                                onTransformAim = sealStampSession::transformAim
+                            )
+                        }
                     }
                 }
                 if (isBackFace || isFlipAnimating) {
@@ -5259,21 +5310,27 @@ fun DetailScreen(
                                                 "도장은 엽서 한 장에 최대 ${MAX_SEAL_COUNT}개까지만 붙일 수 있어.",
                                                 Toast.LENGTH_SHORT
                                             ).show()
-                                        } else {
-                                            viewModel.recordSealSnapshotForUndo()
-                                            val newSeal =
-                                                PostcardSealItem(
-                                                    type = type,
-                                                    scale = type.defaultScale,
-                                                    colorArgb = colorArgb
+                                        } else if (postcardPreviewSize != IntSize.Zero) {
+                                            // 바로 붙이지 않고 조준부터 — 실제 도장은 손이
+                                            // 종이에 닿는 순간(SealStampHandOverlay onContact)에
+                                            // 기존과 같은 undo 한 건으로 만들어진다.
+                                            viewModel.setSelectedSealId(null)
+                                            sealStampSession.startAiming(
+                                                type = type,
+                                                colorArgb = colorArgb,
+                                                center = Offset(
+                                                    postcardPreviewSize.width / 2f,
+                                                    postcardPreviewSize.height / 2f
                                                 )
-                                            viewModel.setPhotoSeals(
-                                                photoSeals + newSeal
-                                            )
-                                            viewModel.setSelectedSealId(
-                                                newSeal.id
                                             )
                                         }
+                                    },
+                                    isStampAiming = sealStampSession.isAiming,
+                                    onStampSeal = {
+                                        sealStampSession.beginStamp()
+                                    },
+                                    onCancelStampAim = {
+                                        sealStampSession.cancelAiming()
                                     },
                                     onDeleteSeal = { id ->
                                         viewModel.recordSealSnapshotForUndo()
@@ -5312,7 +5369,7 @@ fun DetailScreen(
                                     },
                                     canUndoSeal = canUndoSeal,
                                     canRedoSeal = canRedoSeal,
-                                    enabled = controlsEnabled,
+                                    enabled = controlsEnabled && !sealStampSession.isStamping,
                                     modifier = Modifier.fillMaxWidth(0.92f)
                                 )
                             }
@@ -6357,6 +6414,32 @@ fun DetailScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 64.dp)
         )
+
+        // 신문지 손은 엽서 밖(화면 아래)에서 올라와야 하므로 엽서 clip 바깥,
+        // 화면 전체 위에 그린다. 엽서 콘텐츠가 아니라 저장·export와 무관하다.
+        val stamping = sealStampSession.phase as? SealStampPhase.Stamping
+        if (stamping != null) {
+            SealStampHandOverlay(
+                target = postcardPositionInRoot - detailRootPositionInRoot + stamping.aim.center,
+                onContact = {
+                    val newSeal =
+                        sealStampSession.takeContactSeal(
+                            baseSealSidePx = baseSealPx
+                        )
+                    if (newSeal != null && latestPhotoSeals.size < MAX_SEAL_COUNT) {
+                        vibrateSealStampContact(context)
+                        viewModel.recordSealSnapshotForUndo()
+                        viewModel.setPhotoSeals(latestPhotoSeals + newSeal)
+                    }
+                },
+                onFinished = {
+                    val stampedId = sealStampSession.finish()
+                    if (stampedId != null && latestPhotoSeals.any { it.id == stampedId }) {
+                        viewModel.setSelectedSealId(stampedId)
+                    }
+                }
+            )
+        }
     }
 
     val readyShareState = shareState as? ShareState.Ready
