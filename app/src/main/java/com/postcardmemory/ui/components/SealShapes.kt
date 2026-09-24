@@ -1,25 +1,30 @@
 package com.postcardmemory.ui.components
 
+import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.postcardmemory.R
 import com.postcardmemory.ui.detail.SealType
+import com.postcardmemory.utils.SealInkWearRenderer
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -43,14 +48,60 @@ private fun sealImageRes(type: SealType): Int? =
  */
 internal const val SEAL_POSTMARK_DATE_TEXT_RATIO = 0.42f
 
-/** 도장 종류에 맞는 모양을 정사각형 영역 안에 그린다. 미리보기 전용(저장본은 PostcardImageExporter에서 별도로 그림) */
+/**
+ * 도장 종류에 맞는 모양을 정사각형 영역 안에 그린다. 미리보기 전용(저장본은 PostcardImageExporter에서 별도로 그림).
+ *
+ * [inkEraseMask]를 주면 도형을 별도 레이어에 그린 뒤 [SealInkWearRenderer]로
+ * 잉크 결손을 지워, 종이에 눌려 찍힌 흔적처럼 보이게 한다 — export도 같은
+ * 렌더러·같은 결손 지도(도장 id 기반)를 쓴다. 엽서 위 도장만 넘기고, 패널 아이콘·
+ * 다이얼로그·인트로 소인처럼 UI 아이콘으로 쓰는 곳은 null(기존 매끈한 모양)로 둔다.
+ */
 @Composable
 fun SealPreviewContent(
     type: SealType,
     color: Color,
     capturedAtMillis: Long? = null,
     dateTextRatio: Float = SEAL_POSTMARK_DATE_TEXT_RATIO,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    inkEraseMask: Bitmap? = null
+) {
+    SealShapeContent(
+        type = type,
+        color = color,
+        capturedAtMillis = capturedAtMillis,
+        dateTextRatio = dateTextRatio,
+        modifier =
+            if (inkEraseMask == null) {
+                modifier
+            } else {
+                modifier
+                    .graphicsLayer {
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        val side = size.minDimension
+                        drawIntoCanvas { canvas ->
+                            SealInkWearRenderer.erase(
+                                canvas = canvas.nativeCanvas,
+                                eraseMask = inkEraseMask,
+                                left = (size.width - side) / 2f,
+                                top = (size.height - side) / 2f,
+                                side = side
+                            )
+                        }
+                    }
+            }
+    )
+}
+
+@Composable
+private fun SealShapeContent(
+    type: SealType,
+    color: Color,
+    capturedAtMillis: Long?,
+    dateTextRatio: Float,
+    modifier: Modifier
 ) {
     val imageRes = sealImageRes(type)
 

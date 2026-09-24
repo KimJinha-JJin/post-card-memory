@@ -306,7 +306,8 @@ class PostcardOverlayExportLogicTest {
             postcardSize = postcard,
             sealSize = seal100,
             minimumVisibleEdgePx = minVisibleEdgePx,
-            capturedAtMillis = null
+            capturedAtMillis = null,
+            inkSeed = 0L
         )
 
         requireNotNull(overlay)
@@ -348,6 +349,27 @@ class PostcardOverlayExportLogicTest {
         )
 
         assertEquals(2, overlays.size)
+    }
+
+    @Test
+    fun createSealOverlaysForExport_inkSeed_comesFromSealId_sameAsScreenPreview() {
+        // 화면(DetailScreen → SealPreviewContent)은 sealInkSeed(seal.id)로
+        // 잉크 결손 지도를 만든다. export도 같은 id 기반 seed를 넘겨야 편집
+        // 화면과 저장 이미지의 질감이 같다.
+        val sealA = seal().copy(id = "a")
+        val sealB = seal(offset = Offset(50f, 50f)).copy(id = "b")
+
+        val overlays = createSealOverlaysForExport(
+            photoSeals = listOf(sealA, sealB),
+            postcardSize = postcard,
+            sealSizes = mapOf("a" to seal100, "b" to seal100),
+            baseSealPx = 200f,
+            minimumVisibleEdgePx = minVisibleEdgePx,
+            capturedAtMillis = null
+        )
+
+        assertEquals(sealInkSeed("a"), overlays[0].inkSeed)
+        assertEquals(sealInkSeed("b"), overlays[1].inkSeed)
     }
 
     @Test

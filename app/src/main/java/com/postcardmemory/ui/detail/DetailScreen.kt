@@ -218,6 +218,7 @@ import com.postcardmemory.utils.DoodleStrokeWidth
 import com.postcardmemory.utils.DoodleTool
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardRenderSpec
+import com.postcardmemory.utils.SealInkWearRenderer
 import com.postcardmemory.utils.renderWidth
 import com.postcardmemory.utils.sanitizedDoodlePoint
 
@@ -684,7 +685,8 @@ internal fun createSealOverlayForExport(
     postcardSize: IntSize,
     sealSize: IntSize,
     minimumVisibleEdgePx: Float,
-    capturedAtMillis: Long?
+    capturedAtMillis: Long?,
+    inkSeed: Long
 ): PostcardImageExporter.SealOverlay? {
     if (
         postcardSize.width <= 0 ||
@@ -725,7 +727,8 @@ internal fun createSealOverlayForExport(
                     postcardSize.width.toFloat(),
         rotationDegrees = rotationDegrees,
         colorArgb = colorArgb,
-        capturedAtMillis = capturedAtMillis
+        capturedAtMillis = capturedAtMillis,
+        inkSeed = inkSeed
     )
 }
 
@@ -765,7 +768,9 @@ internal fun createSealOverlaysForExport(
             sealOffset = seal.offset,
             postcardSize = postcardSize,
             sealSize = sealSize,
-            capturedAtMillis = capturedAtMillis
+            capturedAtMillis = capturedAtMillis,
+            // 화면(SealPreviewContent)도 같은 seal.id로 결손 지도를 만든다.
+            inkSeed = sealInkSeed(seal.id)
         )
     }
 }
@@ -3600,11 +3605,20 @@ fun DetailScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
+                                    // 도장 id에서 결정론적으로 만든 잉크 결손 지도 —
+                                    // export(createSealOverlaysForExport)도 같은 id를 seed로 쓴다.
+                                    val inkEraseMask =
+                                        remember(seal.id) {
+                                            SealInkWearRenderer.createEraseMask(
+                                                sealInkWear(sealInkSeed(seal.id))
+                                            )
+                                        }
                                     SealPreviewContent(
                                         type = seal.type,
                                         color = Color(seal.colorArgb),
                                         capturedAtMillis = pc.capturedAt,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier.fillMaxSize(),
+                                        inkEraseMask = inkEraseMask
                                     )
                                 }
                             }

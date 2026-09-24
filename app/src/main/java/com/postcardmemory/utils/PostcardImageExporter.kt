@@ -41,6 +41,7 @@ import com.postcardmemory.ui.detail.MaskingTapePatternKind
 import com.postcardmemory.ui.detail.LabelTapeStyle
 import com.postcardmemory.ui.detail.labelTapePalette
 import com.postcardmemory.ui.detail.maskingTapeOutlinePoints
+import com.postcardmemory.ui.detail.sealInkWear
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -96,7 +97,9 @@ object PostcardImageExporter {
         val sizeRatio: Float,
         val rotationDegrees: Float = 0f,
         val colorArgb: Long,
-        val capturedAtMillis: Long? = null
+        val capturedAtMillis: Long? = null,
+        /** 잉크 결손 지도 seed(sealInkSeed(도장 id)). 화면 미리보기와 같은 값. */
+        val inkSeed: Long
     )
 
     /**
@@ -989,6 +992,10 @@ object PostcardImageExporter {
             sealBounds.centerY()
         )
 
+        // 도장만 별도 레이어에 그린 뒤 잉크 결손을 지운다 — 화면의
+        // Offscreen 레이어(SealPreviewContent)와 같은 범위(도장 정사각형)다.
+        canvas.saveLayer(sealBounds, null)
+
         when (sealOverlay.type) {
             "CIRCLE_POSTMARK" ->
                 drawCirclePostmarkOverlay(
@@ -1019,7 +1026,24 @@ object PostcardImageExporter {
                 )
         }
 
-        canvas.restore()
+        val inkEraseMask =
+            SealInkWearRenderer.createEraseMask(
+                sealInkWear(sealOverlay.inkSeed)
+            )
+        try {
+            SealInkWearRenderer.erase(
+                canvas = canvas,
+                eraseMask = inkEraseMask,
+                left = sealBounds.left,
+                top = sealBounds.top,
+                side = sealBounds.width()
+            )
+        } finally {
+            inkEraseMask.recycle()
+        }
+
+        canvas.restore() // saveLayer
+        canvas.restore() // rotate
     }
 
     private fun sealImageDrawableRes(type: String): Int? =
