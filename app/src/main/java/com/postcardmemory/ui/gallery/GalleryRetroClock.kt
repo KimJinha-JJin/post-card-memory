@@ -1,5 +1,11 @@
 package com.postcardmemory.ui.gallery
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -21,6 +27,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -38,6 +45,8 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import kotlin.math.PI
+import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -278,6 +287,8 @@ private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String
 // 시계 오른쪽 여백을 정리해주는 작은 동반자. 컵 몸체 + 손잡이 + 김 두 줄만 — 라떼아트·
 // 표정·반짝임 등 장식은 넣지 않는다. 다른 갤러리 아이콘([PondDrawerIcon] 등)과 같은
 // stroke 기반 ImageVector.Builder 패턴을 그대로 따른다.
+// 84일차: 김 두 줄은 아이콘에서 빼 [RetroClockCoffeeSteam]이 같은 좌표로 따로 그린다 —
+// 컵은 가만히 있고 김만 아주 조금 좌우로 흔들리게 하기 위해서다.
 private val RetroClockCoffeeCupIcon: ImageVector =
     ImageVector.Builder(
         name = "RetroClockCoffeeCupIcon",
@@ -316,27 +327,71 @@ private val RetroClockCoffeeCupIcon: ImageVector =
             quadTo(21.5f, 15.1f, 19.2f, 15.1f)
             lineTo(17f, 15.1f)
         }
-        path(
-            fill = SolidColor(Color.Transparent),
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 1.6f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
-            strokeAlpha = 0.55f
-        ) {
-            // 김 두 줄 (최소한의 표현만)
-            moveTo(8.3f, 8.6f)
-            quadTo(9.7f, 7.0f, 8.3f, 5.6f)
-            quadTo(6.9f, 4.2f, 8.3f, 2.6f)
-
-            moveTo(12f, 8.6f)
-            quadTo(13.4f, 7.0f, 12f, 5.6f)
-            quadTo(10.6f, 4.2f, 12f, 2.6f)
-        }
     }.build()
 
 // 시계 바디 옆 커피잔 크기. 바디보다 확실히 작아 "동반자"로 읽히는 선.
 private val RETRO_CLOCK_CUP_SIZE = 22.dp
+
+// 김: 알고 보면 보이고 모르고 보면 그냥 살아 있는 정도. 두 줄은 주기가 달라
+// 복제품처럼 같이 움직이지 않는다. 좌우 폭은 "꼭대기" 기준이고 컵에 붙은 밑동은
+// 움직이지 않는다(위로 갈수록 조금씩 더 흔들림).
+private val RETRO_CLOCK_STEAM_LEFT_SWAY = 1.2.dp
+private val RETRO_CLOCK_STEAM_RIGHT_SWAY = 1.0.dp
+private const val RETRO_CLOCK_STEAM_LEFT_PERIOD_MS = 2800
+private const val RETRO_CLOCK_STEAM_RIGHT_PERIOD_MS = 3400
+private const val RETRO_CLOCK_STEAM_ALPHA = 0.55f
+
+/**
+ * 커피잔 위 김 두 줄. 아이콘과 같은 24 viewport 좌표(예전 정적 김과 같은 모양)를
+ * [RETRO_CLOCK_CUP_SIZE]에 맞춰 그리고, 줄마다 sin 한 주기로 좌우만 아주 조금
+ * 흔든다. 진행값은 draw 단계에서만 읽어 매 프레임 재구성 없이 다시 그리기만 하고,
+ * sin(0)=0에서 시작해 화면 진입 순간 위치가 튀지 않는다. alpha는 고정(깜빡임 없음).
+ */
+@Composable
+private fun RetroClockCoffeeSteam(color: Color, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "retroClockSteam")
+    val leftPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            tween(RETRO_CLOCK_STEAM_LEFT_PERIOD_MS, easing = LinearEasing),
+            RepeatMode.Restart
+        ),
+        label = "retroClockSteamLeft"
+    )
+    val rightPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            tween(RETRO_CLOCK_STEAM_RIGHT_PERIOD_MS, easing = LinearEasing),
+            RepeatMode.Restart
+        ),
+        label = "retroClockSteamRight"
+    )
+
+    Canvas(modifier = modifier) {
+        val unit = size.width / 24f
+        val stroke = Stroke(
+            width = 1.6f * unit,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
+        val steamColor = color.copy(alpha = color.alpha * RETRO_CLOCK_STEAM_ALPHA)
+
+        fun steamPath(baseX: Float, sway: Float): Path = Path().apply {
+            // 밑동(8.6)은 고정, 중간(5.6)은 절반, 꼭대기(2.6)는 sway만큼 이동.
+            moveTo(baseX * unit, 8.6f * unit)
+            quadraticBezierTo((baseX + 1.4f) * unit + sway * 0.25f, 7.0f * unit, baseX * unit + sway * 0.5f, 5.6f * unit)
+            quadraticBezierTo((baseX - 1.4f) * unit + sway * 0.75f, 4.2f * unit, baseX * unit + sway, 2.6f * unit)
+        }
+
+        val leftSway = RETRO_CLOCK_STEAM_LEFT_SWAY.toPx() * sin(2f * PI.toFloat() * leftPhase)
+        val rightSway = RETRO_CLOCK_STEAM_RIGHT_SWAY.toPx() * sin(2f * PI.toFloat() * rightPhase)
+
+        drawPath(steamPath(8.3f, leftSway), color = steamColor, style = stroke)
+        drawPath(steamPath(12f, rightSway), color = steamColor, style = stroke)
+    }
+}
 
 /**
  * 메인 갤러리 상단의 작은 레트로 디지털 탁상시계 + 커피잔. 네온·유광·그림자·badge·장식문구
@@ -392,12 +447,18 @@ internal fun GalleryRetroClock(modifier: Modifier = Modifier) {
                 timeText = timeText,
                 dateText = dateText
             )
-            Icon(
-                imageVector = RetroClockCoffeeCupIcon,
-                contentDescription = null,
-                tint = InkSecondary,
-                modifier = Modifier.size(RETRO_CLOCK_CUP_SIZE)
-            )
+            Box(modifier = Modifier.size(RETRO_CLOCK_CUP_SIZE)) {
+                Icon(
+                    imageVector = RetroClockCoffeeCupIcon,
+                    contentDescription = null,
+                    tint = InkSecondary,
+                    modifier = Modifier.fillMaxSize()
+                )
+                RetroClockCoffeeSteam(
+                    color = InkSecondary,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         // "선반 위 물건" 느낌만 주는, 존재감을 최소화한 얇은 공유 선반선.
