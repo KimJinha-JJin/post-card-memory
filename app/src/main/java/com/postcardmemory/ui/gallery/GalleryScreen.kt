@@ -84,6 +84,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -120,6 +121,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -139,6 +141,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.components.StampCardContent
@@ -254,6 +258,94 @@ private fun rememberShakeTrigger(enabled: Boolean): Int {
     return triggerCount
 }
 
+/**
+ * 84일차: 메인 갤러리 "흔들어서 한 장"의 센서 연결. 판정은
+ * [GalleryShakeDetector]가 하고, 여기서는 등록/해제만 맡는다.
+ *
+ * 연못 모드의 [rememberShakeTrigger]와 달리 화면 lifecycle을 따른다 —
+ * 갤러리 back stack entry가 RESUMED일 때만 등록하고 ON_PAUSE에서 바로
+ * 해제한다. 상세 화면으로 넘어가거나(entry가 RESUMED를 벗어남) 앱이
+ * 백그라운드로 가면 감지가 멈추고, composable이 사라지면 onDispose에서
+ * 해제된다. 다시 RESUMED가 될 때마다 detector를 새로 만들어 이전 sample이
+ * 남지 않게 한다.
+ */
+@Composable
+private fun GalleryShakeToOpenEffect(
+    enabled: Boolean,
+    onShake: () -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnShake by rememberUpdatedState(onShake)
+
+    DisposableEffect(enabled, lifecycleOwner) {
+        if (!enabled) {
+            return@DisposableEffect onDispose { }
+        }
+
+        val sensorManager =
+            context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val accelerometer =
+            sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        if (sensorManager == null || accelerometer == null) {
+            return@DisposableEffect onDispose { }
+        }
+
+        var detector = GalleryShakeDetector()
+        var registered = false
+
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val accepted = detector.onSample(
+                    timestampMillis = event.timestamp / 1_000_000L,
+                    x = event.values[0],
+                    y = event.values[1],
+                    z = event.values[2]
+                )
+
+                if (accepted) {
+                    currentOnShake()
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+
+        fun register() {
+            if (registered) return
+            detector = GalleryShakeDetector()
+            registered = sensorManager.registerListener(
+                listener,
+                accelerometer,
+                SensorManager.SENSOR_DELAY_GAME
+            )
+        }
+
+        fun unregister() {
+            if (!registered) return
+            sensorManager.unregisterListener(listener)
+            registered = false
+        }
+
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> register()
+                Lifecycle.Event.ON_PAUSE -> unregister()
+                else -> Unit
+            }
+        }
+
+        // 이미 RESUMED라면 addObserver가 ON_RESUME까지 따라잡아 바로 등록된다.
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            unregister()
+        }
+    }
+}
+
 @Composable
 fun GalleryScreen(
     onNavigateToCamera: () -> Unit,
@@ -353,6 +445,51 @@ fun GalleryScreen(
     val visitDrawerScope = rememberCoroutineScope()
 
     val selectionMode = selectedIds.isNotEmpty()
+
+    // 84일차 후속: 흔들어서 뽑은 엽서. null이 아니면 갤러리 위에
+    // [GalleryRandomPostcardOverlay]가 떠 있고, 그동안 흔들기는 꺼진다.
+    var shakePickedPostcardId by remember {
+        mutableStateOf<Long?>(null)
+    }
+    val shakePickedPostcard = shakePickedPostcardId?.let { id ->
+        postcards.firstOrNull { it.id == id }
+    }
+
+    // overlay가 떠 있는 사이 그 엽서가 목록에서 사라지면(삭제 등) 닫는다 —
+    // 그대로 두면 아무것도 안 보이는데 흔들기만 꺼진 상태가 된다.
+    LaunchedEffect(shakePickedPostcardId, shakePickedPostcard == null) {
+        if (shakePickedPostcardId != null && shakePickedPostcard == null) {
+            shakePickedPostcardId = null
+        }
+    }
+
+    // 84일차: 흔들어서 한 장. 연못 모드는 흔들기를 파문에 쓰고 양떼목장·쫑쫑컵은
+    // 전체 화면 놀이라, 일반 갤러리(playMode NONE)에서만 켠다. 선택·삭제 확인·
+    // 방문 달력이 열려 있거나 이미 뽑은 엽서 overlay가 떠 있을 때는 끈다.
+    // 후보는 지금 화면에 보이는 목록(검색어 적용)과 같다 — 검색이 비어 있으면
+    // 갤러리의 일반 엽서 전체이고, 발송된 미래편지는 DAO 단계에서 이미 빠진다.
+    GalleryShakeToOpenEffect(
+        enabled = playMode == GalleryPlayMode.NONE &&
+            !selectionMode &&
+            !showDeleteDialog &&
+            !visitDrawerState.isOpen &&
+            shakePickedPostcardId == null
+    ) {
+        if (shakePickedPostcardId != null) return@GalleryShakeToOpenEffect
+
+        val candidateIds =
+            filterPostcardsForSearch(postcards, searchQuery).map { it.id }
+        val id = nextShakeOverlayPostcardId(shakePickedPostcardId, candidateIds)
+            ?: return@GalleryShakeToOpenEffect
+
+        vibrateGalleryFab(
+            context,
+            GalleryShakeHapticDurationMs,
+            GalleryShakeHapticAmplitude
+        )
+        fabMenuExpanded = false
+        shakePickedPostcardId = id
+    }
 
     fun toggleSelection(id: Long) {
         selectedIds =
@@ -916,6 +1053,22 @@ fun GalleryScreen(
                 .navigationBarsPadding()
                 .padding(16.dp)
         )
+
+        shakePickedPostcard?.let { picked ->
+            // key: 다른 엽서가 뽑히면 등장 연출을 처음부터 다시 한다.
+            key(picked.id) {
+                GalleryRandomPostcardOverlay(
+                    postcard = picked,
+                    onOpen = {
+                        shakePickedPostcardId = null
+                        onNavigateToDetail(picked.id)
+                    },
+                    onDismissed = {
+                        shakePickedPostcardId = null
+                    }
+                )
+            }
+        }
     }
 
     }
@@ -1009,6 +1162,9 @@ private const val GalleryFabHapticConfirmAmplitude = 160
 // "톡"보다도 더 짧고 가벼운, 메뉴를 열기 전 손끝에 주는 최소한의 답.
 private const val GalleryFabHapticAnchorTapDurationMs = 10L
 private const val GalleryFabHapticAnchorTapAmplitude = 90
+// 84일차: 흔들어서 한 장 — 인식됐다는 것만 알리는 짧은 "톡". 도장 "콩!"보다 약하다.
+private const val GalleryShakeHapticDurationMs = 18L
+private const val GalleryShakeHapticAmplitude = 120
 
 private fun vibrateGalleryFab(context: Context, durationMillis: Long, amplitude: Int) {
     val vibrator = context.getSystemService(Vibrator::class.java) ?: return

@@ -1,8 +1,8 @@
-# 테스트 보호지도 — 83일차 최신화 (원본 79일차 마감)
+# 테스트 보호지도 — 84일차 최신화 (원본 79일차 마감)
 
-확인일: 2026-09-24 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / HEAD: `0a19187153da759831d7034f50118a2ee5a741f0`
+확인일: 2026-09-25 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `a659f89` 위 84일차 작업트리(흔들어서 한 장·랜덤 엽서 overlay·커피 김)
 
-기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
+기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치)에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
 
 ## 먼저 읽는 지도
 
@@ -44,11 +44,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 766건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 784건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 766개, 테스트를 담은 파일 82개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 83개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 13개/6파일(81일차에 `PostcardDeletionOrchestrationTest` 3건 추가 뒤 83일차 변화 없음), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 784개, 테스트를 담은 파일 84개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 85개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 13개/6파일(81일차에 `PostcardDeletionOrchestrationTest` 3건 추가 뒤 83일차 변화 없음), Compose UI는 3개, Robolectric은 없어.
 
-JVM 766개는 83일차 로컬 결과 XML에서 766/766 통과(실패·오류·skip 0)를 확인했고, GitHub Actions run `35977829337`에서도 `testDebugUnitTest` 성공을 확인했어. instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어 — 83일차에는 새 instrumentation이 없고 `assembleDebugAndroidTest` 컴파일만 다시 통과했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·skip 0)를 확인했어(직전 766개는 GitHub Actions run `35977829337`에서 성공 확인, 84일차 CI 결과는 이 문서 작성 시점에 아직 없음). instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어 — 83일차에는 새 instrumentation이 없고 `assembleDebugAndroidTest` 컴파일만 다시 통과했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -166,11 +166,11 @@ JVM 766개는 83일차 로컬 결과 XML에서 766/766 통과(실패·오류·sk
 ### 기능: 갤러리
 
 - **보호 수준:** 중간.
-- **현재 보호하는 테스트:** `GallerySearchFilterTest`, `GalleryCalendarCellsTest`, `GalleryMemoryDensityTest`, `GalleryPagerTargetIndexTest`, `GalleryRetroClockTest`, 보기 선택·월 grid 구조 테스트.
-- **실제 production 직접 검증:** 검색 결과·순서 유지, 달력 칸, 월별 엽서 수, 페이지 목표 index, 시계 표시 계산.
+- **현재 보호하는 테스트:** `GallerySearchFilterTest`, `GalleryCalendarCellsTest`, `GalleryMemoryDensityTest`, `GalleryPagerTargetIndexTest`, `GalleryRetroClockTest`, `GalleryShakeDetectorTest`(84일차), `GalleryRandomPostcardOverlayTest`(84일차), 보기 선택·월 grid 구조 테스트.
+- **실제 production 직접 검증:** 검색 결과·순서 유지, 달력 칸, 월별 엽서 수, 페이지 목표 index, 시계 표시 계산, 흔들림 판정(합성 가속도 sample로 정지·약한 흔들림·한쪽 충격·화면 회전 미발동, 명확한 흔들기 1회 인정, cooldown 중 무시·종료 후 재인정), 균등 랜덤 선택(후보 0/1/범위), overlay 날짜 문구(`capturedAt` 월·일), overlay 중 재흔들기 시 엽서 유지, overlay 배치(엽서가 화면 안·문구 자리·손이 화면 아래까지 닿고 왼쪽 귀퉁이를 집음).
 - **간접 검증:** **보기 선택·drawer·월 grid의 UI 배선은 구조 검사 중심의 유일한 자동 방어선**이야.
 - **현재 믿어도 되는 것:** 테스트 입력에 대한 검색·집계·달력·표시 계산.
-- **아직 믿으면 안 되는 것:** 실제 선택·drag·스크롤·보기 전환·카드 animation·양 목장/연못 놀이 동작.
+- **아직 믿으면 안 되는 것:** 실제 선택·drag·스크롤·보기 전환·카드 animation·양 목장/연못 놀이 동작. 실제 센서 감도·센서 등록/해제 lifecycle·흔들기 비활성 조건 배선·overlay 등장 animation·손 이미지 위치·커피 김 움직임은 자동 테스트가 없고 실기기 QA로만 확인했어.
 - **수동 확인 필요:** 예 — 3열 목록, 검색, 보기 전환, 카드 진입, 해당 작업에서 바뀐 놀이 동작 확인.
 
 근거: [검색 테스트](../../app/src/test/java/com/postcardmemory/ui/gallery/GallerySearchFilterTest.kt), [production 갤러리](../../app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt).
@@ -260,7 +260,7 @@ JVM 766개는 83일차 로컬 결과 XML에서 766/766 통과(실패·오류·sk
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 766개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 83일차 CI run `35977829337` 성공 로그 |
+| JVM unit test 784개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 766개 기준 83일차 CI run `35977829337` 성공 로그, 84일차 784개는 로컬 784/784 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 13개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
@@ -279,6 +279,8 @@ JVM 766개는 83일차 로컬 결과 XML에서 766/766 통과(실패·오류·sk
 **81일차 추가 확인 — Espresso/API 37 수정 후 전량 재실행(CI 아님, 검증 전용 로컬 emulator):** `da78619`에서 `espresso-core`를 3.7.0으로, `androidx.test.ext:junit`을 1.3.0으로 올려 위 `PostcardBackRenderingTest` 3건 실패 원인이던 hidden API 호출을 제거했고, 같은 커밋에서 `PostcardDeletionOrchestrationTest` 3건(DB 삭제 실패 시 파일 미삭제·DB 행 유지, DB 삭제 성공 시 소유 파일 정리, 재호출 멱등성)을 추가했어. instrumentation 실행 전 `adb devices -l`로 검증 전용 `emulator-5554`만 연결된 걸 재확인했고, **13/13 전부 통과**했어 — `PostcardBackMigrationTest`(1/1), `PostcardFullMigrationChainTest`(2/2), `PostcardBackSaveTest`(2/2), `PostcardBackgroundColorSaveRaceTest`(2/2), `PostcardBackRenderingTest`(3/3), `PostcardDeletionOrchestrationTest`(3/3). 이 실행도 GitHub Actions CI가 아니라 로컬 검증 전용 emulator에서 이뤄졌고, `da78619`·`000e7ce` push 각각의 GitHub Actions run(`35701039918`, `35704566020`)은 JVM unit test·`assembleDebug`·`assembleDebugAndroidTest`(컴파일)만 성공을 확인했을 뿐 emulator instrumentation은 여전히 CI에 포함되지 않아.
 
 **83일차 추가 확인 — 도장 잉크 질감·찍기 상호작용 보호 확대:** `d833c2a`에서 `SealInkWearTest` 5건과 `PostcardOverlayExportLogicTest`의 preview/export seed 연결 1건이 추가돼 JVM 750→756개가 됐고, `0a19187`에서 `SealStampSessionTest` 10건이 추가돼 756→766개가 됐어. 현재 소스 실측과 로컬 결과 XML 모두 766개이며 766/766 통과(실패·오류·skip 0), GitHub Actions run `35977829337`에서 `testDebugUnitTest`·`assembleDebug`·`assembleDebugAndroidTest`가 전부 성공했어. 두 commit 모두 `app/src/androidTest` 변경은 없어 instrumentation은 13개/6파일 그대로고, 83일차 CI의 `assembleDebugAndroidTest` 성공은 실행이 아니라 컴파일 확인이야.
+
+**84일차 추가 확인 — 흔들어서 한 장:** 갤러리 흔들림 판정을 센서 callback에서 분리한 `GalleryShakeDetector`와 균등 랜덤 선택에 `GalleryShakeDetectorTest` 11건, 랜덤 엽서 overlay의 날짜 문구·재흔들기 처리·화면 배치에 `GalleryRandomPostcardOverlayTest` 7건이 추가돼 JVM 766→784개가 됐어. 로컬 결과 XML 784/784 통과(실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest`(컴파일) 성공. `app/src/androidTest` 변경은 없어 instrumentation은 13개/6파일 그대로야. 커피 김 애니메이션은 시각 전용이라 테스트를 추가하지 않았어.
 
 ## 마지막 요약
 
@@ -307,4 +309,4 @@ JVM 766개는 83일차 로컬 결과 XML에서 766/766 통과(실패·오류·sk
 - 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
 - instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
 
-테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 766개라는 숫자로 보장할 수는 없어.**
+테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 784개라는 숫자로 보장할 수는 없어.**
