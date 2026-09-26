@@ -14,7 +14,10 @@ data class PhotoStickerItem(
     val scale: Float = 1f,
     val rotationDegrees: Float = 0f,
     val flipHorizontal: Boolean = false,
-    val flipVertical: Boolean = false
+    val flipVertical: Boolean = false,
+    val edgeStyle: PhotoStickerEdgeStyle = PhotoStickerEdgeStyle.DEFAULT,
+    /** 불규칙 오림 모양의 고정 seed. 0L = 아직 스타일을 적용한 적 없음. 복제 시 copy()로 그대로 따라간다. */
+    val edgeSeed: Long = 0L
 )
 
 fun PhotoStickerItem.serialize(): String =
@@ -29,7 +32,9 @@ fun PhotoStickerItem.serialize(): String =
         scale.toString(),
         rotationDegrees.toString(),
         flipHorizontal.toString(),
-        flipVertical.toString()
+        flipVertical.toString(),
+        edgeStyle.storedName,
+        edgeSeed.toString()
     ).joinToString("\t")
 
 fun deserializePhotoStickerItem(
@@ -60,7 +65,11 @@ fun deserializePhotoStickerItem(
             flipHorizontal =
                 p.getOrNull(9)?.toBoolean() ?: false,
             flipVertical =
-                p.getOrNull(10)?.toBoolean() ?: false
+                p.getOrNull(10)?.toBoolean() ?: false,
+            edgeStyle =
+                PhotoStickerEdgeStyle.fromStored(p.getOrNull(11)),
+            edgeSeed =
+                parsePhotoStickerEdgeSeed(p.getOrNull(12))
         )
     }.getOrNull()
 }

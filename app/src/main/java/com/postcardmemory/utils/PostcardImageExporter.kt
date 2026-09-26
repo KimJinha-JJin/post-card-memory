@@ -38,6 +38,12 @@ import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_PITCH_RATIO
 import com.postcardmemory.ui.detail.MASKING_TAPE_STRIPE_WIDTH_RATIO
 import com.postcardmemory.ui.detail.MaskingTapeEdgeStyle
 import com.postcardmemory.ui.detail.MaskingTapePatternKind
+import com.postcardmemory.ui.detail.PHOTO_STICKER_CUT_CORE_ARGB
+import com.postcardmemory.ui.detail.PHOTO_STICKER_PAPER_EDGE_ARGB
+import com.postcardmemory.ui.detail.PhotoStickerEdgeStyle
+import com.postcardmemory.ui.detail.PhotoStickerPaperSpec
+import com.postcardmemory.ui.detail.mirrored
+import com.postcardmemory.ui.detail.photoStickerPaperSpec
 import com.postcardmemory.ui.detail.LabelTapeStyle
 import com.postcardmemory.ui.detail.labelTapePalette
 import com.postcardmemory.ui.detail.maskingTapeOutlinePoints
@@ -87,7 +93,10 @@ object PostcardImageExporter {
         val isBackgroundRemoved: Boolean = false,
         val rotationDegrees: Float = 0f,
         val flipHorizontal: Boolean = false,
-        val flipVertical: Boolean = false
+        val flipVertical: Boolean = false,
+        /** 누끼 상태면 호출부(renderedEdgeStyle)가 이미 DEFAULT로 넘긴다. */
+        val edgeStyle: PhotoStickerEdgeStyle = PhotoStickerEdgeStyle.DEFAULT,
+        val edgeSeed: Long = 0L
     )
 
     data class SealOverlay(
@@ -509,6 +518,11 @@ object PostcardImageExporter {
         val drawAsBackgroundRemoved =
             stickerOverlay.isBackgroundRemoved &&
                     decodedStickerBitmap != null
+        val paperSpec =
+            photoStickerPaperSpec(
+                style = stickerOverlay.edgeStyle,
+                edgeSeed = stickerOverlay.edgeSeed
+            )
 
         try {
             val stickerSide =
@@ -581,6 +595,15 @@ object PostcardImageExporter {
                         bitmap = stickerBitmap,
                         destinationRect = stickerBounds
                     )
+                } else if (paperSpec != null) {
+                    drawPaperStyledSticker(
+                        canvas = canvas,
+                        bitmap = stickerBitmap,
+                        stickerBounds = stickerBounds,
+                        spec = paperSpec,
+                        flipHorizontal = stickerOverlay.flipHorizontal,
+                        flipVertical = stickerOverlay.flipVertical
+                    )
                 } else {
                     val stickerPath =
                         Path().apply {
@@ -639,6 +662,177 @@ object PostcardImageExporter {
             if (!stickerBitmap.isRecycled) {
                 stickerBitmap.recycle()
             }
+        }
+    }
+
+    /**
+     * 종이 스타일 사진 스티커. 캔버스는 이미 회전·대칭된 상태다 — 편집 미리보기
+     * (Modifier.photoStickerPaper)와 똑같이 종이만 대칭을 되돌려 그리고, 사진은
+     * 거울상 창 안에 대칭된 채로 그린다. 모양 값은 PhotoStickerPaperSpec 하나에서 온다.
+     */
+    private fun drawPaperStyledSticker(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        stickerBounds: RectF,
+        spec: PhotoStickerPaperSpec,
+        flipHorizontal: Boolean,
+        flipVertical: Boolean
+    ) {
+        val side = stickerBounds.width()
+        val cornerRadius = spec.paperCornerRadius * side
+        val edgeLineWidth = spec.edgeLineWidth * side
+
+        canvas.save()
+        try {
+            canvas.scale(
+                if (flipHorizontal) -1f else 1f,
+                if (flipVertical) -1f else 1f,
+                stickerBounds.centerX(),
+                stickerBounds.centerY()
+            )
+            val outline = spec.paperOutline
+            if (outline != null) {
+                val outlinePath =
+                    Path().apply {
+                        outline.forEachIndexed { index, point ->
+                            val x = stickerBounds.left + point.x * side
+                            val y = stickerBounds.top + point.y * side
+                            if (index == 0) moveTo(x, y) else lineTo(x, y)
+                        }
+                        close()
+                    }
+                canvas.drawPath(
+                    outlinePath,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = spec.paperArgb.toInt()
+                        style = Paint.Style.FILL
+                    }
+                )
+                spec.halftone?.let { halftone ->
+                    canvas.drawPath(
+                        outlinePath,
+                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = halftone.marginInkArgb.toInt()
+                            alpha = (halftone.marginTintAlpha * 255).toInt()
+                            style = Paint.Style.FILL
+                        }
+                    )
+                    PhotoStickerHalftoneRenderer.draw(
+                        canvas = canvas,
+                        clip = outlinePath,
+                        originX = stickerBounds.left,
+                        originY = stickerBounds.top,
+                        side = side,
+                        pitch = halftone.pitch,
+                        angleDegrees = halftone.marginAngleDegrees,
+                        inkArgb = halftone.marginInkArgb,
+                        alpha = halftone.marginAlpha
+                    )
+                }
+                if (spec.cutCoreWidth > 0f) {
+                    // 외곽 안쪽에만 보이도록 외곽으로 잘라 두 배 폭 선을 긋는다.
+                    canvas.save()
+                    try {
+                        canvas.clipPath(outlinePath)
+                        canvas.drawPath(
+                            outlinePath,
+                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = PHOTO_STICKER_CUT_CORE_ARGB.toInt()
+                                style = Paint.Style.STROKE
+                                strokeWidth = spec.cutCoreWidth * side * 2f
+                            }
+                        )
+                    } finally {
+                        canvas.restore()
+                    }
+                }
+                canvas.drawPath(
+                    outlinePath,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = PHOTO_STICKER_PAPER_EDGE_ARGB.toInt()
+                        style = Paint.Style.STROKE
+                        strokeWidth = edgeLineWidth
+                    }
+                )
+            } else {
+                canvas.drawRoundRect(
+                    stickerBounds,
+                    cornerRadius,
+                    cornerRadius,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = spec.paperArgb.toInt()
+                        style = Paint.Style.FILL
+                    }
+                )
+                val edgeRadius =
+                    (cornerRadius - edgeLineWidth / 2f).coerceAtLeast(0f)
+                canvas.drawRoundRect(
+                    RectF(stickerBounds).apply {
+                        inset(edgeLineWidth / 2f, edgeLineWidth / 2f)
+                    },
+                    edgeRadius,
+                    edgeRadius,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = PHOTO_STICKER_PAPER_EDGE_ARGB.toInt()
+                        style = Paint.Style.STROKE
+                        strokeWidth = edgeLineWidth
+                    }
+                )
+            }
+        } finally {
+            canvas.restore()
+        }
+
+        val window =
+            spec.photoWindow.mirrored(
+                flipHorizontal = flipHorizontal,
+                flipVertical = flipVertical
+            )
+        val windowRect =
+            RectF(
+                stickerBounds.left + window.left * side,
+                stickerBounds.top + window.top * side,
+                stickerBounds.left + window.right * side,
+                stickerBounds.top + window.bottom * side
+            )
+
+        canvas.save()
+        try {
+            canvas.clipRect(windowRect)
+            spec.photoClipOutline?.let { outline ->
+                canvas.clipPath(
+                    Path().apply {
+                        outline
+                            .mirrored(flipHorizontal, flipVertical)
+                            .forEachIndexed { index, point ->
+                                val x = stickerBounds.left + point.x * side
+                                val y = stickerBounds.top + point.y * side
+                                if (index == 0) moveTo(x, y) else lineTo(x, y)
+                            }
+                        close()
+                    }
+                )
+            }
+            drawCenterCroppedBitmap(
+                canvas = canvas,
+                bitmap = bitmap,
+                destinationRect = windowRect
+            )
+            spec.halftone?.let { halftone ->
+                PhotoStickerHalftoneRenderer.draw(
+                    canvas = canvas,
+                    clip = Path().apply { addRect(windowRect, Path.Direction.CW) },
+                    originX = stickerBounds.left,
+                    originY = stickerBounds.top,
+                    side = side,
+                    pitch = halftone.pitch,
+                    angleDegrees = halftone.photoAngleDegrees,
+                    inkArgb = halftone.photoInkArgb,
+                    alpha = halftone.photoAlpha
+                )
+            }
+        } finally {
+            canvas.restore()
         }
     }
 

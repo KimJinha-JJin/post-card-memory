@@ -4172,6 +4172,22 @@ class DetailViewModel @Inject constructor(
         scheduleDraftAutosave()
     }
 
+    /** 오림 스타일 변경도 다른 스티커 속성 편집과 같은 undo/redo 스냅샷 경로를 쓴다. */
+    fun setPhotoStickerEdgeStyle(
+        stickerId: String,
+        style: PhotoStickerEdgeStyle
+    ) {
+        val updated =
+            _photoStickers.value.withStickerEdgeStyle(
+                stickerId = stickerId,
+                style = style
+            ) ?: return
+
+        recordStickerSnapshotForUndo()
+        _photoStickers.value = updated
+        scheduleDraftAutosave()
+    }
+
     /** Takes ownership of the snapshot. Even a canceled launch releases it. */
     fun exportBackPostcard(postcardId: Long, bitmap: Bitmap, sharing: Boolean) {
         if (_exportState.value is ExportState.Exporting || _shareState.value !is ShareState.Idle) {

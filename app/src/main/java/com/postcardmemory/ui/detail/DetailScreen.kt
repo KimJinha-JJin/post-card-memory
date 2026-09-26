@@ -590,7 +590,9 @@ internal fun createStickerOverlayForExport(
     flipVertical: Boolean,
     stickerOffset: Offset?,
     postcardSize: IntSize,
-    stickerSize: IntSize
+    stickerSize: IntSize,
+    edgeStyle: PhotoStickerEdgeStyle = PhotoStickerEdgeStyle.DEFAULT,
+    edgeSeed: Long = 0L
 ): PostcardImageExporter.StickerOverlay? {
     val selectedUri =
         stickerUri
@@ -625,6 +627,8 @@ internal fun createStickerOverlayForExport(
         rotationDegrees = rotationDegrees,
         flipHorizontal = flipHorizontal,
         flipVertical = flipVertical,
+        edgeStyle = edgeStyle,
+        edgeSeed = edgeSeed,
         normalizedX =
             (resolvedOffset.x /
                     postcardSize.width.toFloat())
@@ -674,7 +678,9 @@ internal fun createStickerOverlaysForExport(
             flipVertical = sticker.flipVertical,
             stickerOffset = sticker.offset,
             postcardSize = postcardSize,
-            stickerSize = stickerSize
+            stickerSize = stickerSize,
+            edgeStyle = sticker.renderedEdgeStyle(),
+            edgeSeed = sticker.edgeSeed
         )
     }
 }
@@ -2626,8 +2632,48 @@ fun DetailScreen(
                                         }
                                 }
 
+                            val renderedEdgeStyle =
+                                sticker.renderedEdgeStyle()
+                            // 오림 외곽은 style·seed로만 정해지므로 제스처 중 매 프레임
+                            // 다시 계산하지 않고 재사용한다.
+                            val paperSpec =
+                                remember(renderedEdgeStyle, sticker.edgeSeed) {
+                                    photoStickerPaperSpec(
+                                        style = renderedEdgeStyle,
+                                        edgeSeed = sticker.edgeSeed
+                                    )
+                                }
+
+                            // 같은 modifier 인스턴스를 재사용해야 제스처로 재구성될 때
+                            // 종이 path·망점 shader 캐시(drawWithCache)가 유지된다.
+                            val paperModifier =
+                                remember(
+                                    paperSpec,
+                                    sticker.flipHorizontal,
+                                    sticker.flipVertical,
+                                    isVisuallySelected
+                                ) {
+                                    if (paperSpec != null) {
+                                        Modifier.photoStickerPaper(
+                                            spec = paperSpec,
+                                            flipHorizontal = sticker.flipHorizontal,
+                                            flipVertical = sticker.flipVertical,
+                                            selectionColor =
+                                                if (isVisuallySelected) {
+                                                    GraphiteAccent
+                                                } else {
+                                                    null
+                                                }
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                }
+
                             val imageModifier =
                                 when {
+                                    paperSpec != null ->
+                                        Modifier.fillMaxSize()
                                     sticker.isBackgroundRemoved && isVisuallySelected ->
                                         Modifier
                                             .fillMaxSize()
@@ -2950,6 +2996,7 @@ fun DetailScreen(
                                                 Modifier
                                             }
                                         )
+                                        .then(paperModifier)
                                 )
 
                                 if (isVisuallySelected && perStickerEditMode == StickerEditMode.Rotate) {
@@ -4945,6 +4992,14 @@ fun DetailScreen(
                                     canUndoSticker = canUndoSticker,
                                     canRedoSticker = canRedoSticker,
                                     isRemovingBackground = isRemovingBackground,
+                                    onSelectEdgeStyle = { style ->
+                                        selectedStickerId?.let { id ->
+                                            viewModel.setPhotoStickerEdgeStyle(
+                                                stickerId = id,
+                                                style = style
+                                            )
+                                        }
+                                    },
                                     onToggleBackgroundRemoval = {
                                         selectedSticker?.let { sticker ->
                                             if (sticker.isBackgroundRemoved) {

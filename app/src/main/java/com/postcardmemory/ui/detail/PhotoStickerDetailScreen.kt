@@ -69,6 +69,7 @@ fun PhotoStickerPickerPanel(
     canRedoSticker: Boolean,
     isRemovingBackground: Boolean,
     onToggleBackgroundRemoval: () -> Unit,
+    onSelectEdgeStyle: (PhotoStickerEdgeStyle) -> Unit,
     canMoveForward: Boolean,
     canMoveBackward: Boolean,
     onMoveForward: () -> Unit,
@@ -302,6 +303,14 @@ fun PhotoStickerPickerPanel(
                 onMoveBackward = onMoveBackward,
                 enabled = enabled,
                 modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            PhotoStickerEdgeStyleRow(
+                sticker = selectedSticker,
+                enabled = enabled,
+                onSelectEdgeStyle = onSelectEdgeStyle
             )
 
             Spacer(modifier = Modifier.height(10.dp))

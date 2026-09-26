@@ -1,8 +1,8 @@
-# 테스트 보호지도 — 84일차 최신화 (원본 79일차 마감)
+# 테스트 보호지도 — 85일차 최신화 (원본 79일차 마감)
 
-확인일: 2026-09-25 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `a659f89` 위 84일차 작업트리(흔들어서 한 장·랜덤 엽서 overlay·커피 김)
+확인일: 2026-09-26 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `fdcabce` 위 85일차 작업트리(사진 스티커 오림 스타일)
 
-기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치)에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
+기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치), 85일차에는 사진 스티커 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림)에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
 
 ## 먼저 읽는 지도
 
@@ -16,18 +16,18 @@
 | 파일 저장 / 삭제 | 중간 | 예: 전체 삭제 흐름 | 개별 파일 helper·DB 삭제 gate는 강함(81일차 instrumentation), 고아 파일 정리는 진단 전용 |
 | Room database / migration | 중간 | 아니오: 별도 Android 자동검증 필요 | emulator 실제 실행 확인(80일차), CI 자동 실행은 아직 없음 |
 | 뒷면 작성 / 저장 / 렌더링 | 중간 | 예 | 가장 구체적인 UI 계측이 있지만 최신 실행 부족 |
-| 앞면 preview / exporter | 중간 | 예 | 좌표·도장 잉크 seed 전달은 직접 검사, 실제 그림 비교 부족 |
+| 앞면 preview / exporter | 중간 | 예 | 좌표·도장 잉크 seed 전달·사진 스티커 오림 geometry는 직접 검사, 실제 그림 비교 부족 |
 | 방문 기록 / 달력 / 자정 처리 | 중간 | 예 | 계산·파일은 강함, 화면 갱신은 간접 검사 |
 | 미래 우체통 | 중간 | 예 | 도착 계산은 직접 검사, 실제 묶음 개봉은 공백 |
 | 갤러리 | 중간 | 예 | 검색·달력 계산과 실제 조작은 별개 |
-| 스티커 / 테이프 / 도장 / 낙서 | 중간 | 예 | 데이터·수치·도장 순수 상태 전이는 강함, 실제 터치·손 연출은 공백 |
+| 스티커 / 테이프 / 도장 / 낙서 | 중간 | 예 | 데이터·수치·도장 순수 상태 전이·사진 스티커 오림 모양 고정은 강함, 실제 터치·손 연출은 공백 |
 | 카메라 / 사진 처리 | 약함 | 예 | Android 실제 처리 연결 부족 |
 | 앱 시작 | 약함 | 예 | 시작 흐름은 주로 구조 검사 |
 | navigation: 화면 이동 | 약함 | 예 | 실제 화면 이동 자동검증 없음 |
 | ViewModel / lifecycle: 화면 상태 수명 | 약함 | 예 | 일부 helper·계측 외에는 replica 중심 |
 | 실제 Compose interaction: 버튼·터치 | 약함 | 예 | 뒷면 표시 3건(81일차 실제 실행 통과), 도장 조준·찍기는 순수 상태 전이만 보호 |
 
-미확인 등급을 붙인 기능은 없어. **instrumentation(emulator) 13건은 80~81일차에 검증 전용 emulator에서 실제로 실행해 13/13 통과를 확인했어 — 다만 이 실행은 로컬이고 GitHub Actions CI에는 아직 포함되지 않았어.** 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
+미확인 등급을 붙인 기능은 없어. **instrumentation(emulator) 20건 중 기존 13건은 80~81일차에 검증 전용 emulator에서 실제로 실행해 13/13 통과를 확인했어. 85일차에 추가한 `PhotoStickerEdgeStyleInstrumentedTest` 7건은 컴파일만 확인했고 아직 한 번도 실행하지 않았어(검증 전용 emulator가 없고 실사용 기기만 연결돼 있었음). 이 실행들은 로컬이고 GitHub Actions CI에는 포함되지 않아.** 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
 
 ## 테스트를 읽는 기준
 
@@ -44,11 +44,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 784건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 813건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 784개, 테스트를 담은 파일 84개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 85개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 13개/6파일(81일차에 `PostcardDeletionOrchestrationTest` 3건 추가 뒤 83일차 변화 없음), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 813개, 테스트를 담은 파일 85개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 86개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·skip 0)를 확인했어(직전 766개는 GitHub Actions run `35977829337`에서 성공 확인, 84일차 CI 결과는 이 문서 작성 시점에 아직 없음). instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어 — 83일차에는 새 instrumentation이 없고 `assembleDebugAndroidTest` 컴파일만 다시 통과했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 813개는 85일차 로컬 결과 XML에서 813/813 통과(실패·오류·skip 0)를 확인했어(85일차 CI 결과는 이 문서 작성 시점에 아직 없음 — push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -130,11 +130,11 @@ JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·sk
 ### 기능: 앞면 preview / exporter
 
 - **보호 수준:** 중간.
-- **현재 보호하는 테스트:** `PostcardOverlayExportLogicTest`, `SealInkWearTest`, `StickerPositionCalculationsTest`, `PostcardRenderSpecLayoutStyleTest`, `LabelStickerLayerOrderStructureTest`.
+- **현재 보호하는 테스트:** `PostcardOverlayExportLogicTest`, `SealInkWearTest`, `StickerPositionCalculationsTest`, `PostcardRenderSpecLayoutStyleTest`, `LabelStickerLayerOrderStructureTest`, `PhotoStickerEdgeStyleTest`(85일차).
 - **실제 production 직접 검증:** overlay(꾸미기 요소) 좌표·크기·정규화와 출력용 데이터 조립. 83일차에는 도장 id에서 만든 결정론적 잉크 seed가 화면 미리보기와 exporter에 동일하게 전달되는지, 저장·복원 뒤에도 같은 id와 질감 seed가 유지되는지 추가로 검사해.
 - **간접 검증:** 앞면 레이어 순서는 구조 검사. **실제 앞면 레이어 순서의 화면 검증은 구조 검사가 사실상 유일한 방어선**이야.
-- **현재 믿어도 되는 것:** 테스트한 수치 계산과 측정값이 없을 때 기본 크기 처리, 같은 도장 id에서 같은 잉크 결손 지도를 재현하고 preview/export 데이터가 같은 seed를 쓰는 연결.
-- **아직 믿으면 안 되는 것:** preview와 exporter의 최종 Bitmap이 픽셀 단위로 같은지, 실제 기기에서 잉크 결손의 확대·합성이 같은지, 글자·EXIF·사진 decoding·잘림·MediaStore 전체 과정. 화면과 exporter가 공용 `SealInkWearRenderer`를 쓰는 것은 코드로 확인했지만 실제 그림 비교 테스트는 아니야.
+- **현재 믿어도 되는 것:** 테스트한 수치 계산과 측정값이 없을 때 기본 크기 처리, 같은 도장 id에서 같은 잉크 결손 지도를 재현하고 preview/export 데이터가 같은 seed를 쓰는 연결. 85일차 사진 스티커 오림은 preview(`PhotoStickerPaperModifier`)와 exporter가 같은 `PhotoStickerPaperSpec`·망점 helper(`PhotoStickerHalftoneRenderer`)를 쓰고, 그 spec의 geometry(여백·외곽·사진 창·망점 강도)는 JVM에서 직접 검사해.
+- **아직 믿으면 안 되는 것:** preview와 exporter의 최종 Bitmap이 픽셀 단위로 같은지, 실제 기기에서 잉크 결손의 확대·합성이 같은지, 글자·EXIF·사진 decoding·잘림·MediaStore 전체 과정. 화면과 exporter가 공용 `SealInkWearRenderer`를 쓰는 것은 코드로 확인했지만 실제 그림 비교 테스트는 아니야. 사진 스티커 오림의 두 렌더러가 같은 모양·대칭 처리를 그리는지도 공통 spec까지만 자동 검사이고, 실제 그림 일치는 85일차 사용자 실기기 QA로만 확인했어. 기본(DEFAULT) 스타일의 기존 preview/export 차이(export만 검은 테두리, 회전 clip 순서)는 알려진 기존 차이로 남아 있어.
 - **수동 확인 필요:** 예 — 대표 앞면을 preview와 공유/저장 이미지로 비교해 위치·크기·순서·잘림을 확인해.
 
 근거: [출력 계산 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/PostcardOverlayExportLogicTest.kt), [도장 잉크 결정성 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealInkWearTest.kt), [production exporter](../../app/src/main/java/com/postcardmemory/utils/PostcardImageExporter.kt).
@@ -178,14 +178,14 @@ JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·sk
 ### 기능: 스티커 / 테이프 / 도장 / 낙서
 
 - **보호 수준:** 중간 — 데이터·수치 범위는 강함.
-- **현재 보호하는 테스트:** `LabelStickerItemTest`, `MaskingTapeItemTest`, `TextStickerItemTest`, `PostcardSealItemTest`, `SealInkWearTest` 5건, `SealStampSessionTest` 10건, `DoodleStrokeTest`, `DoodleLineSnapTest`, 위치·export 계산 테스트.
+- **현재 보호하는 테스트:** `LabelStickerItemTest`, `MaskingTapeItemTest`, `TextStickerItemTest`, `PostcardSealItemTest`, `SealInkWearTest` 5건, `SealStampSessionTest` 10건, `PhotoStickerEdgeStyleTest` 29건(85일차), `DoodleStrokeTest`, `DoodleLineSnapTest`, 위치·export 계산 테스트. instrumentation `PhotoStickerEdgeStyleInstrumentedTest` 7건(85일차, 미실행).
 - **실제 production 직접 검증:** 저장 형식·옛 값 호환, 위치/크기, 선 스냅, 지우개 충돌 계산, 테이프 윤곽점 등. 도장은 같은 id의 잉크 결손 결정성·서로 다른 id의 차이·결손값 범위·압력별 결손량과, 조준→찍기 상태 전이·중복 생성 방지·취소·상태 정리·위치/크기/회전 보존·크기 제한·preview/final id 일치·직렬화 round-trip·조준점 clamp를 직접 검사해.
 - **간접 검증:** **생성·편집 toolbar·다이얼로그 배선은 구조 검사 중심**. `SealStampSessionTest`는 순수 상태 객체를 직접 검사하지만 Compose pointer 입력, 신문지 손 animation, 진동, 실제 undo 연결까지 실행하지는 않아. ML Kit 배경제거 취소 3건은 처리 모형을 복제해.
-- **현재 믿어도 되는 것:** 검사한 꾸미기 데이터와 기하 계산의 경계 조건, 한 번의 도장 찍기 상태에서 최종 도장이 중복 생성되지 않고 조준 속성이 저장 가능한 `PostcardSealItem`으로 이어지는 규칙.
-- **아직 믿으면 안 되는 것:** 실제 터치·pinch·회전, 신문지 손이 목표점에 닿는 화면 결과·animation timing·haptic, 실제 undo 한 건 연결, 사진 URI 영속성, 실제 배경제거 결과.
+- **현재 믿어도 되는 것:** 검사한 꾸미기 데이터와 기하 계산의 경계 조건, 한 번의 도장 찍기 상태에서 최종 도장이 중복 생성되지 않고 조준 속성이 저장 가능한 `PostcardSealItem`으로 이어지는 규칙. 85일차 사진 스티커 오림: 스타일 필드가 없거나 알 수 없는 값·깨진 seed는 예외 없이 DEFAULT/미지정으로 읽힘, 같은 seed는 같은 모양, 가위 오림·찢은 종이의 실제 출력은 golden 값으로 고정(바뀌면 기존 스티커 모양 변경), 외곽이 스티커 박스 안에 머물고 사진을 침범하지 않음, 폴라로이드 하단 여백, 찢김의 돌기 억제와 흰 단면 띠 최소 폭, 잡지 망점 강도 상한과 가위 오림과의 구분.
+- **아직 믿으면 안 되는 것:** 실제 터치·pinch·회전, 신문지 손이 목표점에 닿는 화면 결과·animation timing·haptic, 실제 undo 한 건 연결, 사진 URI 영속성, 실제 배경제거 결과. 사진 스티커 오림의 `PhotoStickerItem` 직렬화 왕복·복제 시 style/seed 유지·누끼 중 스타일 보존은 Uri 때문에 JVM에서 만들 수 없어 instrumentation 7건으로 작성했지만 아직 실행하지 않았어. 스타일 변경의 undo/redo는 기존 스냅샷 경로(`recordStickerSnapshotForUndo`)를 그대로 쓰며 전용 자동 테스트는 없고 사용자 실기기 QA로 확인했어.
 - **수동 확인 필요:** 예 — 추가·이동·회전·크기·삭제·되돌리기와 재진입/공유 결과.
 
-근거: [도장 찍기 상태 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealStampSessionTest.kt), [도장 잉크 결정성 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealInkWearTest.kt), [낙서 테스트](../../app/src/test/java/com/postcardmemory/utils/DoodleStrokeTest.kt), [배경제거 replica](../../app/src/test/java/com/postcardmemory/ui/detail/StickerBackgroundRemovalCancellationTest.kt).
+근거: [사진 스티커 오림 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/PhotoStickerEdgeStyleTest.kt), [사진 스티커 오림 instrumentation](../../app/src/androidTest/java/com/postcardmemory/PhotoStickerEdgeStyleInstrumentedTest.kt), [도장 찍기 상태 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealStampSessionTest.kt), [도장 잉크 결정성 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealInkWearTest.kt), [낙서 테스트](../../app/src/test/java/com/postcardmemory/utils/DoodleStrokeTest.kt), [배경제거 replica](../../app/src/test/java/com/postcardmemory/ui/detail/StickerBackgroundRemovalCancellationTest.kt).
 
 ### 기능: 카메라 / 사진 처리
 
@@ -260,10 +260,10 @@ JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·sk
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 784개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 766개 기준 83일차 CI run `35977829337` 성공 로그, 84일차 784개는 로컬 784/784 통과(CI는 push 후 확인) |
+| JVM unit test 813개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 766개 기준 83일차 CI run `35977829337` 성공 로그, 85일차 813개는 로컬 813/813 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
-| instrumentation 13개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
+| instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
 | lint | 아니오 | 오늘 범위 밖 |
 
 79일차에는 이 표의 모든 항목이 "아니오"였어. 79일차 조사와 80일차 도입 과정은 [CI-AUDIT-79.md](CI-AUDIT-79.md), [CI-AUDIT-80.md](CI-AUDIT-80.md)를 확인해. **instrumentation의 "컴파일 자동검증됨"과 "CI에서 자동 실행됨"은 서로 다른 사실이니 혼동하면 안 돼.**
@@ -282,6 +282,8 @@ JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·sk
 
 **84일차 추가 확인 — 흔들어서 한 장:** 갤러리 흔들림 판정을 센서 callback에서 분리한 `GalleryShakeDetector`와 균등 랜덤 선택에 `GalleryShakeDetectorTest` 11건, 랜덤 엽서 overlay의 날짜 문구·재흔들기 처리·화면 배치에 `GalleryRandomPostcardOverlayTest` 7건이 추가돼 JVM 766→784개가 됐어. 로컬 결과 XML 784/784 통과(실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest`(컴파일) 성공. `app/src/androidTest` 변경은 없어 instrumentation은 13개/6파일 그대로야. 커피 김 애니메이션은 시각 전용이라 테스트를 추가하지 않았어.
 
+**85일차 추가 확인 — 사진 스티커 오림 스타일:** 사진 스티커에 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림)과 고정 seed가 추가돼, 순수 geometry·저장값 해석·golden 모양 고정을 검사하는 `PhotoStickerEdgeStyleTest` 29건으로 JVM 784→813개가 됐어. 로컬 결과 XML 813/813 통과(실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest`(컴파일) 성공. `PhotoStickerItem` 자체(Uri 포함)의 직렬화 왕복·옛 형식 fallback·복제·누끼 보존은 `PhotoStickerEdgeStyleInstrumentedTest` 7건으로 추가해 instrumentation이 13→20개/7파일이 됐지만, 작업 중 `adb devices -l`에 실사용 기기만 연결돼 있고 검증 전용 emulator가 없어 **실행하지 않았어(미실행, 컴파일만 확인)**. 중간에 기존 구조 테스트 `StickerItemFlatBoxRemovalStructureTest`가 `PhotoStickerDetailScreen.kt` 안의 타일 호출 수 2개를 고정하고 있어 스타일 선택 줄을 별도 파일(`PhotoStickerEdgeStyleRow.kt`)로 분리했고, 그 테스트의 조건은 바꾸지 않았어. 모양·망점 미감, preview/export 그림 일치, 이동·회전 중 외곽 안정성, 저장·재실행 복원, 복제·undo/redo·누끼 ON/OFF는 사용자 실기기 QA 영역이야.
+
 ## 마지막 요약
 
 ### 지금 테스트를 꽤 믿어도 되는 영역
@@ -298,6 +300,7 @@ JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·sk
 - 앞면·뒷면 preview와 저장/공유 이미지.
 - 달력·우체통의 화면 갱신과 개봉.
 - 스티커·테이프·낙서의 터치, 카메라 촬영·crop.
+- 사진 스티커 오림 스타일의 미감과 preview/export 그림 일치.
 
 이는 오늘 재QA 요청이 아니라 향후 변경 시 확인할 지도야. 자동으로 재현 가능한 DB/파일 실패는 사용자 수동 QA로 떠넘기지 않아.
 
@@ -307,6 +310,6 @@ JVM 784개는 84일차 로컬 결과 XML에서 784/784 통과(실패·오류·sk
 - navigation·ViewModel 제거·프로세스 lifecycle.
 - 실제 Compose 버튼·drag·키보드 상호작용.
 - 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
-- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
+- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. 85일차 신규 사진 스티커 오림 instrumentation 7건은 아직 실행 전이야(검증 전용 emulator에서 실행 필요). push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
 
-테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 784개라는 숫자로 보장할 수는 없어.**
+테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 813개라는 숫자로 보장할 수는 없어.**
