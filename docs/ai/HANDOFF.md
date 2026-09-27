@@ -1,4 +1,69 @@
-# HANDOFF — 85일차 사진 스티커 오림 스타일 완료
+# HANDOFF — 86일차 workflow 마감 구조 정비
+
+확인일: 2026-09-27. 수동 표준 모드에서도 저장소 상태가 바뀐 개발 작업은 최종 완료보고 전에 `docs/ai/HANDOFF.md`를 최신화하도록 workflow를 보강했어. 이번 작업은 운영 문서와 canonical workflow plugin만 다뤘고 앱 production·test·Room·Gradle·CI YAML은 수정하지 않았어. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 상태 빠른 확인
+
+- 브랜치: `feature/photo-sticker`
+- 시작 HEAD: `1941308` "Recover 82-84 day handoff records from git and CI"
+- 시작 origin 관계: ahead·behind `0/0`
+- 시작 작업트리: tracked 변경 없음. 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존
+- 현재 repository 변경: `AGENTS.md`, `CLAUDE.md`, `docs/ai/HANDOFF.md` 문서-only
+- canonical workflow source: `C:/Users/estel/plugins/post-card-memory-workflow`
+- 설치 캐시: `C:/Users/estel/.codex/plugins/cache/personal/post-card-memory-workflow/0.1.0+codex.20260927080957`
+- source/cache: 전체 18개 파일 SHA-256 일치, 차이 0건
+- plugin 내부 Markdown 링크: 14개 파일, 깨진 링크 0건
+- plugin 재설치 명령: 성공 메시지와 새 캐시 생성을 확인했어. 다만 같은 CLI의 `plugin list --available --json`은 `installed: false`, `enabled: false`를 반환하고 `config.toml`에는 `enabled = true`가 있어 설치 장부 표시는 불일치 상태야. 현재 세션도 이전 설치본을 이미 로드한 상태라 새 세션 실제 로딩은 아직 미확인이야.
+
+## 이번에 고친 마감 구조
+
+- `완료보고`: 작업자가 사용자에게 보내는 이번 실행 결과
+- `다음 작업용 인수인계서`: ChatGPT·사용자가 다음 작업을 설계하거나 새 대화에 전달하는 별도 문서
+- `repository HANDOFF`: 저장소의 `docs/ai/HANDOFF.md`. 실제 Git 상태·미검증·위험·재개 조건을 남기는 공용 교대 장부
+
+수동 모드의 `CURRENT_TASK.md`·`WORK_CONTEXT.md`·`STATUS.md` 면제는 유지하지만 repository HANDOFF 마감까지 면제하지 않도록 분리했어. 기본 마감 순서는 아래와 같아.
+
+```text
+구현
+→ 자동 검증
+→ 필요한 사용자 QA
+→ 테스트 변화가 있을 때 TEST-COVERAGE-MAP 갱신
+→ repository HANDOFF 갱신
+→ 전체 diff 확인
+→ 명시적으로 승인된 commit / push
+→ push했다면 CI 확인
+→ 최종 완료보고
+```
+
+- 다음 작업 제안, 자동 후속 제안, `/clear` 권장은 repository HANDOFF 최신화 뒤에만 가능해.
+- 날짜형 기록에 공백이 보이면 Git·CI·기존 기록으로 확인되는 사실만 복구하고, 나머지는 `미확인` 또는 `복구 필요`로 남겨.
+- TEST-COVERAGE-MAP은 테스트 수·파일·의미·보호 범위가 실제로 바뀐 작업에서만 같은 작업일에 갱신해. 이번 작업은 production/test 변화가 없어 변경하지 않았어.
+- commit·push는 기존 명시 승인 규칙을 그대로 따라. 이번 86일차 지시서에는 문서 commit·push·CI 확인이 명시적으로 포함돼 있어 현재 마감 단계에서 수행해.
+
+## 검증과 남은 상태
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| workflow 정합성 | 확인 — 과거의 수동 모드 HANDOFF 면제 충돌 0건 | 저장소·canonical source 전체 검색 |
+| source/cache | 확인 — 18/18 SHA-256 일치 | 새 설치 캐시와 canonical 비교 |
+| 내부 링크 | 확인 — 깨진 링크 0건 | Markdown 상대 링크 검사 |
+| 공식 skill/plugin validator | 실행 불가 | 번들 Python에 `PyYAML`이 없어 import 단계에서 중단. 별도 dependency 설치는 범위 밖 |
+| 앱 자동검증 | 불필요 | 운영 문서-only, 앱·테스트·Gradle 변경 없음 |
+| 실기기 QA | 불필요 | 앱 동작 변경 없음 |
+| TEST-COVERAGE-MAP | 변경 없음 | test 수·파일·의미·보호 범위 변화 없음 |
+| 신규 instrumentation 7건 | 미실행 유지 | 85일차부터 compile만 확인. 이번 workflow 작업 범위 밖 |
+| commit / push / CI | 이 HANDOFF를 포함한 마감 단계에서 확인 | 정확한 결과는 Git과 최종 완료보고를 근거로 삼음 |
+
+## 남은 항목과 재개 조건
+
+1. 새 Codex 세션에서 `0.1.0+codex.20260927080957` 실제 로딩을 확인해. 현재 세션은 시작 시 이전 설치본을 로드했으므로 새 버전 로딩 근거가 될 수 없어.
+2. CLI 설치 장부의 `installed: false`·`enabled: false`와 실제 새 캐시·`config.toml enabled = true` 불일치는 별도 plugin 상태 조사 대상으로 남겨. 이번 workflow 규칙 수정과 저장소 Git 마감을 막지는 않아.
+3. `PhotoStickerEdgeStyleInstrumentedTest` 신규 7건은 검증 전용 emulator에서만 후속 실행해. 실사용 물리 기기에는 실행하지 않아.
+4. 82~84일차 미확인 기록 3건은 아래 이전 기록의 상태를 유지해. 근거 없이 채우지 않아.
+
+---
+
+# 이전 기록 — 85일차 사진 스티커 오림 스타일 완료
 
 확인일: 2026-09-26. 수동 표준 모드(공용 작업판 비활성). 85일차 작업지시서로 승인된 사진 스티커 오림 스타일 5종(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림)은 구현·사용자 실기기 QA·commit·push·CI까지 끝났어. **이 문서의 다음 후보는 실행 승인이 아니야.**
 
