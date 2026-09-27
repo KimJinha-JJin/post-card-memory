@@ -13,7 +13,7 @@
 - 설치 캐시: `C:/Users/estel/.codex/plugins/cache/personal/post-card-memory-workflow/0.1.0+codex.20260927080957`
 - source/cache: 전체 18개 파일 SHA-256 일치, 차이 0건
 - plugin 내부 Markdown 링크: 14개 파일, 깨진 링크 0건
-- plugin 재설치 명령: 성공 메시지와 새 캐시 생성을 확인했어. 다만 같은 CLI의 `plugin list --available --json`은 `installed: false`, `enabled: false`를 반환하고 `config.toml`에는 `enabled = true`가 있어 설치 장부 표시는 불일치 상태야. 현재 세션도 이전 설치본을 이미 로드한 상태라 새 세션 실제 로딩은 아직 미확인이야.
+- plugin 재설치 명령: 성공 메시지와 새 캐시 생성을 확인했어. 직후 첫 조회에서는 일시적으로 `installed: false`, `enabled: false`가 보였지만 최종 재조회에서 새 버전 `installed: true`, `enabled: true`를 확인했어. 현재 세션은 이전 설치본을 이미 로드한 상태라 새 세션 실제 로딩만 아직 미확인이야.
 
 ## 이번에 고친 마감 구조
 
@@ -46,20 +46,20 @@
 |---|---|---|
 | workflow 정합성 | 확인 — 과거의 수동 모드 HANDOFF 면제 충돌 0건 | 저장소·canonical source 전체 검색 |
 | source/cache | 확인 — 18/18 SHA-256 일치 | 새 설치 캐시와 canonical 비교 |
+| plugin 설치 장부 | 확인 — installed / enabled 모두 true | `codex plugin list --available --json` 최종 재조회 |
 | 내부 링크 | 확인 — 깨진 링크 0건 | Markdown 상대 링크 검사 |
 | 공식 skill/plugin validator | 실행 불가 | 번들 Python에 `PyYAML`이 없어 import 단계에서 중단. 별도 dependency 설치는 범위 밖 |
 | 앱 자동검증 | 불필요 | 운영 문서-only, 앱·테스트·Gradle 변경 없음 |
 | 실기기 QA | 불필요 | 앱 동작 변경 없음 |
 | TEST-COVERAGE-MAP | 변경 없음 | test 수·파일·의미·보호 범위 변화 없음 |
 | 신규 instrumentation 7건 | 미실행 유지 | 85일차부터 compile만 확인. 이번 workflow 작업 범위 밖 |
-| commit / push / CI | 이 HANDOFF를 포함한 마감 단계에서 확인 | 정확한 결과는 Git과 최종 완료보고를 근거로 삼음 |
+| workflow commit / push / CI | 완료 — `257331e` push, CI 성공 | run `36305445591`: JVM unit tests·debug APK·instrumentation test compile 모두 success |
 
 ## 남은 항목과 재개 조건
 
 1. 새 Codex 세션에서 `0.1.0+codex.20260927080957` 실제 로딩을 확인해. 현재 세션은 시작 시 이전 설치본을 로드했으므로 새 버전 로딩 근거가 될 수 없어.
-2. CLI 설치 장부의 `installed: false`·`enabled: false`와 실제 새 캐시·`config.toml enabled = true` 불일치는 별도 plugin 상태 조사 대상으로 남겨. 이번 workflow 규칙 수정과 저장소 Git 마감을 막지는 않아.
-3. `PhotoStickerEdgeStyleInstrumentedTest` 신규 7건은 검증 전용 emulator에서만 후속 실행해. 실사용 물리 기기에는 실행하지 않아.
-4. 82~84일차 미확인 기록 3건은 아래 이전 기록의 상태를 유지해. 근거 없이 채우지 않아.
+2. `PhotoStickerEdgeStyleInstrumentedTest` 신규 7건은 검증 전용 emulator에서만 후속 실행해. 실사용 물리 기기에는 실행하지 않아.
+3. 82~84일차 미확인 기록 3건은 아래 이전 기록의 상태를 유지해. 근거 없이 채우지 않아.
 
 ---
 
