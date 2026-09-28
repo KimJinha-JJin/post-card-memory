@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,7 +99,18 @@ internal fun MaskingTapePickerPanel(
     canUndoMaskingTape: Boolean,
     canRedoMaskingTape: Boolean,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPlaceAiming: Boolean = false,
+    /** 조준 중인 새 테이프(각도는 조준 각도). 편집창이 이 값에서 시작한다. */
+    placeAimTape: MaskingTapeItem? = null,
+    onPlaceMaskingTape: () -> Unit = {},
+    onCancelPlaceAim: () -> Unit = {},
+    onEditPlaceAim: (
+        edgeStyle: MaskingTapeEdgeStyle,
+        lengthScale: Float,
+        thicknessScale: Float,
+        rotationDegrees: Float
+    ) -> Unit = { _, _, _, _ -> }
 ) {
     val context = LocalContext.current
     val selectedTape =
@@ -107,6 +119,12 @@ internal fun MaskingTapePickerPanel(
     var showEditDialog by remember { mutableStateOf(false) }
     var showPresetCreateDialog by remember { mutableStateOf(false) }
     var showCustomCreateDialog by remember { mutableStateOf(false) }
+    var showPlaceAimEditDialog by remember { mutableStateOf(false) }
+
+    // 새 테이프 조준이 시작되면 세부 편집창을 바로 띄운다. 조준이 끝나면 닫는다.
+    LaunchedEffect(placeAimTape?.id) {
+        showPlaceAimEditDialog = placeAimTape != null
+    }
 
     val photoPicker =
         rememberLauncherForActivityResult(
@@ -137,13 +155,49 @@ internal fun MaskingTapePickerPanel(
                 canRedo = canRedoMaskingTape,
                 onUndo = onUndoMaskingTape,
                 onRedo = onRedoMaskingTape,
-                enabled = enabled,
+                enabled = enabled && !isPlaceAiming,
                 undoContentDescription = "실행 취소",
                 redoContentDescription = "다시 실행"
             )
         }
 
         Spacer(modifier = Modifier.height(10.dp))
+
+        // 새 테이프를 엽서 위 +로 자리 잡는 동안에는 목록 대신 안내 한 줄과
+        // `취소 | 편집 | 붙이기`만 둔다(사진 스티커 조준의 `취소 | 배경제거 | 붙이기`와
+        // 같은 문법). `편집`은 붙인 테이프와 같은 세부 편집창을 다시 연다.
+        if (isPlaceAiming) {
+            EditorQuietHint(
+                text = "엽서를 눌러 자리를 고르고, 길이·각도는 편집에서 바꿔봐."
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EditorTextAction(
+                    text = "취소",
+                    onClick = onCancelPlaceAim,
+                    enabled = enabled
+                )
+
+                EditorActionDivider()
+
+                EditorTextAction(
+                    text = "편집",
+                    onClick = { showPlaceAimEditDialog = true },
+                    enabled = enabled && placeAimTape != null
+                )
+
+                EditorActionDivider()
+
+                EditorTextAction(
+                    text = "붙이기",
+                    onClick = onPlaceMaskingTape,
+                    enabled = enabled
+                )
+            }
+            return@Column
+        }
 
         // 붙인 테이프 목록과 `+ 추가`를 한 줄에 둔다(라벨 스티커 패널과 같은
         // 문법). 목록이 비어 있어도 이 줄과 `+ 추가`의 자리는 그대로라서
@@ -261,6 +315,20 @@ internal fun MaskingTapePickerPanel(
                     rotationDegrees
                 )
                 showEditDialog = false
+            }
+        )
+    }
+
+    if (showPlaceAimEditDialog && placeAimTape != null) {
+        // 붙인 테이프 `편집`과 같은 창. `저장`하면 엽서 위 조준 미리보기에 반영되고,
+        // `취소`는 값만 버린다(조준은 그대로 — 추가 자체의 취소는 하단 `취소`).
+        MaskingTapeEditDialog(
+            tape = placeAimTape,
+            enabled = enabled,
+            onDismiss = { showPlaceAimEditDialog = false },
+            onConfirm = { edgeStyle, lengthScale, thicknessScale, rotationDegrees ->
+                onEditPlaceAim(edgeStyle, lengthScale, thicknessScale, rotationDegrees)
+                showPlaceAimEditDialog = false
             }
         )
     }

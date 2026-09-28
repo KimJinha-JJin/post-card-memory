@@ -1,4 +1,62 @@
-# HANDOFF — 87일차 후속: 라벨·텍스트 스티커 핀셋 붙이기
+# HANDOFF — 87일차 후속: 마스킹테이프 쓸어 붙이기
+
+확인일: 2026-09-28. 수동 표준 모드. 87일차 작업지시서의 선택 목표였던 마스킹테이프 밀착 연출을 사용자 선택("조준 후 붙이기", "밀착 효과 살짝 넣기")으로 구현했어. 첫 QA 전 사용자 요청으로 "추가하면 세부 편집창이 바로 뜨고, 조준 중 `취소 | 편집 | 붙이기`" 흐름을 더했어(사용자 선택: 팝업 + 하단 편집 버튼). 로컬 자동검증과 사용자 실기기 QA를 마쳤고, 사용자 요청("커밋하고 푸시해줘")으로 commit·push해(실제 commit hash·CI는 `git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 상태 빠른 확인
+
+- 브랜치: `feature/photo-sticker`, HEAD `ec66fce` "Place label and text stickers with the tweezer hand"(CI run `36394271108` 성공), origin `0/0`
+- 커밋 대상: `DetailScreen.kt`, `DetailViewModel.kt`, `MaskingTapeDetailScreen.kt` 수정 / 새 파일 `MaskingTapePlaceInteraction.kt`, `MaskingTapePlaceSessionTest.kt`, 이제 쓰는 자산 `tape_press_hand.png` / 이 HANDOFF·TEST-COVERAGE-MAP
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존
+
+## 앱에 달라진 점
+
+- 테이프 `+ 추가`(기본 디자인·커스텀·사진 세 방식 모두)에서 고르면 바로 붙지 않고, 붙인 테이프 `편집`과 같은 세부 편집창(가장자리·길이·굵기·회전, 창 안 미리보기가 즉시 바뀜)이 곧바로 떠. `저장`하면 엽서 위 +와 반투명 미리보기에 그 모양·길이·각도가 반영되고, `취소`는 값만 버려(추가는 계속). 탭·드래그로 자리, 두 손가락으로도 각도를 바꿀 수 있어. 패널은 안내 한 줄과 `취소 | 편집 | 붙이기`만 보여 — `편집`은 창을 다시 열고(현재 조준 각도에서 시작), `취소`는 추가 자체를 취소해.
+- `붙이기` → 신문 오림 손이 화면 아래에서 올라와 테이프 한쪽 끝에 손가락을 대고(이 순간 실제 테이프 생성·"톡" 진동), 테이프 긴 축을 따라 반대쪽 끝까지 한 번 쓸고 빠져. 왕복·문지르기·흔들림·반동 없음.
+- 밀착 연출: 손가락이 닿은 뒤 손 앞쪽(아직 안 눌린 부분)만 종이색 막(32%)으로 살짝 옅게 덮이고, 손이 지나간 자리부터 제 색이 돼. 쓸기가 끝나면 60ms에 걸쳐 사라져. 연출 overlay 안에서만 그리므로 저장·공유 이미지와 무관해.
+- 추가 1번 = undo 1건, 붙인 뒤 선택 상태. 저장 형식·Room·serialization은 그대로(기존 offset·rotationDegrees만 채움). 복제·편집·삭제·끌기는 그대로.
+
+## 구조와 결정
+
+- 새 파일 `MaskingTapePlaceInteraction.kt`: `MaskingTapePlaceSession`(Idle→Aiming→Placing(placed)→Idle, 초안을 돌려주는 `startAiming`/`cancelAiming`/`abandon`, 편집창 값을 받는 `editAim` — 범위 제한 후 새 크기로 자리 재보정), 순수 계산 `maskingTapeSweep`·`maskingTapeUnpressedRange`·`maskingTapeSizePx`, `MaskingTapeAimLayer`, `MaskingTapePressHandOverlay`. 조준 +·진동은 스티커 것(`StickerPlaceCrosshair`·`vibratePhotoStickerContact`)을 그대로 써.
+- 좌표: 조준 중심 = 엽서 미리보기 좌상단 기준 px, 붙인 테이프 끌기와 같은 `clampStickerOffset` 규칙(회전 전 사각형이 엽서 안)으로 가둬서 조준 = 착지. 크기는 붙인 테이프 Box와 같은 `132dp×scale×lengthScale`, `40dp×scale×thicknessScale`을 `roundToPx`. 이를 위해 `MASKING_TAPE_BASE_WIDTH/HEIGHT`를 private → internal로만 바꿨어(값 그대로).
+- 쓸기 경로: 긴 축 방향 = 테이프 각도의 `(cos, sin)`(화면 가로 아님). 손이 뒤집히지 않도록 각도를 (-90°, 90°]로 접어서 늘 대체로 왼쪽→오른쪽(세로면 위→아래)으로 쓸고, 손 이미지도 그 각도만큼 돌려. 양 끝에서 테이프 굵기의 절반만큼 안쪽이 시작·끝점(짧으면 중심으로 모임).
+- 손 anchor: `tape_press_hand.png`(1254×1254) 손가락 부분(y 90~500) 불투명 영역 가운데 약 (500, 325) → `MASKING_TAPE_HAND_ANCHOR_X/Y = 0.399/0.259`, 손 크기 260dp. 진입 320 → 누름 60 → 쓸기(길이 dp×2.6ms, 360~760ms, FastOutSlowIn) → 뗌 60 → 퇴장 220ms. 진입·퇴장 모양(아래에서 원근 +12%, 기울기 4°)은 핀셋 손과 같아.
+- 사진 테이프: `addPhotoMaskingTape` → `importMaskingTapePhoto`(복사만, 콜백) + `addPlacedMaskingTape`. 예전에는 복사 전에 undo를 기록해 실패해도 빈 undo가 남았는데 이제 실제 추가 때만 생겨. 조준하다 버린 사진(취소·교체·화면 이탈)은 기존 `deleteMaskingTapePhotoIfUnreferenced`(현재 테이프·undo/redo가 참조하면 남김)로 정리해. 복사를 기다리는 사이 조준할 수 없게 되면(탭 이동·크게보기·뒷면·엽서 크기 미측정) 예전처럼 가운데에 바로 붙여.
+- 조준 편집창: 기존 private `MaskingTapeEditDialog`를 그대로 재사용(패널 안에서 새 조준 id가 생기면 자동으로 열림). 새 dialog·새 slider는 만들지 않았어.
+- 입력 잠금·취소: overlay가 모든 pointer 소비, 패널 `enabled && !isPlacing`, 조준 중 undo/redo 비활성. 테이프 탭 이탈·크게보기·뒷면이면 조준 취소, 뒤로가기는 조준만 취소하고 손 연출 중엔 흘려보냄.
+
+## 검증과 남은 상태
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| 구현 | 완료 | |
+| 로컬 JVM | 통과 866/866 (90 XML) | 신규 `MaskingTapePlaceSessionTest` 16건 |
+| assembleDebug / assembleDebugAndroidTest | 성공 | |
+| emulator instrumentation | 미실행 | androidTest 변경 없음, `PhotoStickerEdgeStyleInstrumentedTest` 7건은 여전히 미실행 |
+| 실기기 QA | 완료 — 사용자가 "QA 완료" 보고, 보정 요청 없음(항목별 세부 결과는 받지 않음) | 아래 체크리스트 |
+| TEST-COVERAGE-MAP | 갱신 완료 | 850→866, 파일 88→89 |
+| Room / migration / serialization / dependency | 변경 없음 | |
+| commit / push / CI | 사용자 요청으로 진행 | 결과는 완료보고·`git log`·GitHub Actions에서 확인 |
+
+## 실기기 QA 체크리스트 (마스킹테이프 — 사용자 QA 완료, 기록용)
+
+1. 기본 디자인·커스텀·사진 테이프 각각 `+ 추가` → 세부 편집창이 바로 뜨는지, `저장` 후 엽서 위 미리보기에 길이·굵기·각도·가장자리가 반영되는지(`취소`면 기본값 그대로 조준), 탭·드래그·두 손가락 회전, 하단 `취소 | 편집 | 붙이기`와 `편집`으로 다시 열기(돌린 각도에서 시작)가 되는지
+2. 붙이기: 손가락이 테이프 끝에 닿는 순간 테이프가 생기고 "톡" 진동, 손이 긴 축을 따라 한 번만 쓸고 빠지는지(돌린 테이프도 축을 따라가는지), 조준한 자리·각도에 어긋남 없이 붙는지
+3. 밀착 막이 "살짝"으로 보이는지(너무 진하거나 안 보이지 않는지), 손 크기·손가락 닿는 위치·쓸기 속도가 어색하지 않은지
+4. undo 한 번에 방금 테이프만 사라지고 redo로 돌아오는지, 조준 중 취소·뒤로가기·탭 이동 시 생성 안 되는지
+5. 사진 테이프 조준을 취소한 뒤에도 다른 사진 테이프·복제·저장이 정상인지
+6. 스티커 붙이기·도장 회귀 없음
+
+## 남은 위험
+
+- 밀착 막은 화면 최상단 overlay에 그려서, 테이프 위에 겹친 스티커·도장이 있으면 쓸기 동안(최대 약 0.8초) 그 부분도 살짝 옅게 덮여 보일 수 있어.
+- 조준 미리보기는 스티커 조준처럼 맨 위에 보이지만, 붙은 테이프는 원래 순서대로 스티커 아래에 그려져.
+- 사진 테이프 복사가 끝나기 전에 화면 자체를 떠나면, 늦게 온 콜백이 사라진 화면의 조준을 시작해 그 복사본이 고아 파일로 남을 수 있어(사진 스티커와 같은 위험, 읽기 전용 `OrphanFileDiagnostics` 대상).
+- 손 anchor·크기·쓸기 속도는 이미지 측정값이라 실기기 QA로 보정할 수 있어.
+
+---
+
+# 이전 기록 — 87일차 후속: 라벨·텍스트 스티커 핀셋 붙이기
 
 확인일: 2026-09-28. 수동 표준 모드. 사진 스티커 핀셋 붙이기(`c8a2cf5`, CI run `36392041882` 성공)에 이어, 사용자가 고른 순서대로 라벨 스티커와 텍스트 스티커에 같은 조준·핀셋 붙이기 문법을 옮겼어(텍스트는 처음에 조준만 넣었다가 사용자 요청으로 핀셋 손을 추가). 로컬 자동검증과 사용자 실기기 QA를 마쳤고, 사용자 요청으로 commit·push해(실제 commit hash·CI는 `git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
 

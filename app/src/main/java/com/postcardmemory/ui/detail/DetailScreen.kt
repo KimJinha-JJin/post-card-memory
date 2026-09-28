@@ -300,8 +300,8 @@ private val SEAL_BASE_SIZE = 90.dp
  * 유지하기 위해 스티커·도장과 달리 가로·세로를 따로 둔다(작업지시서 19절:
  * 길이·폭을 따로 조절하는 기능은 만들지 않되, 기본 형태 자체는 직사각형).
  */
-private val MASKING_TAPE_BASE_WIDTH = 132.dp
-private val MASKING_TAPE_BASE_HEIGHT = 40.dp
+internal val MASKING_TAPE_BASE_WIDTH = 132.dp
+internal val MASKING_TAPE_BASE_HEIGHT = 40.dp
 
 /**
  * 회전·확대가 반영된 도장의 최종 시각 경계(AABB)를 기준으로, 도장이 최소 가시 영역
@@ -1620,6 +1620,8 @@ fun DetailScreen(
     // 텍스트 스티커 붙이기(조준 + 핀셋 손) 연출 상태. 미리보기가 잰 실제 크기를 함께 둔다.
     val textStickerPlaceSession = remember { TextStickerPlaceSession() }
     var textStickerAimSize by remember { mutableStateOf(IntSize.Zero) }
+    // 마스킹테이프 붙이기(조준 + 쓸어 붙이는 손) 연출 상태. 스티커와 같은 문법이다.
+    val maskingTapePlaceSession = remember { MaskingTapePlaceSession() }
     val stickerPlaceDensity = LocalDensity.current
     var postcardPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var detailRootPositionInRoot by remember { mutableStateOf(Offset.Zero) }
@@ -1969,11 +1971,68 @@ fun DetailScreen(
         textStickerPlaceSession.cancelAiming()
     }
 
+    // 조준하다 버린 사진 테이프의 복사본만 정리한다. 붙은 테이프·undo/redo가 쓰는
+    // 파일은 deleteMaskingTapePhotoIfUnreferenced가 남겨 둔다.
+    fun discardMaskingTapeAimDraft(draft: MaskingTapeItem) {
+        val photoUri = draft.photoUri ?: return
+        viewModel.deleteMaskingTapePhotoIfUnreferenced(
+            photoUri,
+            viewModel.photoMaskingTapes.value
+        )
+    }
+
+    // 새 테이프는 바로 붙이지 않고 조준부터 한다. 조준할 수 없는 상태(엽서 크기를 아직
+    // 모르거나, 사진을 복사하는 사이 탭·화면이 바뀜)면 예전처럼 가운데에 바로 붙인다.
+    fun startMaskingTapeAim(draft: MaskingTapeItem) {
+        val canAim =
+            postcardPreviewSize != IntSize.Zero &&
+                    customizationPagerState.currentPage == MASKING_TAPE_TAB_PAGE_INDEX &&
+                    !isFocusPreviewMode &&
+                    !isBackFace
+        if (!canAim) {
+            viewModel.addPlacedMaskingTape(draft)
+            return
+        }
+        viewModel.setSelectedMaskingTapeId(null)
+        maskingTapePlaceSession
+            .startAiming(
+                draft = draft,
+                postcardSize = postcardPreviewSize,
+                tapeSize = maskingTapeSizePx(draft, stickerPlaceDensity)
+            )
+            .forEach(::discardMaskingTapeAimDraft)
+    }
+
+    // 테이프 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 테이프 조준을 접는다(테이프 생성 없음).
+    LaunchedEffect(
+        customizationPagerState.currentPage,
+        isFocusPreviewMode,
+        isBackFace
+    ) {
+        if (
+            customizationPagerState.currentPage != MASKING_TAPE_TAB_PAGE_INDEX ||
+            isFocusPreviewMode ||
+            isBackFace
+        ) {
+            maskingTapePlaceSession.cancelAiming()
+                .forEach(::discardMaskingTapeAimDraft)
+        }
+    }
+
+    BackHandler(
+        enabled = maskingTapePlaceSession.isAiming || maskingTapePlaceSession.isPlacing
+    ) {
+        maskingTapePlaceSession.cancelAiming()
+            .forEach(::discardMaskingTapeAimDraft)
+    }
+
     // 화면을 떠나면 아직 붙지 않은 조준 사진만 정리한다.
     DisposableEffect(Unit) {
         onDispose {
             photoStickerPlaceSession.abandon()
                 .forEach(::discardPhotoStickerAimOriginal)
+            maskingTapePlaceSession.abandon()
+                .forEach(::discardMaskingTapeAimDraft)
         }
     }
 
@@ -4643,6 +4702,33 @@ fun DetailScreen(
                                 onRotateAim = labelStickerPlaceSession::rotateAim
                             )
                         }
+
+                        // 테이프 조준: 스티커 조준과 같은 규칙(조준 중 조작, 손이 오는 동안 표시만).
+                        val tapePlacePhase = maskingTapePlaceSession.phase
+                        val tapeAim =
+                            when (tapePlacePhase) {
+                                is MaskingTapePlacePhase.Aiming -> tapePlacePhase
+                                is MaskingTapePlacePhase.Placing ->
+                                    tapePlacePhase.aim.takeIf { !tapePlacePhase.placed }
+                                MaskingTapePlacePhase.Idle -> null
+                            }
+                        if (tapeAim != null) {
+                            MaskingTapeAimLayer(
+                                aim = tapeAim,
+                                interactive = tapePlacePhase is MaskingTapePlacePhase.Aiming,
+                                onMoveAim = { center ->
+                                    maskingTapePlaceSession.moveAim(
+                                        center = center,
+                                        postcardSize = postcardPreviewSize,
+                                        tapeSize = maskingTapeSizePx(
+                                            tapeAim.draft,
+                                            stickerPlaceDensity
+                                        )
+                                    )
+                                },
+                                onRotateAim = maskingTapePlaceSession::rotateAim
+                            )
+                        }
                     }
                 }
                 if (isBackFace || isFlipAnimating) {
@@ -5516,38 +5602,33 @@ fun DetailScreen(
                                             }
                                         )
                                     },
+                                    // 세 생성 방식 모두 바로 붙이지 않고 조준부터 — 실제 테이프는
+                                    // 손가락이 종이에 닿는 순간 undo 한 건으로 만들어진다.
                                     onAddMaskingTape = { style ->
-                                        viewModel.recordMaskingTapeSnapshotForUndo()
-                                        val newTape =
-                                            MaskingTapeItem(style = style)
-                                        viewModel.setPhotoMaskingTapes(
-                                            photoMaskingTapes + newTape
-                                        )
-                                        viewModel.setSelectedMaskingTapeId(
-                                            newTape.id
-                                        )
+                                        startMaskingTapeAim(MaskingTapeItem(style = style))
                                     },
                                     onAddCustomMaskingTape = { baseColorArgb, patternColorArgb, patternKind ->
-                                        viewModel.recordMaskingTapeSnapshotForUndo()
-                                        val newTape =
+                                        startMaskingTapeAim(
                                             MaskingTapeItem(
                                                 style = MaskingTapeStyle.CUSTOM,
                                                 customBaseColorArgb = baseColorArgb,
                                                 customPatternColorArgb = patternColorArgb,
                                                 customPatternKind = patternKind
                                             )
-                                        viewModel.setPhotoMaskingTapes(
-                                            photoMaskingTapes + newTape
-                                        )
-                                        viewModel.setSelectedMaskingTapeId(
-                                            newTape.id
                                         )
                                     },
                                     onAddPhotoMaskingTape = { uri ->
-                                        viewModel.addPhotoMaskingTape(
-                                            postcardId,
-                                            uri
-                                        )
+                                        viewModel.importMaskingTapePhoto(
+                                            postcardId = postcardId,
+                                            sourceUri = uri
+                                        ) { photoUri ->
+                                            startMaskingTapeAim(
+                                                MaskingTapeItem(
+                                                    style = MaskingTapeStyle.PHOTO,
+                                                    photoUri = photoUri
+                                                )
+                                            )
+                                        }
                                     },
                                     onDeleteMaskingTape = { id ->
                                         val tape =
@@ -5607,8 +5688,28 @@ fun DetailScreen(
                                     },
                                     canUndoMaskingTape = canUndoMaskingTape,
                                     canRedoMaskingTape = canRedoMaskingTape,
-                                    enabled = controlsEnabled,
-                                    modifier = Modifier.fillMaxWidth(0.92f)
+                                    enabled = controlsEnabled && !maskingTapePlaceSession.isPlacing,
+                                    modifier = Modifier.fillMaxWidth(0.92f),
+                                    isPlaceAiming = maskingTapePlaceSession.isAiming,
+                                    placeAimTape =
+                                        (maskingTapePlaceSession.phase as? MaskingTapePlacePhase.Aiming)
+                                            ?.let { it.draft.copy(rotationDegrees = it.rotationDegrees) },
+                                    onEditPlaceAim = { edgeStyle, lengthScale, thicknessScale, rotationDegrees ->
+                                        maskingTapePlaceSession.editAim(
+                                            edgeStyle = edgeStyle,
+                                            lengthScale = lengthScale,
+                                            thicknessScale = thicknessScale,
+                                            rotationDegrees = rotationDegrees,
+                                            postcardSize = postcardPreviewSize
+                                        ) { tape -> maskingTapeSizePx(tape, stickerPlaceDensity) }
+                                    },
+                                    onPlaceMaskingTape = {
+                                        maskingTapePlaceSession.beginPlace()
+                                    },
+                                    onCancelPlaceAim = {
+                                        maskingTapePlaceSession.cancelAiming()
+                                            .forEach(::discardMaskingTapeAimDraft)
+                                    }
                                 )
                             }
                         }
@@ -6878,6 +6979,29 @@ fun DetailScreen(
                 },
                 onFinished = {
                     labelStickerPlaceSession.finish()
+                }
+            )
+        }
+
+        val placingTape = maskingTapePlaceSession.phase as? MaskingTapePlacePhase.Placing
+        if (placingTape != null) {
+            MaskingTapePressHandOverlay(
+                tape = placingTape.aim.draft,
+                tapeCenter =
+                    postcardPositionInRoot - detailRootPositionInRoot + placingTape.aim.center,
+                rotationDegrees = placingTape.aim.rotationDegrees,
+                onContact = {
+                    val newTape =
+                        maskingTapePlaceSession.takeContactTape(
+                            maskingTapeSizePx(placingTape.aim.draft, stickerPlaceDensity)
+                        )
+                    if (newTape != null) {
+                        vibratePhotoStickerContact(context)
+                        viewModel.addPlacedMaskingTape(newTape)
+                    }
+                },
+                onFinished = {
+                    maskingTapePlaceSession.finish()
                 }
             )
         }

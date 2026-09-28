@@ -1144,15 +1144,15 @@ class DetailViewModel @Inject constructor(
     /**
      * importCameraPhotoStickerOriginal과 동일한 정책 — Photo Picker로 고른 사진을 즉시
      * 앱 소유 파일(masking_tape_photos/<postcardId>/)로 복사한 뒤에만
-     * MaskingTapeItem을 만든다. Photo Picker가 돌려주는 URI는 persistable
-     * grant를 지원하지 않아 그대로 오래 보관할 수 없기 때문이다.
+     * 조준을 시작한다. Photo Picker가 돌려주는 URI는 persistable
+     * grant를 지원하지 않아 그대로 오래 보관할 수 없기 때문이다. 복사만 하고
+     * 테이프는 만들지 않으므로 undo도 남기지 않는다(붙일 때 [addPlacedMaskingTape]).
      */
-    fun addPhotoMaskingTape(
+    fun importMaskingTapePhoto(
         postcardId: Long,
-        sourceUri: Uri
+        sourceUri: Uri,
+        onImported: (Uri) -> Unit
     ) {
-        recordMaskingTapeSnapshotForUndo()
-
         viewModelScope.launch {
             val photoUri =
                 withContext(Dispatchers.IO) {
@@ -1169,15 +1169,7 @@ class DetailViewModel @Inject constructor(
                 }
 
             if (photoUri != null) {
-                val newTape =
-                    MaskingTapeItem(
-                        style = MaskingTapeStyle.PHOTO,
-                        photoUri = photoUri
-                    )
-
-                _photoMaskingTapes.value += newTape
-                _selectedMaskingTapeId.value = newTape.id
-                scheduleDraftAutosave()
+                onImported(photoUri)
             } else {
                 _textScaleSaveErrors.trySend(
                     "마스킹테이프 사진을 저장하지 못했어."
@@ -1187,9 +1179,24 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
+     * 손이 테이프를 종이에 댄 순간(또는 조준을 쓸 수 없을 때 바로) 새 테이프를
+     * 추가한다. 추가 한 번 = undo 한 건이며, 붙인 테이프를 선택 상태로 둔다.
+     */
+    fun addPlacedMaskingTape(
+        tape: MaskingTapeItem
+    ) {
+        if (_photoMaskingTapes.value.any { it.id == tape.id }) return
+
+        recordMaskingTapeSnapshotForUndo()
+        _photoMaskingTapes.value += tape
+        _selectedMaskingTapeId.value = tape.id
+        scheduleDraftAutosave()
+    }
+
+    /**
      * duplicateSticker와 동일한 정책 — 살짝 어긋난 위치(40,40 px)에 같은
      * 디자인의 새 테이프를 추가한다. photoUri는 파일을 복사하지 않고 그대로
-     * 공유한다 — addPhotoMaskingTape()가 이미 앱 소유 파일(masking_tape_photos/)로
+     * 공유한다 — importMaskingTapePhoto()가 이미 앱 소유 파일(masking_tape_photos/)로
      * 복사해 둔 뒤라 여러 테이프가 같은 파일을 공유해도 안전하고, 삭제 시
      * deleteMaskingTapePhotoIfUnreferenced()가 참조 여부를 확인한 뒤에만 지운다
      * (사진 스티커의 originalUri 공유와 동일한 이유).
