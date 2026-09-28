@@ -531,32 +531,28 @@ object PostcardImageExporter {
                         1f,
                         OUTPUT_SIZE.toFloat()
                     )
+            // 누끼 스티커는 투명 여백이 엽서 밖으로 나갈 수 있어 칸을 캔버스 안으로 당기지
+            // 않는다(화면과 같은 자리 — 밖으로 나간 부분은 캔버스 경계에서 잘린다).
+            val allowsOverhang = stickerOverlay.isBackgroundRemoved
+            val positionRange = if (allowsOverhang) -1f..2f else 0f..1f
             val left =
                 stickerOverlay.normalizedX
-                    .coerceIn(0f, 1f) *
+                    .coerceIn(positionRange) *
                         OUTPUT_SIZE
             val top =
                 stickerOverlay.normalizedY
-                    .coerceIn(0f, 1f) *
+                    .coerceIn(positionRange) *
                         OUTPUT_SIZE
+            val boundsLeft =
+                if (allowsOverhang) left else left.coerceIn(0f, OUTPUT_SIZE - stickerSide)
+            val boundsTop =
+                if (allowsOverhang) top else top.coerceIn(0f, OUTPUT_SIZE - stickerSide)
             val stickerBounds =
                 RectF(
-                    left.coerceIn(
-                        0f,
-                        OUTPUT_SIZE - stickerSide
-                    ),
-                    top.coerceIn(
-                        0f,
-                        OUTPUT_SIZE - stickerSide
-                    ),
-                    left.coerceIn(
-                        0f,
-                        OUTPUT_SIZE - stickerSide
-                    ) + stickerSide,
-                    top.coerceIn(
-                        0f,
-                        OUTPUT_SIZE - stickerSide
-                    ) + stickerSide
+                    boundsLeft,
+                    boundsTop,
+                    boundsLeft + stickerSide,
+                    boundsTop + stickerSide
                 )
 
             if (

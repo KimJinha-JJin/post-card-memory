@@ -44,11 +44,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 866건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 875건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 866개, 테스트를 담은 파일 89개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 90개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 875개, 테스트를 담은 파일 90개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 91개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 148개(구조 전용 파일에 있는 140개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 866개는 87일차 후속(마스킹테이프) 로컬 결과 XML에서 866/866 통과(실패·오류·skip 0)를 확인했어. 직전 850개는 CI run `36394271108`에서 통과했고, 866개의 CI 결과는 이 문서 작성 시점에 아직 없음(push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 875개는 87일차 후속(누끼 스티커 이동 경계 수정) 로컬 결과 XML에서 875/875 통과(실패·오류·skip 0)를 확인했어. 직전 866개는 CI run `36398477330`에서 통과했고, 875개의 CI 결과는 이 문서 작성 시점에 아직 없음(push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -178,7 +178,7 @@ JVM 866개는 87일차 후속(마스킹테이프) 로컬 결과 XML에서 866/86
 ### 기능: 스티커 / 테이프 / 도장 / 낙서
 
 - **보호 수준:** 중간 — 데이터·수치 범위는 강함.
-- **현재 보호하는 테스트:** `LabelStickerItemTest`, `MaskingTapeItemTest`, `TextStickerItemTest`, `PostcardSealItemTest`, `SealInkWearTest` 5건, `SealStampSessionTest` 10건, `PhotoStickerPlaceSessionTest` 20건·`LabelStickerPlaceSessionTest` 10건·`TextStickerPlaceSessionTest` 7건·`MaskingTapePlaceSessionTest` 16건(87일차), `PhotoStickerEdgeStyleTest` 29건(85일차), `DoodleStrokeTest`, `DoodleLineSnapTest`, 위치·export 계산 테스트. instrumentation `PhotoStickerEdgeStyleInstrumentedTest` 7건(85일차, 미실행).
+- **현재 보호하는 테스트:** `LabelStickerItemTest`, `MaskingTapeItemTest`, `TextStickerItemTest`, `PostcardSealItemTest`, `SealInkWearTest` 5건, `SealStampSessionTest` 10건, `PhotoStickerPlaceSessionTest` 20건·`LabelStickerPlaceSessionTest` 10건·`TextStickerPlaceSessionTest` 7건·`MaskingTapePlaceSessionTest` 16건·`PhotoStickerCutoutBoundsTest` 9건(87일차), `PhotoStickerEdgeStyleTest` 29건(85일차), `DoodleStrokeTest`, `DoodleLineSnapTest`, 위치·export 계산 테스트. instrumentation `PhotoStickerEdgeStyleInstrumentedTest` 7건(85일차, 미실행).
 - **실제 production 직접 검증:** 저장 형식·옛 값 호환, 위치/크기, 선 스냅, 지우개 충돌 계산, 테이프 윤곽점 등. 도장은 같은 id의 잉크 결손 결정성·서로 다른 id의 차이·결손값 범위·압력별 결손량과, 조준→찍기 상태 전이·중복 생성 방지·취소·상태 정리·위치/크기/회전 보존·크기 제한·preview/final id 일치·직렬화 round-trip·조준점 clamp를 직접 검사해.
 - **간접 검증:** **생성·편집 toolbar·다이얼로그 배선은 구조 검사 중심**. `SealStampSessionTest`·`PhotoStickerPlaceSessionTest`는 순수 상태 객체를 직접 검사하지만 Compose pointer 입력, 신문지 손·핀셋 손 animation, 진동, 실제 undo 연결, 조준 취소 시 원본 파일 정리까지 실행하지는 않아. ML Kit 배경제거 취소 3건은 처리 모형을 복제해.
 - **현재 믿어도 되는 것:** 검사한 꾸미기 데이터와 기하 계산의 경계 조건, 한 번의 도장 찍기 상태에서 최종 도장이 중복 생성되지 않고 조준 속성이 저장 가능한 `PostcardSealItem`으로 이어지는 규칙. 85일차 사진 스티커 오림: 스타일 필드가 없거나 알 수 없는 값·깨진 seed는 예외 없이 DEFAULT/미지정으로 읽힘, 같은 seed는 같은 모양, 가위 오림·찢은 종이의 실제 출력은 golden 값으로 고정(바뀌면 기존 스티커 모양 변경), 외곽이 스티커 박스 안에 머물고 사진을 침범하지 않음, 폴라로이드 하단 여백, 찢김의 돌기 억제와 흰 단면 띠 최소 폭, 잡지 망점 강도 상한과 가위 오림과의 구분.
@@ -260,7 +260,7 @@ JVM 866개는 87일차 후속(마스킹테이프) 로컬 결과 XML에서 866/86
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 866개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 87일차 850개 기준 CI run `36394271108` 성공, 866개는 로컬 866/866 통과(CI는 push 후 확인) |
+| JVM unit test 875개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 87일차 866개 기준 CI run `36398477330` 성공, 875개는 로컬 875/875 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
@@ -290,6 +290,8 @@ JVM 866개는 87일차 후속(마스킹테이프) 로컬 결과 XML에서 866/86
 
 **87일차 후속 — 마스킹테이프 쓸어 붙이기:** 사용자 선택으로 같은 조준 문법을 마스킹테이프에 옮기고(추가하면 세부 편집창이 바로 뜨고, 조준 중 `취소 | 편집 | 붙이기`), 손은 테이프 긴 축을 따라 한 번만 쓸게 했어. `MaskingTapePlaceSessionTest` 16건(연타·중복 닿기에도 1개, 손 연출 중 취소·새 조준·조작 차단, 취소·닿기 전 생성 0과 초안 반환, 조준 교체 시 이전 초안 반환, 화면 이탈 시 아직 닿지 않은 초안만 반환, 조준 중심 = 테이프 중심·각도·디자인/길이/굵기 보존, 테이프 전체가 엽서 안, 회전 정규화, 쓸기 경로가 화면 가로가 아니라 테이프 각도의 긴 축을 따름·0°는 왼쪽→오른쪽·90°를 넘으면 같은 축에서 손이 뒤집히지 않음·아주 짧은 테이프에서 뒤로 가지 않음, 손 앞쪽 "아직 안 눌린" 구간 계산, 편집창 값(가장자리·길이·굵기·각도)이 미리보기와 붙은 테이프에 반영·범위 제한·길어지면 엽서 안으로 재보정·손 연출 중 무시)으로 JVM 850→866개, 테스트 파일 88→89개가 됐어. 로컬 결과 XML 866/866 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, instrumentation은 20개/7파일 그대로(미실행 7건 유지). 사진 테이프 복사·조준 취소 시 파일 정리(`deleteMaskingTapePhotoIfUnreferenced`), 실제 gesture, 손 위치·쓸기 속도·밀착 막의 미감, 진동은 사용자 실기기 QA 영역이야.
 
+**87일차 후속 — 누끼 스티커 이동 경계 수정:** 사용자 QA 제보("배경 제거 후 크기를 키우면 원본 사진 크기가 테두리처럼 작용해 원하는 위치까지 못 옮김")로, 누끼 스티커는 원본 칸 전체가 아니라 보이는 부분(불투명 표본점, 회전·뒤집기 반영)이 엽서 안에 있으면 되도록 바꿨어. `PhotoStickerCutoutBoundsTest` 9건(기본 모양은 예전 칸 전체 규칙 그대로, 누끼는 보이는 부분이 가장자리에 닿을 때까지 투명 여백이 밖으로 나감, 범위 안이면 안 움직임, 회전·치우친 피사체에서도 보이는 점이 엽서 밖으로 안 나감, 좌우 뒤집기 반영, 느슨한 규칙(저장된 자리 재보정·저장본)이 정확한 규칙으로 놓은 자리를 절대 당기지 않음, 표본점 없으면 느슨한 규칙, 조준 중 누끼도 같은 규칙·원본복원 시 칸 기준 재보정)으로 JVM 866→875개, 테스트 파일 89→90개가 됐어. 로컬 결과 XML 875/875 통과, `assembleDebug` 성공. 수정 전 코드에서는 누끼가 칸 밖으로 나가는 기대값 테스트가 실패하는 구조야. `createStickerOverlayForExport`는 `android.net.Uri`를 받아 순수 JUnit에서 누끼 경로를 직접 검사하지 못하고(규칙 함수만 검사), exporter의 캔버스 밖 그리기, 그림을 줄여 읽는 표본점 계산(BitmapFactory), 실제 제스처는 사용자 실기기 QA 영역이야.
+
 ## 마지막 요약
 
 ### 지금 테스트를 꽤 믿어도 되는 영역
@@ -318,4 +320,4 @@ JVM 866개는 87일차 후속(마스킹테이프) 로컬 결과 XML에서 866/86
 - 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
 - instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. 85일차 신규 사진 스티커 오림 instrumentation 7건은 아직 실행 전이야(검증 전용 emulator에서 실행 필요). push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
 
-테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 866개라는 숫자로 보장할 수는 없어.**
+테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 875개라는 숫자로 보장할 수는 없어.**

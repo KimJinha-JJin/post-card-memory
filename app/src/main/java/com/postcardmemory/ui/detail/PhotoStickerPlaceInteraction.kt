@@ -183,7 +183,9 @@ internal class PhotoStickerPlaceSession<S : Any> {
                 center = clampPhotoStickerAimCenter(
                     center = center,
                     stickerSidePx = baseStickerSidePx * current.scale,
-                    postcardSize = postcardSize
+                    postcardSize = postcardSize,
+                    cutoutSilhouette = current.activeCutoutSilhouette,
+                    rotationDegrees = current.rotationDegrees
                 )
             )
     }
@@ -198,16 +200,19 @@ internal class PhotoStickerPlaceSession<S : Any> {
         val current = phase as? PhotoStickerPlacePhase.Aiming<S> ?: return
         val scale =
             (current.scale * zoom).coerceIn(PHOTO_STICKER_PLACE_MIN_SCALE, PHOTO_STICKER_PLACE_MAX_SCALE)
+        val rotationDegrees = normalizeStickerRotation(current.rotationDegrees + rotationChange)
         phase =
             current.copy(
                 scale = scale,
-                rotationDegrees = normalizeStickerRotation(current.rotationDegrees + rotationChange),
+                rotationDegrees = rotationDegrees,
                 // 커진 스티커가 엽서 밖으로 밀려나지 않게 중심을 다시 맞춘다 —
-                // 붙인 스티커의 clampStickerOffset과 같은 기준이라 조준 = 착지.
+                // 붙인 스티커를 끌 때와 같은 기준이라 조준 = 착지.
                 center = clampPhotoStickerAimCenter(
                     center = current.center,
                     stickerSidePx = baseStickerSidePx * scale,
-                    postcardSize = postcardSize
+                    postcardSize = postcardSize,
+                    cutoutSilhouette = current.activeCutoutSilhouette,
+                    rotationDegrees = rotationDegrees
                 )
             )
     }
@@ -215,13 +220,30 @@ internal class PhotoStickerPlaceSession<S : Any> {
     /**
      * 조준 중 `배경제거`/`원본복원`. 이미 만든 결과가 있으면 켜고 끄기만 하고 null,
      * 새로 돌려야 하면 처리 중으로 표시하고 작업 단위를 돌려준다. 처리 중에는 무시한다.
+     * `원본복원`이면 칸 전체가 다시 보이므로 [postcardSize]가 있으면 칸 기준으로 다시 가둔다.
      */
-    fun toggleAimBackground(): PhotoStickerAimBackgroundRequest<S>? {
+    fun toggleAimBackground(
+        postcardSize: IntSize = IntSize.Zero,
+        baseStickerSidePx: Float = 0f
+    ): PhotoStickerAimBackgroundRequest<S>? {
         val current = phase as? PhotoStickerPlacePhase.Aiming<S> ?: return null
         if (current.isRemovingBackground) return null
         return when {
             current.isBackgroundRemoved -> {
-                phase = current.copy(isBackgroundRemoved = false)
+                phase =
+                    current.copy(
+                        isBackgroundRemoved = false,
+                        center =
+                            if (postcardSize == IntSize.Zero) {
+                                current.center
+                            } else {
+                                clampPhotoStickerAimCenter(
+                                    center = current.center,
+                                    stickerSidePx = baseStickerSidePx * current.scale,
+                                    postcardSize = postcardSize
+                                )
+                            }
+                    )
                 null
             }
             current.removedBgSource != null -> {
@@ -332,16 +354,32 @@ internal class PhotoStickerPlaceSession<S : Any> {
 }
 
 /**
- * 조준 중심을 붙인 스티커와 같은 규칙([clampStickerOffset]: 회전 전 사각형이
- * 엽서 안)으로 가둔다. 그래서 조준한 자리와 실제로 놓이는 자리가 어긋나지 않는다.
+ * 조준 중심을 붙인 스티커를 끌 때와 같은 규칙([clampPhotoStickerOffset])으로 가둔다 —
+ * 기본 모양은 회전 전 사각형이 엽서 안, 누끼([cutoutSilhouette])는 보이는 부분만 엽서 안.
+ * 그래서 조준한 자리와 실제로 놓이는 자리가 어긋나지 않는다.
  */
 internal fun clampPhotoStickerAimCenter(
     center: Offset,
     stickerSidePx: Float,
-    postcardSize: IntSize
+    postcardSize: IntSize,
+    cutoutSilhouette: List<Offset>? = null,
+    rotationDegrees: Float = 0f
 ): Offset {
     val side = stickerSidePx.roundToInt()
-    return clampStickerAimCenter(center, IntSize(side, side), postcardSize)
+    if (cutoutSilhouette == null) {
+        return clampStickerAimCenter(center, IntSize(side, side), postcardSize)
+    }
+    val half = side / 2f
+    val topLeft =
+        clampPhotoStickerOffset(
+            offset = Offset(center.x - half, center.y - half),
+            postcardSize = postcardSize,
+            stickerSize = IntSize(side, side),
+            isBackgroundRemoved = true,
+            cutoutSilhouette = cutoutSilhouette,
+            rotationDegrees = rotationDegrees
+        )
+    return Offset(topLeft.x + half, topLeft.y + half)
 }
 
 /** [clampPhotoStickerAimCenter]의 직사각형판(라벨 스티커처럼 가로·세로가 다른 스티커). */

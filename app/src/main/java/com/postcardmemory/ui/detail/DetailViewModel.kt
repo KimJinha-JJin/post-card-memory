@@ -2,6 +2,7 @@ package com.postcardmemory.ui.detail
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.geometry.Offset
@@ -338,6 +339,16 @@ class DetailViewModel @Inject constructor(
     val stickerBackgroundRemovalState:
             StateFlow<StickerBackgroundRemovalState> =
         _stickerBackgroundRemovalState
+
+    // 누끼 스티커 그림(uri)별 불투명 표본점. 스티커를 끌거나 키울 때 "보이는 부분만
+    // 엽서 안" 경계를 계산하는 화면 전용 값이라 저장하지 않는다. 읽기 실패는 빈 목록.
+    private val _stickerCutoutSilhouettes =
+        MutableStateFlow<Map<Uri, List<Offset>>>(emptyMap())
+
+    val stickerCutoutSilhouettes: StateFlow<Map<Uri, List<Offset>>> =
+        _stickerCutoutSilhouettes
+
+    private val stickerCutoutSilhouetteLoads = mutableSetOf<Uri>()
 
     private val _photoColorExtractionState =
         MutableStateFlow<PhotoColorExtractionState>(
@@ -3888,6 +3899,72 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** 이미 계산한 표본점(조준 중 배경제거 결과)을 붙인 스티커용으로 그대로 기억한다. */
+    fun rememberStickerCutoutSilhouette(
+        cutoutUri: Uri,
+        cutoutSilhouette: List<Offset>
+    ) {
+        stickerCutoutSilhouetteLoads += cutoutUri
+        _stickerCutoutSilhouettes.value += (cutoutUri to cutoutSilhouette)
+    }
+
+    /**
+     * 누끼 스티커 그림을 줄여 읽어 불투명 표본점을 만든다(uri당 한 번). 파일은 읽기만 한다.
+     * 결과는 [stickerCutoutSilhouettes]에 쌓이고, 읽기 실패는 빈 목록(느슨한 경계)이다.
+     */
+    fun loadStickerCutoutSilhouette(
+        cutoutUri: Uri
+    ) {
+        if (!stickerCutoutSilhouetteLoads.add(cutoutUri)) return
+
+        viewModelScope.launch {
+            val silhouette =
+                withContext(Dispatchers.IO) {
+                    runCatching { decodeStickerCutoutSilhouette(cutoutUri) }
+                        .getOrNull()
+                        .orEmpty()
+                }
+            _stickerCutoutSilhouettes.value += (cutoutUri to silhouette)
+        }
+    }
+
+    private fun decodeStickerCutoutSilhouette(
+        cutoutUri: Uri
+    ): List<Offset> {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(cutoutUri)?.use {
+            BitmapFactory.decodeStream(it, null, bounds)
+        } ?: return emptyList()
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return emptyList()
+
+        var sampleSize = 1
+        while (
+            maxOf(bounds.outWidth, bounds.outHeight) / (sampleSize * 2) >=
+            STICKER_CUTOUT_SILHOUETTE_DECODE_SIDE
+        ) {
+            sampleSize *= 2
+        }
+        val options =
+            BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+        val bitmap =
+            context.contentResolver.openInputStream(cutoutUri)?.use {
+                BitmapFactory.decodeStream(it, null, options)
+            } ?: return emptyList()
+        return try {
+            photoStickerCutoutSilhouette(
+                width = bitmap.width,
+                height = bitmap.height
+            ) { x, y ->
+                (bitmap.getPixel(x, y) ushr 24) >= PHOTO_STICKER_CUTOUT_ALPHA_THRESHOLD
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     fun resetStickerBackgroundRemovalState() {
         _stickerBackgroundRemovalState.value =
             StickerBackgroundRemovalState.Idle
@@ -4636,3 +4713,6 @@ class DetailViewModel @Inject constructor(
         super.onCleared()
     }
 }
+
+// 표본점 계산용으로 누끼 그림을 줄여 읽을 때의 긴 변 기준(px).
+private const val STICKER_CUTOUT_SILHOUETTE_DECODE_SIDE = 512

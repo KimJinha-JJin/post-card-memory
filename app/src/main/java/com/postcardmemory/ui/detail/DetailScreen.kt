@@ -609,8 +609,10 @@ internal fun createStickerOverlayForExport(
 
     // 일반 사진 스티커는 도장과 달리 가장자리 걸침을 허용하지 않는다 —
     // 항상 엽서 내부에 완전히 들어오도록 clampStickerOffset을 그대로 쓴다.
+    // 누끼 스티커는 투명 여백이 엽서 밖으로 나갈 수 있어서, 화면에서 저장된 자리를
+    // 다시 맞출 때와 같은 느슨한 규칙(clampPhotoStickerOffset, 표본점 없이)을 쓴다.
     val resolvedOffset =
-        clampStickerOffset(
+        clampPhotoStickerOffset(
             offset =
                 stickerOffset
                     ?: centeredStickerOffset(
@@ -618,8 +620,15 @@ internal fun createStickerOverlayForExport(
                         stickerSize = stickerSize
                     ),
             postcardSize = postcardSize,
-            stickerSize = stickerSize
+            stickerSize = stickerSize,
+            isBackgroundRemoved = isBackgroundRemoved,
+            cutoutSilhouette = null,
+            rotationDegrees = rotationDegrees,
+            flipHorizontal = flipHorizontal,
+            flipVertical = flipVertical
         )
+    // 누끼는 엽서 밖으로 나간 투명 여백 때문에 좌상단이 0보다 작거나 1보다 클 수 있다.
+    val normalizedRange = if (isBackgroundRemoved) -1f..2f else 0f..1f
     return PostcardImageExporter.StickerOverlay(
         uri = selectedUri,
         originalUri = originalStickerUri,
@@ -632,11 +641,11 @@ internal fun createStickerOverlayForExport(
         normalizedX =
             (resolvedOffset.x /
                     postcardSize.width.toFloat())
-                .coerceIn(0f, 1f),
+                .coerceIn(normalizedRange),
         normalizedY =
             (resolvedOffset.y /
                     postcardSize.height.toFloat())
-                .coerceIn(0f, 1f),
+                .coerceIn(normalizedRange),
         sizeRatio =
             stickerSize.width.toFloat() /
                     postcardSize.width.toFloat()
@@ -1852,11 +1861,51 @@ fun DetailScreen(
         mutableStateOf<String?>(null)
     }
 
+    // 누끼 스티커의 보이는 부분 표본점. 끌기·크기·회전 때 "보이는 부분만 엽서 안" 경계에 쓴다.
+    val stickerCutoutSilhouettes by viewModel.stickerCutoutSilhouettes.collectAsState()
+    val latestStickerCutoutSilhouettes by rememberUpdatedState(stickerCutoutSilhouettes)
+
+    LaunchedEffect(photoStickers) {
+        photoStickers
+            .filter { it.isBackgroundRemoved }
+            .forEach { viewModel.loadStickerCutoutSilhouette(it.displayedUri) }
+    }
+
+    // 사용자가 붙인 사진 스티커를 끌거나 키우거나 돌릴 때의 경계. 기본 모양은 칸 전체,
+    // 누끼는 보이는 부분만 엽서 안(표본점을 아직 모르면 느슨한 규칙).
+    fun clampPlacedStickerOffset(
+        sticker: PhotoStickerItem,
+        offset: Offset,
+        stickerSize: IntSize,
+        rotationDegrees: Float
+    ): Offset =
+        clampPhotoStickerOffset(
+            offset = offset,
+            postcardSize = postcardPreviewSize,
+            stickerSize = stickerSize,
+            isBackgroundRemoved = sticker.isBackgroundRemoved,
+            cutoutSilhouette = latestStickerCutoutSilhouettes[sticker.displayedUri],
+            rotationDegrees = rotationDegrees,
+            flipHorizontal = sticker.flipHorizontal,
+            flipVertical = sticker.flipVertical
+        )
+
+    // 돌린 뒤 누끼의 보이는 부분이 엽서 밖으로 나가지 않게 자리만 다시 맞춘다.
+    fun rotatedStickerOffset(sticker: PhotoStickerItem, rotationDegrees: Float): Offset? {
+        val offset = sticker.offset ?: return null
+        val size = stickerSizes[sticker.id] ?: return offset
+        if (!sticker.isBackgroundRemoved || postcardPreviewSize == IntSize.Zero) return offset
+        return clampPlacedStickerOffset(sticker, offset, size, rotationDegrees)
+    }
+
     // 조준 중 `배경제거`/`원본복원`. 결과가 도착했을 때 조준이 이미 바뀌었으면 결과를 정리한다.
     fun togglePhotoStickerAimBackground() {
         photoStickerAimBackgroundError = null
         val request =
-            photoStickerPlaceSession.toggleAimBackground() ?: return
+            photoStickerPlaceSession.toggleAimBackground(
+                postcardSize = postcardPreviewSize,
+                baseStickerSidePx = baseStickerPx
+            ) ?: return
         viewModel.removeAimStickerBackground(
             sourceUri = request.source,
             onRemoved = { resultUri, silhouette ->
@@ -2161,10 +2210,14 @@ fun DetailScreen(
                         stickerSize = stickerSize
                     )
                 } else {
-                    clampStickerOffset(
+                    // 누끼는 느슨한 규칙(표본점 없이)으로만 — 끌어서 놓은 자리를 당기지 않는다.
+                    clampPhotoStickerOffset(
                         offset = sticker.offset,
                         postcardSize = postcardPreviewSize,
-                        stickerSize = stickerSize
+                        stickerSize = stickerSize,
+                        isBackgroundRemoved = sticker.isBackgroundRemoved,
+                        cutoutSilhouette = null,
+                        rotationDegrees = sticker.rotationDegrees
                     )
                 }
 
@@ -3034,9 +3087,35 @@ fun DetailScreen(
                                                         val isMultiTouch =
                                                             activeStickerPointerCount >= 2
 
+                                                        val newScale =
+                                                            (currentSticker.scale * zoom)
+                                                                .coerceIn(0.5f, 2.5f)
+
+                                                        val newRotation =
+                                                            normalizeStickerRotation(
+                                                                currentSticker.rotationDegrees +
+                                                                        rotationChange
+                                                            )
+
                                                         val newOffset =
                                                             if (isMultiTouch) {
-                                                                currentSticker.offset
+                                                                // 누끼는 키우거나 돌린 뒤에도 보이는 부분이 엽서 안에 남게.
+                                                                val multiTouchOffset = currentSticker.offset
+                                                                if (
+                                                                    currentSticker.isBackgroundRemoved &&
+                                                                    multiTouchOffset != null
+                                                                ) {
+                                                                    val newSidePx =
+                                                                        (baseStickerPx * newScale).roundToInt()
+                                                                    clampPlacedStickerOffset(
+                                                                        sticker = currentSticker,
+                                                                        offset = multiTouchOffset,
+                                                                        stickerSize = IntSize(newSidePx, newSidePx),
+                                                                        rotationDegrees = newRotation
+                                                                    )
+                                                                } else {
+                                                                    multiTouchOffset
+                                                                }
                                                             } else {
                                                                 val oldOffset =
                                                                     currentSticker.offset
@@ -3056,22 +3135,14 @@ fun DetailScreen(
                                                                             currentSticker.flipVertical
                                                                     )
 
-                                                                clampStickerOffset(
+                                                                clampPlacedStickerOffset(
+                                                                    sticker = currentSticker,
                                                                     offset = oldOffset + parentSpaceDrag,
-                                                                    postcardSize = postcardPreviewSize,
-                                                                    stickerSize = currentStickerSize
+                                                                    stickerSize = currentStickerSize,
+                                                                    rotationDegrees =
+                                                                        currentSticker.rotationDegrees
                                                                 )
                                                             }
-
-                                                        val newScale =
-                                                            (currentSticker.scale * zoom)
-                                                                .coerceIn(0.5f, 2.5f)
-
-                                                        val newRotation =
-                                                            normalizeStickerRotation(
-                                                                currentSticker.rotationDegrees +
-                                                                        rotationChange
-                                                            )
 
                                                         viewModel.setPhotoStickers(
                                                             latestPhotoStickers.map {
@@ -3158,10 +3229,12 @@ fun DetailScreen(
                                                                 if (it.id == sticker.id) {
                                                                     it.copy(
                                                                         scale = newScale,
-                                                                        offset = clampStickerOffset(
+                                                                        offset = clampPlacedStickerOffset(
+                                                                            sticker = currentSticker,
                                                                             offset = correctedOffset,
-                                                                            postcardSize = postcardPreviewSize,
-                                                                            stickerSize = newEffectiveSize
+                                                                            stickerSize = newEffectiveSize,
+                                                                            rotationDegrees =
+                                                                                currentSticker.rotationDegrees
                                                                         )
                                                                     )
                                                                 } else {
@@ -3198,7 +3271,8 @@ fun DetailScreen(
                                                             latestPhotoStickers.map {
                                                                 if (it.id == sticker.id) {
                                                                     it.copy(
-                                                                        rotationDegrees = newRotation
+                                                                        rotationDegrees = newRotation,
+                                                                        offset = rotatedStickerOffset(it, newRotation)
                                                                     )
                                                                 } else {
                                                                     it
@@ -3352,7 +3426,9 @@ fun DetailScreen(
                                                                     if (it.id == sticker.id) {
                                                                         it.copy(
                                                                             rotationDegrees =
-                                                                                newRotation
+                                                                                newRotation,
+                                                                            offset =
+                                                                                rotatedStickerOffset(it, newRotation)
                                                                         )
                                                                     } else {
                                                                         it
@@ -3595,13 +3671,14 @@ fun DetailScreen(
                                                                         it.copy(
                                                                             scale = newScale,
                                                                             offset =
-                                                                                clampStickerOffset(
+                                                                                clampPlacedStickerOffset(
+                                                                                    sticker = it,
                                                                                     offset =
                                                                                         newOffset,
-                                                                                    postcardSize =
-                                                                                        postcardPreviewSize,
                                                                                     stickerSize =
-                                                                                        newSize
+                                                                                        newSize,
+                                                                                    rotationDegrees =
+                                                                                        it.rotationDegrees
                                                                                 )
                                                                         )
                                                                     } else {
@@ -6925,6 +7002,13 @@ fun DetailScreen(
                             baseStickerSidePx = baseStickerPx
                         )?.toPhotoStickerItem()
                     if (newSticker != null) {
+                        val aimSilhouette = placingSticker.aim.activeCutoutSilhouette
+                        if (newSticker.isBackgroundRemoved && aimSilhouette != null) {
+                            viewModel.rememberStickerCutoutSilhouette(
+                                newSticker.displayedUri,
+                                aimSilhouette
+                            )
+                        }
                         vibratePhotoStickerContact(context)
                         viewModel.addPlacedPhotoSticker(newSticker)
                     }
