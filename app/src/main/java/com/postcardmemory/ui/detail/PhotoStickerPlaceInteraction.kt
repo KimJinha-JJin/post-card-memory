@@ -340,15 +340,55 @@ internal fun clampPhotoStickerAimCenter(
     stickerSidePx: Float,
     postcardSize: IntSize
 ): Offset {
-    val half = stickerSidePx / 2f
     val side = stickerSidePx.roundToInt()
+    return clampStickerAimCenter(center, IntSize(side, side), postcardSize)
+}
+
+/** [clampPhotoStickerAimCenter]의 직사각형판(라벨 스티커처럼 가로·세로가 다른 스티커). */
+internal fun clampStickerAimCenter(
+    center: Offset,
+    stickerSize: IntSize,
+    postcardSize: IntSize
+): Offset {
+    val halfWidth = stickerSize.width / 2f
+    val halfHeight = stickerSize.height / 2f
     val topLeft =
         clampStickerOffset(
-            offset = Offset(center.x - half, center.y - half),
+            offset = Offset(center.x - halfWidth, center.y - halfHeight),
             postcardSize = postcardSize,
-            stickerSize = IntSize(side, side)
+            stickerSize = stickerSize
         )
-    return Offset(topLeft.x + half, topLeft.y + half)
+    return Offset(topLeft.x + halfWidth, topLeft.y + halfHeight)
+}
+
+/**
+ * 통째로 회전하는 직사각형 스티커(라벨)에서 핀셋 끝이 집는 자리(중심 기준 px, 화면 좌표).
+ * 네 변의 가운데 중 회전 뒤 화면에서 가장 아래에 있는 변을, 중심 쪽으로 [gripInsetPx]만큼
+ * 들어가 문다 — 기울기가 조금 바뀌어도 집는 자리가 모서리 사이를 튀지 않는다.
+ */
+internal fun rectStickerGripOffset(
+    widthPx: Float,
+    heightPx: Float,
+    rotationDegrees: Float,
+    gripInsetPx: Float
+): Offset {
+    val radians = Math.toRadians(rotationDegrees.toDouble())
+    val c = cos(radians).toFloat()
+    val s = sin(radians).toFloat()
+    val halfWidth = widthPx / 2f
+    val halfHeight = heightPx / 2f
+    val (edgeMid, halfDepth) =
+        listOf(
+            Offset(0f, halfHeight) to halfHeight,
+            Offset(0f, -halfHeight) to halfHeight,
+            Offset(halfWidth, 0f) to halfWidth,
+            Offset(-halfWidth, 0f) to halfWidth
+        )
+            .map { (p, depth) -> Offset(p.x * c - p.y * s, p.x * s + p.y * c) to depth }
+            .maxBy { (p, _) -> p.y }
+    if (halfDepth <= 0f) return edgeMid
+    val keep = max(0f, halfDepth - gripInsetPx) / halfDepth
+    return Offset(edgeMid.x * keep, edgeMid.y * keep)
 }
 
 /**
@@ -483,30 +523,34 @@ internal fun PhotoStickerAimLayer(
         }
 
         if (interactive) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val center = aim.center
-                val arm = PHOTO_STICKER_CROSSHAIR_ARM.toPx()
-                // 도장 조준과 같은 십자: 종이색 바탕선 위에 흑연색 선.
-                listOf(
-                    Color(0xCCFFFDF7) to PHOTO_STICKER_CROSSHAIR_UNDERLAY_WIDTH.toPx(),
-                    GraphiteAccent to PHOTO_STICKER_CROSSHAIR_WIDTH.toPx()
-                ).forEach { (lineColor, width) ->
-                    drawLine(
-                        color = lineColor,
-                        start = Offset(center.x - arm, center.y),
-                        end = Offset(center.x + arm, center.y),
-                        strokeWidth = width,
-                        cap = StrokeCap.Round
-                    )
-                    drawLine(
-                        color = lineColor,
-                        start = Offset(center.x, center.y - arm),
-                        end = Offset(center.x, center.y + arm),
-                        strokeWidth = width,
-                        cap = StrokeCap.Round
-                    )
-                }
-            }
+            StickerPlaceCrosshair(center = aim.center)
+        }
+    }
+}
+
+/** 조준 십자. 도장 조준과 같은 모양: 종이색 바탕선 위에 흑연색 선. */
+@Composable
+internal fun StickerPlaceCrosshair(center: Offset) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val arm = PHOTO_STICKER_CROSSHAIR_ARM.toPx()
+        listOf(
+            Color(0xCCFFFDF7) to PHOTO_STICKER_CROSSHAIR_UNDERLAY_WIDTH.toPx(),
+            GraphiteAccent to PHOTO_STICKER_CROSSHAIR_WIDTH.toPx()
+        ).forEach { (lineColor, width) ->
+            drawLine(
+                color = lineColor,
+                start = Offset(center.x - arm, center.y),
+                end = Offset(center.x + arm, center.y),
+                strokeWidth = width,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = lineColor,
+                start = Offset(center.x, center.y - arm),
+                end = Offset(center.x, center.y + arm),
+                strokeWidth = width,
+                cap = StrokeCap.Round
+            )
         }
     }
 }
@@ -538,17 +582,7 @@ private fun PhotoStickerPlacingImage(
     )
 }
 
-/**
- * 신문지에서 오린 손이 핀셋으로 스티커를 집어 화면 아래에서 들고 올라와
- * [stickerCenter]에 톡 놓고 빠지는 일시 overlay. 좌표는 이 overlay 좌상단 기준 px.
- *
- * 손과 스티커는 한 덩어리로 같은 변환(이동·기울기·원근 크기)을 받는다. 변환 기준점은
- * 핀셋 끝([PHOTO_STICKER_TWEEZER_ANCHOR_X]/[PHOTO_STICKER_TWEEZER_ANCHOR_Y])이
- * 스티커를 집는 점([photoStickerGripOffset])이라, 진행값 0에서 스티커는 조준한
- * 자리·크기·각도와 정확히 같다. 연출 중에는 아래 화면 입력을 막는다.
- *
- * 닿는 프레임에 [onContact] 한 번, 다 빠진 뒤 [onFinished] 한 번 부른다.
- */
+/** 사진 스티커용 핀셋 손: 집는 자리를 정하고 들고 갈 그림을 [StickerTweezerHandOverlay]에 넘긴다. */
 @Composable
 internal fun PhotoStickerTweezerHandOverlay(
     stickerUri: Uri,
@@ -560,6 +594,58 @@ internal fun PhotoStickerTweezerHandOverlay(
     onContact: () -> Unit,
     onFinished: () -> Unit,
     modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    val stickerSidePx = with(density) { stickerSide.toPx() }
+    val gripOffset =
+        remember(cutoutSilhouette, stickerSidePx, stickerRotationDegrees, density) {
+            photoStickerGripOffset(
+                cutoutSilhouette = cutoutSilhouette,
+                stickerSidePx = stickerSidePx,
+                rotationDegrees = stickerRotationDegrees,
+                gripInsetPx = with(density) { STICKER_TWEEZER_GRIP_INSET.toPx() }
+            )
+        }
+    StickerTweezerHandOverlay(
+        stickerCenter = stickerCenter,
+        stickerWidth = stickerSide,
+        stickerHeight = stickerSide,
+        gripOffset = gripOffset,
+        onContact = onContact,
+        onFinished = onFinished,
+        modifier = modifier
+    ) {
+        PhotoStickerPlacingImage(
+            uri = stickerUri,
+            isBackgroundRemoved = isBackgroundRemoved,
+            rotationDegrees = stickerRotationDegrees
+        )
+    }
+}
+
+/**
+ * 신문지에서 오린 손이 핀셋으로 스티커를 집어 화면 아래에서 들고 올라와
+ * [stickerCenter]에 톡 놓고 빠지는 일시 overlay. 좌표는 이 overlay 좌상단 기준 px.
+ * 사진·라벨 스티커가 함께 쓴다 — 들고 가는 그림([carriedContent], 스티커 크기 칸 안에
+ * 붙은 스티커와 같은 순서로 그림)과 집는 자리([gripOffset], 중심 기준)만 다르다.
+ *
+ * 손과 스티커는 한 덩어리로 같은 변환(이동·기울기·원근 크기)을 받는다. 변환 기준점은
+ * 핀셋 끝([PHOTO_STICKER_TWEEZER_ANCHOR_X]/[PHOTO_STICKER_TWEEZER_ANCHOR_Y])이
+ * 스티커를 집는 점이라, 진행값 0에서 스티커는 조준한 자리·크기·각도와 정확히
+ * 같다. 연출 중에는 아래 화면 입력을 막는다.
+ *
+ * 닿는 프레임에 [onContact] 한 번, 다 빠진 뒤 [onFinished] 한 번 부른다.
+ */
+@Composable
+internal fun StickerTweezerHandOverlay(
+    stickerCenter: Offset,
+    stickerWidth: Dp,
+    stickerHeight: Dp,
+    gripOffset: Offset,
+    onContact: () -> Unit,
+    onFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+    carriedContent: @Composable () -> Unit
 ) {
     val hand: ImageBitmap = ImageBitmap.imageResource(R.drawable.sticker_tweezer_hand)
     val currentOnContact by rememberUpdatedState(onContact)
@@ -593,16 +679,8 @@ internal fun PhotoStickerTweezerHandOverlay(
 
     val density = LocalDensity.current
     val handSidePx = with(density) { PHOTO_STICKER_TWEEZER_HAND_SIZE.toPx() }
-    val stickerSidePx = with(density) { stickerSide.toPx() }
-    val gripOffset =
-        remember(cutoutSilhouette, stickerSidePx, stickerRotationDegrees, density) {
-            photoStickerGripOffset(
-                cutoutSilhouette = cutoutSilhouette,
-                stickerSidePx = stickerSidePx,
-                rotationDegrees = stickerRotationDegrees,
-                gripInsetPx = with(density) { PHOTO_STICKER_TWEEZER_GRIP_INSET.toPx() }
-            )
-        }
+    val stickerWidthPx = with(density) { stickerWidth.toPx() }
+    val stickerHeightPx = with(density) { stickerHeight.toPx() }
     val grip = stickerCenter + gripOffset
     val anchorX = PHOTO_STICKER_TWEEZER_ANCHOR_X * handSidePx
     val anchorY = PHOTO_STICKER_TWEEZER_ANCHOR_Y * handSidePx
@@ -627,9 +705,9 @@ internal fun PhotoStickerTweezerHandOverlay(
                     val t = travel.value
                     val approachScale = 1f + PHOTO_STICKER_APPROACH_SCALE * t
                     // 출발점: 덩어리의 가장 위(스티커 윗부분 또는 핀셋 끝)까지 화면 아래로 숨는 거리.
-                    // 스티커는 회전해도 중심에서 한 변의 0.75배 안에 들어온다.
+                    // 스티커는 회전해도 중심에서 긴 변의 0.75배 안에 들어온다.
                     val extentAboveGrip =
-                        max(gripOffset.y + stickerSidePx * 0.75f, anchorY)
+                        max(gripOffset.y + max(stickerWidthPx, stickerHeightPx) * 0.75f, anchorY)
                     val hiddenDistance =
                         (size.height - grip.y) +
                                 extentAboveGrip * (1f + PHOTO_STICKER_APPROACH_SCALE) +
@@ -650,19 +728,14 @@ internal fun PhotoStickerTweezerHandOverlay(
                 Box(
                     modifier = Modifier
                         .offset {
-                            val half = stickerSidePx / 2f
                             IntOffset(
-                                (stickerCenter.x - half).roundToInt(),
-                                (stickerCenter.y - half).roundToInt()
+                                (stickerCenter.x - stickerWidthPx / 2f).roundToInt(),
+                                (stickerCenter.y - stickerHeightPx / 2f).roundToInt()
                             )
                         }
-                        .size(stickerSide)
+                        .size(stickerWidth, stickerHeight)
                 ) {
-                    PhotoStickerPlacingImage(
-                        uri = stickerUri,
-                        isBackgroundRemoved = isBackgroundRemoved,
-                        rotationDegrees = stickerRotationDegrees
-                    )
+                    carriedContent()
                 }
             }
 
@@ -703,7 +776,7 @@ internal const val PHOTO_STICKER_TWEEZER_ANCHOR_X = 0.297f
 internal const val PHOTO_STICKER_TWEEZER_ANCHOR_Y = 0.045f
 
 // 집게 끝이 스티커 가장자리에서 안쪽으로 물고 들어가는 정도.
-private val PHOTO_STICKER_TWEEZER_GRIP_INSET = 2.dp
+internal val STICKER_TWEEZER_GRIP_INSET = 2.dp
 private val PHOTO_STICKER_TWEEZER_HAND_SIZE = 300.dp
 private val PHOTO_STICKER_HAND_OFFSCREEN_MARGIN = 24.dp
 private const val PHOTO_STICKER_APPROACH_SCALE = 0.12f

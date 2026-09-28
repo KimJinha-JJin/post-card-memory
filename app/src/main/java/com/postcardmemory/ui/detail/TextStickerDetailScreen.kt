@@ -81,7 +81,10 @@ fun TextStickerPickerPanel(
     canUndoTextSticker: Boolean,
     canRedoTextSticker: Boolean,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPlaceAiming: Boolean = false,
+    onPlaceTextSticker: () -> Unit = {},
+    onCancelPlaceAim: () -> Unit = {}
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -100,7 +103,7 @@ fun TextStickerPickerPanel(
                 canRedo = canRedoTextSticker,
                 onUndo = onUndoTextSticker,
                 onRedo = onRedoTextSticker,
-                enabled = enabled,
+                enabled = enabled && !isPlaceAiming,
                 undoContentDescription = "실행 취소",
                 redoContentDescription = "다시 실행"
             )
@@ -114,6 +117,33 @@ fun TextStickerPickerPanel(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        // 새 글자를 엽서 위 +로 자리 잡는 동안에는 목록 대신 안내 한 줄과
+        // `취소 | 붙이기`만 둔다(사진·라벨 스티커 조준과 같은 문법, 손 연출은 없음).
+        if (isPlaceAiming) {
+            EditorQuietHint(
+                text = "엽서를 눌러 자리를 고르고, 두 손가락으로 돌리거나 크기를 바꿔봐."
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EditorTextAction(
+                    text = "취소",
+                    onClick = onCancelPlaceAim,
+                    enabled = enabled
+                )
+
+                EditorActionDivider()
+
+                EditorTextAction(
+                    text = "붙이기",
+                    onClick = onPlaceTextSticker,
+                    enabled = enabled
+                )
+            }
+            return@Column
+        }
 
         Row(
             modifier = Modifier

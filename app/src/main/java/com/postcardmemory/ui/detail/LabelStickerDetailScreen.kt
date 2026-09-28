@@ -89,7 +89,10 @@ fun LabelStickerPickerPanel(
     canUndoLabelSticker: Boolean,
     canRedoLabelSticker: Boolean,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPlaceAiming: Boolean = false,
+    onPlaceLabelSticker: () -> Unit = {},
+    onCancelPlaceAim: () -> Unit = {}
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -108,7 +111,7 @@ fun LabelStickerPickerPanel(
                 canRedo = canRedoLabelSticker,
                 onUndo = onUndoLabelSticker,
                 onRedo = onRedoLabelSticker,
-                enabled = enabled,
+                enabled = enabled && !isPlaceAiming,
                 undoContentDescription = "실행 취소",
                 redoContentDescription = "다시 실행"
             )
@@ -122,6 +125,34 @@ fun LabelStickerPickerPanel(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        // 새 라벨을 엽서 위 +로 자리 잡는 동안에는 목록 대신 안내 한 줄과
+        // `취소 | 붙이기`만 둔다(사진 스티커·도장 조준과 같은 문법). 라벨은 붙인 뒤에도
+        // 크기를 바꾸지 않으므로 안내도 자리·각도만 말한다.
+        if (isPlaceAiming) {
+            EditorQuietHint(
+                text = "엽서를 눌러 자리를 고르고, 두 손가락으로 돌려봐."
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EditorTextAction(
+                    text = "취소",
+                    onClick = onCancelPlaceAim,
+                    enabled = enabled
+                )
+
+                EditorActionDivider()
+
+                EditorTextAction(
+                    text = "붙이기",
+                    onClick = onPlaceLabelSticker,
+                    enabled = enabled
+                )
+            }
+            return@Column
+        }
 
         Row(
             modifier = Modifier

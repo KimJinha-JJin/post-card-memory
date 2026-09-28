@@ -1,4 +1,56 @@
-# HANDOFF — 87일차 꾸미기 손 인터랙션(사진 스티커 핀셋 붙이기)
+# HANDOFF — 87일차 후속: 라벨·텍스트 스티커 핀셋 붙이기
+
+확인일: 2026-09-28. 수동 표준 모드. 사진 스티커 핀셋 붙이기(`c8a2cf5`, CI run `36392041882` 성공)에 이어, 사용자가 고른 순서대로 라벨 스티커와 텍스트 스티커에 같은 조준·핀셋 붙이기 문법을 옮겼어(텍스트는 처음에 조준만 넣었다가 사용자 요청으로 핀셋 손을 추가). 로컬 자동검증과 사용자 실기기 QA를 마쳤고, 사용자 요청으로 commit·push해(실제 commit hash·CI는 `git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 상태 빠른 확인
+
+- 브랜치: `feature/photo-sticker`, HEAD `c8a2cf5` "Place photo stickers with a tweezer hand interaction", origin `0/0`
+- 작업트리(미커밋): `DetailScreen.kt`, `LabelStickerDetailScreen.kt`, `TextStickerDetailScreen.kt`, `PhotoStickerPlaceInteraction.kt` 수정 / 새 파일 `LabelStickerPlaceInteraction.kt`, `TextStickerPlaceInteraction.kt`, `LabelStickerPlaceSessionTest.kt`, `TextStickerPlaceSessionTest.kt` / 이 HANDOFF·TEST-COVERAGE-MAP
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존. `tape_press_hand.png`는 미사용이라 여전히 untracked
+
+## 앱에 달라진 점
+
+- **라벨 스티커**: 문구·테이프를 고르고 확인하면 바로 붙지 않고 엽서 위 +와 반투명 미리보기로 자리·각도를 정해(붙인 라벨 편집처럼 크기 조절은 없음). `취소 | 붙이기` → 사진 스티커와 같은 핀셋 손이 라벨을 집어 와 톡 놓아. 핀셋은 회전한 라벨에서 화면 아래를 향한 변의 가운데를 물어.
+- **텍스트 스티커**: 같은 조준(자리·크기 0.5~3배·각도)과 `취소 | 붙이기` → 핀셋 손이 외곽선 있는 글자 스티커를 집어 와 톡 놓아. 핀셋은 회전한 글자 영역(측정한 사각형)에서 화면 아래를 향한 변의 가운데를 물어 — 글자 모양이 아니라 사각형 기준이라 글자 사이 빈 곳을 무는 것처럼 보일 수 있어(QA로 판단).
+- 둘 다 추가 1번 = undo 1건, 붙인 뒤 선택 상태. 저장 형식·Room은 그대로(기존 offset·scale·rotationDegrees만 채움).
+
+## 구조와 결정
+
+- 공용화한 최소 조각(`PhotoStickerPlaceInteraction.kt`): `clampStickerAimCenter`(직사각형판 조준 가두기), `rectStickerGripOffset`, `StickerPlaceCrosshair`, `StickerTweezerHandOverlay`(들고 갈 그림과 집는 자리만 받는 핀셋 손). 사진 스티커는 기존 동작 그대로 이 조각을 쓰도록 나눴어(상수·타이밍 변경 없음).
+- 라벨: `LabelStickerPlaceSession`(Idle→Aiming→Placing(placed)→Idle). 크기는 `LabelStickerContent`와 같은 `LabelStickerRenderer`로 계산(`labelStickerSizePx`)해 조준 = 착지. 파일이 없어 정리할 것도 없어.
+- 텍스트: `TextStickerPlaceSession`(Idle→Aiming→Placing(placed)→Idle). 크기는 글자 모양 측정이라 미리보기가 `onSizeChanged`로 잰 실제 크기를 쓰고, `붙이기` 때 마지막 크기로 자리를 한 번 더 가둬 고정해서 손 목표 = 착지야. 핀셋 손·집는 자리 계산은 라벨과 같은 `StickerTweezerHandOverlay`·`rectStickerGripOffset`.
+- 조준 자동 취소: 각 하위 탭 이탈·크게보기·뒷면. 뒤로가기는 조준 취소, 손 연출 중엔 흘려보냄. 손 연출 중 각 패널 비활성. 엽서 크기를 아직 모르면 예전처럼 가운데에 바로 붙여.
+
+## 검증과 남은 상태
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| 구현 | 라벨·텍스트 완료 | |
+| 로컬 JVM | 통과 850/850 (89 XML) | 신규 라벨 10건·텍스트 7건 |
+| assembleDebug / assembleDebugAndroidTest | 성공 | |
+| emulator instrumentation | 미실행 | 연결 기기·emulator 없음(앞 확인 기준) |
+| 실기기 QA | 완료 — 사용자가 "QA 완료" 보고, 보정 요청 없음(항목별 세부 결과는 받지 않음) | 아래 체크리스트 |
+| TEST-COVERAGE-MAP | 갱신 완료 | 833→850, 파일 86→88 |
+| Room / migration / serialization / dependency | 변경 없음 | |
+| commit / push / CI | 사용자 요청("커밋하고 푸시해줘")으로 진행 | 결과는 완료보고·`git log`·GitHub Actions에서 확인 |
+
+## 실기기 QA 체크리스트 (라벨·텍스트 — 사용자 QA 완료, 기록용)
+
+1. 라벨 추가 → 조준 미리보기가 실제 라벨과 같은 모양·크기로 가운데에 뜨고, 탭·드래그·두 손가락 회전이 되는지(크기는 안 바뀜)
+2. 라벨 붙이기: 핀셋이 라벨 아래 변(많이 돌리면 옆 변)을 문 것처럼 보이는지, 도착 순간 어긋남 없이 조준한 자리·각도에 놓이는지, "톡" 진동
+3. 텍스트 추가 → 조준 미리보기에서 자리·크기·각도 조절, 붙이기 → 핀셋이 글자 스티커를 자연스럽게 무는지(글자 사이 빈 곳을 무는 것처럼 보이지 않는지), 조준한 자리에 놓이는지(엽서 가장자리에서 키운 뒤 붙여도 밖으로 안 나가는지)
+4. 라벨·텍스트 각각 undo 한 번에 방금 것만 사라지고 redo로 돌아오는지, 조준 중 취소·뒤로가기·탭 이동 시 생성 안 되는지
+5. 사진 스티커 붙이기·도장·흔들기 회귀 없음
+
+## 남은 위험
+
+- 텍스트 미리보기는 첫 프레임에 크기를 아직 몰라 아주 잠깐 가운데 기준이 어긋나 보일 수 있어(측정 직후 바로 맞음).
+- 라벨 크기 계산은 화면 `LabelStickerContent`와 같은 렌더러 함수지만 px→dp→px 반올림으로 1px 차이가 날 수 있어.
+- 마스킹 테이프 밀착 연출은 여전히 미착수(별도 승인 필요).
+
+---
+
+# 이전 기록 — 87일차 꾸미기 손 인터랙션(사진 스티커 핀셋 붙이기)
 
 확인일: 2026-09-28. 수동 표준 모드(공용 작업판 비활성). 87일차 작업지시서의 필수 목표인 사진 스티커 핀셋 붙이기(조준 중 배경제거 포함)를 구현하고 로컬 자동검증과 사용자 실기기 QA까지 마쳤어. commit·push는 작업지시서 40·41절의 마감 절차로 수행해(실제 commit hash는 `git log`로 확인). 선택 목표인 마스킹 테이프 밀착 연출은 미착수 — 사용자가 다음 순서로 "사진 스티커 QA → 라벨 스티커 핀셋 붙이기 → 텍스트 스티커(조준만)"를 골랐어. **이 문서의 다음 후보는 실행 승인이 아니야.**
 

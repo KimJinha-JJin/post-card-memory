@@ -1615,6 +1615,12 @@ fun DetailScreen(
     val sealStampSession = remember { SealStampSession() }
     // 사진 스티커 붙이기(조준 + 핀셋 손) 연출 상태. 도장과 같이 화면에만 있는 상태다.
     val photoStickerPlaceSession = remember { PhotoStickerPlaceSession<Uri>() }
+    // 라벨 스티커 붙이기(조준 + 핀셋 손) 연출 상태. 사진 스티커와 같은 문법이다.
+    val labelStickerPlaceSession = remember { LabelStickerPlaceSession() }
+    // 텍스트 스티커 붙이기(조준 + 핀셋 손) 연출 상태. 미리보기가 잰 실제 크기를 함께 둔다.
+    val textStickerPlaceSession = remember { TextStickerPlaceSession() }
+    var textStickerAimSize by remember { mutableStateOf(IntSize.Zero) }
+    val stickerPlaceDensity = LocalDensity.current
     var postcardPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var detailRootPositionInRoot by remember { mutableStateOf(Offset.Zero) }
 
@@ -1915,6 +1921,52 @@ fun DetailScreen(
             photoStickerPlaceSession.cancelAiming()
                 .forEach(::discardPhotoStickerAimOriginal)
         }
+    }
+
+    // 라벨 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 라벨 조준을 접는다(라벨 생성 없음).
+    LaunchedEffect(
+        customizationPagerState.currentPage,
+        stickerSubTabIndex,
+        isFocusPreviewMode,
+        isBackFace
+    ) {
+        if (
+            customizationPagerState.currentPage != STICKER_TAB_PAGE_INDEX ||
+            stickerSubTabIndex != 2 ||
+            isFocusPreviewMode ||
+            isBackFace
+        ) {
+            labelStickerPlaceSession.cancelAiming()
+        }
+    }
+
+    BackHandler(
+        enabled = labelStickerPlaceSession.isAiming || labelStickerPlaceSession.isPlacing
+    ) {
+        labelStickerPlaceSession.cancelAiming()
+    }
+
+    // 텍스트 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 텍스트 조준을 접는다(스티커 생성 없음).
+    LaunchedEffect(
+        customizationPagerState.currentPage,
+        stickerSubTabIndex,
+        isFocusPreviewMode,
+        isBackFace
+    ) {
+        if (
+            customizationPagerState.currentPage != STICKER_TAB_PAGE_INDEX ||
+            stickerSubTabIndex != 1 ||
+            isFocusPreviewMode ||
+            isBackFace
+        ) {
+            textStickerPlaceSession.cancelAiming()
+        }
+    }
+
+    BackHandler(
+        enabled = textStickerPlaceSession.isAiming || textStickerPlaceSession.isPlacing
+    ) {
+        textStickerPlaceSession.cancelAiming()
     }
 
     // 화면을 떠나면 아직 붙지 않은 조준 사진만 정리한다.
@@ -4533,6 +4585,64 @@ fun DetailScreen(
                                 }
                             )
                         }
+
+                        val textPlacePhase = textStickerPlaceSession.phase
+                        val textAim =
+                            when (textPlacePhase) {
+                                is TextStickerPlacePhase.Aiming -> textPlacePhase
+                                is TextStickerPlacePhase.Placing ->
+                                    textPlacePhase.aim.takeIf { !textPlacePhase.placed }
+                                TextStickerPlacePhase.Idle -> null
+                            }
+                        if (textAim != null) {
+                            TextStickerAimLayer(
+                                aim = textAim,
+                                textSize = textStickerAimSize,
+                                interactive = textPlacePhase is TextStickerPlacePhase.Aiming,
+                                onMeasured = { size -> textStickerAimSize = size },
+                                onMoveAim = { center ->
+                                    textStickerPlaceSession.moveAim(
+                                        center = center,
+                                        postcardSize = postcardPreviewSize,
+                                        textSize = textStickerAimSize
+                                    )
+                                },
+                                onTransformAim = { zoom, rotationChange ->
+                                    textStickerPlaceSession.transformAim(
+                                        zoom = zoom,
+                                        rotationChange = rotationChange,
+                                        postcardSize = postcardPreviewSize,
+                                        textSize = textStickerAimSize
+                                    )
+                                }
+                            )
+                        }
+
+                        // 라벨 조준: 사진 스티커 조준과 같은 규칙(조준 중 조작, 손이 오는 동안 표시만).
+                        val labelPlacePhase = labelStickerPlaceSession.phase
+                        val labelAim =
+                            when (labelPlacePhase) {
+                                is LabelStickerPlacePhase.Aiming -> labelPlacePhase
+                                is LabelStickerPlacePhase.Placing ->
+                                    labelPlacePhase.aim.takeIf { !labelPlacePhase.placed }
+                                LabelStickerPlacePhase.Idle -> null
+                            }
+                        if (labelAim != null) {
+                            val labelAimSize = rememberLabelStickerSizePx(labelAim.draft)
+                            LabelStickerAimLayer(
+                                aim = labelAim,
+                                labelSize = labelAimSize,
+                                interactive = labelPlacePhase is LabelStickerPlacePhase.Aiming,
+                                onMoveAim = { center ->
+                                    labelStickerPlaceSession.moveAim(
+                                        center = center,
+                                        postcardSize = postcardPreviewSize,
+                                        labelSize = labelAimSize
+                                    )
+                                },
+                                onRotateAim = labelStickerPlaceSession::rotateAim
+                            )
+                        }
                     }
                 }
                 if (isBackFace || isFlipAnimating) {
@@ -5231,14 +5341,36 @@ fun DetailScreen(
                                         )
                                     },
                                     onAddTextSticker = { text, colorArgb, outlineColorArgb ->
-                                        viewModel.recordTextStickerSnapshotForUndo()
                                         val newTextSticker = TextStickerItem(
                                             text = text,
                                             colorArgb = colorArgb,
                                             outlineColorArgb = outlineColorArgb
                                         )
-                                        viewModel.setTextStickers(textStickers + newTextSticker)
-                                        viewModel.setSelectedTextStickerId(newTextSticker.id)
+                                        if (postcardPreviewSize == IntSize.Zero) {
+                                            // 엽서 크기를 아직 모르면 조준 없이 예전처럼 가운데에 붙인다.
+                                            viewModel.recordTextStickerSnapshotForUndo()
+                                            viewModel.setTextStickers(textStickers + newTextSticker)
+                                            viewModel.setSelectedTextStickerId(newTextSticker.id)
+                                        } else {
+                                            // 바로 붙이지 않고 조준부터 — 실제 스티커는 핀셋이
+                                            // 종이에 닿는 순간 undo 한 건으로 만들어진다.
+                                            viewModel.setSelectedTextStickerId(null)
+                                            textStickerAimSize = IntSize.Zero
+                                            textStickerPlaceSession.startAiming(
+                                                draft = newTextSticker,
+                                                postcardSize = postcardPreviewSize
+                                            )
+                                        }
+                                    },
+                                    isPlaceAiming = textStickerPlaceSession.isAiming,
+                                    onPlaceTextSticker = {
+                                        textStickerPlaceSession.beginPlace(
+                                            textSize = textStickerAimSize,
+                                            postcardSize = postcardPreviewSize
+                                        )
+                                    },
+                                    onCancelPlaceAim = {
+                                        textStickerPlaceSession.cancelAiming()
                                     },
                                     onEditTextSticker = { id, text, colorArgb, outlineColorArgb ->
                                         viewModel.recordTextStickerSnapshotForUndo()
@@ -5273,7 +5405,7 @@ fun DetailScreen(
                                     },
                                     canUndoTextSticker = canUndoTextSticker,
                                     canRedoTextSticker = canRedoTextSticker,
-                                    enabled = controlsEnabled,
+                                    enabled = controlsEnabled && !textStickerPlaceSession.isPlacing,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 } else {
@@ -5290,18 +5422,33 @@ fun DetailScreen(
                                         )
                                     },
                                     onAddLabelSticker = { text, style, customTapeColorArgb ->
-                                        viewModel.recordLabelStickerSnapshotForUndo()
                                         val newLabelSticker = LabelStickerItem(
                                             text = text,
                                             style = style,
                                             customTapeColorArgb = customTapeColorArgb
                                         )
-                                        viewModel.setLabelStickers(
-                                            labelStickers + newLabelSticker
-                                        )
-                                        viewModel.setSelectedLabelStickerId(
-                                            newLabelSticker.id
-                                        )
+                                        if (postcardPreviewSize == IntSize.Zero) {
+                                            // 엽서 크기를 아직 모르면 조준 없이 예전처럼 가운데에 붙인다.
+                                            viewModel.recordLabelStickerSnapshotForUndo()
+                                            viewModel.setLabelStickers(
+                                                labelStickers + newLabelSticker
+                                            )
+                                            viewModel.setSelectedLabelStickerId(
+                                                newLabelSticker.id
+                                            )
+                                        } else {
+                                            // 바로 붙이지 않고 조준부터 — 실제 라벨은 핀셋이
+                                            // 종이에 닿는 순간 undo 한 건으로 만들어진다.
+                                            viewModel.setSelectedLabelStickerId(null)
+                                            labelStickerPlaceSession.startAiming(
+                                                draft = newLabelSticker,
+                                                postcardSize = postcardPreviewSize,
+                                                labelSize = labelStickerSizePx(
+                                                    newLabelSticker,
+                                                    stickerPlaceDensity
+                                                )
+                                            )
+                                        }
                                     },
                                     onEditLabelSticker = { id, text, style, customTapeColorArgb ->
                                         viewModel.recordLabelStickerSnapshotForUndo()
@@ -5336,8 +5483,15 @@ fun DetailScreen(
                                     },
                                     canUndoLabelSticker = canUndoLabelSticker,
                                     canRedoLabelSticker = canRedoLabelSticker,
-                                    enabled = controlsEnabled,
-                                    modifier = Modifier.fillMaxWidth()
+                                    enabled = controlsEnabled && !labelStickerPlaceSession.isPlacing,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    isPlaceAiming = labelStickerPlaceSession.isAiming,
+                                    onPlaceLabelSticker = {
+                                        labelStickerPlaceSession.beginPlace()
+                                    },
+                                    onCancelPlaceAim = {
+                                        labelStickerPlaceSession.cancelAiming()
+                                    }
                                 )
                                 }
                                 }
@@ -6676,6 +6830,54 @@ fun DetailScreen(
                 },
                 onFinished = {
                     photoStickerPlaceSession.finish()
+                }
+            )
+        }
+
+        val placingText = textStickerPlaceSession.phase as? TextStickerPlacePhase.Placing
+        if (placingText != null) {
+            TextStickerTweezerHandOverlay(
+                aim = placingText.aim,
+                textSize = textStickerAimSize,
+                textCenter =
+                    postcardPositionInRoot - detailRootPositionInRoot + placingText.aim.center,
+                onContact = {
+                    val newText =
+                        textStickerPlaceSession.takeContactText(textStickerAimSize)
+                    if (newText != null) {
+                        vibratePhotoStickerContact(context)
+                        viewModel.recordTextStickerSnapshotForUndo()
+                        viewModel.setTextStickers(viewModel.textStickers.value + newText)
+                        viewModel.setSelectedTextStickerId(newText.id)
+                    }
+                },
+                onFinished = {
+                    textStickerPlaceSession.finish()
+                }
+            )
+        }
+
+        val placingLabel = labelStickerPlaceSession.phase as? LabelStickerPlacePhase.Placing
+        if (placingLabel != null) {
+            val placingLabelSize = rememberLabelStickerSizePx(placingLabel.aim.draft)
+            LabelStickerTweezerHandOverlay(
+                label = placingLabel.aim.draft,
+                labelSize = placingLabelSize,
+                labelCenter =
+                    postcardPositionInRoot - detailRootPositionInRoot + placingLabel.aim.center,
+                labelRotationDegrees = placingLabel.aim.rotationDegrees,
+                onContact = {
+                    val newLabel =
+                        labelStickerPlaceSession.takeContactLabel(placingLabelSize)
+                    if (newLabel != null) {
+                        vibratePhotoStickerContact(context)
+                        viewModel.recordLabelStickerSnapshotForUndo()
+                        viewModel.setLabelStickers(viewModel.labelStickers.value + newLabel)
+                        viewModel.setSelectedLabelStickerId(newLabel.id)
+                    }
+                },
+                onFinished = {
+                    labelStickerPlaceSession.finish()
                 }
             )
         }
