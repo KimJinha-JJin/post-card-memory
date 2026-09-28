@@ -1613,6 +1613,8 @@ fun DetailScreen(
     // 도장 찍기(조준 + 신문지 손) 연출 상태. 화면에만 잠깐 있는 상태라 remember로만
     // 두고, 화면을 떠나면 함께 사라진다 — 저장·복원·export에는 들어가지 않는다.
     val sealStampSession = remember { SealStampSession() }
+    // 사진 스티커 붙이기(조준 + 핀셋 손) 연출 상태. 도장과 같이 화면에만 있는 상태다.
+    val photoStickerPlaceSession = remember { PhotoStickerPlaceSession<Uri>() }
     var postcardPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var detailRootPositionInRoot by remember { mutableStateOf(Offset.Zero) }
 
@@ -1824,6 +1826,112 @@ fun DetailScreen(
         enabled = sealStampSession.isAiming || sealStampSession.isStamping
     ) {
         sealStampSession.cancelAiming()
+    }
+
+    // 조준에 쓰다 버린 파일(원본 또는 조준 중 배경제거 결과)을 기존 정리 경로로 지운다.
+    // 두 함수 모두 자기 폴더(sticker_originals/ 또는 cache/photo_stickers/·sticker_bgs/)
+    // 안의 file:// 이면서 지금 스티커·undo/redo 어디에서도 참조하지 않을 때만 지우고,
+    // 다른 폴더의 파일이나 SAF(파일에서 추가) URI는 건드리지 않는다.
+    fun discardPhotoStickerAimOriginal(uri: Uri) {
+        viewModel.deleteStickerCacheUri(uri)
+        viewModel.deleteStickerOriginalIfUnreferenced(
+            uri,
+            viewModel.photoStickers.value
+        )
+    }
+
+    var photoStickerAimBackgroundError by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    // 조준 중 `배경제거`/`원본복원`. 결과가 도착했을 때 조준이 이미 바뀌었으면 결과를 정리한다.
+    fun togglePhotoStickerAimBackground() {
+        photoStickerAimBackgroundError = null
+        val request =
+            photoStickerPlaceSession.toggleAimBackground() ?: return
+        viewModel.removeAimStickerBackground(
+            sourceUri = request.source,
+            onRemoved = { resultUri, silhouette ->
+                photoStickerPlaceSession
+                    .applyAimBackgroundRemoval(
+                        stickerId = request.stickerId,
+                        removedBgSource = resultUri,
+                        cutoutSilhouette = silhouette
+                    )
+                    ?.let(::discardPhotoStickerAimOriginal)
+            },
+            onFailed = {
+                photoStickerPlaceSession.failAimBackgroundRemoval(request.stickerId)
+                photoStickerAimBackgroundError =
+                    "배경 제거를 준비하지 못했어. 잠시 뒤 다시 시도해줘."
+            }
+        )
+    }
+
+    // 고른 사진(복사 완료 또는 SAF URI)으로 조준을 시작한다. 바로 붙이지 않고 조준부터 —
+    // 실제 스티커는 핀셋이 종이에 닿는 순간 undo 한 건으로 만들어진다.
+    // 복사를 기다리는 사이 조준할 수 없는 상태(엽서 크기 미측정, 다른 탭, 크게보기·뒷면)가
+    // 됐으면 고른 사진을 잃지 않도록 예전처럼 가운데에 바로 붙인다.
+    fun startPhotoStickerAim(originalUri: Uri) {
+        val canAim =
+            postcardPreviewSize != IntSize.Zero &&
+                    customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX &&
+                    stickerSubTabIndex == 0 &&
+                    !isFocusPreviewMode &&
+                    !isBackFace
+        if (!canAim) {
+            viewModel.addPlacedPhotoSticker(
+                PhotoStickerItem(
+                    originalUri = originalUri,
+                    displayedUri = originalUri
+                )
+            )
+            return
+        }
+        viewModel.setSelectedStickerId(null)
+        photoStickerAimBackgroundError = null
+        photoStickerPlaceSession
+            .startAiming(
+                source = originalUri,
+                postcardSize = postcardPreviewSize,
+                baseStickerSidePx = baseStickerPx
+            )
+            .forEach(::discardPhotoStickerAimOriginal)
+    }
+
+    // 사진 스티커 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 조준을 접는다(스티커 생성 없음).
+    LaunchedEffect(
+        customizationPagerState.currentPage,
+        stickerSubTabIndex,
+        isFocusPreviewMode,
+        isBackFace
+    ) {
+        if (
+            customizationPagerState.currentPage != STICKER_TAB_PAGE_INDEX ||
+            stickerSubTabIndex != 0 ||
+            isFocusPreviewMode ||
+            isBackFace
+        ) {
+            photoStickerPlaceSession.cancelAiming()
+                .forEach(::discardPhotoStickerAimOriginal)
+        }
+    }
+
+    // 화면을 떠나면 아직 붙지 않은 조준 사진만 정리한다.
+    DisposableEffect(Unit) {
+        onDispose {
+            photoStickerPlaceSession.abandon()
+                .forEach(::discardPhotoStickerAimOriginal)
+        }
+    }
+
+    // 도장과 같은 규칙: 조준 중 뒤로가기는 조준만 취소하고, 핀셋 손이 움직이는
+    // 짧은 동안에는 뒤로가기를 흘려보낸다.
+    BackHandler(
+        enabled = photoStickerPlaceSession.isAiming || photoStickerPlaceSession.isPlacing
+    ) {
+        photoStickerPlaceSession.cancelAiming()
+            .forEach(::discardPhotoStickerAimOriginal)
     }
 
     // 미래로 발송된 엽서는 직접 detail/{id} 딥링크로 들어오더라도 편집
@@ -4392,6 +4500,39 @@ fun DetailScreen(
                                 onTransformAim = sealStampSession::transformAim
                             )
                         }
+
+                        // 사진 스티커 조준: 조준 중에는 조작 가능한 미리보기 + 십자,
+                        // 핀셋이 오는 동안에는 목표 자리 표시만. 닿는 순간 사라진다.
+                        val stickerPlacePhase = photoStickerPlaceSession.phase
+                        val stickerAim =
+                            when (stickerPlacePhase) {
+                                is PhotoStickerPlacePhase.Aiming -> stickerPlacePhase
+                                is PhotoStickerPlacePhase.Placing ->
+                                    stickerPlacePhase.aim.takeIf { !stickerPlacePhase.placed }
+                                PhotoStickerPlacePhase.Idle -> null
+                            }
+                        if (stickerAim != null) {
+                            PhotoStickerAimLayer(
+                                aim = stickerAim,
+                                stickerBaseSize = STICKER_BASE_SIZE,
+                                interactive = stickerPlacePhase is PhotoStickerPlacePhase.Aiming,
+                                onMoveAim = { center ->
+                                    photoStickerPlaceSession.moveAim(
+                                        center = center,
+                                        postcardSize = postcardPreviewSize,
+                                        baseStickerSidePx = baseStickerPx
+                                    )
+                                },
+                                onTransformAim = { zoom, rotationChange ->
+                                    photoStickerPlaceSession.transformAim(
+                                        zoom = zoom,
+                                        rotationChange = rotationChange,
+                                        postcardSize = postcardPreviewSize,
+                                        baseStickerSidePx = baseStickerPx
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
                 if (isBackFace || isFlipAnimating) {
@@ -4931,29 +5072,45 @@ fun DetailScreen(
                                     onAddFromGallery = { uri ->
                                         backgroundRemovalError = null
                                         viewModel.resetStickerBackgroundRemovalState()
-                                        viewModel.addGalleryPhotoSticker(
+                                        viewModel.importGalleryPhotoStickerOriginal(
                                             postcardId,
-                                            uri
+                                            uri,
+                                            onImported = ::startPhotoStickerAim
                                         )
                                     },
                                     onAddFromFile = { uri ->
-                                        viewModel.recordStickerSnapshotForUndo()
-                                        val newSticker = PhotoStickerItem(
-                                            originalUri = uri,
-                                            displayedUri = uri
-                                        )
-                                        viewModel.setPhotoStickers(photoStickers + newSticker)
-                                        viewModel.setSelectedStickerId(newSticker.id)
                                         backgroundRemovalError = null
                                         viewModel.resetStickerBackgroundRemovalState()
+                                        startPhotoStickerAim(uri)
                                     },
                                     onAddFromCamera = { captureFile ->
                                         backgroundRemovalError = null
                                         viewModel.resetStickerBackgroundRemovalState()
-                                        viewModel.addCameraPhotoSticker(
+                                        viewModel.importCameraPhotoStickerOriginal(
                                             postcardId,
-                                            captureFile
+                                            captureFile,
+                                            onImported = ::startPhotoStickerAim
                                         )
+                                    },
+                                    isPlaceAiming = photoStickerPlaceSession.isAiming,
+                                    onPlaceSticker = {
+                                        photoStickerPlaceSession.beginPlace()
+                                    },
+                                    onCancelPlaceAim = {
+                                        photoStickerPlaceSession.cancelAiming()
+                                            .forEach(::discardPhotoStickerAimOriginal)
+                                    },
+                                    placeAimBackgroundState =
+                                        (photoStickerPlaceSession.phase as? PhotoStickerPlacePhase.Aiming)
+                                            ?.let { aim ->
+                                                PhotoStickerAimBackgroundState(
+                                                    isRemoved = aim.isBackgroundRemoved,
+                                                    isRemoving = aim.isRemovingBackground,
+                                                    error = photoStickerAimBackgroundError
+                                                )
+                                            },
+                                    onTogglePlaceAimBackground = {
+                                        togglePhotoStickerAimBackground()
                                     },
                                     onDeleteSticker = { id ->
                                         val sticker = photoStickers.find { it.id == id }
@@ -5057,7 +5214,7 @@ fun DetailScreen(
                                             viewModel.moveStickerBackward(it.id)
                                         }
                                     },
-                                    enabled = controlsEnabled,
+                                    enabled = controlsEnabled && !photoStickerPlaceSession.isPlacing,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 } else if (stickerSubTabIndex == 1) {
@@ -6492,6 +6649,33 @@ fun DetailScreen(
                     if (stampedId != null && latestPhotoSeals.any { it.id == stampedId }) {
                         viewModel.setSelectedSealId(stampedId)
                     }
+                }
+            )
+        }
+
+        // 핀셋 손도 도장 손과 같이 엽서 clip 바깥, 화면 전체 위에 그린다.
+        val placingSticker = photoStickerPlaceSession.phase as? PhotoStickerPlacePhase.Placing
+        if (placingSticker != null) {
+            PhotoStickerTweezerHandOverlay(
+                stickerUri = placingSticker.aim.displayedSource,
+                isBackgroundRemoved = placingSticker.aim.isBackgroundRemoved,
+                cutoutSilhouette = placingSticker.aim.activeCutoutSilhouette,
+                stickerCenter =
+                    postcardPositionInRoot - detailRootPositionInRoot + placingSticker.aim.center,
+                stickerSide = STICKER_BASE_SIZE * placingSticker.aim.scale,
+                stickerRotationDegrees = placingSticker.aim.rotationDegrees,
+                onContact = {
+                    val newSticker =
+                        photoStickerPlaceSession.takeContactPlacement(
+                            baseStickerSidePx = baseStickerPx
+                        )?.toPhotoStickerItem()
+                    if (newSticker != null) {
+                        vibratePhotoStickerContact(context)
+                        viewModel.addPlacedPhotoSticker(newSticker)
+                    }
+                },
+                onFinished = {
+                    photoStickerPlaceSession.finish()
                 }
             )
         }

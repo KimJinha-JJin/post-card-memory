@@ -75,7 +75,12 @@ fun PhotoStickerPickerPanel(
     onMoveForward: () -> Unit,
     onMoveBackward: () -> Unit,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPlaceAiming: Boolean = false,
+    onPlaceSticker: () -> Unit = {},
+    onCancelPlaceAim: () -> Unit = {},
+    placeAimBackgroundState: PhotoStickerAimBackgroundState? = null,
+    onTogglePlaceAimBackground: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -207,7 +212,7 @@ fun PhotoStickerPickerPanel(
                 canRedo = canRedoSticker,
                 onUndo = onUndoSticker,
                 onRedo = onRedoSticker,
-                enabled = enabled,
+                enabled = enabled && !isPlaceAiming,
                 undoContentDescription = "실행 취소",
                 redoContentDescription = "다시 실행"
             )
@@ -221,6 +226,62 @@ fun PhotoStickerPickerPanel(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        // 고른 사진을 엽서 위 +로 자리 잡는 동안에는 목록 대신 안내 한 줄과
+        // `취소 | 배경제거 | 붙이기`만 둔다(도장 찍기 조준과 같은 문법, 배경제거
+        // 문구는 붙인 스티커의 편집 줄과 같다).
+        if (isPlaceAiming) {
+            val isRemovingAimBackground =
+                placeAimBackgroundState?.isRemoving == true
+
+            EditorQuietHint(
+                text = "엽서를 눌러 자리를 고르고, 두 손가락으로 돌리거나 크기를 바꿔봐."
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            placeAimBackgroundState?.error?.let { errorMessage ->
+                Text(
+                    text = errorMessage,
+                    color = GalleryDangerRed,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EditorTextAction(
+                    text = "취소",
+                    onClick = onCancelPlaceAim,
+                    enabled = enabled
+                )
+
+                EditorActionDivider()
+
+                EditorTextAction(
+                    text =
+                        when {
+                            isRemovingAimBackground -> "처리중..."
+                            placeAimBackgroundState?.isRemoved == true -> "원본복원"
+                            else -> "배경제거"
+                        },
+                    onClick = onTogglePlaceAimBackground,
+                    enabled = enabled && !isRemovingAimBackground
+                )
+
+                EditorActionDivider()
+
+                EditorTextAction(
+                    text = "붙이기",
+                    onClick = onPlaceSticker,
+                    enabled = enabled && !isRemovingAimBackground
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            return@Column
+        }
 
         // 스티커 목록 (가로 스크롤)
         Row(
@@ -376,3 +437,10 @@ fun PhotoStickerPickerPanel(
         )
     }
 }
+
+/** 붙이기 전 조준 중인 사진의 배경제거 표시 상태(패널 문구·버튼 활성용). */
+data class PhotoStickerAimBackgroundState(
+    val isRemoved: Boolean,
+    val isRemoving: Boolean,
+    val error: String?
+)

@@ -1142,7 +1142,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * addCameraPhotoSticker와 동일한 정책 — Photo Picker로 고른 사진을 즉시
+     * importCameraPhotoStickerOriginal과 동일한 정책 — Photo Picker로 고른 사진을 즉시
      * 앱 소유 파일(masking_tape_photos/<postcardId>/)로 복사한 뒤에만
      * MaskingTapeItem을 만든다. Photo Picker가 돌려주는 URI는 persistable
      * grant를 지원하지 않아 그대로 오래 보관할 수 없기 때문이다.
@@ -3817,6 +3817,70 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 87일차 후속: 붙이기 전 조준 중인 사진의 배경제거. 아직 스티커가 아니므로
+     * [removeStickerBackground]와 달리 undo·[stickerBackgroundRemovalState]를 건드리지
+     * 않고, 결과 PNG(cache/photo_stickers/)와 핀셋이 집을 자리를 정할 불투명 표본점을
+     * [onRemoved]로 넘긴다. 결과가 늦게 도착해 쓸 곳이 없으면 호출자가 정리한다.
+     */
+    fun removeAimStickerBackground(
+        sourceUri: Uri,
+        onRemoved: (resultUri: Uri, cutoutSilhouette: List<Offset>) -> Unit,
+        onFailed: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val result =
+                runCatching {
+                    val inputImage =
+                        withContext(Dispatchers.IO) {
+                            InputImage.fromFilePath(
+                                context,
+                                sourceUri
+                            )
+                        }
+
+                    val foregroundBitmap =
+                        getSubjectSegmenter()
+                            .process(inputImage)
+                            .awaitResult()
+                            .foregroundBitmap
+                            ?: throw IllegalStateException(
+                                "배경 제거 결과를 만들지 못했어."
+                            )
+
+                    try {
+                        withContext(Dispatchers.IO) {
+                            val silhouette =
+                                photoStickerCutoutSilhouette(
+                                    width = foregroundBitmap.width,
+                                    height = foregroundBitmap.height
+                                ) { x, y ->
+                                    (foregroundBitmap.getPixel(x, y) ushr 24) >=
+                                            PHOTO_STICKER_CUTOUT_ALPHA_THRESHOLD
+                                }
+                            saveStickerForegroundBitmap(foregroundBitmap) to silhouette
+                        }
+                    } finally {
+                        if (!foregroundBitmap.isRecycled) {
+                            foregroundBitmap.recycle()
+                        }
+                    }
+                }
+
+            result.fold(
+                onSuccess = { (resultUri, silhouette) ->
+                    onRemoved(resultUri, silhouette)
+                },
+                onFailure = { exception ->
+                    if (exception is CancellationException) {
+                        throw exception
+                    }
+                    onFailed()
+                }
+            )
+        }
+    }
+
     fun resetStickerBackgroundRemovalState() {
         _stickerBackgroundRemovalState.value =
             StickerBackgroundRemovalState.Idle
@@ -3908,12 +3972,16 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun addCameraPhotoSticker(
+    /**
+     * 87일차: 촬영한 스티커 원본을 앱 저장소로 복사만 하고, 스티커는 만들지 않는다.
+     * 복사가 끝나면 [onImported]로 원본 URI를 넘겨 조준(핀셋 붙이기)을 시작한다 —
+     * 실제 스티커와 undo 기록은 핀셋이 닿는 순간 [addPlacedPhotoSticker]에서 한 번에 생긴다.
+     */
+    fun importCameraPhotoStickerOriginal(
         postcardId: Long,
-        captureFile: File
+        captureFile: File,
+        onImported: (Uri) -> Unit
     ) {
-        recordStickerSnapshotForUndo()
-
         viewModelScope.launch {
             val originalUri =
                 withContext(Dispatchers.IO) {
@@ -3934,16 +4002,7 @@ class DetailViewModel @Inject constructor(
                 }
 
             if (originalUri != null) {
-                val newSticker =
-                    PhotoStickerItem(
-                        originalUri = originalUri,
-                        displayedUri = originalUri
-                    )
-
-                _photoStickers.value += newSticker
-                _selectedStickerId.value =
-                    newSticker.id
-                scheduleDraftAutosave()
+                onImported(originalUri)
             } else {
                 _textScaleSaveErrors.trySend(
                     "스티커 사진을 저장하지 못했어."
@@ -3953,20 +4012,19 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * addCameraPhotoSticker와 동일한 정책 — Photo Picker(갤러리)로 고른
+     * importCameraPhotoStickerOriginal과 동일한 정책 — Photo Picker(갤러리)로 고른
      * 사진은 content://media/picker/... URI라 persistable grant를 지원하지
      * 않으므로, onAddFromGallery 콜백에서 이 함수를 호출해 즉시 앱 소유
-     * 파일(sticker_originals/<postcardId>/)로 복사한 뒤에만 PhotoStickerItem을
-     * 만든다. OpenDocument(파일에서 추가, onAddFromFile)로 고른 URI는 SAF
+     * 파일(sticker_originals/<postcardId>/)로 복사한 뒤에만 조준을 시작한다.
+     * OpenDocument(파일에서 추가, onAddFromFile)로 고른 URI는 SAF
      * 표준상 persistable grant가 실제로 성립해 이 복사가 필요 없으므로
      * 그 경로는 그대로 둔다.
      */
-    fun addGalleryPhotoSticker(
+    fun importGalleryPhotoStickerOriginal(
         postcardId: Long,
-        sourceUri: Uri
+        sourceUri: Uri,
+        onImported: (Uri) -> Unit
     ) {
-        recordStickerSnapshotForUndo()
-
         viewModelScope.launch {
             val originalUri =
                 withContext(Dispatchers.IO) {
@@ -3983,22 +4041,28 @@ class DetailViewModel @Inject constructor(
                 }
 
             if (originalUri != null) {
-                val newSticker =
-                    PhotoStickerItem(
-                        originalUri = originalUri,
-                        displayedUri = originalUri
-                    )
-
-                _photoStickers.value += newSticker
-                _selectedStickerId.value =
-                    newSticker.id
-                scheduleDraftAutosave()
+                onImported(originalUri)
             } else {
                 _textScaleSaveErrors.trySend(
                     "스티커 사진을 저장하지 못했어."
                 )
             }
         }
+    }
+
+    /**
+     * 핀셋이 스티커를 종이에 놓은 순간(또는 조준을 쓸 수 없을 때 바로) 새 스티커를
+     * 추가한다. 추가 한 번 = undo 한 건이며, 붙인 스티커를 선택 상태로 둔다.
+     */
+    fun addPlacedPhotoSticker(
+        sticker: PhotoStickerItem
+    ) {
+        if (_photoStickers.value.any { it.id == sticker.id }) return
+
+        recordStickerSnapshotForUndo()
+        _photoStickers.value += sticker
+        _selectedStickerId.value = sticker.id
+        scheduleDraftAutosave()
     }
 
     fun duplicateSticker(
