@@ -1,4 +1,77 @@
-# HANDOFF — 87일차 후속: 누끼 스티커 이동 경계 수정
+# HANDOFF — 88일차: 갤러리 퀵 셀렉트 미감 정비(신문 오림 손 부채)
+
+확인일: 2026-09-29. 수동 표준 모드(88일차 작업지시서). 기능은 더하거나 빼지 않고, 갤러리 우측 하단 + 클러스터의 표현만 사용자가 준비한 신문 오림 손 5장이 부채처럼 펼쳐지며 기능을 내미는 모습으로 바꿨어. 로컬 자동검증과 사용자 실기기 QA 2회(1차 보정 요청 → 2차 통과)를 마쳤고, 작업지시서 34절에 따라 commit·push·CI 확인까지 진행해(실제 commit hash·CI는 완료보고·`git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 상태 빠른 확인
+
+- 브랜치: `feature/photo-sticker`, 시작 HEAD `6621e12` "Let cutout stickers reach the postcard edge by their visible part"(CI run `36400626851` 성공), origin `0/0`
+- 커밋 대상: `ui/gallery/GalleryScreen.kt` 수정 / 새 파일 `ui/gallery/GalleryQuickSelectFan.kt`, `GalleryQuickSelectFanTest.kt`, 손 PNG 5장 / `GalleryViewSelectionStructureTest.kt`, `AppIntroVisitPostmarkStructureTest.kt` 수정 / 이 HANDOFF·TEST-COVERAGE-MAP
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존
+
+## 기존 퀵 셀렉트 구조(바꾸기 전)
+
+- `GalleryScreen.kt`의 `GalleryFabCluster`: 오른쪽 아래 + 버튼 → 큰 원 3개(카메라·미래 우체통·"특별한 갤러리" 묶음 토글) + 작은 원 3개(연못·양떼목장·쫑쫑컵), 실행 버튼 5 + 묶음 토글 1 = 6개. 68일차 롱프레스 드래그 바로 실행, 탭/드래그 공용 `dispatchDragTarget`.
+- 실행: 카메라 → `navigate("camera")`, 미래 우체통 → `navigate("futureMailbox")`, 놀이 3종 → `onPlayModeSelected`(같은 모드 재선택 시 NONE, 선택 해제·메뉴 닫힘).
+- 노출: 다중 선택 중에만 숨김(`visible = !selectionMode`). 검색·놀이 모드 중에는 보임(놀이 모드 출구). 방문 달력 drawer 아래, 흔들어서 한 장 overlay 아래. 뒤로가기(`BackHandler(enabled = fabMenuExpanded)`)·20% 딤 바깥 탭으로 닫힘. 흔들기 인식 시 강제로 닫힘.
+
+## 앱에 달라진 점
+
+- 닫힌 상태: 오른쪽 아래 끝에 손끝·블록 일부만 삐져나온 작은 손 묶음(0.8배, 손끼리 1.2°씩 어긋남). 그 자리 60×64dp가 손잡이(탭 = 열기/닫기, 접근성 "바로가기 열기/닫기").
+- 열기: 묶음째 쑤욱(130ms) → 아래로 5° 젖힘(60ms) → 촤라락 부채(170ms, 손별 약 14ms 어긋남). 닫기는 역방향(모임 120ms → 빠짐 110ms). 도중 반대 요청은 그 자리에서 방향만 바꿔.
+- 손 매핑(아래→위): 카메라 손 = 카메라, 편지 손 = 미래 우체통, 강물 손 = 엽서의 연못, 양 손 = 양떼목장, 체커 손 = 엽서 쫑쫑컵. 기능 callback·navigation·노출 조건·뒤로가기·바깥 탭(딤)은 그대로.
+- 켜져 있는 놀이 모드의 손은 블록 테두리에 옅은 금색(SunsetGold) 선. 누르면 0.96배 짧은 눌림 + 확정 진동(22ms/160), 손잡이 탭은 가벼운 진동(10ms/90).
+- **사용자 승인으로 빠진 것:** "특별한 갤러리" 묶음 단계(다섯 손이 한 단계), 68일차 롱프레스 드래그 바로 실행과 그 진동, 옛 원형 버튼·선택 링·물방울 pulse. 닫힌 위치는 오른쪽 아래 유지(권장안 승인).
+- 저장 데이터·Room·migration·serialization·dependency 변경 없음.
+
+## 자산
+
+- `app/src/main/res/drawable-nodpi/quick_select_{camera,letter,sheep,checker,river}_hand.png` — 사용자 제공 원본 그대로(crop·보정 없음). 모두 1254×1254 32bpp ARGB 투명 PNG, 손목은 오른쪽 가장자리에서 들어옴(우측 가장자리 불투명 행: camera 631~909, letter 696~992, sheep 619~920, checker 617~933, river 670~929).
+- 블록 경계(원본 px, 눈으로 실측): camera 243,405–692,718 / letter 113,432–590,750 / river 243,403–692,713 / sheep 280,377–723,722 / checker 162,413–653,725. `GalleryQuickSelectItem`에 상수로 둠.
+- 기존 손 오버레이와 같은 `ImageBitmap.imageResource` + `FilterQuality.Medium`(원본 해상도).
+
+## 구조와 결정
+
+- `GalleryQuickSelectFan.kt`(순수): `GalleryQuickSelectPhase`(CLOSED/OPENING/OPEN/CLOSING, `onRequest`·`onAnimationFinished`·`onSelect`), `GalleryQuickSelectItem`(슬롯·블록 좌표), 부채 geometry.
+- 부채: 화면 오른쪽 밖 가상 pivot 하나. 각 손은 블록 중심이 pivot에서 반지름 440dp 위에 오고 손 가로축이 반지름과 나란하게 같은 각도로 돈다(`graphicsLayer` translation + 블록 중심 transformOrigin + rotationZ). 이웃 각도 9°(작은 화면은 7.6°까지 clamp) → 슬롯 각도 −18°/−9°/0°/+9°/+18°, 이웃 블록 중심 간격 약 69dp. 가운데 손 블록 중심 = 오른쪽 끝에서 92dp, 맨 아래 블록 중심 = 바닥에서 64dp. 손 표시 크기 180dp.
+- 닫힌 묶음: 전부 맨 아래 슬롯 각도 근처, 반지름 −72dp(오른쪽으로 물러남), 0.8배, 닫힌 자리만 24dp 더 아래(`quickSelectAnimatedBlockCenter`).
+- 겹침 순서: 위 손부터 그려 아래 손이 위 손의 손바닥을 덮음(블록은 안 가림). 터치 영역은 블록 + 좌우 6dp, 높이 48dp(이웃 손과 겹치지 않는 한계 `r_in·tan(Δ/2)`로 제한). 회전된 layer 안이라 터치 판정도 회전을 따라감. 손잡이는 손들보다 먼저 둬 겹치는 곳은 손이 입력을 받음.
+- 입력 보호: 기능은 OPEN에서만 실행, 탭 즉시 CLOSING으로 넘어가 연타해도 callback 1회. CLOSED에서는 손 터치 영역·접근성 노드 자체가 없음. 열기/닫기 연타는 같은 방향이면 재시작하지 않음.
+- 연출 값(`Animatable` 3개: slide·tilt·spread)은 `graphicsLayer` 안에서만 읽음.
+
+## 실기기 QA 결과
+
+- 1차: 기능·닫기·연타·속도 정상. 요청 = "닫힌 손잡이 조금 더 아래", "손 사이 간격이 빡빡하고 겹치는 부분이 어색" → 반지름 400→440dp, 이웃 각도 8→9°(블록 간격 약 56→69dp, 기울기 ±16→±18°), 닫힌 자리만 24dp 하강.
+- 2차: 손잡이 위치·간격·기능 전부 "좋아/전부 정상".
+
+## 검증과 남은 상태
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| 구현 | 완료 | |
+| 로컬 JVM | 통과 888/888 (92 XML) | 신규 `GalleryQuickSelectFanTest` 14건, 구조 테스트 12→11 |
+| assembleDebug / assembleDebugAndroidTest | 성공 | |
+| emulator instrumentation | 미실행 | androidTest 변경 없음, 연결된 emulator 없음(`adb devices -l` 빈 목록), 기존 미실행 7건 유지 |
+| 실기기 QA | 완료(2차 통과) | 위 결과 |
+| TEST-COVERAGE-MAP | 갱신 완료 | 875→888, 파일 90→91, 구조 148→147 |
+| Room / migration / serialization / dependency | 변경 없음 | |
+| commit / push / CI | 작업지시서 34절에 따라 진행 | 결과는 완료보고·`git log`·GitHub Actions |
+
+## 남은 위험
+
+- 손 PNG 5장을 원본 해상도로 상주 로드(장당 약 6.3MB, 합 약 31MB). 저사양 기기 메모리 압박 가능성 — 문제 시 표시 크기에 맞춘 축소 디코드가 후보(질감 손실 확인 필요).
+- 블록 좌표는 눈 실측이라 수 px 오차 가능(터치 영역·금색 테두리 위치). QA에서 문제는 없었어.
+- 롱프레스 드래그 바로 실행을 쓰던 사용 습관은 사라짐(승인된 제거).
+- 가로 화면·아주 작은 화면(높이 약 400dp 미만)에서는 각도가 7.6°까지만 줄어 맨 위 손이 잘릴 수 있어(실기기 미확인).
+
+## 다음 후보(승인된 작업 아님)
+
+- 퀵 셀렉트 미감 추가 보정(사용자 요청 시)
+- `PhotoStickerEdgeStyleInstrumentedTest` 7건 검증 전용 emulator 실행
+- 사진 복사 중 고아 파일, 기본 모양 사진 스티커 회전 문제(88일차 범위 밖으로 유지)
+
+---
+
+# 이전 기록 — 87일차 후속: 누끼 스티커 이동 경계 수정
 
 확인일: 2026-09-28. 수동 표준 모드. 마스킹테이프 쓸어 붙이기(`b9cd53b`, CI run `36398477330` 성공)를 마감한 직후 사용자가 제보한 버그를 고쳤어: "스티커 배경 제거 후 크기를 조절하니 원본 사진 크기가 테두리처럼 작용해서 원하는 위치까지 이동 못 함". 사용자 선택은 "보이는 부분 기준". 로컬 자동검증과 사용자 실기기 QA를 마쳤고, 사용자 요청("커밋하고 푸시해줘")으로 commit·push해(실제 commit hash·CI는 `git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
 

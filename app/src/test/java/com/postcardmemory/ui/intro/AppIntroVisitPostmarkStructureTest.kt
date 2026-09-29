@@ -217,7 +217,11 @@ class AppIntroVisitPostmarkStructureTest {
 
     @Test
     fun postmark_hapticIsLighterThanGalleryLongPress() {
-        val gallery = sourceOf("main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt")
+        // 기준값은 68일차 갤러리 + 롱프레스 진동(35ms / 190)이다. 88일차에 퀵
+        // 셀렉트가 손 부채로 바뀌며 롱프레스 조작과 그 상수가 사라져, 같은
+        // 보호(앱 실행 직후 진동은 그보다 짧고 약하다)를 그 값으로 고정한다.
+        val galleryLongPressDurationMs = 35L
+        val galleryLongPressAmplitude = 190
 
         fun longConstant(source: String, name: String): Long =
             Regex("$name = (\\d+)L").find(source)?.groupValues?.get(1)?.toLong()
@@ -229,16 +233,14 @@ class AppIntroVisitPostmarkStructureTest {
 
         val introDuration = longConstant(introSource, "INTRO_POSTMARK_HAPTIC_DURATION_MS")
         val introAmplitude = intConstant(introSource, "INTRO_POSTMARK_HAPTIC_AMPLITUDE")
-        val longPressDuration = longConstant(gallery, "GalleryFabHapticLongPressDurationMs")
-        val longPressAmplitude = intConstant(gallery, "GalleryFabHapticLongPressAmplitude")
 
         assertTrue(
-            "앱 실행 직후 진동이라 롱프레스보다 짧아야 함($introDuration vs $longPressDuration)",
-            introDuration < longPressDuration
+            "앱 실행 직후 진동이라 롱프레스보다 짧아야 함($introDuration vs $galleryLongPressDurationMs)",
+            introDuration < galleryLongPressDurationMs
         )
         assertTrue(
-            "롱프레스보다 약해야 함($introAmplitude vs $longPressAmplitude)",
-            introAmplitude < longPressAmplitude
+            "롱프레스보다 약해야 함($introAmplitude vs $galleryLongPressAmplitude)",
+            introAmplitude < galleryLongPressAmplitude
         )
     }
 
