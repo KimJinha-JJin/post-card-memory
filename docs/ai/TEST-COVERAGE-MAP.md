@@ -1,8 +1,8 @@
-# 테스트 보호지도 — 88일차 최신화 (원본 79일차 마감)
+# 테스트 보호지도 — 90일차 최신화 (원본 79일차 마감)
 
-확인일: 2026-09-29 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `6621e12` 위 88일차 작업트리(갤러리 퀵 셀렉트 손 부채)
+확인일: 2026-09-30 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `926b280` 위 90일차 작업트리(방문 달력 종이 한 장 + 위로 넘김)
 
-기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치), 85일차에는 사진 스티커 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림), 87일차에는 사진 스티커 핀셋 붙이기(조준·핀셋 손) 상태 흐름, 88일차에는 갤러리 퀵 셀렉트(신문 오림 손 부채)의 열기/닫기 단계·중복 탭 방지·부채 배치에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
+기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치), 85일차에는 사진 스티커 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림), 87일차에는 사진 스티커 핀셋 붙이기(조준·핀셋 손) 상태 흐름, 88일차에는 갤러리 퀵 셀렉트(신문 오림 손 부채)의 열기/닫기 단계·중복 탭 방지·부채 배치, 89일차에는 메인 갤러리 종이 배경 구조, 90일차에는 방문 달력의 종이 한 장 구조와 위로 넘기는 월 이동에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
 
 ## 먼저 읽는 지도
 
@@ -44,11 +44,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 893건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 903건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 893개, 테스트를 담은 파일 92개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 93개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 152개(구조 전용 파일에 있는 144개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 903개, 테스트를 담은 파일 93개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 94개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 159개(구조 전용 파일에 있는 151개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 893개는 89일차(메인 갤러리 종이 배경) 로컬 결과 XML에서 893/893 통과(실패·오류·skip 0)를 확인했어. 직전 888개는 CI run `36547707223`(`6f9d821`)·`36549115333`(`e4045ab`)에서 통과했고, 893개의 CI 결과는 이 문서 작성 시점에 아직 없음(push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 903개는 90일차(방문 달력 종이·넘김) 로컬 결과 XML에서 903/903 통과(실패·오류·skip 0)를 확인했어. 직전 893개는 CI run `36698372064`(`926b280`)에서 통과했고, 903개의 CI 결과는 이 문서 작성 시점에 아직 없음(push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -142,11 +142,11 @@ JVM 893개는 89일차(메인 갤러리 종이 배경) 로컬 결과 XML에서 8
 ### 기능: 방문 기록 / 달력 / 자정 처리
 
 - **보호 수준:** 중간 — 계산과 파일은 강함, 실제 화면 연결은 간접 보호.
-- **현재 보호하는 테스트:** `VisitRecordTest`, `VisitRecordStorageTest`, `VisitHistoryStorageTest`, `VisitCalendarTest`, `VisitCalendarMonthLoadingTest`, `DayBoundaryTest`, `VisitDayBoundaryDefinitionTest`.
-- **실제 production 직접 검증:** 같은 날 중복 방문 억제, 날짜·월 경계, 읽기 실패 시 기존 기록 보존, 실제 방문 표식 파일, 월별 읽기, 자정 신호 helper.
-- **간접 검증:** 화면의 자정 신호 연결·방문 생성 분리는 구조 검사. 새 소비자가 모두 감시된다는 전역 보장으로 해석하면 안 돼.
+- **현재 보호하는 테스트:** `VisitRecordTest`, `VisitRecordStorageTest`, `VisitHistoryStorageTest`, `VisitCalendarTest`, `VisitCalendarMonthLoadingTest`, `DayBoundaryTest`, `VisitDayBoundaryDefinitionTest`, `VisitCalendarPaperPageStructureTest`(90일차 달력 한 장 구조).
+- **실제 production 직접 검증:** 같은 날 중복 방문 억제, 날짜·월 경계, 읽기 실패 시 기존 기록 보존, 실제 방문 표식 파일, 월별 읽기, 자정 신호 helper, 달력 묶음 겹침 순서(앞선 달이 항상 위, 해 경계·먼 점프 포함), 넘어가는 장 불투명도(펼치면 불투명·다 넘어가면 0·단조 감소, 다음 달 장은 절반 넘게 넘어가도 불투명하고 이전 달 장보다 먼저 흐려지지 않음).
+- **간접 검증:** 화면의 자정 신호 연결·방문 생성 분리는 구조 검사. 새 소비자가 모두 감시된다는 전역 보장으로 해석하면 안 돼. 달력 종이 한 장(종이·제목·장식·요일·날짜 grid가 한 composable, 그 안에서 `displayedMonth`를 읽지 않음, 월 이동 transition 1개가 장 전체를 감쌈, 종이 drawable 1회·월 이동 밖에서 로드, 늘림·타일·윤곽선 없음, "다녀간 날들"·◀ ▶는 종이 밖, 윗변 축 `rotationX`·달력 묶음 zIndex·끝까지 유지·clip 없음, 월/연도 선택 단계 전환은 fade+scale 그대로, drawer 배경은 `PaperSurface` 그대로)도 구조 검사가 유일한 자동 방어선이야.
 - **현재 믿어도 되는 것:** 검증한 날짜와 파일 조건에서 방문 수·월별 기록 계산.
-- **아직 믿으면 안 되는 것:** 앱을 켜 둔 실제 자정 전환·절전 복귀·화면 재구성에서 모든 표시가 갱신되는지.
+- **아직 믿으면 안 되는 것:** 앱을 켜 둔 실제 자정 전환·절전 복귀·화면 재구성에서 모든 표시가 갱신되는지. 넘김의 실제 렌더링(각도·원근·그림자·잘림·연타 중단)과 종이 질감·가독성은 자동 테스트가 없고 실기기 QA로만 확인했어.
 - **수동 확인 필요:** 예 — 다른 달 탐색과 정상 재실행 표시 확인. 자정은 자연적으로 넘길 기회에 관찰하며 기기 시간을 강제로 바꾸지 않아.
 
 근거: [방문 파일 테스트](../../app/src/test/java/com/postcardmemory/utils/VisitRecordStorageTest.kt), [월별 연결 검사](../../app/src/test/java/com/postcardmemory/ui/gallery/VisitCalendarMonthLoadingTest.kt).
@@ -252,7 +252,7 @@ JVM 893개는 89일차(메인 갤러리 종이 배경) 로컬 결과 XML에서 8
 
 핵심 DetailViewModel replica 25건은 삭제 대상이라는 뜻이 아니야. **설계 의도와 경합 규칙을 설명하는 데 가치가 있지만 실제 production 동작의 직접 증거는 아니야.** 배경색 계측 2건은 실제 production 검증 일부 존재로 따로 표시해. 뒷면 저장 계측은 다른 필드의 저장을 검사하므로 슬라이더 replica의 전체 대체가 아니야.
 
-구조 테스트 152건도 역할을 나눠 읽어야 해. migration 등록, 공용 component 사용, 의존 관계처럼 형태가 계약이면 유효한 안전망이야. 버튼 반응·화면 갱신·레이어 결과를 대신 검사하면 간접 보호에 머물러. 직접 테스트와 구조 테스트를 묶어 볼 수는 있지만, 테스트 개수를 합쳐 보호가 강해졌다고 판단하지 않아.
+구조 테스트 159건도 역할을 나눠 읽어야 해. migration 등록, 공용 component 사용, 의존 관계처럼 형태가 계약이면 유효한 안전망이야. 버튼 반응·화면 갱신·레이어 결과를 대신 검사하면 간접 보호에 머물러. 직접 테스트와 구조 테스트를 묶어 볼 수는 있지만, 테스트 개수를 합쳐 보호가 강해졌다고 판단하지 않아.
 
 ## 자동 실행 여부
 
@@ -260,7 +260,7 @@ JVM 893개는 89일차(메인 갤러리 종이 배경) 로컬 결과 XML에서 8
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 893개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 888개 기준 CI run `36549115333`(`e4045ab`) 성공, 893개는 로컬 893/893 통과(CI는 push 후 확인) |
+| JVM unit test 903개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 893개 기준 CI run `36698372064`(`926b280`) 성공, 903개는 로컬 903/903 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
@@ -295,6 +295,8 @@ JVM 893개는 89일차(메인 갤러리 종이 배경) 로컬 결과 XML에서 8
 **88일차 추가 확인 — 갤러리 퀵 셀렉트 손 부채:** 우측 하단 + 클러스터가 신문 오림 손 5장의 부채로 바뀌어, 순수 단계·geometry를 검사하는 `GalleryQuickSelectFanTest` 14건이 추가되고(파일 90→91), `GalleryViewSelectionStructureTest`는 옛 클러스터 구조 7건(+ anchor·롱프레스 드래그·선택 링·punch)이 퀵 셀렉트 구조 6건으로 바뀌어 12→11건이 돼 JVM 875→888개가 됐어. 사용자 승인으로 롱프레스 드래그 바로 실행과 "특별한 갤러리" 묶음 단계가 빠져 그 보호는 더 이상 없고(구조 테스트가 제거 상태를 고정), 기존 callback·노출 조건·뒤로가기·바깥 탭은 구조 테스트로 계속 보호해. `AppIntroVisitPostmarkStructureTest`의 "인트로 진동은 갤러리 롱프레스보다 짧고 약하다"는 롱프레스 상수가 사라져 옛 값(35ms/190)을 테스트 안 고정값으로 옮겼어(보호 의미 유지). 로컬 결과 XML 888/888 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 손 부채의 실제 렌더링·회전된 터치 판정·연출 리듬·간격 미감은 사용자 실기기 QA(2회, 간격·손잡이 높이 보정 후 통과)로 확인했어.
 
 **89일차 추가 확인 — 메인 갤러리 종이 배경:** 구분선 아래 본문에 사용자 제공 seamless 종이 타일을 한 레이어로 깔고 시계·커피 header를 불투명하게 만들어, 구조만 고정하는 `GalleryPaperBackgroundStructureTest` 5건이 추가돼(파일 91→92, 구조 147→152) JVM 888→893개가 됐어. `GalleryMonthlyGridStructureTest`의 "월별 페이지 배경 개수"는 grid 컨테이너 배경이 pager 밖 종이 레이어로 옮겨져 1→0으로 바꿨어(월 섹션마다 배경을 씌우지 않는다는 보호 의미는 유지, 조건은 더 엄격). 농도·색·타일 크기 같은 미감 값은 테스트로 고정하지 않았어. 로컬 결과 XML 893/893 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 질감 농도·가로 이음매 가시성·header 가림·기존 기능은 사용자 실기기 QA(이미지 교체 1회 후 통과)로 확인했어.
+
+**90일차 추가 확인 — 방문 달력 종이 한 장 + 위로 넘기는 월 이동:** 달력의 제목·장식·요일·날짜 grid를 사용자 제공 종이(`visit_calendar_paper.png`, 한 장 crop) 위 한 장(`VisitCalendarMonthPage`)으로 묶고, 월 이동을 가로 슬라이드에서 벽걸이 달력처럼 윗변을 축으로 위로 넘기는 넘김으로 바꿨어. 구조만 고정하는 `VisitCalendarPaperPageStructureTest` 7건(파일 92→93, 구조 152→159)과 `VisitCalendarTest`의 순수 계산 3건(달력 묶음 겹침 순서, 넘어가는 장 불투명도 경계·단조성, 다음 달 장이 반투명하게 겹치지 않음)으로 JVM 893→903개가 됐어. 각도·시간·그림자 농도 같은 미감 값은 테스트로 고정하지 않았어. 로컬 결과 XML 903/903 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 종이 질감·윤곽선 제거·다음 달 넘김(반투명 겹침 보정 후)·이전 달 넘김·연타·오늘 복귀·선택 단계 전환·하단 가로선 제거는 사용자 실기기 QA로 확인했어.
 
 ## 마지막 요약
 

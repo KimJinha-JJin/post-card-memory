@@ -1,4 +1,64 @@
-# HANDOFF — 89일차: 메인 갤러리 카드보드 종이 배경 + 불투명 시계 header
+# HANDOFF — 90일차(89일차 추가 작업): 방문 달력 종이 한 장 + 위로 넘기는 월 이동
+
+확인일: 2026-09-30. 수동 표준 모드(89일차 추가 작업지시서: 구조 조사 → 자산 규격 → 자산 게이트 → 정적 형태 → 넘김 → QA 보정). 사이드바 방문 달력의 제목·장식·요일·날짜 grid·방문 표시·카오모지를 사용자 제공 종이 한 장 위에 묶고, 이전/다음 달 이동을 벽걸이 달력처럼 윗변을 축으로 위로 넘기는 넘김으로 바꿨어. 로컬 자동검증과 사용자 실기기 QA(정적 형태 → 넘김 → 다음 달 반투명 겹침 보정 → 하단 가로선 제거, 전부 통과)를 마쳤어. **commit·push는 사용자 승인 대기**야. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 상태 빠른 확인
+
+- 브랜치: `feature/photo-sticker`, 시작·현재 HEAD `926b280` "Lay the main gallery on a cardboard paper sheet"(CI run `36698372064` 성공), origin `0/0`
+- 미커밋 변경: `ui/gallery/VisitCalendarDrawer.kt` 수정, `VisitCalendarTest.kt` 수정 / 새 파일 `res/drawable-nodpi/visit_calendar_paper.png`, `VisitCalendarPaperPageStructureTest.kt` / 이 HANDOFF·TEST-COVERAGE-MAP
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존
+
+## 자산
+
+- `app/src/main/res/drawable-nodpi/visit_calendar_paper.png` — 사용자가 생성형 이미지로 만든 한 장 종이(타일 아님), 수정 없이 사용. 1122×1402(정확히 4:5) PNG 8bit RGB, 알파·ICC 없음(→ sRGB), 2,431,538 B, `caBX` 청크 포함. decode 약 6.3MB.
+- 실측: 평균 #E9D4BA(L\* 85.9, b\* 15.7), 밝기 표준편차 5.06, 잔결 4.65, 가장 어두운 8×8 영역 201, 날짜색 #5B5046 대비 평균 약 5.4:1·최저 약 4.7:1, 5px 이상 섬유 점 81개, 3×4 구역 균일(±1), 비네팅·격자 성분 없음. 산출했던 규격(평균 #F4EDE1, L\* 92~95, 섬유 점 15개 이하)보다 어둡고 누렇지만 **사용자가 의도적으로 선택**했어.
+- 경과: 1차(이 파일) 게이트 불통과 판정 → 2차(평균 #F6EFE6, 편차 2.03)는 폰에서 거의 무지로 보임 → 사용자가 "뒷배경이 너무 연하다"며 1차를 다시 채택. 2차는 저장소에 없음.
+
+## 기존 구조(바꾸기 전)
+
+- `VisitCalendarDrawer.kt` 한 파일: `ModalNavigationDrawer` → `ModalDrawerSheet`(304dp, `PaperSurface`) → `Column(verticalScroll, padding 24dp)` → `MonthlyVisitCalendar`. 월별↔선택판은 `AnimatedContent(navLevel)`(CALENDAR/MONTH_PICKER/YEAR_PICKER, fade+scale 170ms).
+- 월 이동은 제목과 날짜 grid가 **각자 다른** `AnimatedContent(displayedMonth)`로 가로 슬라이드(200ms)했고, 요일·상단 장식·"다녀간 날들" 줄은 고정. 달력 자체 배경은 없었어(drawer 단색). 월 이동 gesture는 없음(◀ ▶·"오늘"·월 선택기만).
+
+## 앱에 달라진 점과 구조
+
+- `VisitCalendarMonthPage(month, …)`: 종이(`drawWithCache` + `drawImage`, 큰 쪽 배율 하나로 가운데 crop, 늘림·타일 없음) 위에 제목(48dp, 탭 → 월 선택)·상단 장식·요일·`VisitCalendarMonthGrid`. 안에서는 파라미터 `month`만 읽어 나가는 장이 다음 달로 바뀌지 않아. 윤곽선은 QA에서 "카드처럼 보임"으로 제거.
+- 종이 bitmap은 `MonthlyVisitCalendar`에서 한 번만 로드해 모든 장이 공유(달이 바뀔 때마다 decode 없음).
+- "다녀간 날들 / 오늘" 줄은 종이 위(밖)로 옮겨 고정, ◀ ▶는 종이 제목 줄 위에 겹쳐 고정(가운데 빈 곳 터치는 제목으로 내려감).
+- 날짜 grid는 구분선이 없는 주 자리에도 같은 높이(4.5dp)를 비워 어느 달이든 장 높이가 같아(넘길 때 아래 장이 삐져나오지 않음). 4·5주 달의 빈 패딩 행 아래 위치가 최대 9dp 내려감.
+- 월 이동: `updateTransition(displayedMonth)` + `Transition.AnimatedContent`, `visitCalendarPageTurnTransition`(Enter None, Exit `KeepUntilTransitionsFinished`, `targetContentZIndex = visitCalendarPageStackZIndex(month)` = 앞선 달이 항상 위, `SizeTransform(clip = false)`). 표현은 장 전체에 거는 `visitCalendarPageTurnModifier(forward)`(윗변 `TransformOrigin(0.5f, 0f)` + `rotationX`, cameraDistance 14, 380ms).
+  - 다음 달: 위의 현재 장이 FastOutLinearIn으로 불투명한 채 들리다 빨라져 90°에서 사라지고(흐려짐은 마지막 10%), 들리는 장에만 옅은 그림자(최대 0.12). 아래 다음 장은 움직이지 않음. 처음엔 두 방향이 FastOutSlowIn·흐려짐 시작 0.45를 공유해 현재 장이 약 70% 시간 반투명하게 떠 있어 "두 달이 crossfade"처럼 보였고(QA), 다음 달 값만 분리해 해결.
+  - 이전 달(QA에서 자연스럽다고 한 기준점, 보정 없이 유지): 이전 장이 80° 들린 채 FastOutSlowIn으로 내려와 덮고(흐려짐 시작 0.45), 덮이는 아래 장에 그림자.
+- 하단 `VisitCalendarBottomOrnament`의 폭 전체 가로선 제거(종이 밑변과 이중 경계로 사이드바 구획선처럼 보임), 양끝 `୨୧`만 유지. 월/연도 선택판 하단도 같이 바뀜(사용자 승인).
+- 월/연도 선택 단계 전환(fade+scale)·선택판 세로 슬라이드·방문 데이터 읽기(`visitedDaysForMonth`)·카오모지·오늘 표시·햅틱·drawer 폭/색/닫기·뒤로가기 변경 없음. Room·migration·serialization·dependency·방문 기록 형식 변경 없음.
+
+## 검증과 남은 상태
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| 구현 | 완료 | |
+| 로컬 JVM | 통과 903/903 (94 XML) | 신규 `VisitCalendarPaperPageStructureTest` 7건, `VisitCalendarTest` +3건 |
+| assembleDebug / assembleDebugAndroidTest | 성공 | 최종 코드로 재실행 |
+| emulator instrumentation | 미실행 | androidTest 변경 없음, 기존 미실행 7건 유지 |
+| 실기기 QA | 완료 | 정적 형태(윤곽선 제거 후) 통과, 다음 달 넘김 보정 후 "좋아졌어", 이전 달·연타·오늘 복귀·선택 단계 전환·방문 표시 정상, 하단 가로선 제거 "좋아" |
+| TEST-COVERAGE-MAP | 갱신 완료 | 893→903, 파일 92→93, 구조 152→159 |
+| git diff --check / LF | 깨끗 / LF 유지 | |
+| commit / push / CI | 미실행(사용자 승인 대기) | |
+
+## 남은 위험
+
+- 종이가 산출 규격보다 어둡고 섬유 점이 많아(최저 대비 약 4.7:1) 밝기가 낮은 기기·야외에서 날짜 가독성이 떨어질 수 있음 — 사용자 선택이라 유지.
+- 상주 메모리: 달력 종이 약 6.3MB 추가(drawer 내용은 닫혀 있어도 composition에 있음). 메인 종이 6.3MB + 퀵 셀렉트 약 31MB와 합산.
+- 넘김 중 ◀ ▶ 아주 빠른 연타는 방향이 섞여 보일 수 있음(QA 연타는 정상). 들어오는 달 방문 기록을 아직 못 읽었으면 넘긴 뒤 민트가 늦게 찍힐 수 있음(기존과 같은 구조).
+- 가로 화면·작은 화면·다른 밀도 기기의 넘김 원근·종이 crop 미확인.
+
+## 다음 후보(승인된 작업 아님)
+
+- 이 변경의 commit·push·CI 확인(사용자 승인 필요)
+- `PhotoStickerEdgeStyleInstrumentedTest` 7건 검증 전용 emulator 실행, 종이·퀵 셀렉트 PNG 메모리 최적화
+
+---
+
+# 이전 기록 — 89일차: 메인 갤러리 카드보드 종이 배경 + 불투명 시계 header
 
 확인일: 2026-09-30. 수동 표준 모드(89일차 작업지시서). 새 기능 없이, 메인 갤러리의 구분선 아래 본문에만 사용자가 만든 종이 질감 타일을 깔고 시계·커피 header를 불투명하게 만들었어. 로컬 자동검증과 사용자 실기기 QA(이미지 교체 1회 후 "대만족", 이음매 선 없음·기존 기능 전부 정상)를 마쳤고, 작업지시서 27절에 따라 commit·push·CI 확인까지 진행해(실제 commit hash·CI는 완료보고·`git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
 

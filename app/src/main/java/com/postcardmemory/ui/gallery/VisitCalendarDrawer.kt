@@ -6,17 +6,22 @@ import android.os.Vibrator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -49,10 +54,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -60,8 +71,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.R
 import com.postcardmemory.ui.detail.labelStickerTextColorArgbFor
 import com.postcardmemory.ui.theme.InkPrimary
 import com.postcardmemory.ui.theme.InkSecondary
@@ -174,18 +187,104 @@ private val VisitCalendarMonthSaver = Saver<YearMonth, String>(
     restore = { saved -> runCatching { YearMonth.parse(saved) }.getOrDefault(YearMonth.now()) }
 )
 
+// 90일차: 벽걸이 달력 한 장을 위로 넘기는 월 이동. 값은 실기기 QA로 다듬는 미감 값이다.
+private const val PAGE_TURN_DURATION_MS = 380
+// 원근을 약하게 둬 책장처럼 깊게 말리지 않고 얇은 종이가 살짝 들리는 정도로만 보이게 한다.
+private const val PAGE_TURN_CAMERA_DISTANCE = 14f
+
+// 이전 달: 이전 장이 위에서 내려와 덮는다. 실기기 QA에서 자연스럽다고 확인된 값이라 그대로 둔다.
+// 들린 채(80°, 반투명) 시작해 FastOutSlowIn으로 빨리 불투명해지고 천천히 내려앉는다.
+private const val PAGE_TURN_BACKWARD_MAX_ANGLE_DEG = 80f
+private const val PAGE_TURN_BACKWARD_FADE_START = 0.45f
+
+// 다음 달: 현재 장이 윗변을 축으로 위로 들려 넘어간다. 불투명한 채 천천히 들리다 빨라져
+// 옆면(90°)에서 선처럼 사라지고, 흐려짐은 마지막에만 쓴다 — 오래 반투명하게 떠 있으면
+// 두 달의 인쇄가 겹쳐 보여 종이가 아니라 화면 crossfade처럼 읽힌다(90일차 QA).
+private const val PAGE_TURN_FORWARD_MAX_ANGLE_DEG = 90f
+private const val PAGE_TURN_FORWARD_FADE_START = 0.9f
+
+// 그림자의 최대 농도. 다음 달에서는 들리는 현재 장에, 이전 달에서는 덮이는 아래 장에 드리운다.
+private const val PAGE_TURN_MAX_SHADE = 0.12f
+
 /**
- * 종이를 옆으로 미는 방향 = 시간이 이동하는 방향. state(월 값의 전후 비교)가 방향을 결정하고
- * animation은 그 결과를 표현만 한다 — 별도 "방향" state를 따로 두지 않는다.
+ * 달력 묶음에서 이 달의 장이 놓이는 높이. 실제 벽걸이 달력처럼 앞선 달이 뒤 달 위에 겹쳐
+ * 있다 — 다음 달로 가면 지금 장이 위에서 들려 넘어가며 아래 장이 드러나고, 이전 달로 가면
+ * 이전 장이 위에서 내려와 덮는다. 달 자체로 정해지므로 별도 순서 state가 없다.
  */
-private fun AnimatedContentTransitionScope<YearMonth>.visitCalendarMonthTransition(): ContentTransform {
-    val forward = targetState > initialState
-    val offsetSpec = tween<IntOffset>(MONTH_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing)
-    val enter = slideInHorizontally(offsetSpec) { width -> if (forward) width else -width }
-    val exit = slideOutHorizontally(offsetSpec) { width -> if (forward) -width else width }
-    return (enter togetherWith exit).using(
-        SizeTransform(sizeAnimationSpec = { _, _ -> tween(MONTH_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing) })
+internal fun visitCalendarPageStackZIndex(month: YearMonth): Float =
+    -(month.year * 12 + month.monthValue - 1).toFloat()
+
+/**
+ * 들린 정도(0 = 펼쳐짐, 1 = 다 넘어감)에 따른 움직이는 장의 불투명도. [forward]면 현재 장이
+ * 거의 다 넘어갈 때까지 불투명하고, 이전 달로 내려오는 장은 더 일찍부터 흐려져 있다.
+ */
+internal fun visitCalendarPageTurnAlpha(lift: Float, forward: Boolean): Float {
+    val fadeStart = if (forward) PAGE_TURN_FORWARD_FADE_START else PAGE_TURN_BACKWARD_FADE_START
+    return if (lift <= fadeStart) {
+        1f
+    } else {
+        (1f - (lift - fadeStart) / (1f - fadeStart)).coerceIn(0f, 1f)
+    }
+}
+
+/**
+ * 월 이동의 AnimatedContent 전환. 움직임 자체는 각 장의 [visitCalendarPageTurnModifier]가
+ * 맡고, 여기서는 두 장을 끝까지 남겨 두고 달력 묶음 순서로 겹치게만 한다. 어느 달이든 장의
+ * 높이가 같아 크기 전환이 없고, 들린 장이 옆으로 살짝 넓어져도 잘리지 않게 clip하지 않는다.
+ */
+private fun AnimatedContentTransitionScope<YearMonth>.visitCalendarPageTurnTransition(): ContentTransform =
+    ContentTransform(
+        targetContentEnter = EnterTransition.None,
+        initialContentExit = ExitTransition.KeepUntilTransitionsFinished,
+        targetContentZIndex = visitCalendarPageStackZIndex(targetState),
+        sizeTransform = SizeTransform(clip = false)
     )
+
+/**
+ * 달력 한 장의 넘김 표현. [forward](다음 달로 이동)이면 위에 놓인 현재 장이 불투명한 채 들려
+ * 넘어가며 조금 어두워지고, 다음 장은 그 아래에 움직이지 않고 놓여 있다가 드러난다. 이전 달로
+ * 이동하면 이전 장이 위에서 내려와 덮고, 덮이는 장은 그 아래에서 그림자가 짙어진다. 두 방향은
+ * 대칭일 필요가 없어 값을 따로 둔다. 장 안의 종이·글자·방문 표시가 한 몸으로 움직인다.
+ */
+@Composable
+private fun AnimatedVisibilityScope.visitCalendarPageTurnModifier(forward: Boolean): Modifier {
+    // 움직이는 장은 방향마다 하나뿐이다 — 다음 달은 나가는 장(PostExit), 이전 달은 들어오는 장(PreEnter).
+    val easing = if (forward) FastOutLinearInEasing else FastOutSlowInEasing
+    val lift by transition.animateFloat(
+        transitionSpec = { tween(PAGE_TURN_DURATION_MS, easing = easing) },
+        label = "visitCalendarPageLift"
+    ) { state ->
+        when (state) {
+            EnterExitState.PreEnter -> if (forward) 0f else 1f
+            EnterExitState.Visible -> 0f
+            EnterExitState.PostExit -> if (forward) 1f else 0f
+        }
+    }
+    // 그림자는 두 방향 모두 나가는 장에만 진다 — 다음 달에서는 들려 넘어가는 현재 장,
+    // 이전 달에서는 내려오는 장에 덮이는 아래 장. 다음 장이 그림자에서 밝아지며 나타나면
+    // fade-in처럼 보여서 들어오는 장에는 그림자를 두지 않는다.
+    val shade by transition.animateFloat(
+        transitionSpec = { tween(PAGE_TURN_DURATION_MS, easing = easing) },
+        label = "visitCalendarPageShade"
+    ) { state ->
+        when (state) {
+            EnterExitState.PreEnter -> 0f
+            EnterExitState.Visible -> 0f
+            EnterExitState.PostExit -> 1f
+        }
+    }
+    val maxAngle = if (forward) PAGE_TURN_FORWARD_MAX_ANGLE_DEG else PAGE_TURN_BACKWARD_MAX_ANGLE_DEG
+    return Modifier
+        .graphicsLayer {
+            transformOrigin = TransformOrigin(0.5f, 0f)
+            rotationX = lift * maxAngle
+            cameraDistance = PAGE_TURN_CAMERA_DISTANCE * density
+            alpha = visitCalendarPageTurnAlpha(lift, forward)
+        }
+        .drawWithContent {
+            drawContent()
+            if (shade > 0f) drawRect(Color.Black, alpha = shade * PAGE_TURN_MAX_SHADE)
+        }
 }
 
 /**
@@ -610,13 +709,9 @@ private fun VisitCalendarBottomOrnament() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("୨୧", color = VisitCalendarBottomOrnamentColor, fontSize = 9.sp)
-        Spacer(Modifier.width(2.dp))
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = .5.dp,
-            color = VisitCalendarBottomOrnamentColor
-        )
-        Spacer(Modifier.width(4.dp))
+        // 90일차: 폭 전체 가로선은 달력 종이 밑변과 이중 경계를 만들어 사이드바 구획선처럼
+        // 보여(실기기 QA) 빼고, 양끝 ୨୧ 표시만 남긴다.
+        Spacer(Modifier.weight(1f))
         Text("୨୧", color = VisitCalendarBottomOrnamentColor, fontSize = 9.sp)
     }
 }
@@ -718,7 +813,7 @@ internal fun visitedDaysForMonth(
         loadedByMonth[month].orEmpty()
     }
 
-/** 한 달 분량의 날짜 grid만 그린다. AnimatedContent가 이 composable 전체를 슬라이드시킨다. */
+/** 한 달 분량의 날짜 grid만 그린다. [VisitCalendarMonthPage]의 종이 위에 함께 인쇄돼 움직인다. */
 @Composable
 private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>, today: LocalDate) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -780,8 +875,91 @@ private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>
                     color = PaperDivider.copy(alpha = 0.3f),
                     modifier = Modifier.padding(vertical = 2.dp)
                 )
+            } else if (weekIndex < weeks.size - 1) {
+                // 90일차: 선을 긋지 않는 자리도 같은 높이를 비워 둬 어느 달이든 달력 한 장의
+                // 높이가 같다 — 넘길 때 아래 장이 더 짧아 삐져나오거나 장 크기가 흔들리지 않는다.
+                Spacer(Modifier.height(4.5.dp))
             }
         }
+    }
+}
+
+// 90일차: 달력 한 장. 기존 제목 줄(IconButton 48dp) 높이를 그대로 둬, 위에 겹쳐 고정한 ◀ ▶와 줄이 맞는다.
+private val VISIT_CALENDAR_PAGE_TITLE_HEIGHT = 48.dp
+private val VISIT_CALENDAR_PAGE_TOP_GAP = 6.dp
+private val VISIT_CALENDAR_PAGE_HORIZONTAL_PADDING = 6.dp
+private val VISIT_CALENDAR_PAGE_BOTTOM_PADDING = 8.dp
+
+// 장의 경계는 윤곽선 없이 종이 자체의 색·질감과 drawer(PaperSurface)의 색 차로만 읽힌다.
+// 윤곽선은 카드형 박스처럼 보여 90일차 QA에서 제거했다.
+
+/**
+ * 종이 한 장에 인쇄된 것처럼 함께 움직이는 달력 한 달. 종이 bitmap은 호출부가 한 번만
+ * 불러와 넘기고, 여기서는 늘리지 않고 비율을 유지한 채 장을 꽉 채우도록 가운데를 잘라 그린다.
+ * 이 composable 안에서는 파라미터로 받은 [month]만 읽는다.
+ */
+@Composable
+private fun VisitCalendarMonthPage(
+    month: YearMonth,
+    paper: ImageBitmap,
+    visitedEpochDays: Set<Long>,
+    today: LocalDate,
+    onTitleClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .drawWithCache {
+                val dstWidth = size.width.toInt()
+                val dstHeight = size.height.toInt()
+                val scale = maxOf(dstWidth.toFloat() / paper.width, dstHeight.toFloat() / paper.height)
+                val srcWidth = (dstWidth / scale).toInt().coerceIn(1, paper.width)
+                val srcHeight = (dstHeight / scale).toInt().coerceIn(1, paper.height)
+                val srcOffset = IntOffset((paper.width - srcWidth) / 2, (paper.height - srcHeight) / 2)
+                onDrawBehind {
+                    drawImage(
+                        image = paper,
+                        srcOffset = srcOffset,
+                        srcSize = IntSize(srcWidth, srcHeight),
+                        dstSize = IntSize(dstWidth, dstHeight)
+                    )
+                }
+            }
+            .padding(
+                start = VISIT_CALENDAR_PAGE_HORIZONTAL_PADDING,
+                end = VISIT_CALENDAR_PAGE_HORIZONTAL_PADDING,
+                bottom = VISIT_CALENDAR_PAGE_BOTTOM_PADDING
+            )
+    ) {
+        Text(
+            text = "${month.year}년 ${month.monthValue}월",
+            color = InkPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            // 근거리는 좌우 화살표, 원거리는 이 제목을 눌러 월/연도 grid로.
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(VISIT_CALENDAR_PAGE_TITLE_HEIGHT)
+                .wrapContentHeight(Alignment.CenterVertically)
+                .clickable(onClick = onTitleClick)
+                .semantics { heading() }
+        )
+        VisitCalendarTopOrnament()
+        Row(Modifier.fillMaxWidth()) {
+            VISIT_CALENDAR_WEEKDAY_HEADERS.forEach { (label, dow) ->
+                Text(
+                    label,
+                    Modifier.weight(1f),
+                    color = visitDayOfWeekColor(dow),
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        VisitCalendarMonthGrid(month = month, visitedEpochDays = visitedEpochDays, today = today)
     }
 }
 
@@ -828,6 +1006,10 @@ internal fun MonthlyVisitCalendar(
         loadedVisitsByMonth[displayedMonth] = loaded
     }
 
+    // 달력 종이는 여기서 한 번만 불러와 모든 장이 같은 bitmap을 나눠 쓴다. 월 이동
+    // AnimatedContent 안에서 불러오면 달이 바뀔 때마다 새 장이 다시 decode한다.
+    val calendarPaper = ImageBitmap.imageResource(R.drawable.visit_calendar_paper)
+
     Column(modifier = Modifier.fillMaxWidth()) {
         AnimatedContent(
             targetState = navLevel,
@@ -838,47 +1020,8 @@ internal fun MonthlyVisitCalendar(
             Column(Modifier.fillMaxWidth()) {
                 when (level) {
                     VisitCalendarNavLevel.CALENDAR -> {
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                    "이전 달",
-                                    tint = InkSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            AnimatedContent(
-                                targetState = displayedMonth,
-                                transitionSpec = { visitCalendarMonthTransition() },
-                                modifier = Modifier.weight(1f).clipToBounds(),
-                                contentAlignment = Alignment.Center,
-                                label = "visitCalendarMonthTitle"
-                            ) { month ->
-                                Text(
-                                    text = "${month.year}년 ${month.monthValue}월",
-                                    color = InkPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    textAlign = TextAlign.Center,
-                                    // 근거리는 좌우 화살표, 원거리는 이 제목을 눌러 월/연도 grid로.
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable(onClick = {
-                                            pickerYear = displayedMonth.year
-                                            onNavLevelChange(VisitCalendarNavLevel.MONTH_PICKER)
-                                        })
-                                        .semantics { heading() }
-                                )
-                            }
-                            IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    "다음 달",
-                                    tint = InkSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
+                        // 90일차: "다녀간 날들 / 오늘" 줄은 종이에 인쇄된 것이 아니라 종이 밖의
+                        // 고정 안내·조작부라, 달력 한 장 위로 올려 두고 월 이동과 함께 움직이지 않는다.
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "다녀간 날들",
@@ -900,35 +1043,60 @@ internal fun MonthlyVisitCalendar(
                                 )
                             }
                         }
-                        VisitCalendarTopOrnament()
-                        Row(Modifier.fillMaxWidth()) {
-                            VISIT_CALENDAR_WEEKDAY_HEADERS.forEach { (label, dow) ->
-                                Text(
-                                    label,
-                                    Modifier.weight(1f),
-                                    color = visitDayOfWeekColor(dow),
-                                    fontSize = 10.sp,
-                                    textAlign = TextAlign.Center
+                        Spacer(Modifier.height(VISIT_CALENDAR_PAGE_TOP_GAP))
+                        // 90일차: 종이·제목·장식·요일·날짜 grid를 달력 한 장(VisitCalendarMonthPage)으로
+                        // 묶어 월 이동 때 한 몸으로 움직인다. ◀ ▶는 인쇄물이 아닌 조작부라 종이 위에
+                        // 겹쳐 고정해 두고, 가운데 빈 곳의 터치는 아래 제목으로 그대로 내려간다.
+                        Box(Modifier.fillMaxWidth()) {
+                            val monthTransition = updateTransition(displayedMonth, label = "visitCalendarMonthPage")
+                            monthTransition.AnimatedContent(
+                                transitionSpec = { visitCalendarPageTurnTransition() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { month ->
+                                // 넘기는 도중에만 두 상태가 다르다. 다음 달로 가는지는 월 값 비교가
+                                // 정하고, animation은 그 결과를 표현만 한다.
+                                val forward = monthTransition.targetState > monthTransition.currentState
+                                // 나가는 장은 자기 [month]만 읽는다 — displayedMonth를 여기서 읽으면
+                                // 넘어가는 도중 다음 달 내용으로 바뀐다.
+                                VisitCalendarMonthPage(
+                                    month = month,
+                                    modifier = visitCalendarPageTurnModifier(forward),
+                                    paper = calendarPaper,
+                                    visitedEpochDays = visitedDaysForMonth(
+                                        month = month,
+                                        currentMonth = todayYearMonth,
+                                        currentMonthVisitedDays = visitedEpochDays,
+                                        loadedByMonth = loadedVisitsByMonth
+                                    ),
+                                    today = today,
+                                    onTitleClick = {
+                                        pickerYear = displayedMonth.year
+                                        onNavLevelChange(VisitCalendarNavLevel.MONTH_PICKER)
+                                    }
                                 )
                             }
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        AnimatedContent(
-                            targetState = displayedMonth,
-                            transitionSpec = { visitCalendarMonthTransition() },
-                            modifier = Modifier.fillMaxWidth().clipToBounds(),
-                            label = "visitCalendarMonthGrid"
-                        ) { month ->
-                            VisitCalendarMonthGrid(
-                                month = month,
-                                visitedEpochDays = visitedDaysForMonth(
-                                    month = month,
-                                    currentMonth = todayYearMonth,
-                                    currentMonthVisitedDays = visitedEpochDays,
-                                    loadedByMonth = loadedVisitsByMonth
-                                ),
-                                today = today
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(VISIT_CALENDAR_PAGE_TITLE_HEIGHT),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                        "이전 달",
+                                        tint = InkSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(Modifier.weight(1f))
+                                IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                        "다음 달",
+                                        tint = InkSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                     VisitCalendarNavLevel.MONTH_PICKER -> {
