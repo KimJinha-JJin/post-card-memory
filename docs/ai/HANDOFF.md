@@ -1,4 +1,62 @@
-# HANDOFF — 88일차: 갤러리 퀵 셀렉트 미감 정비(신문 오림 손 부채)
+# HANDOFF — 89일차: 메인 갤러리 카드보드 종이 배경 + 불투명 시계 header
+
+확인일: 2026-09-30. 수동 표준 모드(89일차 작업지시서). 새 기능 없이, 메인 갤러리의 구분선 아래 본문에만 사용자가 만든 종이 질감 타일을 깔고 시계·커피 header를 불투명하게 만들었어. 로컬 자동검증과 사용자 실기기 QA(이미지 교체 1회 후 "대만족", 이음매 선 없음·기존 기능 전부 정상)를 마쳤고, 작업지시서 27절에 따라 commit·push·CI 확인까지 진행해(실제 commit hash·CI는 완료보고·`git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 상태 빠른 확인
+
+- 브랜치: `feature/photo-sticker`, 시작 HEAD `e4045ab` "Record the quick select long-press removal as a product decision"(CI run `36549115333` 성공), origin `0/0`, 추적 파일 clean
+- 커밋 대상: `ui/gallery/GalleryScreen.kt` 수정 / 새 파일 `res/drawable-nodpi/gallery_paper_tile.png`, `GalleryPaperBackgroundStructureTest.kt` / `GalleryMonthlyGridStructureTest.kt` 수정 / 이 HANDOFF·TEST-COVERAGE-MAP
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존
+
+## 자산
+
+- `app/src/main/res/drawable-nodpi/gallery_paper_tile.png` — 사용자가 생성형 이미지로 만든 seamless 타일, 수정 없이 사용. 1254×1254 PNG 8bit RGB(알파 없음, ICC 없음 → sRGB), 2,668,364 B, `caBX`(C2PA 출처 메타데이터 추정) 청크 포함.
+- 실측(최종본): 평균 #EFE1CD(Hue 35°, 채도 14%), 밝기 표준편차 6.9/255, 156px 블록 평균 차 2.4, 내부 반복 없음, 좌우 이음매 연속. 위아래 이음매는 맨 아래 줄(224.5)과 맨 위 줄(229.9)이 전체 줄 중 가장 어둡고/밝은 1px 밝기 단차가 있었지만 실기기에서 선이 보이지 않음(QA 확인).
+- 1차 이미지(표준편차 4.5, 평균 #F1E7D5)는 폰에서 거의 안 보여 사용자가 같은 파일명으로 교체함(1차는 커밋되지 않음).
+
+## 기존 구조(바꾸기 전)
+
+- `GalleryScreen` = `VisitCalendarDrawer` → `Box` → `Scaffold(containerColor = GalleryPaperWhite)`. 상태바는 `MainNavHost`의 `safeDrawingPadding`이 처리해 화면 밖.
+- 기본 topBar `Column`에는 배경이 없고 제목 `Row`만 `GalleryPaperWhite` → **시계·커피 줄은 실제로 투명**했어. M3 Scaffold는 본문 다음에 topBar를 그리고, 월별 `LazyVerticalGrid`가 화면 전체 크기(contentPadding으로 header만큼 비움)라 위로 스크롤한 엽서가 시계 줄 뒤로 비치는 구조였어. 같은 색이라 눈에 안 띄었던 것.
+- 월별·기억 밀도·검색 빈 상태·엽서 0장 화면이 각자 전체 화면 `GalleryPaperWhite`를 칠했어. 검색·선택 topBar는 Row 배경과 1dp 구분선이 이미 불투명.
+
+## 앱에 달라진 점과 구조
+
+- 기본 topBar `Column(modifier = Modifier.background(GalleryPaperWhite))` — header 전체 불투명. 스크롤한 엽서·글씨·그림자는 header 뒤로 가려짐(z-order로 해결, 별도 clip 없음). 구분선·시계·커피·김 animation은 그대로.
+- `GalleryPaperBackground`(private composable): `ImageBitmap.imageResource` 1회 → `drawWithCache`에서 `ImageShader(Repeated, Repeated)` + `setLocalMatrix(setScale(s, s))`로 타일 한 장을 `GALLERY_PAPER_TILE_SIZE = 360.dp`로 같은 배율 축소 반복. 먼저 `GalleryPaperWhite`를 칠하고 타일을 `GALLERY_PAPER_TILE_ALPHA = 1f`로 겹침(0.5에서는 안 보여 QA 뒤 1로 올림). 늘림·crop 없음.
+- 배치: pager `Box` 첫 자식으로 `padding(top = paddingValues.calculateTopPadding())` → 구분선 바로 아래부터, pager 밖이라 스크롤·보기 전환에 고정. 엽서 0장 빈 상태는 `matchParentSize`로 같은 composable 사용(두 곳은 서로 배타 분기라 동시에 한 레이어).
+- 월별·기억 밀도·검색 빈 상태 페이지의 전체 배경 제거(카드·칩·월 헤더 자체 색은 유지).
+- 양떼목장·쫑쫑컵(`SheepRanchStage`)은 사용자 결정으로 종이 없이 그대로. 퀵 셀렉트·흔들어서 한 장·drawer·popup·callback·navigation 변경 없음.
+- Room·migration·serialization·dependency 변경 없음.
+
+## 검증과 남은 상태
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| 구현 | 완료 | |
+| 로컬 JVM | 통과 893/893 (93 XML) | 신규 `GalleryPaperBackgroundStructureTest` 5건, `GalleryMonthlyGridStructureTest` 배경 개수 1→0 |
+| assembleDebug / assembleDebugAndroidTest | 성공 | 최종 alpha 1f 코드로 재실행 |
+| emulator instrumentation | 미실행 | androidTest 변경 없음, 이 셸에 adb 명령 없음, 기존 미실행 7건 유지 |
+| 실기기 QA | 완료 | 질감 보임·대만족, 가로 이음매 선 없음, header 가림·검색·다중 선택·퀵 셀렉트·흔들어서 한 장·연못 정상 |
+| TEST-COVERAGE-MAP | 갱신 완료 | 888→893, 파일 91→92, 구조 147→152 |
+| git diff --check / LF | 깨끗 / LF 유지 | |
+| commit / push / CI | 작업지시서 27절에 따라 진행 | 결과는 완료보고·`git log`·GitHub Actions |
+
+## 남은 위험
+
+- 종이 타일 상주 메모리 약 6.3MB(1254²×4). 퀵 셀렉트 손 5장 약 31MB와 합쳐 저사양 기기 부담 가능 — 문제 시 축소 디코드가 후보.
+- 위아래 이음매 1px 밝기 단차: 시험한 기기에서는 안 보였지만 다른 밀도·밝기 설정 기기에서는 미확인.
+- 가로 화면·태블릿·아주 작은 화면의 종이 모습 미확인(타일 반복이라 늘림은 없음).
+- 연못 파문이 종이 위에서 그려지는 모습은 QA에서 정상이라고 했지만 세부 미감은 따로 보지 않았어.
+
+## 다음 후보(승인된 작업 아님)
+
+- 90일차: 사이드바 방문 달력 종이 질감 + 이전/다음 달 이동 시 달력 한 장이 넘어가는 페이지 물성(월별↔연도별 전환 slide는 유지 예정)
+- `PhotoStickerEdgeStyleInstrumentedTest` 7건 검증 전용 emulator 실행, 퀵 셀렉트 PNG 메모리 최적화
+
+---
+
+# 이전 기록 — 88일차: 갤러리 퀵 셀렉트 미감 정비(신문 오림 손 부채)
 
 확인일: 2026-09-29. 수동 표준 모드(88일차 작업지시서). 기능은 더하거나 빼지 않고, 갤러리 우측 하단 + 클러스터의 표현만 사용자가 준비한 신문 오림 손 5장이 부채처럼 펼쳐지며 기능을 내미는 모습으로 바꿨어. 로컬 자동검증과 사용자 실기기 QA 2회(1차 보정 요청 → 2차 통과)를 마쳤고, 작업지시서 34절에 따라 commit·push·CI 확인까지 진행해(실제 commit hash·CI는 완료보고·`git log`·GitHub Actions로 확인). **이 문서의 다음 후보는 실행 승인이 아니야.**
 

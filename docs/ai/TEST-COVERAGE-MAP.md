@@ -44,11 +44,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 888건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 893건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 888개, 테스트를 담은 파일 91개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 92개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 147개(구조 전용 파일에 있는 139개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 893개, 테스트를 담은 파일 92개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 93개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 152개(구조 전용 파일에 있는 144개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 888개는 88일차(갤러리 퀵 셀렉트 손 부채) 로컬 결과 XML에서 888/888 통과(실패·오류·skip 0)를 확인했어. 직전 875개는 CI run `36400626851`(`6621e12`)에서 통과했고, 888개의 CI 결과는 이 문서 작성 시점에 아직 없음(push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 893개는 89일차(메인 갤러리 종이 배경) 로컬 결과 XML에서 893/893 통과(실패·오류·skip 0)를 확인했어. 직전 888개는 CI run `36547707223`(`6f9d821`)·`36549115333`(`e4045ab`)에서 통과했고, 893개의 CI 결과는 이 문서 작성 시점에 아직 없음(push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -166,11 +166,11 @@ JVM 888개는 88일차(갤러리 퀵 셀렉트 손 부채) 로컬 결과 XML에�
 ### 기능: 갤러리
 
 - **보호 수준:** 중간.
-- **현재 보호하는 테스트:** `GallerySearchFilterTest`, `GalleryCalendarCellsTest`, `GalleryMemoryDensityTest`, `GalleryPagerTargetIndexTest`, `GalleryRetroClockTest`, `GalleryShakeDetectorTest`(84일차), `GalleryRandomPostcardOverlayTest`(84일차), `GalleryQuickSelectFanTest`(88일차), 보기 선택·월 grid·퀵 셀렉트 연결 구조 테스트.
+- **현재 보호하는 테스트:** `GallerySearchFilterTest`, `GalleryCalendarCellsTest`, `GalleryMemoryDensityTest`, `GalleryPagerTargetIndexTest`, `GalleryRetroClockTest`, `GalleryShakeDetectorTest`(84일차), `GalleryRandomPostcardOverlayTest`(84일차), `GalleryQuickSelectFanTest`(88일차), 보기 선택·월 grid·퀵 셀렉트 연결 구조 테스트, `GalleryPaperBackgroundStructureTest`(89일차 종이 배경 구조).
 - **실제 production 직접 검증:** 검색 결과·순서 유지, 달력 칸, 월별 엽서 수, 페이지 목표 index, 시계 표시 계산, 흔들림 판정(합성 가속도 sample로 정지·약한 흔들림·한쪽 충격·화면 회전 미발동, 명확한 흔들기 1회 인정, cooldown 중 무시·종료 후 재인정), 균등 랜덤 선택(후보 0/1/범위), overlay 날짜 문구(`capturedAt` 월·일), overlay 중 재흔들기 시 엽서 유지, overlay 배치(엽서가 화면 안·문구 자리·손이 화면 아래까지 닿고 왼쪽 귀퉁이를 집음), 퀵 셀렉트 단계 전이(닫힘→펼치는 중→펼침→닫히는 중, 같은 방향 연타는 재시작 없음, 도중 반대 요청은 방향만 전환, 펼침 완료 전·닫히는 중 탭 무효, 연타해도 기능 실행 1회)와 부채 배치(손 5개·슬롯 중복 없음, 아래→위 순서·가운데 0°·회전 ±20° 이내, 맨 아래 블록 높이, 닫힌 묶음이 오른쪽 끝에 숨고 닫힌 자리만 더 내려앉음, 젖힘은 아래 방향, stagger 짧음, 작은 화면 각도 clamp, 이웃 손 터치 영역 비겹침·높이 46dp 이상, 이웃 블록 간격 64dp 이상).
-- **간접 검증:** **보기 선택·drawer·월 grid·퀵 셀렉트(기존 callback 5종·노출 조건·뒤로가기·바깥 탭·손 자산·접근성 이름)의 UI 배선은 구조 검사 중심의 유일한 자동 방어선**이야.
+- **간접 검증:** **보기 선택·drawer·월 grid·퀵 셀렉트(기존 callback 5종·노출 조건·뒤로가기·바깥 탭·손 자산·접근성 이름)·종이 배경(타일 drawable 1회 참조, 가로·세로 Repeated와 같은 배율, pager 밖·header 아래 한 레이어, 페이지 자체 배경 없음, 시계 header 불투명)의 UI 배선은 구조 검사 중심의 유일한 자동 방어선**이야.
 - **현재 믿어도 되는 것:** 테스트 입력에 대한 검색·집계·달력·표시 계산.
-- **아직 믿으면 안 되는 것:** 실제 선택·drag·스크롤·보기 전환·카드 animation·양 목장/연못 놀이 동작. 실제 센서 감도·센서 등록/해제 lifecycle·흔들기 비활성 조건 배선·overlay 등장 animation·손 이미지 위치·커피 김 움직임, 퀵 셀렉트 손의 실제 렌더링·회전된 터치 판정·연출 리듬·PNG 안 블록 좌표의 정확도는 자동 테스트가 없고 실기기 QA로만 확인했어.
+- **아직 믿으면 안 되는 것:** 실제 선택·drag·스크롤·보기 전환·카드 animation·양 목장/연못 놀이 동작. 실제 센서 감도·센서 등록/해제 lifecycle·흔들기 비활성 조건 배선·overlay 등장 animation·손 이미지 위치·커피 김 움직임, 퀵 셀렉트 손의 실제 렌더링·회전된 터치 판정·연출 리듬·PNG 안 블록 좌표의 정확도, 종이 질감의 농도·이음매 가시성·header 가림은 자동 테스트가 없고 실기기 QA로만 확인했어.
 - **수동 확인 필요:** 예 — 3열 목록, 검색, 보기 전환, 카드 진입, 해당 작업에서 바뀐 놀이 동작 확인.
 
 근거: [검색 테스트](../../app/src/test/java/com/postcardmemory/ui/gallery/GallerySearchFilterTest.kt), [production 갤러리](../../app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt).
@@ -252,7 +252,7 @@ JVM 888개는 88일차(갤러리 퀵 셀렉트 손 부채) 로컬 결과 XML에�
 
 핵심 DetailViewModel replica 25건은 삭제 대상이라는 뜻이 아니야. **설계 의도와 경합 규칙을 설명하는 데 가치가 있지만 실제 production 동작의 직접 증거는 아니야.** 배경색 계측 2건은 실제 production 검증 일부 존재로 따로 표시해. 뒷면 저장 계측은 다른 필드의 저장을 검사하므로 슬라이더 replica의 전체 대체가 아니야.
 
-구조 테스트 147건도 역할을 나눠 읽어야 해. migration 등록, 공용 component 사용, 의존 관계처럼 형태가 계약이면 유효한 안전망이야. 버튼 반응·화면 갱신·레이어 결과를 대신 검사하면 간접 보호에 머물러. 직접 테스트와 구조 테스트를 묶어 볼 수는 있지만, 테스트 개수를 합쳐 보호가 강해졌다고 판단하지 않아.
+구조 테스트 152건도 역할을 나눠 읽어야 해. migration 등록, 공용 component 사용, 의존 관계처럼 형태가 계약이면 유효한 안전망이야. 버튼 반응·화면 갱신·레이어 결과를 대신 검사하면 간접 보호에 머물러. 직접 테스트와 구조 테스트를 묶어 볼 수는 있지만, 테스트 개수를 합쳐 보호가 강해졌다고 판단하지 않아.
 
 ## 자동 실행 여부
 
@@ -260,7 +260,7 @@ JVM 888개는 88일차(갤러리 퀵 셀렉트 손 부채) 로컬 결과 XML에�
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 888개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 875개 기준 CI run `36400626851` 성공, 888개는 로컬 888/888 통과(CI는 push 후 확인) |
+| JVM unit test 893개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 888개 기준 CI run `36549115333`(`e4045ab`) 성공, 893개는 로컬 893/893 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
@@ -293,6 +293,8 @@ JVM 888개는 88일차(갤러리 퀵 셀렉트 손 부채) 로컬 결과 XML에�
 **87일차 후속 — 누끼 스티커 이동 경계 수정:** 사용자 QA 제보("배경 제거 후 크기를 키우면 원본 사진 크기가 테두리처럼 작용해 원하는 위치까지 못 옮김")로, 누끼 스티커는 원본 칸 전체가 아니라 보이는 부분(불투명 표본점, 회전·뒤집기 반영)이 엽서 안에 있으면 되도록 바꿨어. `PhotoStickerCutoutBoundsTest` 9건(기본 모양은 예전 칸 전체 규칙 그대로, 누끼는 보이는 부분이 가장자리에 닿을 때까지 투명 여백이 밖으로 나감, 범위 안이면 안 움직임, 회전·치우친 피사체에서도 보이는 점이 엽서 밖으로 안 나감, 좌우 뒤집기 반영, 느슨한 규칙(저장된 자리 재보정·저장본)이 정확한 규칙으로 놓은 자리를 절대 당기지 않음, 표본점 없으면 느슨한 규칙, 조준 중 누끼도 같은 규칙·원본복원 시 칸 기준 재보정)으로 JVM 866→875개, 테스트 파일 89→90개가 됐어. 로컬 결과 XML 875/875 통과, `assembleDebug` 성공. 수정 전 코드에서는 누끼가 칸 밖으로 나가는 기대값 테스트가 실패하는 구조야. `createStickerOverlayForExport`는 `android.net.Uri`를 받아 순수 JUnit에서 누끼 경로를 직접 검사하지 못하고(규칙 함수만 검사), exporter의 캔버스 밖 그리기, 그림을 줄여 읽는 표본점 계산(BitmapFactory), 실제 제스처는 사용자 실기기 QA 영역이야.
 
 **88일차 추가 확인 — 갤러리 퀵 셀렉트 손 부채:** 우측 하단 + 클러스터가 신문 오림 손 5장의 부채로 바뀌어, 순수 단계·geometry를 검사하는 `GalleryQuickSelectFanTest` 14건이 추가되고(파일 90→91), `GalleryViewSelectionStructureTest`는 옛 클러스터 구조 7건(+ anchor·롱프레스 드래그·선택 링·punch)이 퀵 셀렉트 구조 6건으로 바뀌어 12→11건이 돼 JVM 875→888개가 됐어. 사용자 승인으로 롱프레스 드래그 바로 실행과 "특별한 갤러리" 묶음 단계가 빠져 그 보호는 더 이상 없고(구조 테스트가 제거 상태를 고정), 기존 callback·노출 조건·뒤로가기·바깥 탭은 구조 테스트로 계속 보호해. `AppIntroVisitPostmarkStructureTest`의 "인트로 진동은 갤러리 롱프레스보다 짧고 약하다"는 롱프레스 상수가 사라져 옛 값(35ms/190)을 테스트 안 고정값으로 옮겼어(보호 의미 유지). 로컬 결과 XML 888/888 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 손 부채의 실제 렌더링·회전된 터치 판정·연출 리듬·간격 미감은 사용자 실기기 QA(2회, 간격·손잡이 높이 보정 후 통과)로 확인했어.
+
+**89일차 추가 확인 — 메인 갤러리 종이 배경:** 구분선 아래 본문에 사용자 제공 seamless 종이 타일을 한 레이어로 깔고 시계·커피 header를 불투명하게 만들어, 구조만 고정하는 `GalleryPaperBackgroundStructureTest` 5건이 추가돼(파일 91→92, 구조 147→152) JVM 888→893개가 됐어. `GalleryMonthlyGridStructureTest`의 "월별 페이지 배경 개수"는 grid 컨테이너 배경이 pager 밖 종이 레이어로 옮겨져 1→0으로 바꿨어(월 섹션마다 배경을 씌우지 않는다는 보호 의미는 유지, 조건은 더 엄격). 농도·색·타일 크기 같은 미감 값은 테스트로 고정하지 않았어. 로컬 결과 XML 893/893 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 질감 농도·가로 이음매 가시성·header 가림·기존 기능은 사용자 실기기 QA(이미지 교체 1회 후 통과)로 확인했어.
 
 ## 마지막 요약
 

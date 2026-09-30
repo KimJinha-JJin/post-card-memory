@@ -66,11 +66,12 @@ class GalleryMonthlyGridStructureTest {
 
     @Test
     fun monthlyGridPage_hasNoDecorativeCardWrappingPerMonthSection() {
-        // 그리드 컨테이너 자신의 배경(.background(GalleryPaperWhite)) 하나만
-        // 있어야 하고, 월 섹션마다 카드처럼 다시 감싸는 배경이 없어야 한다.
+        // 89일차: 종이 배경은 pager 밖 한 레이어(GalleryPaperBackground)로
+        // 옮겨져 grid 컨테이너도 배경을 칠하지 않는다. 월 섹션마다 카드처럼
+        // 다시 감싸는 배경도 없어야 한다.
         assertEquals(
-            "GalleryMonthlyGridPage 안에는 grid 컨테이너 자체의 배경 1개만 있어야 함",
-            1,
+            "GalleryMonthlyGridPage 안에는 배경이 없어야 함(종이는 pager 밖 한 레이어)",
+            0,
             Regex("""\.background\(""").findAll(monthlyGridPageBody).count()
         )
         assertFalse(

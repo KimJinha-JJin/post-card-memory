@@ -89,6 +89,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -97,6 +98,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
@@ -665,7 +669,9 @@ fun GalleryScreen(
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
             } else {
-                Column {
+                // 89일차: 시계·커피 줄까지 불투명하게 칠해, 위로 스크롤한 엽서와
+                // 아래 종이 질감이 header 뒤로 비치지 않게 한다.
+                Column(modifier = Modifier.background(GalleryPaperWhite)) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -837,10 +843,11 @@ fun GalleryScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(GalleryPaperWhite)
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
+                GalleryPaperBackground(modifier = Modifier.matchParentSize())
+
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
@@ -949,6 +956,14 @@ fun GalleryScreen(
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
+                // 89일차: 종이는 pager 밖 한 레이어라 스크롤·보기 전환에 따라
+                // 움직이지 않는다. 페이지들은 배경을 칠하지 않는다.
+                GalleryPaperBackground(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = paddingValues.calculateTopPadding())
+                )
+
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
@@ -1414,6 +1429,37 @@ private fun GalleryQuickSelectHand(
 /** 보기 형식 dot indicator 한 줄이 차지하는 고정 높이. 페이지 콘텐츠는 이만큼을 위쪽 padding으로 더 확보해 겹치지 않는다. */
 private val GALLERY_PAGE_INDICATOR_RESERVED_HEIGHT = 28.dp
 
+/** 종이 타일 한 장이 화면에 보이는 크기. 기기 밀도와 상관없이 섬유 크기를 일정하게 둔다. */
+private val GALLERY_PAPER_TILE_SIZE = 360.dp
+
+/** 헤더와 같은 단색 위에 겹치는 종이 타일의 농도. 실기기 QA로 맞추는 값이다. */
+private const val GALLERY_PAPER_TILE_ALPHA = 1f
+
+/**
+ * 89일차: 구분선 아래 갤러리 본문에 까는 카드보드 종이. 사용자 제공 seamless
+ * 타일(drawable-nodpi/gallery_paper_tile.png)을 가로·세로 같은 배율로만 줄여
+ * 반복한다 — 늘리거나 자르지 않아 화면 비율이 달라도 섬유 모양이 그대로다.
+ * 헤더 단색을 먼저 칠하고 그 위에 [GALLERY_PAPER_TILE_ALPHA]로 겹친다.
+ */
+@Composable
+private fun GalleryPaperBackground(modifier: Modifier = Modifier) {
+    val tile = ImageBitmap.imageResource(R.drawable.gallery_paper_tile)
+
+    Spacer(
+        modifier = modifier.drawWithCache {
+            val shader = ImageShader(tile, TileMode.Repeated, TileMode.Repeated)
+            val scale = GALLERY_PAPER_TILE_SIZE.toPx() / tile.width
+            shader.setLocalMatrix(android.graphics.Matrix().apply { setScale(scale, scale) })
+            val brush = ShaderBrush(shader)
+
+            onDrawBehind {
+                drawRect(GalleryPaperWhite)
+                drawRect(brush, alpha = GALLERY_PAPER_TILE_ALPHA)
+            }
+        }
+    )
+}
+
 /**
  * 활성 보기 목록이 바뀐 뒤 pager가 위치해야 할 새 페이지 index를 계산한다
  * (작업지시서 44절 — 보기 비활성화 edge case). 순수 함수라 Compose 없이도
@@ -1565,7 +1611,6 @@ private fun GalleryDensityPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(GalleryPaperWhite)
             .padding(
                 start = 16.dp,
                 end = 16.dp,
@@ -1759,7 +1804,6 @@ private fun GalleryMonthlyGridPage(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(GalleryPaperWhite)
             .onGloballyPositioned { coordinates ->
                 if (isPondModeOn) {
                     originInWindow = coordinates.positionInWindow()
@@ -1983,7 +2027,6 @@ private fun SearchEmptyState(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(GalleryPaperWhite)
             .padding(paddingValues),
         contentAlignment = Alignment.Center
     ) {
