@@ -1,6 +1,6 @@
-# 테스트 보호지도 — 90일차 최신화 (원본 79일차 마감)
+# 테스트 보호지도 — 90일차 건강검진 최신화 (원본 79일차 마감)
 
-확인일: 2026-09-30 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `926b280` 위 90일차 작업트리(방문 달력 종이 한 장 + 위로 넘김)
+확인일: 2026-10-01 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `5e1abc8` 위 90일차 건강검진 작업트리
 
 기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치), 85일차에는 사진 스티커 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림), 87일차에는 사진 스티커 핀셋 붙이기(조준·핀셋 손) 상태 흐름, 88일차에는 갤러리 퀵 셀렉트(신문 오림 손 부채)의 열기/닫기 단계·중복 탭 방지·부채 배치, 89일차에는 메인 갤러리 종이 배경 구조, 90일차에는 방문 달력의 종이 한 장 구조와 위로 넘기는 월 이동에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
 
@@ -27,7 +27,7 @@
 | ViewModel / lifecycle: 화면 상태 수명 | 약함 | 예 | 일부 helper·계측 외에는 replica 중심 |
 | 실제 Compose interaction: 버튼·터치 | 약함 | 예 | 뒷면 표시 3건(81일차 실제 실행 통과), 도장 조준·찍기는 순수 상태 전이만 보호 |
 
-미확인 등급을 붙인 기능은 없어. **instrumentation(emulator) 20건 중 기존 13건은 80~81일차에 검증 전용 emulator에서 실제로 실행해 13/13 통과를 확인했어. 85일차에 추가한 `PhotoStickerEdgeStyleInstrumentedTest` 7건은 컴파일만 확인했고 아직 한 번도 실행하지 않았어(검증 전용 emulator가 없고 실사용 기기만 연결돼 있었음). 이 실행들은 로컬이고 GitHub Actions CI에는 포함되지 않아.** 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
+미확인 등급을 붙인 기능은 없어. **instrumentation 20건/7파일 전부를 2026-10-01 검증 전용 `PostcardMemory_Test` emulator(API 37, 16KB page image)에서 실제 실행해 20/20 통과를 확인했어. 기존 미실행이던 `PhotoStickerEdgeStyleInstrumentedTest` 7건도 명시 실행과 전체 실행에서 통과했어. 이 실행은 로컬이고 GitHub Actions CI에는 포함되지 않아.** 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
 
 ## 테스트를 읽는 기준
 
@@ -48,7 +48,7 @@ JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 A
 
 현재 실측은 JVM `@Test` 903개, 테스트를 담은 파일 93개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 94개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 159개(구조 전용 파일에 있는 151개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 903개는 90일차(방문 달력 종이·넘김) 로컬 결과 XML에서 903/903 통과(실패·오류·skip 0)를 확인했어. 직전 893개는 CI run `36698372064`(`926b280`)에서 통과했고, 903개의 CI 결과는 이 문서 작성 시점에 아직 없음(push 후 확인). 기존 instrumentation 13개는 80~81일차에 검증 전용 emulator(API 37)에서 실제로 전부 실행해 **13/13 통과**를 확인했어. 85일차 신규 7개는 `assembleDebugAndroidTest` 컴파일만 통과했고 **미실행**이야. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 903개는 90일차 건강검진 최종 로컬 결과 XML에서 903/903 통과(실패·오류·skip 0)를 확인했어. 직전 CI run `36713844171`(`5e1abc8`)도 성공했어. instrumentation은 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 

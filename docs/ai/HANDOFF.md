@@ -1,4 +1,64 @@
-# HANDOFF — 90일차(89일차 추가 작업): 방문 달력 종이 한 장 + 위로 넘기는 월 이동
+# HANDOFF — 90일차 건강검진: instrumentation 청산 + 첫 보안 감사 + bitmap 메모리 감사
+
+확인일: 2026-10-01. 수동 표준 모드(90일차 장기 작업지시서). 신규 기능과 앱 동작 변경 없이, 미실행 instrumentation을 검증 전용 emulator에서 실제로 실행하고 release/debug 보안 표면과 bitmap 상주 구조를 감사했어. production·test·이미지 자산은 수정하지 않았고 이 HANDOFF와 TEST-COVERAGE-MAP만 실제 결과로 갱신했어. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 90일차 시작 상태
+
+- 브랜치 `feature/photo-sticker`, 시작 HEAD `5e1abc861b88fc5a365acb16a3b222b663a3f3bf`, origin 대비 `0/0`, 추적 작업트리 clean.
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/`을 수정·삭제·이동·stage하지 않았어. 기존 `.claude/settings.local.json`도 보존했어.
+- JVM 903개/소스 테스트 파일 93개(+helper 1개), 기존 결과 903/903. instrumentation 20개/7파일. 최근 CI run `36713844171` 성공.
+- Room schema 19, migration 1→19 연속 등록, custom text serialization과 `filesDir/visits/visit_record.txt` + `visits/history/<epochDay>.visit` 방문 기록 형식, dependency 구조를 확인했어.
+
+## 1단계 — instrumentation 실제 실행
+
+- 검증 전용 `PostcardMemory_Test` AVD만 연결했어: `emulator-5554`, API 37, x86_64, 16KB page system image, 1080×2400, 420dpi. 실사용 기기는 연결하거나 조작하지 않았어.
+- `assembleDebug`와 `assembleDebugAndroidTest` 성공 후 main/test APK를 이 emulator에만 설치했어.
+- `PhotoStickerEdgeStyleInstrumentedTest` 7건을 명시 실행해 **7/7 통과**, 이어 전체 instrumentation을 **20/20 통과**했어.
+- boot 직후 첫 대상 실행은 test process가 test status 전 종료됐어. 같은 시각 emulator에서 Play Store install session 충돌과 UWB HAL 재시작이 반복돼 환경 문제로 분류했고, test emulator만 재부팅해 session을 비운 뒤 같은 APK·테스트를 재실행하자 전부 통과했어. production/test 수정은 없었어.
+
+## 2~3단계 — 첫 보안 감사와 수정 판단
+
+- 앱 소스·설정 126개와 생성된 release/debug manifest를 정적 감사했어. manifest component/exported/permission, 내부 저장소와 cache, FileProvider/URI, 경로 입력, backup, release log, secret, 네트워크, 외부 Intent와 존재하는 선택 기능을 추적했어.
+- 결과: 높음 0, 중간 1, 낮음 2, 정보성 3.
+- **중간 — 기본 백업 범위 미지정:** `allowBackup=true`이고 `dataExtractionRules`/`fullBackupContent`가 없어 내부 Room·사진·초안·방문 기록이 플랫폼 기본 백업/기기 이전 대상이 될 수 있어. 앱 샌드박스와 계정 보호는 있지만 백업 계정·복원 환경 노출 시 개인 데이터가 함께 노출될 가능성이 있어. 제외하면 복원·기기 이전에서 데이터가 사라질 수 있으므로 제품 정책 결정 전 수정 STOP.
+- **낮음 — release 진단 로그:** `PostCardMemoryApp`, `DetailViewModel`, `GalleryViewModel`의 `Log.w` 9곳에 내부 경로·ID·예외 메시지가 일부 남을 수 있어. 일반 앱이 logcat을 읽을 수 있는 구조는 아니고 사용자 본문을 직접 기록하지 않아 즉시 수정하지 않았어.
+- **낮음 — FileProvider 여분 root:** provider는 `exported=false`이고 개별 URI grant가 필요하지만, 현재 호출 경로가 쓰지 않는 `files-path/postcards/`가 URI 생성 범위에 포함돼 있어. 현재 외부 grant 호출은 없고 과거 URI 호환을 깨뜨릴 가능성이 있어 보류했어.
+- release의 필수 외부 진입은 launcher `MainActivity`뿐이야. provider/service는 비공개이고, 외부 표시된 profile installer receiver는 시스템급 `DUMP` permission으로 보호돼. `root-path`·`external-path`·전체 저장소 권한·deep link·WebView·동적 코드·secret/credential은 없었어.
+- CAMERA는 카메라 기능, VIBRATE는 햅틱에 사용해. INTERNET·ACCESS_NETWORK_STATE는 ML Kit 계열 전이 dependency가 병합하지만 앱 소스에는 endpoint/HTTP 호출이 없고 release cleartext HTTP는 플랫폼 기본값으로 차단돼.
+- production/test 수정과 보안 테스트 추가는 없음. 근거 없는 수정이나 테스트 수 늘리기를 피했어.
+
+## 4단계 — bitmap 메모리 건강검진
+
+- quick select 손 5장은 각각 1254×1254 `drawable-nodpi`이고 ARGB_8888 예상 decode 합계가 31,450,320B(약 30.0MiB)야. 표시 크기는 180dp, 검증 emulator 420dpi에서는 약 473px인데 메뉴를 닫아도 손 묶음이 composition에 남아 5장 모두 상주할 수 있어.
+- `gallery_paper_tile.png`는 1254×1254, 예상 6,290,064B(약 6.0MiB). 360dp 반복 타일로 갤러리 화면 수명 동안 한 장만 유지되고 빈 화면/일반 pager 분기는 서로 배타적이야.
+- `visit_calendar_paper.png`는 1122×1402, 예상 6,292,176B(약 6.0MiB). 월 이동 장들이 하나를 공유하지만 drawer가 닫혀도 drawer content composition에 남을 수 있어.
+- 세 자산군 동시 상주 예상은 44,032,560B(약 42.0MiB)야. 실제 heap profiler 측정이 아니라 픽셀×4 상한 추정이야.
+- 가장 큰 후보는 quick select야. 640px 가정 시 약 22.2MiB(74%), 720px 가정 시 약 20.1MiB(67%)를 줄일 수 있지만 손 디테일·알파 경계 비교 QA가 필요해. 이미지 파일과 두 종이의 해상도·밝기·질감은 수정하지 않았고, 달력 조건부 composition도 첫 열림/넘김 감각을 바꿀 수 있어 보류했어.
+
+## 최종 검증과 구조 상태
+
+| 구분 | 현재 상태 | 근거 |
+|---|---|---|
+| production/test 구현 | 변경 없음 | 감사 결과상 즉시 수리보다 정책·호환 판단이 먼저 |
+| 로컬 JVM | 903/903 통과(94 XML, 실패·오류·skip 0) | 최종 task 성공, 코드 불변으로 test task는 up-to-date |
+| assembleDebug / assembleDebugAndroidTest | 성공 | 최종 task 성공, 산출물 up-to-date |
+| emulator instrumentation | 대상 7/7, 전체 20/20, 최종 대상 7/7 통과 | 검증 전용 emulator만 사용 |
+| 실기기 QA | 불필요 | 앱 코드·UI·이미지·동작 변경 없음 |
+| TEST-COVERAGE-MAP | 갱신 완료 | 테스트 수 변화 없음, instrumentation 실제 실행 상태 변경 |
+| Room / migration / serialization / visit history / draft / photo format / dependency | 변경 없음 | 읽기 전용 감사 |
+| 실사용 기기 | 미조작 | 설치·실행·ADB·instrumentation 없음 |
+
+## 남은 위험과 91일차 후보(승인된 작업 아님)
+
+- 백업 보존 정책을 사용자와 먼저 결정한 뒤 민감 경로 제외/백업 유지/전체 비활성 중 하나를 별도 작업으로 설계.
+- release 로그 최소화와 미사용 FileProvider root 제거는 과거 호환·진단 필요성을 먼저 확인한 뒤 방어 심화 작업으로 검토.
+- quick select 손 640px/720px 후보를 별도 파일로 비교해 실기기 화질 승인을 받은 뒤에만 원본 교체 검토.
+- Android Studio profiler로 갤러리 진입·drawer 열기/닫기 전후 실제 Java/native/graphics heap을 측정해 42.0MiB 추정을 검증.
+- CI는 instrumentation을 실행하지 않으므로 Android 계측 자동화는 검증 전용 emulator 환경과 실사용 기기 보호를 함께 설계한 뒤 별도 검토.
+
+---
+
+# 이전 기록 — 90일차(89일차 추가 작업): 방문 달력 종이 한 장 + 위로 넘기는 월 이동
 
 확인일: 2026-09-30. 수동 표준 모드(89일차 추가 작업지시서: 구조 조사 → 자산 규격 → 자산 게이트 → 정적 형태 → 넘김 → QA 보정). 사이드바 방문 달력의 제목·장식·요일·날짜 grid·방문 표시·카오모지를 사용자 제공 종이 한 장 위에 묶고, 이전/다음 달 이동을 벽걸이 달력처럼 윗변을 축으로 위로 넘기는 넘김으로 바꿨어. 로컬 자동검증과 사용자 실기기 QA(정적 형태 → 넘김 → 다음 달 반투명 겹침 보정 → 하단 가로선 제거, 전부 통과)를 마쳤어. **commit·push는 사용자 승인 대기**야. **이 문서의 다음 후보는 실행 승인이 아니야.**
 
