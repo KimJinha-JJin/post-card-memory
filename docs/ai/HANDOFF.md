@@ -58,6 +58,100 @@
 
 ---
 
+# 90일차 추가 감사 — 구조·기술부채 / 장기 유지보수
+
+확인일: 2026-10-01. 수동 표준 모드. 위 90일차 건강검진을 기록한 HEAD `7fe29bf874461c46a3313d3667c0c1132abcfc06` "Record the 90-day health and security audit" 상태를 대상으로 한 **읽기 전용 후속 감사**야. 보안·bitmap 메모리는 위 건강검진에서 이미 봤으므로 반복하지 않고 장기 유지보수 관점만 봤어. production·test·Gradle/dependency·이미지 자산·Room/migration/serialization은 수정하지 않았고, 이 HANDOFF 섹션만 추가했어. 아래 수치는 감사 시점 `wc -l`·`grep` 실측이며, 상태 개수 등은 근사값이야. **이 섹션의 모든 후보는 승인된 작업이 아니라 관찰·후속 후보야.**
+
+## 전체 판단
+
+- 현재 구조 상태: **관리 필요**. 다만 **구조적 한계 접근 중은 아니야.**
+- 강한 영역: 저장 안전성, Room schema/migration(schema 19 JSON 보존, 1→19 연결 계측 테스트), 원자 저장(`AtomicFileReplace`), 삭제 흐름(DB 삭제 성공 → 앱 소유 파일 정리, `isInsideDirectory` guard), 초안 파일 기반 프로세스 종료 복구.
+- 현재 구조 비용은 주로 **편집 화면(`DetailScreen`/`DetailViewModel`)과 꾸미기 종류 확장 경로**에 집중돼 있어. 데이터 손상 위험보다 변경 시 수고 형태의 비용이야.
+- 지금은 대규모 리팩터링보다 관찰과 작은 예방 조치가 적절해.
+
+## 주요 hotspot
+
+### DetailScreen
+
+- `ui/detail/DetailScreen.kt`: 약 7,173줄(2026-08-08 기준 5,666줄 → 제3~9차 UI 조각 분리 이후에도 약 1,500줄 증가).
+- `DetailScreen()` 단일 composable(`:1407` ~ 파일 끝): 약 5,770줄.
+- 함수 안 `remember` 상태 약 78개, Effect(`LaunchedEffect`/`DisposableEffect`/`SideEffect`) 약 21개, `viewModel.` 참조 약 234개, gesture/`pointerInput` 계열 약 44곳.
+- 2026-09-01 이후 이 파일을 건드린 커밋 13개로 변경 빈도가 가장 높은 파일이야. 새 상호작용은 별도 파일(`*PlaceInteraction.kt`, `SealStampInteraction.kt`)로 빼고 있지만 연결 코드는 계속 이 함수에 쌓여.
+- 지금 대규모 분리는 회귀 위험(제스처·저장 연결, 소스 텍스트 구조 테스트 동반 수정)이 더 크므로 즉시 리팩터링하지 않아.
+- 새 편집 탭이나 새 꾸미기 기능을 추가할 때 그 탭 단위로 작은 분리를 검토해.
+
+### DetailViewModel
+
+- `ui/detail/DetailViewModel.kt`: 약 4,718줄.
+- 꾸미기 6종(사진 스티커·도장·낙서·텍스트·마스킹테이프·라벨)마다 목록·선택 id·canUndo/canRedo·확정 baseline·`persist*EditState`·`clear*History`·`filesDir/<종류>_states/<id>.txt` 경로가 평행 구조로 존재해. 여기에 Room 필드 즉시 저장 Job 19개, 초안 자동저장, 배경 제거, export/share가 같은 클래스에 있어.
+- 7번째 꾸미기 종류 추가 시 이 파일만 최소 8~10군데를 고쳐야 해 유지보수 비용이 크게 증가할 가능성이 있어. 확정 저장 코드 주석도 "여섯 개여야 한다 — 하나라도 빠지면 …"이라고 기억 의존 계약을 경고해.
+- 현재는 공통화하지 않아. 7번째 종류가 실제로 기획될 때 공통 틀을 검토해.
+
+### 화면 / exporter 이중 렌더러
+
+- 마스킹테이프 무늬와 도장 모양 일부가 Compose 화면(`ui/components/MaskingTapeShapes.kt`, `SealShapes.kt`, DrawScope)과 Canvas exporter(`utils/PostcardImageExporter.kt`의 `drawTape*Overlay`, `drawCirclePostmarkOverlay` 등)에 별도 구현돼 있어. 상수만 공유하고, 예를 들어 하트 path cubic 수식은 두 파일에 복사돼 있어. 사진·라벨·도장 잉크처럼 `PostcardRenderSpec`/`LabelStickerRenderer`/`SealInkWearRenderer`로 이미 공통화된 부분도 있어.
+- 한쪽만 고치면 화면과 저장·공유 결과가 달라질 잠재 위험이 있고(`AGENTS.md` 13절 불변값), 좌표 테스트는 있지만 그림 일치 테스트는 없어.
+- 지금 전체 통합하지 않아. 해당 모양을 실제 수정하는 시점에 그 종류만 공통화를 검토해.
+
+## 숨은 결합
+
+1. **꾸미기 상태 파일 디렉터리 목록 3중 정의:** 같은 `<종류>_states`·`sticker_bgs`·`sticker_originals`·`masking_tape_photos` 등 디렉터리 목록이 `DetailViewModel`(쓰기), `PostcardDeletionManager`(삭제), `OrphanFileDiagnostics`(진단) 세 곳에 별도 문자열 목록으로 존재해. 세 곳 모두 "새 디렉터리 추가 시 여기도 넣어야" 주석이 있고 목록별 테스트는 있지만, 세 목록이 서로 같은지 확인하는 테스트는 없어. 삭제 쪽 누락은 컴파일·테스트를 통과한 채 삭제할 때마다 고아 파일을 남길 수 있어.
+2. **`shouldConfirmSaveSucceed`(`DetailViewModel.kt:101`):** 6종 중 4종 인자의 기본값이 `= true`야. 새 꾸미기 종류 추가 시 이 판정에 넘기는 것을 잊어도 컴파일되고, 그 종류의 실제 저장 실패가 전체 성공으로 처리돼 초안이 삭제될 수 있어. 미래 데이터 손실 함정 후보야(현재 6종은 모두 명시적으로 전달돼 현재 결함은 아님).
+3. **초안 형식(`PostcardEditDraft.kt`):** 위치 기반 meta index(`meta[14]` 등)와 "앞 종류 개수 합" offset 구조야. v1~v5 하위 호환 테스트는 강하지만 종류 추가마다 offset 계산이 길어지고, 순서 실수 시 `parsePostcardEditDraft`가 null을 반환해 초안이 통째로 버려질 수 있어.
+4. **꾸미기 종류 간 겹침 순서:** 종류 사이의 layer 순서는 데이터에 저장되지 않고 화면 코드와 exporter 코드의 그리기 순서에 각각 암묵적으로 존재해. 한쪽만 바뀌면 미리보기와 저장 이미지의 layer 순서가 달라질 수 있어(코드 구조로 판단, 실제 불일치 재현은 미실행).
+
+참고(기록용): 레이아웃 × 사진 배치 컬럼(`stamp/polaroid/tapedFilm × offset/zoom/scale`)도 새 레이아웃 추가 시 Entity·Migration·DAO·Repository·저장 Job·화면 분기(`DetailScreen` 약 9곳)를 함께 늘리는 곱셈 구조야. 경로 자체는 잘 보호돼 있어 아래 안정 영역으로 분류해.
+
+## 안정적인 영역 — 현재 건드리지 않는 편이 좋음
+
+- Room schema / migration chain
+- 평면 `Postcard` Entity와 DAO/Repository 1:1 경로
+- 기존 텍스트 serialization 형식(바꾸면 기존 사용자 파일 호환 위험이 이득보다 큼)
+- 필드별 저장 Job 구조(장황하지만 경합 테스트가 붙어 있음)
+- `ExitSaveScope` / 초안 승격 / `onCleared` 저장 흐름
+- 삭제 순서와 앱 소유 파일 guard
+- 갤러리 계열 기능 분리 구조(`GalleryScreen.kt` 1,545 → 3,267 → 2,182줄로 실제 분리된 이력)
+- 방문 기록 저장 구조
+
+## 테스트 관점
+
+- JVM 903개 / instrumentation 20개라는 숫자보다 무엇을 보호하는지가 중요해.
+- migration, 직렬화, 초안, 원자 저장, 삭제, 순수 계산(좌표·오림 모양·달력·상호작용 session)은 production 직접 검증으로 강해.
+- 구조 테스트 159개는 실제 동작이 아니라 소스 형태를 보호하는 한계가 있고, `DetailScreen` 분리 시 테스트 동반 수정 비용을 만들어.
+- replica 테스트(핵심 DetailViewModel replica 25개)는 실제 production ViewModel 직접 검증이 아닌 영역이 존재해(`TEST-COVERAGE-MAP.md`에 이미 명시).
+- 화면과 exporter의 시각 결과 일치 검증은 현재 공백이야.
+- `app/src/test/.../testsupport/StructureTestSource.kt`의 "emulator는 아직 준비돼 있지 않다" 취지 주석은 90일차 검증 전용 emulator 20/20 실제 실행 결과 기준으로 이제 오래된 설명이야.
+
+## 다음 코드 클린데이 후보(승인된 작업 아님, 실행하지 않음)
+
+1. 쓰기·삭제·진단의 꾸미기 디렉터리 목록이 서로 동일한지 확인하는 보호 테스트 1건.
+2. `shouldConfirmSaveSucceed`의 위험한 `= true` 기본값 제거 검토.
+3. `StructureTestSource`의 emulator 관련 오래된 주석 갱신.
+
+## 장기 후보(승인된 작업 아님 — 100일 이후 또는 실제 기능 확장 시점의 관찰·후속 후보)
+
+- `DetailScreen` 탭 단위 점진적 분리
+- 꾸미기 공통 상태/저장 틀
+- 화면/exporter renderer 공통화(그림 비교 검증 마련 선행)
+- 초안 위치 기반 형식의 장기 확장 전략
+
+## 최종 평가
+
+> 90일 동안 기능이 지속적으로 추가된 것에 비해 프로젝트는 구조적으로 잘 버티고 있다. 현재 가장 큰 비용은 데이터 손상 위험보다는 편집 기능을 변경할 때 발생하는 유지보수 비용이다. 지금은 대규모 리팩터링보다 다음 기능 확장 시점에 작은 단위로 분리하는 편이 안전하다.
+
+## 이 감사의 독립 상태
+
+| 구분 | 상태 | 근거 |
+|---|---|---|
+| production/test/Gradle/자산/Room/serialization | 변경 없음 | 읽기 전용 감사 |
+| 로컬 JVM / instrumentation / CI | 미실행 | 코드 불변, 위 건강검진 결과(903/903, 20/20) 유지 |
+| 실기기 QA | 불필요 | 앱 동작 변경 없음 |
+| TEST-COVERAGE-MAP | 변경 없음 | 테스트 수·범위 변화 없음 |
+| repository HANDOFF | 이 섹션 추가 | 문서-only |
+| commit / push | 미실행(사용자 승인 대기) | |
+
+---
+
 # 이전 기록 — 90일차(89일차 추가 작업): 방문 달력 종이 한 장 + 위로 넘기는 월 이동
 
 확인일: 2026-09-30. 수동 표준 모드(89일차 추가 작업지시서: 구조 조사 → 자산 규격 → 자산 게이트 → 정적 형태 → 넘김 → QA 보정). 사이드바 방문 달력의 제목·장식·요일·날짜 grid·방문 표시·카오모지를 사용자 제공 종이 한 장 위에 묶고, 이전/다음 달 이동을 벽걸이 달력처럼 윗변을 축으로 위로 넘기는 넘김으로 바꿨어. 로컬 자동검증과 사용자 실기기 QA(정적 형태 → 넘김 → 다음 달 반투명 겹침 보정 → 하단 가로선 제거, 전부 통과)를 마쳤어. **commit·push는 사용자 승인 대기**야. **이 문서의 다음 후보는 실행 승인이 아니야.**
