@@ -17,7 +17,8 @@ import java.util.UUID
  */
 object MaskingTapePhotoStorage {
 
-    private const val PHOTOS_DIRECTORY_NAME = "masking_tape_photos"
+    private val PHOTOS_DIRECTORY_NAME =
+        PostcardAssetDirectory.MASKING_TAPE_PHOTOS.directoryName
 
     fun copyToMaskingTapePhotoStorage(
         context: Context,

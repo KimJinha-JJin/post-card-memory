@@ -117,31 +117,14 @@ internal fun cleanupPostcardOwnedAssets(
     // 3. 꾸미기 요소별 확정 상태 파일. DetailViewModel의 persist*EditState가
     // 요소마다 <디렉터리>/<postcardId>.txt 하나씩 쓰므로, 여기서도 삭제되는
     // 엽서의 id에 해당하는 파일만 지운다(다른 엽서 파일은 건드리지 않음).
-    // 요소를 새로 추가할 때 이 목록에 함께 넣지 않으면 고아 파일이 남는다.
-    deleteFile(
-        "stickerState",
-        File(filesDir, "sticker_states/${postcard.id}.txt")
-    )
-    deleteFile(
-        "sealState",
-        File(filesDir, "seal_states/${postcard.id}.txt")
-    )
-    deleteFile(
-        "doodleState",
-        File(filesDir, "doodle_states/${postcard.id}.txt")
-    )
-    deleteFile(
-        "textStickerState",
-        File(filesDir, "text_sticker_states/${postcard.id}.txt")
-    )
-    deleteFile(
-        "maskingTapeState",
-        File(filesDir, "masking_tape_states/${postcard.id}.txt")
-    )
-    deleteFile(
-        "labelStickerState",
-        File(filesDir, "label_sticker_states/${postcard.id}.txt")
-    )
+    // 저장과 같은 DecorationStateFile 목록을 순회하므로 요소를 새로 추가하면
+    // 여기에도 자동으로 포함된다(DecorationDirectoryContractTest가 보호).
+    DecorationStateFile.entries.forEach { stateFile ->
+        deleteFile(
+            stateFile.assetName,
+            stateFile.file(filesDir, postcard.id)
+        )
+    }
 
     // 5. 편집 초안 — PostcardDraftStorage.deleteDraft가 초안 텍스트와
     // 2일차에 추가된 초안 전용 누끼 디렉터리(draft_sticker_bgs/<id>/)를
@@ -173,29 +156,18 @@ internal fun cleanupPostcardOwnedAssets(
             missing += "draft"
     }
 
-    // 6. 확정 누끼 이미지 디렉터리(sticker_bgs/<id>/) — postcardId 전용
-    // 하위 디렉터리라 재귀 삭제가 안전하다(sticker_bgs/ 루트 자체는 건드리지 않음).
-    deleteDir(
-        "confirmedStickerBackgrounds",
-        File(filesDir, "sticker_bgs/${postcard.id}")
-    )
-
-    // 7. 카메라 스티커 원본 디렉터리(sticker_originals/<id>/) — 57일차부터는
-    // Photo Picker(갤러리)로 고른 원본도 같은 디렉터리에 복사되지만, 라벨은
-    // 기존 테스트 호환을 위해 그대로 둔다. 마찬가지로 postcardId 전용
-    // 하위 디렉터리라 재귀 삭제가 안전하다.
-    deleteDir(
-        "cameraStickerOriginals",
-        File(filesDir, "sticker_originals/${postcard.id}")
-    )
-
-    // 8. 마스킹테이프 사진 원본 디렉터리(masking_tape_photos/<id>/) —
-    // Photo Picker로 고른 마스킹테이프 사진을 복사해 두는 postcardId 전용
-    // 하위 디렉터리(57일차 URI 영속성 수정으로 신설).
-    deleteDir(
-        "maskingTapePhotoOriginals",
-        File(filesDir, "masking_tape_photos/${postcard.id}")
-    )
+    // 6~8. 엽서별 꾸미기 자산 디렉터리 — 확정 누끼(sticker_bgs/<id>/),
+    // 스티커 원본(sticker_originals/<id>/: 카메라 촬영분과 57일차부터 Photo
+    // Picker로 고른 원본까지, 라벨 "cameraStickerOriginals"는 기존 테스트 호환을
+    // 위해 그대로 둔다), 마스킹테이프 사진 원본(masking_tape_photos/<id>/,
+    // 57일차 URI 영속성 수정으로 신설). 모두 postcardId 전용 하위 디렉터리라
+    // 재귀 삭제가 안전하다(각 루트 자체는 건드리지 않음).
+    PostcardAssetDirectory.entries.forEach { assetDirectory ->
+        deleteDir(
+            assetDirectory.deletionAssetName,
+            assetDirectory.directory(filesDir, postcard.id)
+        )
+    }
 
     return PostcardDeletionResult(
         postcardId = postcard.id,

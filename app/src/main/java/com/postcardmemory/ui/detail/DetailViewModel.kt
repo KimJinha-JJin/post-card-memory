@@ -23,10 +23,12 @@ import com.postcardmemory.ui.components.withBackMessage
 import com.postcardmemory.ui.components.writingOffsetMinutes
 import com.postcardmemory.ui.components.BACK_RECIPIENT_MODIFIER_MAX_LENGTH
 import com.postcardmemory.utils.ConfirmedEditStateStorage
+import com.postcardmemory.utils.DecorationStateFile
 import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.MaskingTapePhotoStorage
 import com.postcardmemory.utils.PhotoColorExtractor
 import com.postcardmemory.utils.PhotoStickerImageStorage
+import com.postcardmemory.utils.PostcardAssetDirectory
 import com.postcardmemory.utils.PostcardDeletionManager
 import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
@@ -85,7 +87,7 @@ sealed interface DraftSaveStatus {
     data object Failed : DraftSaveStatus
 }
 
-/** 완료 버튼(확정 저장)의 상태. 스티커·도장 저장을 이 상태로만 판단한다. */
+/** 완료 버튼(확정 저장)의 상태. 꾸미기 여섯 종의 확정 저장 결과를 이 상태로만 판단한다. */
 sealed interface ConfirmSaveState {
 
     data object Idle : ConfirmSaveState
@@ -97,14 +99,20 @@ sealed interface ConfirmSaveState {
     data object Failed : ConfirmSaveState
 }
 
-/** 스티커·도장·낙서 저장이 모두 성공했을 때만 확정 저장 전체를 성공으로 본다. */
+/**
+ * 꾸미기 여섯 종(스티커·도장·낙서·텍스트·마스킹테이프·라벨) 저장이 모두 성공했을 때만
+ * 확정 저장 전체를 성공으로 본다. 기본값을 두지 않는다 — 기본값 `true`가 있으면 저장
+ * 결과 하나를 넘기는 것을 잊어도 컴파일되고, 그 종류의 저장 실패가 전체 성공으로
+ * 처리돼 초안이 지워질 수 있다. 꾸미기 종류를 추가하면 여기에 인자를 추가해 모든
+ * 호출부가 그 결과를 명시적으로 넘기게 한다.
+ */
 internal fun shouldConfirmSaveSucceed(
     stickersSaved: Boolean,
     sealsSaved: Boolean,
-    doodlesSaved: Boolean = true,
-    textStickersSaved: Boolean = true,
-    maskingTapesSaved: Boolean = true,
-    labelStickersSaved: Boolean = true
+    doodlesSaved: Boolean,
+    textStickersSaved: Boolean,
+    maskingTapesSaved: Boolean,
+    labelStickersSaved: Boolean
 ): Boolean =
     stickersSaved &&
             sealsSaved &&
@@ -819,13 +827,13 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 확정 저장(완료 버튼)이 스티커·도장 모두 실제로 성공한 뒤에만 초안을
+     * 확정 저장(완료 버튼)이 꾸미기 여섯 종 모두 실제로 성공한 뒤에만 초안을
      * 지운다. 하나라도 실패하면 초안을 유지해 사용자가 다시 시도할 수 있게
      * 한다. 이미 저장이 진행 중이면 새 요청은 무시해 완료 버튼 연타로
      * 같은 파일에 저장이 중복 실행되는 것을 막는다.
      *
      * 초안 삭제 자체의 실패(드문 파일시스템 오류)는 정리 실패로만 취급하고
-     * 전체 결과는 성공으로 본다 — 이 시점엔 스티커·도장 확정 상태가 이미
+     * 전체 결과는 성공으로 본다 — 이 시점엔 여섯 종의 확정 상태가 이미
      * 안전하게 저장됐고, deleteDraft는 예외를 던지지 않으므로 재시도 시
      * 자동저장이 다음 임시저장에서 초안 파일을 다시 갱신해 자연히 해소된다.
      */
@@ -846,12 +854,12 @@ class DetailViewModel @Inject constructor(
             val labelStickersSaved = persistLabelStickerEditState(postcardId)
             val allSaved =
                 shouldConfirmSaveSucceed(
-                    stickersSaved,
-                    sealsSaved,
-                    doodlesSaved,
-                    textStickersSaved,
-                    maskingTapesSaved,
-                    labelStickersSaved
+                    stickersSaved = stickersSaved,
+                    sealsSaved = sealsSaved,
+                    doodlesSaved = doodlesSaved,
+                    textStickersSaved = textStickersSaved,
+                    maskingTapesSaved = maskingTapesSaved,
+                    labelStickersSaved = labelStickersSaved
                 )
 
             if (allSaved) {
@@ -933,10 +941,8 @@ class DetailViewModel @Inject constructor(
                 "photo_stickers"
             ).canonicalFile
         val persistDir =
-            File(
-                context.filesDir,
-                "sticker_bgs/$postcardId"
-            )
+            PostcardAssetDirectory.CONFIRMED_STICKER_BACKGROUNDS
+                .directory(context.filesDir, postcardId)
         if (
             !persistDir.exists() &&
             !persistDir.mkdirs()
@@ -956,7 +962,7 @@ class DetailViewModel @Inject constructor(
         }
 
         val stateFile =
-            File(context.filesDir, "sticker_states/$postcardId.txt")
+            DecorationStateFile.PHOTO_STICKER.file(context.filesDir, postcardId)
         val saved =
             ConfirmedEditStateStorage.writeTextAtomically(
                 targetFile = stateFile,
@@ -981,17 +987,12 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): List<PhotoStickerItem> {
         val file =
-            File(
-                context.filesDir,
-                "sticker_states/$postcardId.txt"
-            )
+            DecorationStateFile.PHOTO_STICKER.file(context.filesDir, postcardId)
         if (!file.exists()) return emptyList()
 
         val persistDir =
-            File(
-                context.filesDir,
-                "sticker_bgs/$postcardId"
-            )
+            PostcardAssetDirectory.CONFIRMED_STICKER_BACKGROUNDS
+                .directory(context.filesDir, postcardId)
 
         return file.readLines()
             .filter { it.isNotBlank() }
@@ -1037,7 +1038,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): Boolean {
         val stateFile =
-            File(context.filesDir, "seal_states/$postcardId.txt")
+            DecorationStateFile.SEAL.file(context.filesDir, postcardId)
 
         return ConfirmedEditStateStorage.writeTextAtomically(
             targetFile = stateFile,
@@ -1052,10 +1053,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): List<PostcardSealItem> {
         val file =
-            File(
-                context.filesDir,
-                "seal_states/$postcardId.txt"
-            )
+            DecorationStateFile.SEAL.file(context.filesDir, postcardId)
         if (!file.exists()) return emptyList()
 
         return file.readLines()
@@ -1097,7 +1095,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): Boolean {
         val stateFile =
-            File(context.filesDir, "text_sticker_states/$postcardId.txt")
+            DecorationStateFile.TEXT_STICKER.file(context.filesDir, postcardId)
 
         return ConfirmedEditStateStorage.writeTextAtomically(
             targetFile = stateFile,
@@ -1112,10 +1110,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): List<TextStickerItem> {
         val file =
-            File(
-                context.filesDir,
-                "text_sticker_states/$postcardId.txt"
-            )
+            DecorationStateFile.TEXT_STICKER.file(context.filesDir, postcardId)
         if (!file.exists()) return emptyList()
 
         return file.readLines()
@@ -1238,7 +1233,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): Boolean {
         val stateFile =
-            File(context.filesDir, "masking_tape_states/$postcardId.txt")
+            DecorationStateFile.MASKING_TAPE.file(context.filesDir, postcardId)
 
         return ConfirmedEditStateStorage.writeTextAtomically(
             targetFile = stateFile,
@@ -1253,10 +1248,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): List<MaskingTapeItem> {
         val file =
-            File(
-                context.filesDir,
-                "masking_tape_states/$postcardId.txt"
-            )
+            DecorationStateFile.MASKING_TAPE.file(context.filesDir, postcardId)
         if (!file.exists()) return emptyList()
 
         return file.readLines()
@@ -1298,7 +1290,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): Boolean {
         val stateFile =
-            File(context.filesDir, "label_sticker_states/$postcardId.txt")
+            DecorationStateFile.LABEL_STICKER.file(context.filesDir, postcardId)
 
         return ConfirmedEditStateStorage.writeTextAtomically(
             targetFile = stateFile,
@@ -1313,10 +1305,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): List<LabelStickerItem> {
         val file =
-            File(
-                context.filesDir,
-                "label_sticker_states/$postcardId.txt"
-            )
+            DecorationStateFile.LABEL_STICKER.file(context.filesDir, postcardId)
         if (!file.exists()) return emptyList()
 
         return file.readLines()
@@ -1346,7 +1335,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): Boolean {
         val stateFile =
-            File(context.filesDir, "doodle_states/$postcardId.txt")
+            DecorationStateFile.DOODLE.file(context.filesDir, postcardId)
 
         return ConfirmedEditStateStorage.writeTextAtomically(
             targetFile = stateFile,
@@ -1361,10 +1350,7 @@ class DetailViewModel @Inject constructor(
         postcardId: Long
     ): List<DoodleStroke> {
         val file =
-            File(
-                context.filesDir,
-                "doodle_states/$postcardId.txt"
-            )
+            DecorationStateFile.DOODLE.file(context.filesDir, postcardId)
         if (!file.exists()) return emptyList()
 
         return file.readLines()
@@ -3991,10 +3977,8 @@ class DetailViewModel @Inject constructor(
                 "photo_stickers"
             )
         val stickerPersistDir =
-            File(
-                context.filesDir,
-                "sticker_bgs"
-            )
+            PostcardAssetDirectory.CONFIRMED_STICKER_BACKGROUNDS
+                .root(context.filesDir)
         val targetFile =
             file.canonicalFile
 

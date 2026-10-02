@@ -10,34 +10,65 @@ import org.junit.Test
  * 프로젝트의 순수 JUnit 환경에서 직접 인스턴스화할 수 없으므로(Robolectric
  * 미사용, PostcardEditDraftTest.kt 참고), saveEditsAndClearDraft가 실제로
  * 사용하는 순수 판정 함수만 분리해 검증한다.
+ *
+ * shouldConfirmSaveSucceed는 기본값 없이 여섯 종 결과를 모두 받는다. 각 테스트도
+ * 여섯 값을 전부 명시해, 검증 대상이 아닌 종류가 기본값에 숨지 않게 한다.
  */
 class ConfirmSaveLogicTest {
 
     @Test
     fun shouldConfirmSaveSucceed_whenStickersAndSealsBothSaved() {
         assertTrue(
-            shouldConfirmSaveSucceed(stickersSaved = true, sealsSaved = true)
+            shouldConfirmSaveSucceed(
+                stickersSaved = true,
+                sealsSaved = true,
+                doodlesSaved = true,
+                textStickersSaved = true,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
+            )
         )
     }
 
     @Test
     fun shouldConfirmSaveSucceed_failsWhenSealsSaveFails() {
         assertFalse(
-            shouldConfirmSaveSucceed(stickersSaved = true, sealsSaved = false)
+            shouldConfirmSaveSucceed(
+                stickersSaved = true,
+                sealsSaved = false,
+                doodlesSaved = true,
+                textStickersSaved = true,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
+            )
         )
     }
 
     @Test
     fun shouldConfirmSaveSucceed_failsWhenStickersSaveFails() {
         assertFalse(
-            shouldConfirmSaveSucceed(stickersSaved = false, sealsSaved = true)
+            shouldConfirmSaveSucceed(
+                stickersSaved = false,
+                sealsSaved = true,
+                doodlesSaved = true,
+                textStickersSaved = true,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
+            )
         )
     }
 
     @Test
     fun shouldConfirmSaveSucceed_failsWhenBothFail() {
         assertFalse(
-            shouldConfirmSaveSucceed(stickersSaved = false, sealsSaved = false)
+            shouldConfirmSaveSucceed(
+                stickersSaved = false,
+                sealsSaved = false,
+                doodlesSaved = true,
+                textStickersSaved = true,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
+            )
         )
     }
 
@@ -47,7 +78,10 @@ class ConfirmSaveLogicTest {
             shouldConfirmSaveSucceed(
                 stickersSaved = true,
                 sealsSaved = true,
-                doodlesSaved = true
+                doodlesSaved = true,
+                textStickersSaved = true,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
             )
         )
     }
@@ -58,7 +92,10 @@ class ConfirmSaveLogicTest {
             shouldConfirmSaveSucceed(
                 stickersSaved = true,
                 sealsSaved = true,
-                doodlesSaved = false
+                doodlesSaved = false,
+                textStickersSaved = true,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
             )
         )
     }
@@ -70,7 +107,9 @@ class ConfirmSaveLogicTest {
                 stickersSaved = true,
                 sealsSaved = true,
                 doodlesSaved = true,
-                textStickersSaved = true
+                textStickersSaved = true,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
             )
         )
     }
@@ -82,7 +121,9 @@ class ConfirmSaveLogicTest {
                 stickersSaved = true,
                 sealsSaved = true,
                 doodlesSaved = true,
-                textStickersSaved = false
+                textStickersSaved = false,
+                maskingTapesSaved = true,
+                labelStickersSaved = true
             )
         )
     }
@@ -95,7 +136,8 @@ class ConfirmSaveLogicTest {
                 sealsSaved = true,
                 doodlesSaved = true,
                 textStickersSaved = true,
-                maskingTapesSaved = true
+                maskingTapesSaved = true,
+                labelStickersSaved = true
             )
         )
     }
@@ -108,7 +150,8 @@ class ConfirmSaveLogicTest {
                 sealsSaved = true,
                 doodlesSaved = true,
                 textStickersSaved = true,
-                maskingTapesSaved = false
+                maskingTapesSaved = false,
+                labelStickersSaved = true
             )
         )
     }

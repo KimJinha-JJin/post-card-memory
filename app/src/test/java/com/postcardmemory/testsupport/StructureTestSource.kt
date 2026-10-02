@@ -12,8 +12,10 @@ import java.io.File
  * 것은 **JVM unit test 쪽 하네스**다 — Robolectric이 없어서 `src/test`에서는 Composable을
  * 렌더링하거나 ViewModel을 만들 수 없다. androidTest로 옮기면 검증할 수 있지만 그건
  * instrumented 실행이 필요하고, 실사용 기기에서의 계측 실행은 `AGENTS.md` 5절로 금지돼
- * 있으며 emulator는 아직 준비돼 있지 않다. 그래서 "지금 당장 확인할 수 있는 유일한 수단"이
- * 소스 텍스트다.
+ * 있다. 90일차부터 검증 전용 emulator에서 계측 테스트를 실제로 실행해 확인하고 있지만,
+ * 그 실행은 사람이 emulator를 띄워 돌리는 수동 절차이고 GitHub Actions CI는 계측 테스트를
+ * 컴파일(`assembleDebugAndroidTest`)만 할 뿐 실행하지 않는다. 그래서 매 변경마다 JVM에서
+ * 자동으로 확인할 수 있는 수단은 여전히 소스 텍스트다.
  *
  * 따라서 구조 테스트는 **대체 수단이 없을 때만** 쓴다. 순수 함수·저장소·enum처럼 직접
  * 호출할 수 있는 대상은 구조 테스트가 아니라 행동 테스트로 검증한다(78일차에 그런 4건을

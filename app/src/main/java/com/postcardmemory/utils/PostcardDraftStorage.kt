@@ -19,8 +19,9 @@ import java.io.IOException
  */
 object PostcardDraftStorage {
 
-    private const val DRAFT_DIR_NAME = "drafts/edit_state"
-    private const val DRAFT_STICKER_BG_DIR_NAME = "draft_sticker_bgs"
+    /** internal: OrphanFileDiagnostics가 같은 경로를 진단할 때 재사용한다. */
+    internal const val DRAFT_DIR_NAME = "drafts/edit_state"
+    internal const val DRAFT_STICKER_BG_DIR_NAME = "draft_sticker_bgs"
 
     internal fun draftFileNameFor(postcardId: Long): String =
         "$postcardId.draft.txt"

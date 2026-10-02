@@ -45,8 +45,9 @@ data class OrphanScanResult(
  * text_sticker_states/, masking_tape_states/, label_sticker_states/ —
  * 그리고 sticker_bgs/<id>/, sticker_originals/<id>/, masking_tape_photos/<id>/,
  * draft_sticker_bgs/<id>/, drafts/edit_state/<id>.draft.txt)을 그대로 따르되, 그 파일들을 지우는
- * 대신 목록만 만든다. 삭제 쪽에 새 디렉터리가 추가되면 여기에도 함께
- * 넣어야 그 요소의 고아 파일을 찾을 수 있다.
+ * 대신 목록만 만든다. 꾸미기 상태 파일과 엽서별 자산 디렉터리는 삭제와 같은
+ * DecorationStateFile / PostcardAssetDirectory 목록을 순회하므로, 그 목록에 새 요소가
+ * 추가되면 진단에도 자동으로 포함된다(DecorationDirectoryContractTest가 보호).
  */
 object OrphanFileDiagnostics {
 
@@ -91,86 +92,36 @@ object OrphanFileDiagnostics {
                 directory = File(rootDirectory, "postcard_backgrounds"),
                 referencedPaths = canonicalize(referencedBackgroundPaths),
                 reason = "Room의 backgroundImagePath에서 참조하지 않음"
-            ),
+            )
+        ) + PostcardAssetDirectory.entries.map { assetDirectory ->
             scanPostcardIdDirectories(
-                type = "confirmedStickerBackground",
-                directory = File(rootDirectory, "sticker_bgs"),
+                type = assetDirectory.orphanType,
+                directory = assetDirectory.root(rootDirectory),
                 existingPostcardIds = existingPostcardIds,
                 unclassified = unclassified,
                 reason = "Room에 존재하지 않는 postcardId 디렉터리"
-            ),
-            scanPostcardIdDirectories(
-                type = "cameraStickerOriginal",
-                directory = File(rootDirectory, "sticker_originals"),
-                existingPostcardIds = existingPostcardIds,
-                unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId 디렉터리"
-            ),
-            scanPostcardIdDirectories(
-                type = "maskingTapePhotoOriginal",
-                directory = File(rootDirectory, "masking_tape_photos"),
-                existingPostcardIds = existingPostcardIds,
-                unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId 디렉터리"
-            ),
+            )
+        } + listOf(
             scanPostcardIdDirectories(
                 type = "draftStickerBackground",
-                directory = File(rootDirectory, "draft_sticker_bgs"),
+                directory = File(rootDirectory, PostcardDraftStorage.DRAFT_STICKER_BG_DIR_NAME),
                 existingPostcardIds = existingPostcardIds,
                 unclassified = unclassified,
                 reason = "Room에 존재하지 않는 postcardId 디렉터리"
-            ),
+            )
+        ) + DecorationStateFile.entries.map { stateFile ->
             scanPostcardIdFiles(
-                type = "stickerState",
-                directory = File(rootDirectory, "sticker_states"),
+                type = stateFile.assetName,
+                directory = File(rootDirectory, stateFile.directoryName),
                 suffix = ".txt",
                 existingPostcardIds = existingPostcardIds,
                 unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId의 스티커 상태 파일"
-            ),
-            scanPostcardIdFiles(
-                type = "sealState",
-                directory = File(rootDirectory, "seal_states"),
-                suffix = ".txt",
-                existingPostcardIds = existingPostcardIds,
-                unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId의 도장 상태 파일"
-            ),
-            scanPostcardIdFiles(
-                type = "doodleState",
-                directory = File(rootDirectory, "doodle_states"),
-                suffix = ".txt",
-                existingPostcardIds = existingPostcardIds,
-                unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId의 낙서 상태 파일"
-            ),
-            scanPostcardIdFiles(
-                type = "textStickerState",
-                directory = File(rootDirectory, "text_sticker_states"),
-                suffix = ".txt",
-                existingPostcardIds = existingPostcardIds,
-                unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId의 텍스트 스티커 상태 파일"
-            ),
-            scanPostcardIdFiles(
-                type = "maskingTapeState",
-                directory = File(rootDirectory, "masking_tape_states"),
-                suffix = ".txt",
-                existingPostcardIds = existingPostcardIds,
-                unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId의 마스킹테이프 상태 파일"
-            ),
-            scanPostcardIdFiles(
-                type = "labelStickerState",
-                directory = File(rootDirectory, "label_sticker_states"),
-                suffix = ".txt",
-                existingPostcardIds = existingPostcardIds,
-                unclassified = unclassified,
-                reason = "Room에 존재하지 않는 postcardId의 라벨 스티커 상태 파일"
-            ),
+                reason = "Room에 존재하지 않는 postcardId의 ${stateFile.displayName} 상태 파일"
+            )
+        } + listOf(
             scanPostcardIdFiles(
                 type = "editDraft",
-                directory = File(rootDirectory, "drafts/edit_state"),
+                directory = File(rootDirectory, PostcardDraftStorage.DRAFT_DIR_NAME),
                 suffix = ".draft.txt",
                 existingPostcardIds = existingPostcardIds,
                 unclassified = unclassified,

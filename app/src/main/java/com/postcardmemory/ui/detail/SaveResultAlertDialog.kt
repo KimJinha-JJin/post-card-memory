@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.postcardmemory.ui.theme.BrutalBlack
 
 /**
- * 저장/내보내기 결과 안내 다이얼로그 7종의 공통 UI. 어떤 상태가 언제 표시될지,
+ * 저장/내보내기 결과 안내 다이얼로그(현재 DetailScreen 호출부 4곳)의 공통 UI. 어떤 상태가 언제 표시될지,
  * 어떤 reset 함수를 호출할지는 호출부(DetailScreen)의 책임이며 이 Composable은
  * 그 판단을 하지 않는다.
  */

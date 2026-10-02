@@ -1,4 +1,60 @@
-# HANDOFF — 90일차 건강검진: instrumentation 청산 + 첫 보안 감사 + bitmap 메모리 감사
+# HANDOFF — 91일차: 꾸미기 저장 누락 방지 보강 + 주석·README 최신화
+
+확인일: 2026-10-02. 수동 표준 모드(91일차 작업지시서, 담당 Claude Code). 새 기능·UI·미감 변경 없이, 꾸미기 저장 결과나 디렉터리 하나를 빠뜨려도 조용히 지나가지 않도록 작은 안전장치를 넣고 오래된 주석과 README를 현재 사실에 맞췄어. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 91일차 시작 상태
+
+- 브랜치 `feature/photo-sticker`, 시작 HEAD `3b01f18adde0e76d6c0421c91a6cec06396e2955`("Record the 90-day structure and tech-debt audit"), `git fetch` 후 origin 대비 `0/0`, 추적 작업트리 clean, `git diff --check` 통과.
+- Codex 실패 시도 뒤 저장소 상태: 추적 파일 변경 없음. untracked는 기존 보호 대상 `.codex-config.candidate.toml`, `.kotlin/`(errors log 2개)뿐이었고, `.claude/settings.local.json`은 전역 ignore로 존재. Codex가 남긴 예상 밖 변경은 발견되지 않았어.
+- 90일차 HANDOFF 게이트: 90일차 구조·기술부채 감사 기록은 이미 `3b01f18`로 커밋·푸시돼 있어 별도 docs-only commit을 하지 않았어.
+
+## 변경 내용
+
+- **저장 성공 확인 누락 방지:** `shouldConfirmSaveSucceed`(`ui/detail/DetailViewModel.kt`)의 `doodlesSaved`·`textStickersSaved`·`maskingTapesSaved`·`labelStickersSaved` 기본값 `= true` 4개를 제거했어. production 호출부는 여섯 결과를 이름 있는 인자로 넘기고, `ConfirmSaveLogicTest` 11개 호출도 여섯 값을 모두 명시해. 판정은 여전히 여섯 개 AND라 저장 성공 조건·실패 처리·초안 삭제/보존 조건은 그대로야. 이제 결과 하나를 빠뜨리면 컴파일이 실패해.
+- **꾸미기 디렉터리 기준 단일화:** 새 `utils/PostcardOwnedFileLayout.kt`에 `DecorationStateFile`(상태 파일 6종: `sticker_states`, `seal_states`, `doodle_states`, `text_sticker_states`, `masking_tape_states`, `label_sticker_states`)과 `PostcardAssetDirectory`(엽서별 자산 3종: `sticker_bgs`, `sticker_originals`, `masking_tape_photos`)를 두었어.
+  - 저장·복원: `DetailViewModel`의 상태 파일 쓰기/읽기 12곳과 `sticker_bgs` 3곳이 enum 경로를 써.
+  - 삭제: `cleanupPostcardOwnedAssets`가 두 enum을 순회해(삭제 순서·결과 이름 `stickerState`·`confirmedStickerBackgrounds` 등 불변).
+  - 고아 진단: `OrphanFileDiagnostics.scan`이 같은 enum을 순회하고, 초안 경로는 `PostcardDraftStorage`의 상수(`private` → `internal`, 값 불변)를 써. category 순서·type·reason 문자열 불변.
+  - `PhotoStickerImageStorage`·`MaskingTapePhotoStorage`의 private 디렉터리 상수도 enum 값을 참조해.
+  - **기존 경로 문자열은 한 글자도 바꾸지 않았어.** 경로 계산 결과(`File(filesDir, "<dir>/<id>.txt")`, `File(filesDir, "<dir>/<id>")`)도 기존과 같아. 파일 이동·rename·데이터 migration 없음.
+- **새 보호 테스트:** `DecorationDirectoryContractTest` 3건 — 디렉터리 이름을 production 상수가 아닌 리터럴로 독립 고정, 저장 경로 함수로 만든 파일을 production 삭제가 전부 지우고 다른 엽서는 보존하는지, production 진단이 전부 찾고 엽서가 있으면 0건인지 실제 파일 I/O로 확인. 삭제 목록에서 마지막 종류를 빼는 일시 변형을 넣었을 때 이 테스트가 실패하는 것을 확인한 뒤 원복했어.
+- **주석 건강검진:** `app/src` 전체에서 TODO/FIXME/HACK·emulator·schema/version 숫자·개수 표현을 검색해 현재 코드와 대조했어. TODO/FIXME는 0건. 고친 오래된 주석:
+  - `testsupport/StructureTestSource.kt`: "emulator는 아직 준비돼 있지 않다" → 90일차부터 검증 전용 emulator 수동 실행이 가능하지만 CI는 계측 테스트를 컴파일만 한다는 현재 사실.
+  - `ui/detail/SaveResultAlertDialog.kt`: "다이얼로그 7종" → 현재 DetailScreen 호출부 4곳(56·58일차에 줄어든 사실 반영).
+  - `DetailViewModel.kt`: `ConfirmSaveState`·`saveEditsAndClearDraft` 설명의 "스티커·도장" 2종 표현 → 꾸미기 여섯 종. `shouldConfirmSaveSucceed`에는 기본값을 두지 않는 이유를 적었어.
+  - `PostcardDeletionManager.kt`·`OrphanFileDiagnostics.kt`: "새 디렉터리 추가 시 여기도 넣어야" 경고 → 공용 목록을 순회하고 계약 테스트가 보호한다는 설명. 저장 실패·초안 보존·`ExitSaveScope`·`onCleared`·삭제 순서·파일 소유권 주석은 건드리지 않았어.
+  - 갤러리 퀵셀렉트의 "특별한 갤러리 3종" 주석은 88일차 변경을 함께 적은 이력 주석이라 유지했어.
+- **README:** "과거 설명 보존" 상태였던 앱 소개를 현재 코드 기준으로 다시 썼어 — 2열 그리드·5페이지 편집·Neo-Brutalism 색표 같은 옛 설명을 걷어내고, 앞면/뒷면 편지·작성 기록, 편집 탭 7개와 꾸미기 종류(사진 스티커 오림 5종 포함), 초안·확정 저장·공유·내보내기, 월별(3열)/기억 밀도 갤러리, 흔들어서 한 장, 퀵셀렉트, 방문 기록·달력, 미래 우체통, 기술 스택(Room schema 19, migration 1→19), 검증 표(CI는 `assembleDebugAndroidTest`로 계측 APK를 컴파일만 하고 실행하지 않음을 구분), 권한(CAMERA, VIBRATE)을 정리했어.
+
+## 최종 검증과 독립 상태
+
+| 구분 | 상태 | 근거 |
+|---|---|---|
+| 구현 | 완료 | 위 변경 내용 |
+| 관련 JVM 우선 실행 | 86/86 통과 | `ConfirmSaveLogicTest` 15, `ConfirmSaveHistoryClearStructureTest` 3, `DecorationDirectoryContractTest` 3, `PostcardDeletionManagerTest` 12, `OrphanFileDiagnosticsTest` 9, `PostcardDraftStorageTest` 29, `ConfirmedEditStateStorageTest` 5, `AppFileOwnershipTest` 10 |
+| 로컬 JVM 전체 | **906/906 통과** | XML 95개, 실패·오류·skip 0. `@Test` 906개, 테스트 파일 94 + helper 1 |
+| assembleDebug | 성공 | 앱 APK 빌드 |
+| assembleDebugAndroidTest | 성공 | 계측 테스트 APK **컴파일**일 뿐 실행 아님 |
+| emulator instrumentation | `PostcardDeletionOrchestrationTest` 3/3, 전체 **20/20** 통과 | 검증 전용 `PostcardMemory_Test`(`emulator-5554`, sdk_gphone16k_x86_64)만 연결 확인 후 APK 설치·실행. boot 직후 첫 시도 2회는 emulator lowmemorykiller가 test process를 죽여 status 없이 종료 → 환경 문제로 분류, test emulator만 재부팅 후 같은 APK로 통과. 실행 후 emulator 종료 |
+| 실기기 QA | 불필요 | UI·미감·사용자 동작 변화 없음, 저장 판정 논리·경로 문자열 불변, 경로 일치는 자동 테스트와 계측으로 확인 |
+| TEST-COVERAGE-MAP | 갱신 완료 | 테스트 3건 추가, 디렉터리 계약 보호 범위·한계 기록 |
+| Room schema / migration / serialization / 꾸미기 파일 형식 / 디렉터리 이름 / 사용자 데이터 | 변경 없음 | diff 확인 |
+| 실사용 기기 | 미접촉 | 연결·ADB·설치·계측 없음 |
+| repository HANDOFF | 최신화 | 이 섹션 |
+| commit / push / CI | 이 HANDOFF를 포함한 91일차 커밋으로 진행 | 결과는 최종 완료보고에서 확인 |
+
+## 남은 위험과 후속 후보(승인된 작업 아님)
+
+- 디렉터리 계약 테스트는 DetailViewModel이 실제로 enum 경로로 저장한다는 사실까지는 증명하지 못해(Robolectric 없음). 새 꾸미기 종류가 enum을 거치지 않고 다른 경로에 저장되면 잡지 못해 — 7번째 종류 기획 시 공통 틀과 함께 검토.
+- `DetailViewModel`의 초기 로드·"원래대로"·확정 저장 후 이력 초기화의 여섯 종 평행 목록은 여전히 기억 의존이야(구조 테스트 `ConfirmSaveHistoryClearStructureTest`만 존재).
+- `ConfirmSaveLogicTest`의 "…AllSaved" 4건은 기본값 제거 후 모두 여섯 값 true로 같은 입력이 됐어. 이름은 여전히 사실이지만 중복 정리는 후속 후보.
+- `GalleryViewMode.DETAIL_LIST`는 enum 선언 외 참조가 없어 보여(README에서 "자세히 보기" 설명을 뺀 근거). 저장된 화면 상태 복원(`valueOf`) 호환까지 확인한 뒤 dead code 여부를 판단할 후보.
+- `PostcardDeletionManager.kt` 정리 단계 주석 번호가 3 → 5로 건너뛰는 오래된 표기는 의미 영향이 없어 그대로 뒀어.
+- 90일차 후보(백업 정책, release 로그, FileProvider 여분 root, quick select 손 해상도, 실제 heap 측정)는 그대로 남아 있고, 92일차 메모리 실측과 섞지 않았어. 90일차 "코드 클린데이 후보" 1~3번은 이번에 처리했어.
+
+---
+
+# 이전 기록 — 90일차 건강검진: instrumentation 청산 + 첫 보안 감사 + bitmap 메모리 감사
 
 확인일: 2026-10-01. 수동 표준 모드(90일차 장기 작업지시서). 신규 기능과 앱 동작 변경 없이, 미실행 instrumentation을 검증 전용 emulator에서 실제로 실행하고 release/debug 보안 표면과 bitmap 상주 구조를 감사했어. production·test·이미지 자산은 수정하지 않았고 이 HANDOFF와 TEST-COVERAGE-MAP만 실제 결과로 갱신했어. **이 문서의 다음 후보는 실행 승인이 아니야.**
 
@@ -58,7 +114,7 @@
 
 ---
 
-# 90일차 추가 감사 — 구조·기술부채 / 장기 유지보수
+# 이전 기록 — 90일차 추가 감사 — 구조·기술부채 / 장기 유지보수
 
 확인일: 2026-10-01. 수동 표준 모드. 위 90일차 건강검진을 기록한 HEAD `7fe29bf874461c46a3313d3667c0c1132abcfc06` "Record the 90-day health and security audit" 상태를 대상으로 한 **읽기 전용 후속 감사**야. 보안·bitmap 메모리는 위 건강검진에서 이미 봤으므로 반복하지 않고 장기 유지보수 관점만 봤어. production·test·Gradle/dependency·이미지 자산·Room/migration/serialization은 수정하지 않았고, 이 HANDOFF 섹션만 추가했어. 아래 수치는 감사 시점 `wc -l`·`grep` 실측이며, 상태 개수 등은 근사값이야. **이 섹션의 모든 후보는 승인된 작업이 아니라 관찰·후속 후보야.**
 

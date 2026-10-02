@@ -9,8 +9,8 @@ import java.util.UUID
 
 object PhotoStickerImageStorage {
 
-    private const val ORIGINALS_DIRECTORY_NAME =
-        "sticker_originals"
+    private val ORIGINALS_DIRECTORY_NAME =
+        PostcardAssetDirectory.STICKER_ORIGINALS.directoryName
 
     /**
      * 카메라로 촬영한 스티커 원본을
