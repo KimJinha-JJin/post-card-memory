@@ -127,13 +127,23 @@ ChatGPT가 상세 작업지시서 작성
 - 현재 UI에서 사용하지 않는 필드나 경로도 과거 데이터 호환성과 삭제 방어 역할을 확인한다.
 - 사용자 데이터 일괄 변환이나 삭제는 별도 승인 없이 수행하지 않는다.
 - 실사용 실기기는 테스트 대상이 아니라 보호 대상이다. 명령어 이름이 아니라 효과 기준으로 판단한다: 앱의 설치 상태, package, 내부 저장소, Room DB, SharedPreferences, 앱 전용 파일에 영향을 줄 가능성이 있는 자동 검증은 실기기에서 사용자 명시 승인 없이 실행하지 않는다.
-- 실기기에서 기본 금지: `connectedAndroidTest`, `connectedCheck`, instrumented test, 테스트 APK lifecycle을 발생시키는 task, uninstall, `pm uninstall`, `pm clear`, destructive migration, 데이터 초기화, package 제거 가능성이 있는 자동 task.
+- 실기기 절대 금지: Gradle `connected*` task(`connectedAndroidTest`, `connectedDebugAndroidTest`, `connectedCheck` 등 — 실행 후 앱 uninstall로 사용자 데이터를 잃을 수 있음), `adb uninstall`, `pm uninstall`, `pm clear`, 앱 데이터 초기화, 사용자 DB 삭제, 실제 `filesDir` 전체 삭제, 사용자 갤러리 데이터 삭제, destructive migration, 앱 삭제 후 재설치 우회, package 제거 가능성이 있는 자동 task, 사용자 데이터를 파괴할 가능성이 있는 자동 테스트, 영향 범위를 확인하지 않은 instrumentation.
 - 명령의 설치/제거 동작을 모르면 실행하지 않고 STOP한다. "검증을 위해 필요함"은 예외 사유가 아니다.
-- 자동 계측 검증이 필요하면 emulator나 별도 테스트 환경을 사용한다. 실기기 검증은 사용자 수동 QA를 기본으로 하고, AI는 사용자가 명시적으로 승인한 일반 install/update, 일반 실행, READ-ONLY 상태 조회로만 관여한다.
-- instrumentation 실행 전 `adb devices -l`로 연결 대상을 실측한다. 검증 전용 `emulator-*`만 있는 경우에만 자동 실행할 수 있다. 물리 기기나 정체를 확정할 수 없는 대상이 함께 보이면 자동 instrumentation을 실행하지 않고 사용자 확인을 받는다.
-- `drawWithContent`, `graphicsLayer`, 화면 캡처나 렌더링 완료 대기가 필요한 emulator 테스트는 필요 시 `adb shell dumpsys power`로 `mWakefulness`를 확인한다. 화면이 `Asleep`이면 실제 draw pass가 없어 앱 timeout처럼 보일 수 있으므로, 검증 전용 emulator 화면만 깨운 뒤 재현 여부를 확인하고 이를 production 결함과 구분한다.
-- 삭제·초기화·파일 정리 검증은 Fake, temporary directory, in-memory DB와 검증 전용 emulator를 우선한다. 실사용 기기의 DB·엽서·사진·`filesDir` 조작, `pm clear`, uninstall은 검증 수단으로 사용하지 않는다.
+- `adb install -r`은 데이터를 보존하는 방식이지만 자동 허용하지 않는다. 사용자 승인 후에만 실행하고, release 서명 충돌 등으로 설치가 실패하면 실패한 상태에서 STOP한다. 앱을 지우고 debug APK를 새로 설치하는 방식으로 우회하지 않는다.
 - 삭제 오케스트레이션은 `DB 삭제 성공 → 사용자 소유 파일 정리` 순서를 지킨다. DB 삭제 실패·예외 시 사용자 파일 삭제는 0건이어야 한다. `파일 삭제 + DB 행 잔존`은 금지해야 할 깨진 상태이고, DB 삭제 뒤 프로세스 종료 등으로 생길 수 있는 `DB 행 없음 + 파일 잔존`은 더 위험한 반대 상태를 피하기 위해 수용한 고아 파일 위험으로 구분한다. 고아 파일은 읽기 전용 `OrphanFileDiagnostics`로 진단하며, 진단 결과가 자동 삭제 승인을 뜻하지 않는다.
+
+### 로컬 검증 환경과 instrumentation 등급
+
+- **로컬 Android Emulator는 이 프로젝트에서 사용하지 않는다(폐기).** 새 AVD 생성, 기존 AVD 부팅, `emulator -avd ...`, `avdmanager`, Android Emulator SDK·hypervisor driver 재설치, emulator 재부팅·APK 설치·instrumentation·메모리 측정·QA, 작업 편의를 위한 임시 복구를 모두 하지 않는다. 프로젝트 작업 필요성만으로 emulator 구성요소를 다시 설치하지 않으며, 정말 필요하면 사용자가 해당 작업에서 별도로 명시 승인해야 한다. Android SDK Platform-Tools(`adb`)는 유지한다.
+- 로컬 검증의 기본 환경은 사용자가 명시적으로 연결한 실사용 Android 기기다. 이 기기는 테스트 샌드박스가 아니라 사용자 데이터가 실제로 있는 보호 대상이다. `adb devices -l`, package·process 확인, `dumpsys`, `meminfo`, log·화면 상태 확인, 사용자와 함께하는 수동 QA처럼 읽기·관찰·비파괴 검증을 우선한다.
+- instrumentation은 실제 앱과 같은 package·저장공간(`targetContext`의 `filesDir`, DB 폴더, 갤러리 권한)에서 실행되므로 테스트별 등급으로 관리한다. 등급은 현재 테스트 코드 기준 조사 결과이며, 테스트 코드가 바뀌면 다시 검토한다. 현재 20건 분류는 `docs/ai/TEST-COVERAGE-MAP.md`에 둔다.
+  - `SAFE`: 사용자 `filesDir`·실제 앱 DB·사용자 갤러리·초안/확정 상태 파일 접근이 없고 삭제·초기화가 없어 실제 앱 데이터에 영향이 없는 테스트. 실사용 기기 실행 **후보**일 뿐 자동 실행하지 않는다.
+  - `CONDITIONAL`: 별도 DB 생성·삭제나 실제 사용자 갤러리 접근 가능성이 있는 테스트. 실사용 기기에서 기본 실행하지 않으며, 구조 개선이나 데이터 격리가 따로 검증되기 전까지 `SAFE`로 승격하지 않는다.
+  - `FORBIDDEN`: 실제 `filesDir` 삭제, 실제 초안·확정 상태 파일을 읽거나 쓰거나 지울 가능성을 배제할 수 없는 테스트. 실사용 기기에서 실행하지 않는다.
+- `SAFE` 테스트 실행 절차: ① `adb devices -l`로 대상 serial 확인 ② 실행할 테스트 클래스/이름 명시 ③ 데이터 영향 없음 확인 ④ 사용자에게 실행 승인 요청 ⑤ 승인 후 그 테스트만 실행. 실행은 Gradle `connected*`가 아니라 serial과 class를 좁힌 `adb -s <serial> shell am instrument -w -r -e class <테스트 클래스> com.postcardmemory.test/androidx.test.runner.AndroidJUnitRunner` 형태만 허용한다(현재 `applicationId`·runner 실측 기준, 바뀌면 다시 실측). 대상 앱과 테스트 APK의 서명이 맞지 않아 실행할 수 없으면 앱을 바꿔 설치하지 말고 STOP한다.
+- 대상 serial이 불명확하거나 승인되지 않은 기기가 함께 보이면 실행하지 않고 사용자 확인을 받는다.
+- 삭제·초기화·파일 정리 검증은 Fake, temporary directory, in-memory DB를 사용하는 JVM 테스트를 우선한다. 실사용 기기의 DB·엽서·사진·`filesDir` 조작, `pm clear`, uninstall은 검증 수단으로 사용하지 않는다.
+- 격리된 instrumentation 환경(원격 CI emulator 등)은 현재 존재하지 않으며 후속 후보다. 도입 전까지 `CONDITIONAL`·`FORBIDDEN` 테스트는 실행 미가능 상태로 기록한다.
 
 ### 공통 효과 기반 실행 안전 원칙
 
@@ -230,8 +240,8 @@ STOP은 현재 승인에 포함되지 않은 새로운 위험·범위·제품 �
 - 비동기·경합 테스트는 고정 `delay()`보다 완료 순서를 결정적으로 통제하는 방식을 우선한다.
 - 구현 코드뿐 아니라 테스트 입력, Fake, gate 위치와 dispatcher 설정도 오류 후보로 검토한다.
 - 코드 실패와 Gradle, 네트워크, 권한, JDK, 파일 잠금 같은 실행환경 실패를 구분한다.
-- 검증 결과는 `로컬 자동검증`, `emulator instrumentation`, `GitHub Actions CI`, `실기기 감각 QA`로 분리하고 각 영역을 `실행`, `미실행`, `불필요`, `실행 불가` 중 하나로 기록한다. 한 영역의 성공을 다른 영역의 성공으로 확대하지 않는다.
-- 테스트 실패는 최소한 `test infrastructure`, `emulator / OS environment`, `fixture`, `timing / race`, `DB / migration`, `assertion`, `production`으로 분류한 뒤 수정 대상을 정한다. stack trace의 발생 위치와 timeout 값, production 코드의 timeout 값을 대조해 테스트 자체가 본문이나 assertion에 진입했는지도 확인한다.
+- 검증 결과는 `로컬 자동검증`, `실사용 기기 instrumentation(승인된 SAFE 테스트에 한함)`, `GitHub Actions CI`, `실기기 감각 QA`로 분리하고 각 영역을 `실행`, `미실행`, `불필요`, `실행 불가` 중 하나로 기록한다. 한 영역의 성공을 다른 영역의 성공으로 확대하지 않는다. `CONDITIONAL`·`FORBIDDEN` instrumentation은 격리 환경이 없으므로 `실행 불가`로 기록하고, 이를 이유로 로컬 emulator를 다시 만들지 않는다.
+- 테스트 실패는 최소한 `test infrastructure`, `device / OS environment`, `fixture`, `timing / race`, `DB / migration`, `assertion`, `production`으로 분류한 뒤 수정 대상을 정한다. stack trace의 발생 위치와 timeout 값, production 코드의 timeout 값을 대조해 테스트 자체가 본문이나 assertion에 진입했는지도 확인한다.
 - Compose BOM·Compose UI test·`androidx.test`·Espresso처럼 함께 동작하는 테스트 dependency 일부를 변경할 때는 현재 해석된 dependency, 최신 안정 버전, 대상 OS/API 호환성, 실제 resolved classpath를 함께 확인한다. 특정 버전 숫자를 영구 규칙으로 고정하지 않는다.
 - 실제 Room 동작을 유지하면서 특정 DAO 실패만 재현해야 하면 `Room.inMemoryDatabaseBuilder`와 `object : Dao by realDao { override ... throw ... }` 위임 패턴을 권장 후보로 검토한다. 모든 테스트에 강제하거나 production 구조를 테스트 편의 때문에 바꾸지 않는다.
 - push가 승인되어 수행됐다면 현재 `.github/workflows/android-ci.yml`의 실제 step과 GitHub Actions 결과를 확인한다. 현재 workflow는 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 실행하며 instrumentation을 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.

@@ -1,6 +1,6 @@
 # 테스트 보호지도 — 91일차 저장 누락 방지 최신화 (원본 79일차 마감)
 
-확인일: 2026-10-02 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `3b01f18` 위 91일차 작업트리
+확인일: 2026-10-02 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `3b01f18` 위 91일차 작업트리. 2026-10-03(92일차 선행 안전정비): 테스트 수 변화 없이 로컬 emulator 폐기와 instrumentation 실사용 기기 안전 등급만 추가했어.
 
 기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치), 85일차에는 사진 스티커 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림), 87일차에는 사진 스티커 핀셋 붙이기(조준·핀셋 손) 상태 흐름, 88일차에는 갤러리 퀵 셀렉트(신문 오림 손 부채)의 열기/닫기 단계·중복 탭 방지·부채 배치, 89일차에는 메인 갤러리 종이 배경 구조, 90일차에는 방문 달력의 종이 한 장 구조와 위로 넘기는 월 이동, 91일차에는 꾸미기 디렉터리 계약(저장·삭제·고아 진단 일치)에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
 
@@ -28,6 +28,22 @@
 | 실제 Compose interaction: 버튼·터치 | 약함 | 예 | 뒷면 표시 3건(81일차 실제 실행 통과), 도장 조준·찍기는 순수 상태 전이만 보호 |
 
 미확인 등급을 붙인 기능은 없어. **instrumentation 20건/7파일 전부를 2026-10-01 검증 전용 `PostcardMemory_Test` emulator(API 37, 16KB page image)에서 실제 실행해 20/20 통과를 확인했어. 기존 미실행이던 `PhotoStickerEdgeStyleInstrumentedTest` 7건도 명시 실행과 전체 실행에서 통과했어. 이 실행은 로컬이고 GitHub Actions CI에는 포함되지 않아.** 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
+
+## instrumentation 실사용 기기 안전 등급 (2026-10-03, 92일차 선행 안전정비)
+
+**로컬 Android Emulator는 2026-10-03에 폐기됐어**(emulator SDK·hypervisor driver·`PostcardMemory_Test` AVD 제거, Platform-Tools 유지). 이 문서의 80~91일차 emulator 실행 결과는 당시 기록으로 보존하지만, emulator를 다시 만들거나 띄우라는 지시가 아니야. 로컬 검증 기본 환경은 사용자가 연결한 실사용 기기이고, instrumentation은 실제 앱과 같은 package·저장공간(`targetContext`의 `filesDir`, DB 폴더, 갤러리 권한)에서 돌기 때문에 아래 등급으로 관리해. 규칙 원문은 `AGENTS.md` 5절 "로컬 검증 환경과 instrumentation 등급"이야.
+
+| 등급 | 테스트 클래스 | 건수 | 실사용 기기 | 근거(현재 코드 기준) |
+|---|---|---|---|---|
+| SAFE | `PhotoStickerEdgeStyleInstrumentedTest` | 7 | 실행 후보 — 매번 serial·클래스·데이터 영향 없음 명시 후 사용자 승인, `am instrument -e class`로 그 클래스만 | 직렬화 검사만 하고 파일·DB·갤러리 접근 없음 |
+| CONDITIONAL | `PostcardBackMigrationTest` | 1 | 기본 실행 안 함 | 실제 앱 DB 폴더에 UUID 이름 별도 DB 생성·삭제, 실패·중단 시 잔여 가능 |
+| CONDITIONAL | `PostcardFullMigrationChainTest` | 2 | 기본 실행 안 함 | 위와 같음 |
+| CONDITIONAL | `PostcardBackRenderingTest` | 3 | 기본 실행 안 함 | 1건이 실제 사용자 갤러리에 PNG 저장 후 삭제, 중간 실패 시 잔여 가능 |
+| FORBIDDEN | `PostcardDeletionOrchestrationTest` | 3 | 실행 금지 | 실제 `filesDir`에 쓰고 `deleteRecursively` |
+| FORBIDDEN | `PostcardBackSaveTest` | 2 | 실행 금지 | in-memory DB id + 실제 `targetContext` + `DetailViewModel.loadPostcard(id)` + `PostcardDraftStorage` 결합 — 같은 id의 실제 엽서 초안·확정 상태 파일을 읽기·쓰기·삭제할 가능성을 아직 배제 못 함 |
+| FORBIDDEN | `PostcardBackgroundColorSaveRaceTest` | 2 | 실행 금지 | 위와 같음 |
+
+합계 SAFE 7 + CONDITIONAL 6 + FORBIDDEN 7 = **20건/7파일**. 등급은 2026-10-03 테스트 코드 읽기 조사 결과이며 실행으로 확인한 값이 아니야. 테스트 코드가 바뀌면 다시 분류해. `CONDITIONAL`은 구조 개선이나 데이터 격리가 따로 검증되기 전까지 `SAFE`로 올리지 않아. 격리된 실행 환경(원격 CI emulator 등)은 아직 없고 후속 후보라서, 그 전까지 `CONDITIONAL`·`FORBIDDEN` 13건의 Android 실제 실행 상태는 `실행 불가`로 기록해. Gradle `connected*` task는 실행 후 uninstall로 사용자 데이터를 잃을 수 있어 어떤 등급에도 쓰지 않아.
 
 ## 테스트를 읽는 기준
 
@@ -113,7 +129,7 @@ JVM 906개는 91일차 최종 로컬 결과 XML 95개에서 906/906 통과(실�
 - **현재 믿어도 되는 것:** migration 등록 누락 감시와 실제 SQL을 검사할 테스트 기반이 있고, 최신 코드 기준 1→19 전체 chain 실행이 실제로 통과함을 확인했어.
 - **아직 믿으면 안 되는 것:** v1은 과거 코드에서 복원한 수동 schema이고 중간 버전 모든 실제 사용자 데이터 조합을 대표하지 않아. 이 실행은 CI 자동 실행이 아니라 로컬 emulator에서의 1회성 수동 실행이라 push마다 자동 보호되지는 않아.
 - **80일차에 실제로 발견·수정한 버그:** `message`/`futureMailDeliverAt`/`envelopeStyle` 3개 컬럼의 migration SQL DEFAULT 선언이 entity/schema export와 어긋나 있었어. 버전 증가·새 migration 없이 기존 migration SQL 3줄만 최소 수정했고, 재실행으로 통과를 확인했어. 상세는 [CI-AUDIT-80.md](CI-AUDIT-80.md).
-- **수동 확인 필요:** 아니오 — SQL 보존 검증은 이제 실제 emulator 실행으로 확인됨. 다만 이 실행은 CI에 편입되지 않았으니 다음에 migration을 또 건드리면 다시 실제 emulator에서 확인해야 해.
+- **수동 확인 필요:** 아니오 — SQL 보존 검증은 80일차 당시 로컬 emulator 실행으로 확인됐어. 그 emulator는 2026-10-03 폐기됐고 두 migration 계측 테스트는 `CONDITIONAL` 등급이라 실사용 기기에서 실행하지 않아. 다음에 migration을 건드리면 JVM 구조 검사·schema export 대조로 확인하고, Android 실제 실행은 격리 환경(원격 CI 후보)이 생기기 전까지 `실행 불가`인 남은 위험으로 기록해.
 
 근거: [전체 migration 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardFullMigrationChainTest.kt), [18→19 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackMigrationTest.kt), [migration 수정](../../app/src/main/java/com/postcardmemory/data/PostcardDatabase.kt).
 
@@ -246,7 +262,7 @@ JVM 906개는 91일차 최종 로컬 결과 XML 95개에서 906/906 통과(실�
 - **현재 믿어도 되는 것:** 선언·호출 형태가 유지되는지, 그리고 뒷면 Compose 표시·캡처·글자 측정 3건은 API 37 emulator에서 실제로 통과한다는 것.
 - **아직 믿으면 안 되는 것:** 구조 검사 통과가 실제 클릭·drag·포커스·키보드·접근성·화면 크기별 정상 조작을 증명한다는 해석. 뒷면 3건 외 나머지 편집 버튼·제스처는 여전히 자동 실행 검증이 없어.
 - **수동 확인 필요:** 예 — 해당 변경의 실제 버튼과 gesture, 비활성 상태, 작은 화면·키보드 겹침 확인.
-- **emulator 환경 메모:** draw/capture 계열 instrumentation은 emulator가 `mWakefulness=Asleep`이면 실제 draw pass가 없어 저장 timeout이 발생할 수 있어(production 문제 아님, `emulator / OS environment`). 실행 전 `adb shell dumpsys power`로 확인해.
+- **과거 emulator 환경 메모(당시 기록, 현재 실행 절차 아님):** 81일차 무렵 draw/capture 계열 instrumentation은 emulator가 `mWakefulness=Asleep`이면 실제 draw pass가 없어 저장 timeout이 날 수 있었어(production 문제 아님). 로컬 emulator는 2026-10-03 폐기됐고 `PostcardBackRenderingTest`는 `CONDITIONAL`이라 실사용 기기에서 실행하지 않아.
 
 근거: [Compose 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackRenderingTest.kt), [구조 검사의 한계와 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt).
 
@@ -265,7 +281,7 @@ JVM 906개는 91일차 최종 로컬 결과 XML 95개에서 906/906 통과(실�
 | JVM unit test 906개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 903개 기준 CI run `36713844171`(`5e1abc8`) 성공, 906개는 로컬 906/906 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
-| instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고). |
+| instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 과거 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고, 그 emulator는 2026-10-03 폐기). 원격 CI의 격리된 instrumentation 환경은 후속 후보야. |
 | lint | 아니오 | 오늘 범위 밖 |
 
 79일차에는 이 표의 모든 항목이 "아니오"였어. 79일차 조사와 80일차 도입 과정은 [CI-AUDIT-79.md](CI-AUDIT-79.md), [CI-AUDIT-80.md](CI-AUDIT-80.md)를 확인해. **instrumentation의 "컴파일 자동검증됨"과 "CI에서 자동 실행됨"은 서로 다른 사실이니 혼동하면 안 돼.**
@@ -328,6 +344,6 @@ JVM 906개는 91일차 최종 로컬 결과 XML 95개에서 906/906 통과(실�
 - navigation·ViewModel 제거·프로세스 lifecycle.
 - 실제 Compose 버튼·drag·키보드 상호작용.
 - 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
-- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. 85일차 신규 사진 스티커 오림 instrumentation 7건은 아직 실행 전이야(검증 전용 emulator에서 실행 필요). push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
+- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. 85일차 신규 사진 스티커 오림 instrumentation 7건은 90일차에 당시 로컬 emulator에서 7/7 통과했어(당시 기록). 로컬 emulator는 2026-10-03 폐기됐어. 이제 Android 실제 실행은 위 "instrumentation 실사용 기기 안전 등급"의 `SAFE` 7건만 사용자 승인 후 가능하고, 나머지 13건은 격리 환경(원격 CI 후보)이 생기기 전까지 실행 불가야. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
 
 테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 875개라는 숫자로 보장할 수는 없어.**

@@ -1,4 +1,60 @@
-# HANDOFF — 91일차: 꾸미기 저장 누락 방지 보강 + 주석·README 최신화
+# HANDOFF — 92일차 선행 안전정비: 로컬 Android Emulator 폐기 + 실기기 instrumentation 안전 등급
+
+확인일: 2026-10-03. 수동 표준 모드(92일차 선행 안전정비 수정지시서, 담당 Claude Code). 앱 기능·production·test 코드 변경 없이, 운영 규칙·workflow·테스트 지도에서 로컬 emulator 사용 경로를 없애고 실사용 기기를 기본 검증 환경으로 바꾸면서 사용자 데이터를 지키는 instrumentation 규칙을 정했어. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 시작 상태
+
+- 브랜치 `feature/photo-sticker`, 시작 HEAD `4a60314eb596cdd918a65585f207a8c66eda435c`("Make a forgotten decoration save result or directory fail loudly"), `git fetch` 후 origin 대비 `0/0`.
+- 기존 미커밋 변경 `app/src/main/java/com/postcardmemory/utils/PostcardDeletionManager.kt` 1건: 정리 단계 주석 번호 `5.`→`4.`, `6~8.`→`5~7.` 2줄(코드 동작 무관). 이번 작업과 무관한 기존 변경으로 보고 수정·restore·stage·commit하지 않고 그대로 보존했어.
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/`와 ignore된 `.claude/settings.local.json` 보존.
+
+## 현재 정책 (2026-10-03 사용자 결정)
+
+- **로컬 Android Emulator 운영 폐기.** 사용자가 emulator SDK, hypervisor driver, `PostcardMemory_Test` AVD를 제거했고 Android SDK Platform-Tools(`adb`)는 유지했어. 저장소와 GitHub Actions 어디에도 emulator를 자동 생성·실행하는 스크립트는 없어(조사 확인). AVD 생성·부팅, `emulator -avd`, `avdmanager`, emulator 구성요소 재설치, emulator 기반 설치·instrumentation·메모리 측정·QA는 하지 않아. 사용자가 해당 작업에서 별도로 명시 승인할 때만 예외야.
+- **로컬 검증 기본 환경 = 사용자가 연결한 실사용 기기.** 실제 엽서가 있는 보호 대상이라 읽기·관찰·비파괴 검증(`adb devices -l`, `dumpsys`, `meminfo`, log, 수동 QA)을 우선해.
+- **instrumentation 20건 안전 등급**(현재 코드 기준 읽기 조사, 상세는 `TEST-COVERAGE-MAP.md`):
+  - SAFE 7: `PhotoStickerEdgeStyleInstrumentedTest` 7
+  - CONDITIONAL 6: `PostcardBackMigrationTest` 1, `PostcardFullMigrationChainTest` 2, `PostcardBackRenderingTest` 3
+  - FORBIDDEN 7: `PostcardDeletionOrchestrationTest` 3, `PostcardBackSaveTest` 2, `PostcardBackgroundColorSaveRaceTest` 2
+- SAFE 7건만 매번 serial 확인 → 클래스·데이터 영향 없음 명시 → 사용자 승인을 거쳐 `adb -s <serial> shell am instrument -w -r -e class ... com.postcardmemory.test/androidx.test.runner.AndroidJUnitRunner`로 실행할 수 있어. 나머지 13건은 실사용 기기에서 실행하지 않고 `실행 불가`로 기록해.
+- Gradle `connected*` task(실행 후 uninstall 위험), `adb uninstall`, `pm clear`, 앱 데이터 초기화, 앱 삭제 후 재설치 우회는 금지야. `adb install -r`도 승인 후에만 하고 서명 충돌로 실패하면 STOP해.
+- 원격 CI emulator는 현재 없고 후속 후보야.
+- **이전 기록 읽는 법:** 아래 91일차 이전 섹션의 "검증 전용 emulator에서 실행" 같은 후속 지시와 emulator 실행 결과는 당시 기준 기록이야. 현재 실행 지시가 아니고, 위 정책이 우선해.
+
+## 변경 내용
+
+- 저장소 `AGENTS.md` 5절: 실기기 절대 금지 목록에 `connected*` 전체·갤러리·`filesDir` 삭제·재설치 우회를 명시, `adb install -r` 승인·서명 충돌 STOP 추가, emulator 우선·자동 실행·화면 깨우기·삭제 검증 emulator 우선 규칙을 제거하고 새 하위 절 "로컬 검증 환경과 instrumentation 등급"(emulator 폐기, 실기기 기본, SAFE/CONDITIONAL/FORBIDDEN, SAFE 실행 절차, 원격 CI 후보)을 추가. 8절: 검증 영역 `emulator instrumentation` → `실사용 기기 instrumentation(승인된 SAFE 테스트에 한함)`, 실패 분류 `emulator / OS environment` → `device / OS environment`.
+- 저장소 `docs/ai/TEST-COVERAGE-MAP.md`: 안전 등급 절과 표 추가, migration·Compose 항목과 마지막 요약의 "다시 emulator에서 확인/실행 필요" 지시형 문구를 당시 기록 + 현재 정책으로 정리. 80~91일차 실행 기록은 그대로 보존. 테스트 수 변화 없음.
+- 저장소 밖 workflow canonical source `~/plugins/post-card-memory-workflow`(Git 저장소 아님, 이번 commit에 포함되지 않음): `SKILL.md` #29~32, `references/work-order-template.md`, `references/claude-code-execution-rules.md`, `references/codex-execution-rules.md`, `references/handoff-template.md`, `write-project-handoff/SKILL.md`, `write-project-handoff/references/handoff-template.md`를 같은 정책으로 수정. 템플릿 검증 표의 `emulator instrumentation`/`AVD·API` 칸을 실사용 기기 SAFE 칸으로 바꿨어.
+- Claude 메모리(저장소 밖): 91일차 메모리의 emulator 부팅~종료 절차를 지우고 폐기 사실만 남겼어. 새 정책 메모리를 추가하고 색인을 갱신했어.
+
+## 독립 상태
+
+| 구분 | 상태 | 근거 |
+|---|---|---|
+| 구현(문서·규칙) | 완료 | 위 변경 내용 |
+| production / test Kotlin | 변경 없음 | diff 확인 |
+| 로컬 자동검증(JVM) | 불필요 | 문서·규칙만 변경 |
+| 실사용 기기 instrumentation | 미실행 | 이번 작업 범위에서 실행 금지 |
+| 로컬 emulator | 미사용 | 폐기 |
+| 실기기 감각 QA | 불필요 | 앱 동작 변화 없음 |
+| 정합성 감사 | 수정 후 검색 재감사로 확인 | 남은 emulator 언급은 금지 문장·과거 기록·원격 CI 후보로 분류 |
+| TEST-COVERAGE-MAP | 갱신 완료 | 테스트 수 변화 없음, 실행 가능 범위(보호 범위 설명) 변화 반영 |
+| 실사용 기기 | 미접촉 | ADB·설치·실행 없음 |
+| repository HANDOFF | 최신화 | 이 섹션 |
+| commit / push / CI | 이 HANDOFF를 포함한 커밋으로 진행 | 결과는 최종 완료보고에서 확인 |
+
+## 남은 위험과 후속 후보(승인된 작업 아님)
+
+- `PostcardBackSaveTest`·`PostcardBackgroundColorSaveRaceTest`가 실제 기기에서 같은 id의 실제 엽서 초안·확정 상태 파일을 건드리는지 읽기 전용 조사로 확정하고, 필요하면 테스트 데이터 격리(별도 승인 필요, test 코드 변경).
+- 원격 CI에서 격리된 instrumentation 환경 도입 검토(CONDITIONAL·FORBIDDEN 13건의 Android 실제 실행 경로).
+- README 122행("검증 전용 emulator에서 수동으로 실행")과 `StructureTestSource.kt` 15~16행 주석은 이번 범위에서 빠졌어. 후속 정리 후보야.
+- Codex 플러그인 캐시 사본 `~/.codex/plugins/cache/personal/post-card-memory-workflow/...`는 canonical source가 아니라서 수정하지 않았어. Codex가 이 캐시를 쓰면 옛 emulator 규칙이 보일 수 있으니 플러그인 재설치·동기화 여부를 확인해야 해.
+- 92일차 메모리 실측은 실사용 기기의 읽기 전용 `meminfo`/profiler 기준으로 다시 설계해야 해.
+
+---
+
+# 이전 기록 — 91일차: 꾸미기 저장 누락 방지 보강 + 주석·README 최신화
 
 확인일: 2026-10-02. 수동 표준 모드(91일차 작업지시서, 담당 Claude Code). 새 기능·UI·미감 변경 없이, 꾸미기 저장 결과나 디렉터리 하나를 빠뜨려도 조용히 지나가지 않도록 작은 안전장치를 넣고 오래된 주석과 README를 현재 사실에 맞췄어. **이 문서의 다음 후보는 실행 승인이 아니야.**
 
@@ -110,7 +166,7 @@
 - release 로그 최소화와 미사용 FileProvider root 제거는 과거 호환·진단 필요성을 먼저 확인한 뒤 방어 심화 작업으로 검토.
 - quick select 손 640px/720px 후보를 별도 파일로 비교해 실기기 화질 승인을 받은 뒤에만 원본 교체 검토.
 - Android Studio profiler로 갤러리 진입·drawer 열기/닫기 전후 실제 Java/native/graphics heap을 측정해 42.0MiB 추정을 검증.
-- CI는 instrumentation을 실행하지 않으므로 Android 계측 자동화는 검증 전용 emulator 환경과 실사용 기기 보호를 함께 설계한 뒤 별도 검토.
+- CI는 instrumentation을 실행하지 않으므로 원격 CI에서 격리된 instrumentation 환경 도입 검토(2026-10-03 갱신: 로컬 emulator는 폐기됐으니 로컬 emulator 재구성이 아니라 원격 CI 후보로 읽어).
 
 ---
 
