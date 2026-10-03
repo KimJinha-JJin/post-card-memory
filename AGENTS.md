@@ -134,9 +134,11 @@ ChatGPT가 상세 작업지시서 작성
 
 ### 로컬 검증 환경과 instrumentation 등급
 
+- 로컬 Android Emulator는 정상 검증 선택지에서 제외한다. 검증 미실행·실행 불가를 해결하기 위한 대안으로 생성·부팅·복구·재설치를 제안하거나 실행하지 않는다. 과거 emulator 성공 기록은 당시 검증의 역사적 근거로 그대로 보존하되, 현재 실행 허가나 현재 기기 검증 완료의 근거로 사용하지 않는다.
 - **로컬 Android Emulator는 이 프로젝트에서 사용하지 않는다(폐기).** 새 AVD 생성, 기존 AVD 부팅, `emulator -avd ...`, `avdmanager`, Android Emulator SDK·hypervisor driver 재설치, emulator 재부팅·APK 설치·instrumentation·메모리 측정·QA, 작업 편의를 위한 임시 복구를 모두 하지 않는다. 프로젝트 작업 필요성만으로 emulator 구성요소를 다시 설치하지 않으며, 정말 필요하면 사용자가 해당 작업에서 별도로 명시 승인해야 한다. Android SDK Platform-Tools(`adb`)는 유지한다.
 - 로컬 검증의 기본 환경은 사용자가 명시적으로 연결한 실사용 Android 기기다. 이 기기는 테스트 샌드박스가 아니라 사용자 데이터가 실제로 있는 보호 대상이다. `adb devices -l`, package·process 확인, `dumpsys`, `meminfo`, log·화면 상태 확인, 사용자와 함께하는 수동 QA처럼 읽기·관찰·비파괴 검증을 우선한다.
 - instrumentation은 실제 앱과 같은 package·저장공간(`targetContext`의 `filesDir`, DB 폴더, 갤러리 권한)에서 실행되므로 테스트별 등급으로 관리한다. 등급은 현재 테스트 코드 기준 조사 결과이며, 테스트 코드가 바뀌면 다시 검토한다. 현재 20건 분류는 `docs/ai/TEST-COVERAGE-MAP.md`에 둔다.
+  - 등급 판정은 테스트 본문뿐 아니라 helper, setup/teardown, runner, 호출되는 앱 동작과 실패·취소 후 cleanup까지 포함한다. 영향이 미확인이면 `SAFE`로 간주하지 않고 실행을 STOP한다. `SAFE` 승인도 `connected*`, uninstall, `pm clear`, 데이터 초기화 또는 앱 삭제 후 재설치 우회를 허용하지 않는다.
   - `SAFE`: 사용자 `filesDir`·실제 앱 DB·사용자 갤러리·초안/확정 상태 파일 접근이 없고 삭제·초기화가 없어 실제 앱 데이터에 영향이 없는 테스트. 실사용 기기 실행 **후보**일 뿐 자동 실행하지 않는다.
   - `CONDITIONAL`: 별도 DB 생성·삭제나 실제 사용자 갤러리 접근 가능성이 있는 테스트. 실사용 기기에서 기본 실행하지 않으며, 구조 개선이나 데이터 격리가 따로 검증되기 전까지 `SAFE`로 승격하지 않는다.
   - `FORBIDDEN`: 실제 `filesDir` 삭제, 실제 초안·확정 상태 파일을 읽거나 쓰거나 지울 가능성을 배제할 수 없는 테스트. 실사용 기기에서 실행하지 않는다.
