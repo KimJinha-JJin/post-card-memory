@@ -1,11 +1,11 @@
-# HANDOFF — 92일차 선행 안전정비: 로컬 Android Emulator 폐기 + 실기기 instrumentation 안전 등급
+# HANDOFF — 92일차: 검증 환경 안전체계 전환 + 주석·README 최신화
 
-확인일: 2026-10-03. 수동 표준 모드(92일차 선행 안전정비 수정지시서, 담당 Claude Code). 앱 기능·production·test 코드 변경 없이, 운영 규칙·workflow·테스트 지도에서 로컬 emulator 사용 경로를 없애고 실사용 기기를 기본 검증 환경으로 바꾸면서 사용자 데이터를 지키는 instrumentation 규칙을 정했어. **이 문서의 다음 후보는 실행 승인이 아니야.**
+확인일: 2026-10-03. 수동 표준 모드(92일차 수정지시서 3건, 담당 Claude Code). **92일차는 원래 계획이던 "메모리 실측 DAY"가 아니야.** 메모리 실측은 하지 않고 보류했어. 앱 기능·production 로직·test 로직 변경 없이 ① 로컬 emulator 폐기와 실기기 instrumentation 안전 등급 도입(`f8b79e5`), ② AGENTS·workflow 정책 보강(`4c24a3a`), ③ 오래된 주석과 README를 현재 사실에 맞게 정리(이 HANDOFF를 포함한 커밋)했어. **이 문서의 다음 후보는 실행 승인이 아니야.**
 
 ## 시작 상태
 
-- 브랜치 `feature/photo-sticker`, 시작 HEAD `4a60314eb596cdd918a65585f207a8c66eda435c`("Make a forgotten decoration save result or directory fail loudly"), `git fetch` 후 origin 대비 `0/0`.
-- 기존 미커밋 변경 `app/src/main/java/com/postcardmemory/utils/PostcardDeletionManager.kt` 1건: 정리 단계 주석 번호 `5.`→`4.`, `6~8.`→`5~7.` 2줄(코드 동작 무관). 이번 작업과 무관한 기존 변경으로 보고 수정·restore·stage·commit하지 않고 그대로 보존했어.
+- 브랜치 `feature/photo-sticker`, 92일차 시작 HEAD `4a60314eb596cdd918a65585f207a8c66eda435c`("Make a forgotten decoration save result or directory fail loudly"), `git fetch` 후 origin 대비 `0/0`.
+- 기존 미커밋 변경 `app/src/main/java/com/postcardmemory/utils/PostcardDeletionManager.kt` 1건: 정리 단계 주석 번호 `5.`→`4.`, `6~8.`→`5~7.` 2줄. ①②에서는 범위 밖이라 보존했고, ③ 주석 클린업에서 실제 단계(1~4, 5~7)와 맞는 주석-only 변경임을 확인한 뒤 포함했어.
 - 보호 untracked `.codex-config.candidate.toml`, `.kotlin/`와 ignore된 `.claude/settings.local.json` 보존.
 
 ## 현재 정책 (2026-10-03 사용자 결정)
@@ -27,30 +27,44 @@
 - 저장소 `docs/ai/TEST-COVERAGE-MAP.md`: 안전 등급 절과 표 추가, migration·Compose 항목과 마지막 요약의 "다시 emulator에서 확인/실행 필요" 지시형 문구를 당시 기록 + 현재 정책으로 정리. 80~91일차 실행 기록은 그대로 보존. 테스트 수 변화 없음.
 - 저장소 밖 workflow canonical source `~/plugins/post-card-memory-workflow`(Git 저장소 아님, 이번 commit에 포함되지 않음): `SKILL.md` #29~32, `references/work-order-template.md`, `references/claude-code-execution-rules.md`, `references/codex-execution-rules.md`, `references/handoff-template.md`, `write-project-handoff/SKILL.md`, `write-project-handoff/references/handoff-template.md`를 같은 정책으로 수정. 템플릿 검증 표의 `emulator instrumentation`/`AVD·API` 칸을 실사용 기기 SAFE 칸으로 바꿨어.
 - Claude 메모리(저장소 밖): 91일차 메모리의 emulator 부팅~종료 절차를 지우고 폐기 사실만 남겼어. 새 정책 메모리를 추가하고 색인을 갱신했어.
+- ② 정책 보강(`4c24a3a`): `AGENTS.md` 5절에 두 가지를 넣었어. 검증 미실행·실행 불가의 대안으로 emulator 생성·부팅·복구·재설치를 제안하지 않고, 과거 emulator 기록을 현재 실행 근거로 쓰지 않아. SAFE 판정은 helper·setup/teardown·runner·호출되는 앱 동작·실패/취소 후 cleanup까지 보고, 영향이 미확인이면 STOP해. workflow에서는 같은 의미가 빠져 있던 `SKILL.md` #30, `codex-execution-rules.md`, `work-order-template.md`만 최소로 보완했어.
+
+## ③ 주석 클린업 + README 최신화
+
+`app/src` 전체를 TODO/FIXME/임시/emulator/개수·구조 표현으로 검색하고, 걸린 항목을 실제 코드와 대조해 틀렸다고 확정된 것만 고쳤어. 로직·이름·포맷 변경은 없어.
+
+- **현재 사실과 달라 수정:**
+  - `ui/gallery/GalleryScreen.kt`의 pager 주석은 76일차에 삭제된 "3단 보기" 페이지가 아직 있는 것처럼 설명하고 있었어. 지금은 월별(MONTHLY)·기억 밀도(DENSITY) 두 페이지가 고정 순서로 있고, 연못 모드는 월별 grid 안에서 그려지고, 월별을 벗어나면 검색이 비워진다는 사실로 고쳤어. 바로 아래 보정 effect의 "(설정에서 보기를 켜거나 끔)"은 토글 UI가 없어진 지금 기준으로 고쳤어.
+  - `data/PostcardDao.kt` `getAllPostcards` 주석: "3열 그리드/세부 기록 보기" → "월별 3열 그리드/기억 밀도 보기"(호출처 `GalleryViewModel` 확인).
+- **단순 단계 번호 수정:** `utils/PostcardDeletionManager.kt` 정리 단계 `5.`→`4.`, `6~8.`→`5~7.`(기존 미커밋분 포함).
+- **emulator 정책 때문에 수정:** `testsupport/StructureTestSource.kt` 주석을 바꿨어. "90일차부터 검증 전용 emulator에서 실행"이던 문장을, 로컬 emulator 폐기(과거 결과는 당시 기록)와 실사용 기기 SAFE만 승인 후 실행, `connected*` 금지, CI는 컴파일만 한다는 내용으로 고쳤어.
+- **README:** 문서 상태 날짜를 92일차로 바꿨어. 레이아웃에 누락돼 있던 `편지지`(LETTER, `PostcardLayoutPicker`가 enum 전체를 노출함)를 추가했어. 퀵셀렉트는 옛 "특별한 갤러리" 묶음 표현 대신 실제 손 5장 이름(카메라·미래 우체통·엽서의 연못·양떼목장·엽서 쫑쫑컵)으로 바꿨어. 검증 절은 계측 20건 등급, 실기기 기본, 로컬 emulator 폐기, `connected*`·uninstall·`pm clear` 금지, 원격 CI 후보를 담도록 다시 썼어. 요구 사항의 "기기 또는 에뮬레이터"도 고쳤어. 기능·버전(`libs.versions.toml`)·schema 19·wrapper 없음·권한은 코드와 일치해서 유지했어.
+- **애매해서 보존:** `GalleryScreen.kt`의 "특별한 갤러리 3종" 퀵셀렉트 이력 주석(88일차 변경을 함께 적은 이력), `StampCard.kt` 546행의 "기존 3단 그리드와 동일하게"(과거 비교 맥락), "76일차: 3단 보기가 삭제되며…" 계열 이력 주석. `GalleryViewMode`(`COMPACT_GRID`/`DETAIL_LIST`)는 선언 외 참조가 없어 보여도 저장 상태 호환을 확인하지 않아 손대지 않았어.
 
 ## 독립 상태
 
 | 구분 | 상태 | 근거 |
 |---|---|---|
-| 구현(문서·규칙) | 완료 | 위 변경 내용 |
-| production / test Kotlin | 변경 없음 | diff 확인 |
-| 로컬 자동검증(JVM) | 불필요 | 문서·규칙만 변경 |
-| 실사용 기기 instrumentation | 미실행 | 이번 작업 범위에서 실행 금지 |
+| 구현(문서·규칙·주석·README) | 완료 | 위 ①②③ |
+| production / test 로직 | 변경 없음 | diff는 주석 줄만 |
+| 로컬 자동검증(JVM) | 대상 실행: 수정한 소스를 읽는 구조 테스트 포함 7개 suite 49/49 통과 | 구조 테스트가 소스 텍스트를 읽어서, 주석 변경이 문자열 assertion을 깨지 않는지 확인. 전체 JVM은 불필요 |
+| 실사용 기기 instrumentation | 미실행 | 범위 밖 |
 | 로컬 emulator | 미사용 | 폐기 |
+| 메모리 실측 | 미실행(보류) | 이번 날은 안전체계 전환으로 성격이 바뀜 |
 | 실기기 감각 QA | 불필요 | 앱 동작 변화 없음 |
-| 정합성 감사 | 수정 후 검색 재감사로 확인 | 남은 emulator 언급은 금지 문장·과거 기록·원격 CI 후보로 분류 |
-| TEST-COVERAGE-MAP | 갱신 완료 | 테스트 수 변화 없음, 실행 가능 범위(보호 범위 설명) 변화 반영 |
+| 정합성 감사 | 수정 후 검색 재감사로 확인 | 남은 emulator 언급은 금지 문장·과거 기록·원격 CI 후보 |
+| TEST-COVERAGE-MAP | ①에서 갱신, ③은 변경 없음 | ③은 테스트 수·보호 범위 변화 없음 |
 | 실사용 기기 | 미접촉 | ADB·설치·실행 없음 |
 | repository HANDOFF | 최신화 | 이 섹션 |
-| commit / push / CI | 이 HANDOFF를 포함한 커밋으로 진행 | 결과는 최종 완료보고에서 확인 |
+| commit / push / CI | ①`f8b79e5` CI 성공, ②`4c24a3a` CI 성공, ③은 이 HANDOFF를 포함한 커밋으로 진행 | ③ 결과는 최종 완료보고에서 확인 |
 
 ## 남은 위험과 후속 후보(승인된 작업 아님)
 
 - `PostcardBackSaveTest`·`PostcardBackgroundColorSaveRaceTest`가 실제 기기에서 같은 id의 실제 엽서 초안·확정 상태 파일을 건드리는지 읽기 전용 조사로 확정하고, 필요하면 테스트 데이터 격리(별도 승인 필요, test 코드 변경).
 - 원격 CI에서 격리된 instrumentation 환경 도입 검토(CONDITIONAL·FORBIDDEN 13건의 Android 실제 실행 경로).
-- README 122행("검증 전용 emulator에서 수동으로 실행")과 `StructureTestSource.kt` 15~16행 주석은 이번 범위에서 빠졌어. 후속 정리 후보야.
 - Codex 플러그인 캐시 사본 `~/.codex/plugins/cache/personal/post-card-memory-workflow/...`는 canonical source가 아니라서 수정하지 않았어. Codex가 이 캐시를 쓰면 옛 emulator 규칙이 보일 수 있으니 플러그인 재설치·동기화 여부를 확인해야 해.
-- 92일차 메모리 실측은 실사용 기기의 읽기 전용 `meminfo`/profiler 기준으로 다시 설계해야 해.
+- 메모리 실측은 실제 증상(버벅임·메모리 부족 종료 등)이 확인될 때 다시 검토하는 후보야. 하게 되면 실사용 기기의 읽기 전용 `meminfo`/profiler 기준으로 설계해.
+- `GalleryViewMode` enum은 선언 외 참조가 없어 보여. 저장된 화면 상태 복원 호환까지 확인한 뒤 dead code 여부를 판단할 후보야(91일차 후보 유지).
 
 ---
 

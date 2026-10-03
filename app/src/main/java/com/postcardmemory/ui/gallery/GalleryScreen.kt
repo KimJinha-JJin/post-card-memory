@@ -876,20 +876,16 @@ fun GalleryScreen(
                 }
             }
         } else {
-            // 62일차 보기 시스템 1차: 기존 3단 갤러리(그리드/세부 기록 토글
-            // 포함)를 통째로 "3단 보기" 페이지 하나로 편입했다. 활성 보기가
-            // 기본값(3단 보기 하나)뿐이면 페이지가 1개라 HorizontalPager는
-            // 사실상 아무것도 바꾸지 않는 얇은 래퍼일 뿐이고, 기존 동작은
-            // 그대로다. GalleryPlayMode(연못/양떼목장/쫑쫑컵)는 이 보기
-            // 시스템과 무관하게 위에서 먼저 분기되어 그대로 전체 화면을
-            // 차지한다(기존 우선순위 유지).
+            // 62일차 보기 시스템에서 갤러리를 HorizontalPager 페이지로 묶었다.
+            // 76일차에 "3단 보기" 페이지가 삭제돼 지금은 월별 보기(MONTHLY)와
+            // 기억 밀도 보기(DENSITY) 두 페이지가 고정 순서로 있다(위
+            // activePageFormats). 연못 모드는 76일차부터 별도 화면이 아니라
+            // 월별 grid 안에서 그려진다(isPondModeOn 전달).
             //
-            // 2차: 검색·정렬 적용 결과(displayedPostcards)는 3단 보기뿐
-            // 아니라 월별 보기도 함께 쓰는 "정렬된 postcard 데이터"라
-            // (작업지시서 10절) 여기 pager 레벨에서 한 번만 계산해 두
-            // 페이지에 동일하게 내려보낸다 — 3단 보기를 벗어나면 검색은
-            // 항상 비워지므로(위 LaunchedEffect) 다른 보기에서는 사실상
-            // sortOrder만 반영된다.
+            // 검색·정렬 적용 결과(displayedPostcards)는 여기 pager 레벨에서
+            // 한 번만 계산해 두 페이지에 동일하게 내려보낸다 — 월별 보기를
+            // 벗어나면 검색은 항상 비워지므로(위 LaunchedEffect) 기억 밀도
+            // 보기에서는 사실상 sortOrder만 반영된다.
             val displayedPostcards = remember(postcards, sortOrder, searchQuery) {
                 val filtered = filterPostcardsForSearch(postcards, searchQuery)
 
@@ -923,7 +919,8 @@ fun GalleryScreen(
                 }
             }
 
-            // 활성 보기 목록이 바뀌었을 때(설정에서 보기를 켜거나 끔) 지금
+            // 활성 보기 목록이 바뀌었을 때(설정 토글이 있던 시절의 보정이다 —
+            // 76일차부터 목록이 고정값이라 지금은 사실상 처음 한 번만 돈다) 지금
             // 보고 있던 보기가 여전히 활성 상태면 그 보기로, 방금 꺼진
             // 보기를 보고 있었다면 가장 가까운 유효한 페이지로 이동한다.
             // 인덱스만 clamp하면 중간 페이지가 꺼졌을 때 엉뚱한 보기로

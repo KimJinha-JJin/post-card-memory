@@ -11,9 +11,10 @@ import java.io.File
  * 들어와 있고 `app/src/androidTest`에서 실제로 쓰인다(`PostcardBackRenderingTest`). 없는
  * 것은 **JVM unit test 쪽 하네스**다 — Robolectric이 없어서 `src/test`에서는 Composable을
  * 렌더링하거나 ViewModel을 만들 수 없다. androidTest로 옮기면 검증할 수 있지만 그건
- * instrumented 실행이 필요하고, 실사용 기기에서의 계측 실행은 `AGENTS.md` 5절로 금지돼
- * 있다. 90일차부터 검증 전용 emulator에서 계측 테스트를 실제로 실행해 확인하고 있지만,
- * 그 실행은 사람이 emulator를 띄워 돌리는 수동 절차이고 GitHub Actions CI는 계측 테스트를
+ * instrumented 실행이 필요하다. 로컬 emulator는 2026-10-03에 폐기됐고(80~91일차 emulator
+ * 실행 결과는 당시 기록), 지금 로컬 계측 실행은 실사용 기기에서 `AGENTS.md` 5절의 `SAFE`
+ * 등급 테스트만 사용자 승인 후 클래스 단위로 할 수 있다(`connected*` task 금지,
+ * `CONDITIONAL`·`FORBIDDEN`은 실행하지 않음). GitHub Actions CI는 계측 테스트를
  * 컴파일(`assembleDebugAndroidTest`)만 할 뿐 실행하지 않는다. 그래서 매 변경마다 JVM에서
  * 자동으로 확인할 수 있는 수단은 여전히 소스 텍스트다.
  *

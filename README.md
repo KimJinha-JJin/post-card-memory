@@ -1,4 +1,4 @@
-> **문서 상태:** 앱 소개는 2026-10-02(91일차) 코드 기준으로 갱신했어. 작업 규칙·현재 상태·승인 범위의 기준은 이 README가 아니라 [AGENTS.md](AGENTS.md), [현재 HANDOFF](docs/ai/HANDOFF.md), [유효한 결정](docs/ai/DECISIONS.md)이야.
+> **문서 상태:** 앱 소개와 검증 설명은 2026-10-03(92일차) 코드·운영 규칙 기준으로 갱신했어. 작업 규칙·현재 상태·승인 범위의 기준은 이 README가 아니라 [AGENTS.md](AGENTS.md), [현재 HANDOFF](docs/ai/HANDOFF.md), [유효한 결정](docs/ai/DECISIONS.md)이야.
 
 <div align="center">
 
@@ -37,7 +37,7 @@
 
 ### 📸 촬영과 엽서 앞면
 - 카메라 가이드에 맞춰 찍으면 엽서 사진으로 잘려 저장됩니다.
-- 사진 레이아웃 우표 / 폴라로이드 / 테이프 필름, 사진 확대·이동·가장자리 블러.
+- 사진 레이아웃 우표 / 폴라로이드 / 테이프 필름 / 편지지, 사진 확대·이동·가장자리 블러.
 - 배경은 사진에서 뽑은 색·직접 고른 색·패턴, 추천 템플릿과 내 템플릿 저장.
 
 ### ✉️ 엽서 뒷면 — 편지
@@ -61,7 +61,7 @@
 - **월별 갤러리** — 판지 종이 위 3열 그리드로 달마다 묶어 봅니다(최신순/오래된순).
 - **기억 밀도 보기** — 1월~12월에 엽서가 얼마나 쌓였는지 한눈에 봅니다.
 - **흔들어서 한 장** — 기기를 흔들면 엽서 한 장을 무작위로 꺼내 보여줍니다.
-- **퀵셀렉트** — 신문 오림 손 다섯 장이 펼쳐지며 촬영·미래 우체통·특별한 갤러리(연못·양떼목장·쫑쫑컵)를 바로 엽니다.
+- **퀵셀렉트** — 신문 오림 손 다섯 장이 부채처럼 펼쳐지며 카메라·미래 우체통과 놀이 갤러리 세 가지(엽서의 연못·양떼목장·엽서 쫑쫑컵)를 바로 엽니다.
 
 ### 📅 방문 기록 · 미래 우체통
 - **방문 기록과 방문 달력** — 하루 처음 앱을 연 날을 기록하고, 벽걸이 달력처럼 넘겨 봅니다.
@@ -102,7 +102,7 @@ app/src/main/java/com/postcardmemory/
 ├── di/          ← Hilt 모듈
 ├── ui/
 │   ├── camera/      ← 촬영
-│   ├── gallery/     ← 월별/기억 밀도 갤러리, 퀵셀렉트, 흔들기, 방문 달력, 특별한 갤러리
+│   ├── gallery/     ← 월별/기억 밀도 갤러리, 퀵셀렉트, 흔들기, 방문 달력, 놀이 갤러리
 │   ├── detail/      ← 엽서 앞뒷면 편집과 꾸미기 요소
 │   ├── futuremail/  ← 미래 우체통
 │   ├── intro/       ← 시작 화면(방문 소인)
@@ -119,11 +119,14 @@ app/src/main/java/com/postcardmemory/
 | 구분 | 내용 |
 |------|------|
 | JVM 단위 테스트 | `testDebugUnitTest` — 저장·초안·직렬화·삭제·좌표 계산 등. 일부는 소스 구조를 고정하는 구조 테스트 |
-| 계측(instrumentation) 테스트 | `app/src/androidTest` — Room migration 1→19 연결, 삭제 순서, 렌더링 등. **검증 전용 emulator에서 수동으로 실행**해 확인 |
-| GitHub Actions CI | push마다 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest` 실행. 마지막 단계는 계측 테스트 APK를 **컴파일만** 하며 emulator에서 실행하지 않음 |
-| 실기기 | 사람이 직접 하는 감각 QA. 실사용 기기에서는 자동 계측 테스트를 돌리지 않음 |
+| 계측(instrumentation) 테스트 | `app/src/androidTest` 20건 — Room migration 1→19 연결, 삭제 순서, 렌더링, 사진 스티커 직렬화 등. 실제 앱 저장공간에서 돌기 때문에 SAFE 7 / CONDITIONAL 6 / FORBIDDEN 7 등급으로 관리하며, 실사용 기기에서는 **SAFE 7건만 사용자 승인 후 클래스 단위로** 실행할 수 있음 |
+| GitHub Actions CI | push마다 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest` 실행. 마지막 단계는 계측 테스트 APK를 **컴파일만** 하며 실행하지 않음 |
+| 실기기 | 로컬 기본 검증 환경. 실제 엽서가 있는 기기라 읽기·관찰 위주 확인과 사람이 직접 하는 감각 QA가 중심 |
 
-테스트 수와 보호 범위의 현재 기록은 [TEST-COVERAGE-MAP](docs/ai/TEST-COVERAGE-MAP.md)에 있습니다.
+- 로컬 Android Emulator는 이 프로젝트의 검증 수단에서 **폐기**됐어요(2026-10-03). 80~91일차의 emulator 계측 실행 결과는 당시 기록으로만 남아 있습니다.
+- 실사용 기기에서는 Gradle `connected*` task, uninstall, `pm clear`, 앱 데이터 초기화를 쓰지 않습니다.
+- 격리된 계측 실행 환경(원격 CI emulator)은 아직 없고 후속 후보예요.
+- 등급별 테스트 목록과 테스트 수·보호 범위는 [TEST-COVERAGE-MAP](docs/ai/TEST-COVERAGE-MAP.md)에, 상세 안전 규칙은 [AGENTS.md](AGENTS.md) 5절에 있습니다.
 
 ---
 
@@ -132,7 +135,7 @@ app/src/main/java/com/postcardmemory/
 **요구 사항**
 - Android Studio (최신 버전 권장)
 - JDK 17
-- Android 8.0 (API 26) 이상 기기 또는 에뮬레이터
+- Android 8.0 (API 26) 이상 기기 (앱은 에뮬레이터에서도 동작하지만, 이 프로젝트의 검증은 로컬 에뮬레이터를 쓰지 않습니다)
 
 ```bash
 git clone https://github.com/KimJinha-JJin/post-card-memory.git

@@ -126,7 +126,7 @@ internal fun cleanupPostcardOwnedAssets(
         )
     }
 
-    // 5. 편집 초안 — PostcardDraftStorage.deleteDraft가 초안 텍스트와
+    // 4. 편집 초안 — PostcardDraftStorage.deleteDraft가 초안 텍스트와
     // 2일차에 추가된 초안 전용 누끼 디렉터리(draft_sticker_bgs/<id>/)를
     // 함께 정리한다(이미 검증된 경로 계산을 재사용, 경로 중복 정의 방지).
     val draftFile =
@@ -156,7 +156,7 @@ internal fun cleanupPostcardOwnedAssets(
             missing += "draft"
     }
 
-    // 6~8. 엽서별 꾸미기 자산 디렉터리 — 확정 누끼(sticker_bgs/<id>/),
+    // 5~7. 엽서별 꾸미기 자산 디렉터리 — 확정 누끼(sticker_bgs/<id>/),
     // 스티커 원본(sticker_originals/<id>/: 카메라 촬영분과 57일차부터 Photo
     // Picker로 고른 원본까지, 라벨 "cameraStickerOriginals"는 기존 테스트 호환을
     // 위해 그대로 둔다), 마스킹테이프 사진 원본(masking_tape_photos/<id>/,
