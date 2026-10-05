@@ -1,3 +1,29 @@
+# HANDOFF — 94일차 추가: 앱 아이콘 손그림(손바닥 + 봉투)으로 교체
+
+확인일: 2026-10-05. 수동 표준 모드(94일차 추가 작업지시서, 담당 Claude Code). 시작 HEAD `ad75b68`, origin 0/0. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 확인된 상태 (아이콘)
+
+- 원본: 사용자 제작 `app/src/main/res/drawable-nodpi/postcard_app_icon_hand_envelope.png`(1254×1254 PNG, RGB 불투명, 아이보리 종이 배경 전면, 약 2.0MB). 크롭·리사이즈·보정 없이 그대로 사용.
+- 구조: minSdk 26이라 adaptive icon(`mipmap-anydpi-v26/ic_launcher.xml`, `ic_launcher_round.xml`, 내용 동일)만 사용, legacy mipmap PNG·monochrome 없음. 기존 구조·리소스 이름 유지.
+- 변경: 두 adaptive XML의 foreground를 `@drawable/postcard_app_icon_hand_envelope`로 연결, `drawable/ic_launcher_background.xml` 배경 `#FFFFFF` → 그림 종이색 `#F9EEDF`(foreground가 전면을 덮어 평소엔 안 보이고, 런처 애니메이션 가장자리 흰 틈 방지용).
+- 안전 영역: 그림 bbox x 262–982, y 428–890(1254 기준). 가장 먼 점은 손목 왼쪽 선 끝 33.7dp/108 — 66dp 보장 영역(33dp)보다 0.7dp 밖, 72dp 표시 원(36dp) 안. 손가락·봉투는 전부 안쪽.
+- 기존 `drawable/ic_launcher_foreground.png`는 미참조가 됐지만 삭제하지 않음(정리 여부 후속 후보).
+
+| 구분 | 상태 |
+|---|---|
+| 구현 | 완료 |
+| 로컬 자동검증 | 실행: assembleDebug 성공(processDebugResources 포함, APK 안 icon/roundIcon 참조와 새 PNG 확인), testDebugUnitTest 907/907, diff --check 통과. lint 별도 미실행 |
+| 실사용 기기 instrumentation | 미실행(불필요·금지) |
+| 실기기 감각 QA | 실행: 사용자 Android Studio 설치(lastUpdateTime 15:21:28, firstInstallTime 14:19:35 유지 = 데이터 보존, DB·엽서 파일 6개 확인) 후 "내가 원하던 느낌 그대로" 승인 |
+| TEST-COVERAGE-MAP | 변경 없음(테스트 변화 없음) |
+| commit / push / CI | 사용자 요청으로 진행 — 결과는 Git·CI와 완료보고로 확인 |
+
+- 아래 "94일차 후반부" 절의 **실기기 데이터 사고(9월 이후 데이터 소실, 사용자 백업 확인 대기)** 위험은 그대로 유효해.
+- 미커밋 유지: `postcard_paper_fiber_tile.png`(사용자 결정 대기), 보호 untracked 2개.
+
+---
+
 # HANDOFF — 94일차 후반부: 엽서 꾸미기 화면 앱 배경 종이 (정전 복구 후 방향 정정) + 실기기 데이터 사고 기록
 
 확인일: 2026-10-05. 수동 표준 모드(94일차 정전 복구 작업지시서, 담당 Claude Code). **이 문서의 다음 후보는 실행 승인이 아니야.**
