@@ -1,3 +1,43 @@
+# HANDOFF — 94일차 후반부: 엽서 꾸미기 화면 앱 배경 종이 (정전 복구 후 방향 정정) + 실기기 데이터 사고 기록
+
+확인일: 2026-10-05. 수동 표준 모드(94일차 정전 복구 작업지시서, 담당 Claude Code). **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 확인된 상태
+
+- 브랜치 `feature/photo-sticker`, 시작 HEAD `2f7e667`(기억밀도), `git fetch` 후 origin 대비 `0/0`.
+- **현재 코드 변경은 하나:** `ui/detail/DetailScreen.kt` 루트 Box 배경 `.background(ScreenBackgroundGray)` → `editorPaperBackground(gallery_paper_tile)`. 갤러리 `GalleryPaperBackground`와 같은 문법(같은 밑색 `PaperCanvas` → `ImageShader` Repeated, 360.dp, 가로·세로 같은 배율). 엽서 꾸미기 화면 **엽서 바깥 앱 배경**에만 보이고, 엽서 캔버스·저장·공유 이미지·뒷면·좌표·gesture·Room·OUTPUT_SIZE는 미변경. 하단 도구 dock은 불투명 단색 유지(갤러리 시계 header와 같은 역할).
+- 엽서 캔버스에 넣었던 종이 결(`PostcardPaperTexture`, `drawBaseContent` 인자, exporter 반영)은 사용자 방향 정정 후 **전부 되돌렸어**(경과는 아래 이전 기록 절). 현재 코드에 흔적 0건.
+- `drawable-nodpi/postcard_paper_fiber_tile.png`(사용자 제작 거친 종이)는 **미사용·untracked로 보존**하고 commit에 넣지 않았어. 쓸지·지울지는 사용자 결정.
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 수정·stage 없음.
+
+## 독립 상태
+
+| 구분 | 상태 | 근거 |
+|---|---|---|
+| 구현 | 완료(꾸미기 화면 앱 배경만) | 위 현재 상태 |
+| 로컬 자동검증 | 실행: testDebugUnitTest 907/907(95 suite, 실패·skip 0), assembleDebug 성공, `git diff --check` 통과 | 2026-10-05 14:26 빌드 |
+| 실사용 기기 instrumentation | 미실행 | 지시서 금지 |
+| 실기기 감각 QA | 실행: 사용자 "종이 배경 일단 나는 만족" | Android Studio 14:30 overlay 설치본으로 사용자 확인. 항목별 관찰 상세는 미확인 |
+| TEST-COVERAGE-MAP | 변경 없음 | 테스트 수·보호 범위 변화 없음. `GalleryPaperBackgroundStructureTest`는 GalleryScreen.kt 안 참조만 셈 |
+| 사용자 데이터 | **사고 발생 — 아래 절** | 9월 이후 기기 엽서 데이터 소실, 7·8월 클라우드 백업으로 복원된 상태 |
+| commit / push / CI | 사용자 승인(작업지시서 12절, 실기기 만족)으로 진행 — 결과는 Git·CI와 완료보고로 확인 | |
+
+## 🚨 실기기 데이터 사고 (2026-10-05) — 현재 위험
+
+- 경위·근거는 아래 이전 기록 절의 "실기기 데이터 사고" 항목 원문 참고. 요약: 14:16:40 기기 홈 런처에서 앱 제거(앱 데이터 삭제) → 14:19:35 Android Studio Run이 새 설치 → Google 자동 백업 복원으로 7·8월 시점 데이터가 들어옴. Claude의 adb 명령에는 제거가 없었고(`install -r` 2회 모두 Retain data), Gradle `connected*`·uninstall·`pm clear` 미실행.
+- 9월 이후(사용자 말로 샘플 위주) 엽서 데이터의 복구 수단은 확인되지 않음. 갤러리 내보내기 이미지 0장. 사용자 측 후보: 구글 포토(완성 이미지), 삼성 클라우드·Smart Switch 백업 — **사용자 확인 대기.**
+- 재개 조건: 복구 시도는 백업 존재 확인 → 계획 설명 → 별도 승인 후에만. 그 전엔 기기 쓰기·재설치·데이터 조작 금지.
+- 교훈(운영): 설치가 꼬일 때는 사용자에게 "앱 삭제 금지"를 먼저 명시하고, 승인된 `adb install -r` 경로를 우선한다.
+
+## 다음 후보 (실행 승인 아님)
+
+- 사용자 백업 확인 결과에 따른 복구 계획 수립.
+- 앱 내 "엽서 전체 백업 내보내기" 기능 검토(데이터 사고 재발 방지) — 별도 작업지시 필요.
+- 종이 배경을 다른 편집 화면으로 넓힐지, 사용자 제작 거친 종이를 쓸지 — 제품 판단.
+
+---
+
+# 이전 기록 — 94일차 전반부·후반부 경과
 # HANDOFF — 94일차 전반부: 기억밀도 실기기 만족 확인, Git 마감
 
 확인일: 2026-10-05. 수동 표준 모드, 94일차 작업지시서에 따라 Codex가 93일차 미커밋 작업을 인수했어.
@@ -24,8 +64,39 @@
 | 실기기 감각 QA | 실행: 사용자 전체 만족 확인 | 항목별 관찰 상세는 미확인 |
 | 실사용 기기 instrumentation | 미실행 | 오늘 지시에서 금지 |
 | 사용자 데이터 | Codex 설치·삭제·데이터 쓰기 없음 | 기기 확인 명령만 실행, 설치 없음 |
-| commit / push / CI | 진행 예정 | 사용자 QA 승인 조건 충족, 결과는 Git·CI와 완료보고로 확인 |
-| 후반부 종이 질감 | 미착수 | 기억밀도 commit·push·CI 성공 전 production 변경 금지 |
+| commit / push / CI | 완료: `2f7e667`, push 성공, CI `37259538200` success | JVM 테스트·assembleDebug·assembleDebugAndroidTest 모두 success |
+| 후반부 종이 질감 | (당시 기록) 엽서 캔버스 1차 구현 — 이후 방향 정정으로 되돌림, 현재 상태는 문서 맨 위 | 아래 "종이 질감 1차 구현" 절 |
+
+## 후반부 조사와 멈춘 범위
+
+- `DetailScreen.kt`의 정사각형 앞면 Box가 실제 엽서 영역이야. `postcardPreviewSize`와 root 위치를 측정하고 사진 pan/zoom 및 꾸미기 객체 좌표에 사용해. 종이 작업으로 이 측정·gesture·좌표는 바꾸지 않아.
+- 앞면은 `PostcardPreviewContent` → `PostcardRenderSpec.drawBaseContent`로 사진·배경·패턴·글귀를 그려. 그 뒤 마스킹테이프 → 사진 스티커 → 도장 등 개별 객체 레이어가 같은 Box에 올라가. 도장은 `SealPreviewContent`를 사용해.
+- `PostcardImageExporter.createPostcardBitmap`와 `PostcardTemplateRow`도 같은 `drawBaseContent`를 사용해. 배경은 `drawBackground`에서 `canvas.drawColor`로 불투명하게 칠해. 외부 Box 아래에 종이를 추가하면 가려지고, 최상단에 덮으면 사진까지 물들이므로 둘 다 적절하지 않아.
+- 기존 asset 2개를 파일·크기·사용처·이미지로 확인했어. `gallery_paper_tile.png`: 1254×1254, 2,668,364 bytes, RGBA 약 6.0MiB. `visit_calendar_paper.png`: 1122×1402, 2,431,538 bytes, RGBA 약 6.0MiB. 갤러리는 ImageBitmap과 Repeated shader로 같은 배율의 타일을 사용하고, 달력은 월 애니메이션 밖에서 로드해 장들이 공유해.
+- 갤러리 타일은 기존 seamless 근거가 있어 재사용 후보야. 현재 자산은 섬유와 누런 기운이 편집 목표보다 강하므로 원본 그대로 적용은 권장하지 않아. 달력 자산은 한 장용이고 seamless 근거가 없어서 반복 타일로 임의 사용하지 않아.
+- 자산 파일 재사용은 새로운 bitmap 할당이 0이라는 뜻이 아니야. editor의 decode 수명·cache 소유와 기존 갤러리와의 공유 여부는 구현안 확정 후 검증해야 해. 현재 새 asset·bitmap·상태를 추가하지 않았어.
+- **제품 판단 대기:** 화면 전용 종이인지 완성 이미지 포함인지 사용자에게 선택을 요청했어. 화면 전용이면 export는 기존 배경을 유지해. 공통 렌더러에 기본 종이를 적용하면 기존 엽서의 표시·재내보내기 인상도 달라져. 작업지시서 18·24절에 따라 이 의미를 임의로 결정하지 않고 production 수정을 멈췄어.
+- 권장 출발점은 저장·export 계약을 유지하는 화면 전용 최소 정적 확인이야. 적용 위치는 사진·글귀 아래의 배경 단계, 범위는 실제 엽서 캔버스만이고 툴바·저장 버튼·navigation은 제외해. 아직 구현이나 실기기 QA는 하지 않았어.
+- UI 역할은 Advanced / Custom Editor의 캔버스 물성 보강과 Canvas Object Selection의 기존 조작 유지야. 진입·선택·객체 행동·Global Save는 현행 유지, 신규 toolbar/container/state/schema 없음. 저장 포함 여부 확정 후 구현 전 문법 보고를 마쳐야 해.
+- TEST-COVERAGE-MAP은 후반부 테스트 수·보호 범위 변화가 없어 추가 수정하지 않았어. CI에 나온 action/runner deprecation 안내는 범위 밖이고 workflow를 변경하지 않았어.
+
+## 종이 질감 1차 구현 (94일차 후반, Claude Code, 미커밋)
+
+- **사용자 결정(94일차 구현 지시):** 화면 전용이 아니라 저장·공유에도 포함(A안), 기존 엽서 전체 적용 허용, 엽서별 ON/OFF 없음, 새 asset 없이 `gallery_paper_tile.png` 재사용, 앞면만. 위 39행의 "화면 전용 권장"은 Codex 조사 시점 의견이고 이 결정으로 대체됐어.
+- 새 파일 `utils/PostcardPaperTexture.kt`: 타일을 한 번 decode해 평균 휘도보다 어두운 곳/밝은 곳을 ALPHA_8 마스크 2장으로 만들고 원본 bitmap은 즉시 recycle. 검정(최대 alpha 18/255)·흰색(최대 8/255)을 SRC_OVER로 엽서 한 장(LOGICAL_SIZE)에 타일 한 장으로 그려. 색은 버려서 배경 hue를 유지해. `PorterDuff.Mode.MULTIPLY`는 alpha까지 곱하는 modulate라 쓰지 않았어.
+- `PostcardRenderSpec.drawBackground`: `drawColor` → **종이** → 패턴 → 안쪽 테두리 → (drawBaseContent) 사진·글귀·날짜. `drawBaseContent`에 기본값 없는 `paperTexture` 인자 추가.
+- 호출부: `DetailScreen`은 앞↔뒤 전환 밖(Column 안, `postcard?.let` 앞)에서 `remember`로 한 번 load, 실패 시 종이 없이 그림. `PostcardImageExporter.createPostcardBitmap`은 IO에서 load→사용→`release`, 실패 시 내보내기 실패(화면과 다른 결과를 조용히 내보내지 않음). 휴면 `PostcardTemplateRow`는 인자만 관통(현재 호출부 없음).
+- 미변경: 뒷면·PaperSurface, `postcardPreviewSize`/좌표/gesture/hit/누끼, OUTPUT_SIZE, Room/schema/migration/metadata.
+- 자동검증(2026-10-05 로컬): compileDebugKotlin, testDebugUnitTest **907/907, 95 suite, 실패·skip 0**, assembleDebug, assembleDebugAndroidTest 성공. 테스트 추가·변경 없음 → TEST-COVERAGE-MAP 변경 없음. `GalleryPaperBackgroundStructureTest`는 GalleryScreen.kt 안 참조만 세므로 영향 없음.
+- **정전 후 재개(2026-10-05):** 작업트리 생존 확인 결과 위 구현 전부 그대로 남음(재작성 0줄). 1차 강도는 실측 평균 검정 약 2.4/255(0.9%)·흰색 1.3/255라 사용자 육안으로 보이지 않음 → 사용자 선택 "중간"으로 상수만 상향: SHADE 4.0/최대 64, LIFT 2.0/최대 24(타일 기준 평균 검정 약 9.7/255≈3.8%, 흰색 약 5.1/255). 구조·호출부 불변. 재검증 testDebugUnitTest 907/907(95 suite, 실패·skip 0), assembleDebug 성공. 첫 Android Studio 설치는 기기에 반영되지 않았음(lastUpdateTime 2026-09-30 그대로) — QA 전 기기 업데이트 시각 확인 필요.
+- **실기기 결과(2026-10-05 14:0x):** `adb -s R3KYB00HAYY install -r` 사용자 승인 후 성공(lastUpdateTime 14:01:50, firstInstallTime 9/7 유지, DB·files 디렉터리 존재 확인). 꾸미기 화면 캡처를 3배 확대해야만 결이 보이고 **사용자 맨눈으로는 1·2차 강도 모두 보이지 않음.** 원인 분석: 타일 자체 휘도 편차가 작음(std 6.9/255), 엽서 전체에 늘린 뒤 화면 축소로 섬유가 평균화됨, 진한 배경에서 검정 overlay 효과 미미, 격자 패턴이 시선 점유. 같은 가설(강도 상향) 2회 실패 → 관련 production 수정 STOP.
+- **재개 조건:** 사용자가 더 거친 질감의 새 이미지 자원을 직접 제작해 경로를 전달 예정(정사각형 약 1024², 색 무관, 잔결 위주, 비네팅·투명 없음 안내함). 도착하면 `drawable-nodpi`에 새 이름으로 추가(갤러리 타일은 GalleryScreen 전용 유지) → 휘도 편차 실측 → 강도 재산정 → 빌드·JVM → 승인 후 install -r → 사용자 맨눈 판정. 2026-10-05 당일 강도 상수 4.0/64·2.0/24는 미커밋 작업트리에 남아 있고 새 자원 기준으로 다시 정할 값.
+- **새 자원 적용(2026-10-05 14:15):** 사용자 제작 `drawable-nodpi/postcard_paper_fiber_tile.png`(1254², RGB 회색, 2,997,641 bytes, 평균 휘도 197.9·std 11.73, 4분면 평균 차 0.4 이내=비네팅 없음). `PostcardPaperTexture`만 새 자원을 load하고 갤러리는 `gallery_paper_tile` 유지. PC 합성 비교(청록·분홍·크림 × 강도 4종) 후 사용자 선택 "3열": SHADE 6.0/최대 96, LIFT 3.0/최대 40. testDebugUnitTest 907/907(95 suite), assembleDebug 성공, 승인된 install -r 성공(lastUpdateTime 14:15:48, firstInstallTime 유지, DB 존재). 사용자 맨눈 판정 대기.
+- **🚨 실기기 데이터 사고(2026-10-05, READ-ONLY 조사로 확인):** 사용자 보고 "9월 샘플 엽서가 사라지고 7·8월 엽서로 바뀜". 기기 logcat·Android Studio idea.log 근거 타임라인: 14:15:48 Claude `adb install -r` 성공(Retain data, firstInstallTime 9/7 유지 확인) → 14:16:40 **기기 홈 런처(uid 10161 com.sec.android.app.launcher)에서 ACTION_DELETE 제거 화면 실행, 14:16:41 `deletePackageX` result 1(앱·앱 데이터 삭제)** — adb 경로 아님 → 14:19:35 Android Studio Run이 패키지 없음(`DUMP_UNKNOWN_PACKAGE`)으로 새 설치 → `BackupManagerService restoreAtInstall`이 Google 클라우드 백업(restoreSet 3835d7b9334e27ea)을 복원해 7·8월 시점 DB·파일이 들어옴(새 uid u0_a525, firstInstallTime 14:19:35). `Pictures/PostcardMemory` 갤러리 내보내기 이미지는 MediaStore 조회 결과 0장. 세션 PC에는 앱 데이터 사본 없음(받아둔 건 설치 APK뿐). 9월 데이터의 기기 내 복구 수단은 현재 확인되지 않음. 사고 후 기기 쓰기·재시도·복구 시도 없음. 복구 후보(삼성 클라우드·Smart Switch 등 사용자 측 백업) 확인 전 앱 사용·추가 설치·백업 동작 보류 권고.
+- **⚠ 방향 정정(2026-10-05 14:2x, 사용자):** 사용자가 원한 "종이 질감"은 엽서 캔버스 배경이 아니라 **엽서 꾸미기 화면의 앱 배경(엽서 바깥, `ScreenBackgroundGray`)**이었음. 작업지시서가 앞면·exporter 기준으로 적혀 있었고, 1차 "안 보인다" 때 위치를 되묻지 않고 강도만 올린 것이 원인. 엽서 배경에 결이 들어간 빌드(14:01·14:15 설치) 동안 갤러리 저장·공유 0장 확인(MediaStore 읽기 조회). Room·저장 데이터 영향 없음(렌더 시점 overlay).
+- **사용자 승인으로 되돌림:** `DetailScreen`·`PostcardTemplateRow`·`PostcardImageExporter`·`PostcardRenderSpec` 4파일을 `git restore`(변경분 전부가 이 작업 것임을 diff로 확인, 백업 diff는 세션 scratchpad), `utils/PostcardPaperTexture.kt` 삭제. 위의 "종이 질감 1차 구현"·"새 자원 적용" 기록은 역사로만 남기며 **현재 코드 상태가 아님.** `drawable-nodpi/postcard_paper_fiber_tile.png`(사용자 제작)는 현재 미사용·untracked로 보존 — commit 포함 여부 사용자 결정 필요.
+- **현재 구현(미커밋):** `DetailScreen` 루트 Box의 `.background(ScreenBackgroundGray)`를 `editorPaperBackground(gallery_paper_tile)`로 교체 — 갤러리 `GalleryPaperBackground`와 같은 문법(같은 밑색 `PaperCanvas` → `ImageShader` Repeated, 360.dp 같은 배율). 사용자 선택: 꾸미기 화면만, 갤러리와 같은 종이. 하단 도구 dock(`ScreenBackgroundGray` 불투명)은 갤러리 시계 header처럼 단색 유지. 엽서 캔버스·exporter·뒷면·좌표·Room 미변경. testDebugUnitTest 907/907(95 suite), assembleDebug 성공, `git diff --check` 깨끗. `GalleryPaperBackgroundStructureTest`는 GalleryScreen.kt 안 참조만 세므로 영향 없음. 테스트 수·보호 범위 변화 없음 → TEST-COVERAGE-MAP 변경 없음. 실기기 설치·맨눈 QA 대기.
+- (이하 이전 엽서 배경 기준 QA 메모 — 현재 무효) 실기기 QA 대기: 밝은 파스텔·중간색·`0xFF2E2638`·커스텀 색에서 누렇게/탁해짐 여부, 결 강도, 사진·텍스트·도장·스티커·패턴과의 조화, 내보낸 이미지와 화면 일치. 진한 배경에서는 결이 거의 안 보일 수 있어(시뮬레이션 기준). QA 전 강도 상향·새 asset·뒷면 확대·commit 금지.
 
 ## 다음 출발점
 

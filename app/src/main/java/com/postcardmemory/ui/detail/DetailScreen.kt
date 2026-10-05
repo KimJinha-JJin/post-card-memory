@@ -120,6 +120,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -127,9 +128,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -153,6 +158,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -167,6 +173,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.postcardmemory.R
 import com.postcardmemory.ui.components.BackgroundColorSwatch
 import com.postcardmemory.ui.components.EditorSlider
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
@@ -2403,10 +2410,12 @@ fun DetailScreen(
                 detailRootPositionInRoot = it.positionInRoot()
             }
     ) {
+    val editorPaperTile = ImageBitmap.imageResource(R.drawable.gallery_paper_tile)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(ScreenBackgroundGray)
+            .editorPaperBackground(editorPaperTile)
     ) {
         Column(
             modifier = Modifier
@@ -7171,3 +7180,25 @@ fun DetailScreen(
         )
     }
 }
+
+/** 종이 타일 한 장이 화면에 보이는 크기. 갤러리(GALLERY_PAPER_TILE_SIZE)와 같은 섬유 크기로 둔다. */
+private val EDITOR_PAPER_TILE_SIZE = 360.dp
+
+/**
+ * 94일차: 엽서 꾸미기 화면의 앱 배경(엽서 바깥)에 까는 종이. 갤러리
+ * GalleryPaperBackground와 같은 타일·같은 문법 — 같은 밑색을 먼저 칠하고
+ * 타일을 가로·세로 같은 배율로만 줄여 반복한다. 엽서 캔버스와 저장·공유
+ * 이미지에는 들어가지 않는다.
+ */
+private fun Modifier.editorPaperBackground(tile: ImageBitmap): Modifier =
+    drawWithCache {
+        val shader = ImageShader(tile, TileMode.Repeated, TileMode.Repeated)
+        val scale = EDITOR_PAPER_TILE_SIZE.toPx() / tile.width
+        shader.setLocalMatrix(android.graphics.Matrix().apply { setScale(scale, scale) })
+        val brush = ShaderBrush(shader)
+
+        onDrawBehind {
+            drawRect(ScreenBackgroundGray)
+            drawRect(brush)
+        }
+    }
