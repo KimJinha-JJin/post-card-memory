@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -89,6 +90,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -127,6 +129,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.imageResource
@@ -155,6 +159,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.coroutineScope
@@ -2001,6 +2006,9 @@ private fun GalleryMonthlyGridPage(
             )
         }
 
+        // 월 라벨 종이 띠는 목록 item마다 decode하지 않게 페이지에서 한 번만 불러온다.
+        val dateStrip = ImageBitmap.imageResource(R.drawable.gallery_date_paper_strip)
+
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(3),
@@ -2021,7 +2029,8 @@ private fun GalleryMonthlyGridPage(
                 ) {
                     GalleryMonthHeader(
                         yearMonth = section.yearMonth,
-                        postcardCount = section.postcards.size
+                        postcardCount = section.postcards.size,
+                        dateStrip = dateStrip
                     )
                 }
 
@@ -2245,10 +2254,23 @@ internal fun filterPostcardsForSearch(
     }
 }
 
+/** gallery_date_paper_strip.png 안에서 투명 여백을 뺀 실제 종이 영역(px). 자산을 바꾸면 다시 잰다. */
+private val GALLERY_DATE_STRIP_SRC_OFFSET = IntOffset(89, 172)
+private val GALLERY_DATE_STRIP_SRC_SIZE = IntSize(2011, 379)
+
+/** 종이 띠를 짧은 날짜에 맞춰 너무 찌그러뜨리지 않게 하는 최소 폭. */
+private val GALLERY_DATE_STRIP_MIN_WIDTH = 136.dp
+
+/**
+ * 95일차: 월 라벨. 화면 폭 단색 띠 없이 뒤의 갤러리 종이 위에, 날짜 글자
+ * 뒤에만 작은 가로 띠(gallery_date_paper_strip.png, 현재 민트 마스킹 테이프 그림)를 깐다. 글자는
+ * 그대로 Text이고 종이는 배경일 뿐이다. 장 수와 아래 구분선은 그대로 둔다.
+ */
 @Composable
 private fun GalleryMonthHeader(
     yearMonth: YearMonth,
-    postcardCount: Int
+    postcardCount: Int,
+    dateStrip: ImageBitmap
 ) {
     val label =
         remember(yearMonth) {
@@ -2258,7 +2280,6 @@ private fun GalleryMonthHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(PaperField)
             .semantics(mergeDescendants = true) {
                 heading()
                 contentDescription = "$label, 엽서 ${postcardCount}장"
@@ -2268,18 +2289,36 @@ private fun GalleryMonthHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    horizontal = 16.dp,
-                    vertical = 10.dp
+                    end = 16.dp,
+                    top = 6.dp,
+                    bottom = 6.dp
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = label,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = InkPrimary,
-                modifier = Modifier.weight(1f)
-            )
+            Box(
+                modifier = Modifier
+                    .widthIn(min = GALLERY_DATE_STRIP_MIN_WIDTH)
+                    .drawBehind {
+                        drawImage(
+                            image = dateStrip,
+                            srcOffset = GALLERY_DATE_STRIP_SRC_OFFSET,
+                            srcSize = GALLERY_DATE_STRIP_SRC_SIZE,
+                            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                            filterQuality = FilterQuality.High
+                        )
+                    }
+                    .padding(horizontal = 18.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = InkPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
 
             Text(
                 text = "${postcardCount}장",

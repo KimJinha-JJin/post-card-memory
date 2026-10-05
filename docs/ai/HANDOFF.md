@@ -1,3 +1,33 @@
+# HANDOFF — 95일차: 갤러리 월 라벨 뒤 마스킹 테이프 띠
+
+확인일: 2026-10-05. 수동 표준 모드(95일차 추가 작업지시서, 담당 Claude Code). 시작 HEAD `7547e2c`, origin 0/0. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 확인된 상태 (월 라벨)
+
+- 대상: `GalleryScreen.kt`의 `GalleryMonthHeader()`(월별 3열 보기 `GalleryMonthlyGridPage` 안 full-span item). 날짜 그룹핑 `monthSectionsFor`, 정렬, `yyyy년 M월` 형식, 스크롤·클릭, 검색 날짜 문자열 미변경.
+- 변경: 헤더의 화면 폭 `PaperField` 단색 배경 제거(뒤의 `GalleryPaperBackground`가 보임). "2026년 8월" Text만 Box로 감싸 `drawBehind`로 `gallery_date_paper_strip.png`를 깔고, 투명 여백을 뺀 영역(srcOffset 89,172 / srcSize 2011×379)만 상자 크기에 맞춰 그림. 안쪽 여백 좌우 18dp·위아래 5dp, 최소 폭 136dp, 글자 가운데. Row 여백 end 16dp·위아래 6dp(이전 가로 16·세로 10) — 띠 왼쪽 끝이 그리드 첫 칸과 맞음. "N장"(12sp, InkSecondary)과 하단 1dp `PaperDivider` 구분선 유지. 텍스트 내용·14sp·SemiBold·InkPrimary 유지.
+- 자산: 사용자 제작 `drawable-nodpi/gallery_date_paper_strip.png`(2172×724 RGBA, 띠 밖 투명, 띠 안 alpha≈253). 같은 이름으로 3번 교체됨 — 크림 종이(배경과 같은 색이라 거의 안 보임) → 얼룩 갈색 종이 → **현재 민트 마스킹 테이프**(사용자 최종 선택). 잘라내기 상수는 자산을 바꿀 때마다 다시 재야 함(KDoc에 명시).
+- 그림은 페이지에서 `ImageBitmap.imageResource`로 한 번만 decode(item별 decode 없음). 2172×724 ARGB라 갤러리 체류 중 약 6MiB — 자산 축소는 후속 후보(사용자 결정).
+- 목업: `docs/ai/mockups/gallery-date-paper-strip-mockup.html`(1dp=1px, 실제 갤러리 타일·띠 자산 상대 경로, 새 모양/이전 모양/구분선 토글). 웹 근사라 실기기 인상과 다를 수 있음.
+
+| 구분 | 상태 |
+|---|---|
+| 구현 | 완료 |
+| 로컬 자동검증 | 실행: testDebugUnitTest 907/907(95 suite, 실패·skip 0), assembleDebug 성공, diff --check 통과. `GalleryMonthlyGridStructureTest`(헤더 재사용)·`GalleryPaperBackgroundStructureTest`(페이지가 종이 가리지 않음) 통과 |
+| 실사용 기기 instrumentation | 미실행(불필요·금지) |
+| 실기기 감각 QA | 실행: 사용자 Android Studio 설치(lastUpdateTime 17:10:12, firstInstallTime 14:19:35 유지, DB·엽서 파일 6개 확인) 후 승인. 구분선 유지(사용자가 제거 요청 안 함) |
+| TEST-COVERAGE-MAP | 변경 없음(테스트 변화 없음) |
+| commit / push / CI | 사용자 승인으로 진행 — 결과는 Git·CI와 완료보고로 확인 |
+
+- 아래 94일차 절의 **실기기 데이터 사고(9월 이후 데이터 소실, 사용자 백업 확인 대기)** 위험은 그대로 유효해.
+- 미커밋 유지: `postcard_paper_fiber_tile.png`(사용자 결정 대기), 보호 untracked 2개.
+
+## 다음 후보 (실행 승인 아님)
+
+- 구분선 제거 여부 재검토, 띠 자산 해상도 축소(메모리), 미사용 `ic_launcher_foreground.png`·`postcard_paper_fiber_tile.png` 정리.
+
+---
+
 # HANDOFF — 94일차 추가: 앱 아이콘 손그림(손바닥 + 봉투)으로 교체
 
 확인일: 2026-10-05. 수동 표준 모드(94일차 추가 작업지시서, 담당 Claude Code). 시작 HEAD `ad75b68`, origin 0/0. **이 문서의 다음 후보는 실행 승인이 아니야.**
