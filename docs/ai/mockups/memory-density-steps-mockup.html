@@ -1,0 +1,339 @@
+<title>기억 밀도 높이 단계</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<style>
+  /* Layout: 휴대폰 세로 한 화면. 중성펜 하나로 높이 규칙 4가지를 같은 높이 행으로 쌓고,
+     맨 아래 슬라이더로 한 달의 엽서 수를 바꿔 막대가 자라는 모습을 네 규칙에서 동시에 본다. */
+  :root {
+    --desk: #E3DACA;
+    --paper-canvas: #F4ECDE;
+    --paper-divider: #DBCBB0;
+    --ink-primary: #1A1324;
+    --ink-secondary: #5B5046;
+    --sunset-gold: #8C5F00;
+    --font-ui: -apple-system, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--desk);
+    color: var(--ink-primary);
+    font-family: var(--font-ui);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .device {
+    height: 100%;
+    width: 100%;
+    background: var(--paper-canvas);
+    display: flex;
+    flex-direction: column;
+    padding-block: 14px 12px;
+    padding-inline: 16px;
+    gap: 6px;
+    min-height: 0;
+  }
+  @media (min-width: 520px) {
+    body { padding-block: 16px; box-sizing: border-box; }
+    .device {
+      height: min(100%, 880px);
+      width: auto;
+      aspect-ratio: 390 / 844;
+      max-width: 100%;
+      border-radius: 28px;
+      box-shadow: 0 0 0 9px #2B2520, 0 18px 40px rgba(40, 30, 20, 0.28);
+    }
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  header .meta { font-size: 11px; color: var(--ink-secondary); white-space: nowrap; }
+  .rows { flex: 1; min-height: 0; display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); }
+  .sample {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-block: 6px 4px;
+    border-top: 1px dashed var(--paper-divider);
+  }
+  .sample:first-child { border-top: 0; }
+  .sample-label { display: flex; align-items: baseline; gap: 6px; font-size: 12px; line-height: 1.2; min-width: 0; }
+  .sample-label b { font-weight: 700; white-space: nowrap; }
+  .sample-label span { color: var(--ink-secondary); font-size: 10.5px; white-space: nowrap; }
+  .sample-label .readout { margin-left: auto; color: var(--sunset-gold); font-variant-numeric: tabular-nums; }
+  .chart-box { flex: 1; min-height: 0; position: relative; }
+  .chart-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .ground-line { height: 1px; background: var(--paper-divider); }
+  .months { display: flex; gap: 2px; padding-top: 2px; }
+  .months div {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 9.5px;
+    line-height: 1.1;
+    color: var(--ink-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .months div.focus { color: var(--sunset-gold); font-weight: 700; }
+  .grow {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 4px 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--paper-divider);
+  }
+  .grow label { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .grow label b { color: var(--sunset-gold); }
+  .grow input { width: 100%; accent-color: var(--sunset-gold); }
+  .grow input:focus-visible { outline: 2px solid var(--sunset-gold); outline-offset: 2px; }
+  .grow p { grid-column: 1 / -1; margin: 0; font-size: 10px; color: var(--ink-secondary); line-height: 1.35; }
+</style>
+
+<div class="device">
+  <header>
+    <h1>기억 밀도 · 높이 규칙</h1>
+    <span class="meta">중성펜 · 2026년</span>
+  </header>
+  <div class="rows" id="rows"></div>
+  <div class="grow">
+    <label for="growSlider">10월 엽서 <b id="growCount">5</b>장</label>
+    <input id="growSlider" type="range" min="0" max="20" step="1" value="5" />
+    <p>밀어서 10월 엽서를 늘려보세요. 네 규칙 모두 20장이면 꽉 찬 높이예요.</p>
+  </div>
+</div>
+
+<script>
+  // ---------- 고정 조건 (1차 질감 비교와 같은 데이터, 10월만 슬라이더로 변경) ----------
+  const COUNTS = [0, 1, 3, 6, 9, 14, 20, 11, 2, 5, 17, 8];
+  const FOCUS_MONTH = 9; // 10월
+  const FULL_COUNT = 20;
+  const COL_GAP = 2;
+  const PLOT_TOP = 3;
+  const PAPER_RGB = [0xF4, 0xEC, 0xDE];
+
+  // 높이 규칙 후보: 몇 장마다 한 칸 오르는지(unit). unit이 없으면 장수에 그대로 비례.
+  const RULES = [
+    { name: "5단계", desc: "1칸 = 4장", unit: 4, levels: 5 },
+    { name: "7단계", desc: "1칸 = 3장", unit: 3, levels: 7 },
+    { name: "10단계", desc: "1칸 = 2장", unit: 2, levels: 10 },
+    { name: "비례형", desc: "1장마다 조금씩" },
+  ];
+
+  function levelOf(rule, count) {
+    return Math.min(rule.levels, Math.ceil(count / rule.unit));
+  }
+  function heightFraction(rule, count) {
+    if (count <= 0) return 0;
+    if (!rule.unit) return Math.min(1, count / FULL_COUNT);
+    return levelOf(rule, count) / rule.levels;
+  }
+  function readoutText(rule, count) {
+    return rule.unit ? "10월 " + count + "장 → " + levelOf(rule, count) + "칸" : "10월 " + count + "장";
+  }
+
+  function barRects(rule, counts, W, H) {
+    const colW = (W - COL_GAP * 11) / 12;
+    const barW = Math.round(colW * 0.55 * 2) / 2;
+    const maxH = H - PLOT_TOP;
+    return counts.map((c, i) => {
+      const f = heightFraction(rule, c);
+      if (f <= 0) return null;
+      const h = Math.max(2.5, f * maxH);
+      const x = i * (colW + COL_GAP) + (colW - barW) / 2;
+      return { i, x, y: H - h, w: barW, h };
+    });
+  }
+
+  // ---------- 결정적 난수 / 종이 결 (1차 목업과 같은 코드) ----------
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function hash2(ix, iy, seed) {
+    let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 2147483647);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+  function valueNoise(x, y, seed) {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    const fx = x - ix, fy = y - iy;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = hash2(ix, iy, seed), b = hash2(ix + 1, iy, seed);
+    const c = hash2(ix, iy + 1, seed), d = hash2(ix + 1, iy + 1, seed);
+    return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
+  }
+  function paperTooth(x, y) {
+    const fine = valueNoise(x * 1.15, y * 1.15, 11);
+    const mid = valueNoise(x * 0.38, y * 0.38, 23);
+    const fiber = valueNoise(x * 0.12, y * 0.9, 37);
+    return 0.55 * fine + 0.27 * mid + 0.18 * fiber;
+  }
+  const paperCache = {};
+  function paperField(W, H, scale) {
+    const key = W + "x" + H + "@" + scale;
+    if (paperCache[key]) return paperCache[key];
+    const w = Math.round(W * scale), h = Math.round(H * scale);
+    const t = new Float32Array(w * h);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) t[py * w + px] = paperTooth((px + 0.5) / scale, (py + 0.5) / scale);
+    }
+    return (paperCache[key] = { w, h, t });
+  }
+
+  // ---------- 손 스트로크 도구 (1차 목업과 같은 코드) ----------
+  function rulerStroke(ctx, x1, y1, x2, y2, o, rng) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 0.3) return;
+    const dx = (x2 - x1) / len, dy = (y2 - y1) / len;
+    const nx = -dy, ny = dx;
+    const step = o.step || 1.2;
+    const n = Math.max(2, Math.ceil(len / step));
+    const ph1 = rng() * 6.28, ph2 = rng() * 6.28;
+    const f1 = 0.08 + rng() * 0.06, f2 = 0.3 + rng() * 0.2;
+    const base = o.alpha * (o.pressureMin + rng() * (1 - o.pressureMin));
+    let prev = null;
+    for (let k = 0; k <= n; k++) {
+      const d = (k / n) * len;
+      const wob = o.wobble * (0.7 * Math.sin(d * f1 + ph1) + 0.3 * Math.sin(d * f2 + ph2));
+      const pt = [x1 + dx * d + nx * wob, y1 + dy * d + ny * wob];
+      if (prev) {
+        ctx.globalAlpha = Math.min(1, base);
+        ctx.lineWidth = o.width;
+        ctx.beginPath();
+        ctx.moveTo(prev[0], prev[1]);
+        ctx.lineTo(pt[0], pt[1]);
+        ctx.stroke();
+      }
+      prev = pt;
+    }
+  }
+  function hatchRect(ctx, r, o, rng) {
+    const ang = (o.angle + (rng() - 0.5) * (o.angleJitter || 0)) * Math.PI / 180;
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const nx = -dy, ny = dx;
+    const cs = [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].map(([x, y]) => x * nx + y * ny);
+    const cMin = Math.min(...cs), cMax = Math.max(...cs);
+    for (let c = cMin + o.spacing * rng(); c < cMax; c += o.spacing * (0.8 + 0.4 * rng())) {
+      const px = nx * c, py = ny * c;
+      let t0 = -1e9, t1 = 1e9;
+      const clipAxis = (p, d, lo, hi) => {
+        if (Math.abs(d) < 1e-9) return p >= lo && p <= hi;
+        let a = (lo - p) / d, b = (hi - p) / d;
+        if (a > b) [a, b] = [b, a];
+        t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+        return t0 <= t1;
+      };
+      if (!clipAxis(px, dx, r.x, r.x + r.w)) continue;
+      if (!clipAxis(py, dy, r.y, r.y + r.h)) continue;
+      const e0 = t0 - (o.overshoot * rng() - o.shortfall * rng());
+      const e1 = t1 + (o.overshoot * rng() - o.shortfall * rng());
+      rulerStroke(ctx, px + dx * e0, py + dy * e0, px + dx * e1, py + dy * e1, o, rng);
+    }
+  }
+  function outlineRect(ctx, r, o, rng) {
+    const ov = () => o.cornerOver * (rng() * 1.2 - 0.2);
+    const L = r.x, R = r.x + r.w, T = r.y, B = r.y + r.h;
+    [[L, B + 0.2, L, T - ov()], [L - ov(), T, R + ov(), T], [R, T - ov(), R, B + 0.2]].forEach(([x1, y1, x2, y2]) => {
+      if (rng() < 0.5) rulerStroke(ctx, x1, y1, x2, y2, o, rng);
+      else rulerStroke(ctx, x2, y2, x1, y1, o, rng);
+    });
+  }
+
+  // ---------- 중성펜 (1차에서 선택된 재료, 값 그대로) ----------
+  const GEL = { ink: [0x1F, 0x1C, 0x24], maxOpacity: 0.9, seed: 505,
+    tooth: { strength: 0.06, center: 0.4, soft: 0.2, fillIn: 0.2 } };
+  function drawGelBar(ctx, r, rng) {
+    hatchRect(ctx, r, { angle: -55, angleJitter: 1.5, spacing: 2.1, width: 0.75, alpha: 0.62,
+      pressureMin: 0.9, wobble: 0.14, overshoot: 0.35, shortfall: 0.4, step: 1.6 }, rng);
+    outlineRect(ctx, r, { width: 0.95, alpha: 0.9, pressureMin: 0.92, wobble: 0.1, cornerOver: 1.2, step: 1.6 }, rng);
+  }
+
+  function smoothstep(a, b, x) {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  }
+
+  function renderRule(canvas, rule, counts, W, H, scale) {
+    const paper = paperField(W, H, scale);
+    const { w, h } = paper;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    const off = document.createElement("canvas");
+    off.width = w; off.height = h;
+    const octx = off.getContext("2d");
+    octx.setTransform(scale, 0, 0, scale, 0, 0);
+    octx.strokeStyle = "#000";
+    octx.fillStyle = "#000";
+    octx.lineCap = "round";
+    // 막대마다 따로 seed를 줘서 10월을 바꿔도 다른 달의 선은 그대로 남는다
+    barRects(rule, counts, W, H).forEach((r) => {
+      if (r) drawGelBar(octx, r, mulberry32(GEL.seed * 100 + r.i));
+    });
+    const pig = octx.getImageData(0, 0, w, h).data;
+    const ctx = canvas.getContext("2d");
+    const out = ctx.createImageData(w, h);
+    const d = out.data, tc = GEL.tooth;
+    for (let p = 0; p < w * h; p++) {
+      const T = paper.t[p];
+      const shade = 1 + (T - 0.5) * 0.06;
+      const pr = PAPER_RGB[0] * shade, pg = PAPER_RGB[1] * shade, pb = PAPER_RGB[2] * shade;
+      const A = pig[p * 4 + 3] / 255;
+      let dep = 0;
+      if (A > 0) {
+        const edge = tc.center - A * tc.fillIn;
+        dep = A * (1 - tc.strength + tc.strength * smoothstep(edge - tc.soft, edge + tc.soft, T)) * GEL.maxOpacity;
+      }
+      d[p * 4] = pr + (GEL.ink[0] - pr) * dep;
+      d[p * 4 + 1] = pg + (GEL.ink[1] - pg) * dep;
+      d[p * 4 + 2] = pb + (GEL.ink[2] - pb) * dep;
+      d[p * 4 + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+  }
+
+  // ---------- 화면 구성 ----------
+  const counts = COUNTS.slice();
+  const rowsEl = document.getElementById("rows");
+  const slider = document.getElementById("growSlider");
+  const growCount = document.getElementById("growCount");
+  const samples = RULES.map((rule) => {
+    const el = document.createElement("section");
+    el.className = "sample";
+    el.innerHTML =
+      '<div class="sample-label"><b>' + rule.name + '</b><span>' + rule.desc + '</span><span class="readout"></span></div>' +
+      '<div class="chart-box"><canvas></canvas></div><div class="ground-line"></div>' +
+      '<div class="months">' + Array.from({ length: 12 }, (_, i) =>
+        '<div' + (i === FOCUS_MONTH ? ' class="focus"' : '') + '>' + (i + 1) + '</div>').join("") + '</div>';
+    rowsEl.appendChild(el);
+    return { rule, box: el.querySelector(".chart-box"), canvas: el.querySelector("canvas"), readout: el.querySelector(".readout") };
+  });
+
+  function renderAll() {
+    const scale = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    growCount.textContent = String(counts[FOCUS_MONTH]);
+    samples.forEach(({ rule, box, canvas, readout }) => {
+      readout.textContent = readoutText(rule, counts[FOCUS_MONTH]);
+      const W = Math.floor(box.clientWidth), H = Math.floor(box.clientHeight);
+      if (W < 20 || H < 10) return;
+      renderRule(canvas, rule, counts, W, H, scale);
+    });
+  }
+
+  let frame = 0;
+  slider.addEventListener("input", () => {
+    counts[FOCUS_MONTH] = Number(slider.value);
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(renderAll);
+  });
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderAll, 120);
+  });
+  renderAll();
+</script>

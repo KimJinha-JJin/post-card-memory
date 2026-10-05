@@ -101,6 +101,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
@@ -1558,33 +1561,146 @@ internal fun memoryDensityMonthsForYear(
     }
 }
 
-private const val MEMORY_DENSITY_UNIT_POSTCARDS = 2
-private const val MEMORY_DENSITY_MAX_BAR_LEVEL = 6
-private const val MEMORY_DENSITY_OVERFLOW_THRESHOLD =
-    MEMORY_DENSITY_UNIT_POSTCARDS * MEMORY_DENSITY_MAX_BAR_LEVEL // 12장
-
-/** 1칸 = 엽서 2장, 최대 6칸(12장). 0장은 0칸(막대 없음, 억지 최소 높이를 주지 않는다). */
-internal fun memoryDensityBarLevel(count: Int): Int =
-    ((count + 1) / MEMORY_DENSITY_UNIT_POSTCARDS).coerceIn(0, MEMORY_DENSITY_MAX_BAR_LEVEL)
-
-/** 12장(6칸) 초과분은 막대를 더 키우지 않고 위에 작은 "+" 표시로만 알린다. */
-internal fun memoryDensityHasOverflow(count: Int): Boolean =
-    count > MEMORY_DENSITY_OVERFLOW_THRESHOLD
+/** 93일차: 엽서 20장이면 꽉 찬 높이. 그보다 많으면 높이는 그대로 두고 위에 작은 "+"만 그린다. */
+private const val MEMORY_DENSITY_FULL_POSTCARDS = 20
 
 /**
- * 76일차 후속(새싹형): 줄기가 있을 때(1장 이상) 그 위에 얹는 하트가
- * 줄기 단계가 높을수록 더 진하게 보이도록 하는 alpha. 표정 대신 진하기로
- * "많이 자랐다"는 인상만 살짝 보태고, 정확한 비교는 여전히 줄기 길이가
- * 담당한다.
+ * 93일차(비례형): 막대 높이 비율. 계단 없이 엽서 1장마다 조금씩 자라고,
+ * 20장에서 1이 된 뒤 더 커지지 않는다. 0장은 0(막대 없음, 억지 최소 높이를 주지 않는다).
  */
-internal fun memoryDensityHeartAlpha(level: Int): Float =
-    0.4f + (level.toFloat() / MEMORY_DENSITY_MAX_BAR_LEVEL) * 0.6f
+internal fun memoryDensityHeightFraction(count: Int): Float =
+    (count.coerceAtLeast(0).toFloat() / MEMORY_DENSITY_FULL_POSTCARDS).coerceAtMost(1f)
 
-private val MEMORY_DENSITY_STEM_WIDTH = 3.dp
-private val MEMORY_DENSITY_STEM_UNIT_HEIGHT = 8.dp
-private val MEMORY_DENSITY_PLANT_AREA_HEIGHT =
-    MEMORY_DENSITY_STEM_UNIT_HEIGHT * MEMORY_DENSITY_MAX_BAR_LEVEL + 10.dp
+/** 20장 초과분은 막대를 더 키우지 않고 위에 작은 "+" 표시로만 알린다. */
+internal fun memoryDensityHasOverflow(count: Int): Boolean =
+    count > MEMORY_DENSITY_FULL_POSTCARDS
+
+private val MEMORY_DENSITY_PLOT_HEIGHT = 120.dp // 20장 = 120dp, 1장 = 6dp
 private val MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT = 14.dp
+private const val MEMORY_DENSITY_BAR_WIDTH_RATIO = 0.55f
+private const val MEMORY_DENSITY_PEN_OPACITY = 0.9f
+private const val MEMORY_DENSITY_PEN_SEED = 50_500
+
+/** 중성펜 한 획. 좌표와 굵기는 dp 단위이고 그릴 때 density를 곱한다. */
+internal class MemoryDensityPenStroke(
+    val points: List<Offset>,
+    val widthDp: Float,
+    val alpha: Float
+)
+
+/**
+ * 자를 대고 중성펜으로 그은 한 획. 실루엣은 곧고, 0.1dp 남짓의 손떨림만 있다.
+ * 잉크 농도는 획마다 거의 일정하다(중성펜은 볼펜과 달리 뭉치거나 끊기지 않는다).
+ */
+private fun memoryDensityRulerStroke(
+    from: Offset,
+    to: Offset,
+    widthDp: Float,
+    alpha: Float,
+    wobble: Float,
+    random: kotlin.random.Random
+): MemoryDensityPenStroke {
+    val length = (to - from).getDistance()
+    val dir = if (length > 0f) (to - from) / length else Offset.Zero
+    val normal = Offset(-dir.y, dir.x)
+    val segments = maxOf(2, kotlin.math.ceil(length / 1.6f).toInt())
+    val phase1 = random.nextFloat() * 6.28f
+    val phase2 = random.nextFloat() * 6.28f
+    val freq1 = 0.08f + random.nextFloat() * 0.06f
+    val freq2 = 0.3f + random.nextFloat() * 0.2f
+    val points = (0..segments).map { k ->
+        val d = length * k / segments
+        val offset = wobble * (0.7f * kotlin.math.sin(d * freq1 + phase1) + 0.3f * kotlin.math.sin(d * freq2 + phase2))
+        from + dir * d + normal * offset
+    }
+    return MemoryDensityPenStroke(points, widthDp, alpha * (0.9f + random.nextFloat() * 0.1f))
+}
+
+/**
+ * 93일차: 기억밀도 막대 하나를 중성펜으로 그린 획들. 사선 반복선으로 안을 메우고,
+ * 왼쪽·위·오른쪽 외곽을 자 대고 긋는다(아래는 바닥선이 맡는다). 반복선 끝은 막대
+ * 경계에서 1dp 미만으로 살짝 모자라거나 삐져나갈 뿐이라 막대 실루엣은 반듯하다.
+ * 같은 seed면 항상 같은 획이 나온다 — 재구성될 때마다 그림이 흔들리지 않는다.
+ * 목업: `docs/ai/mockups/memory-density-steps-mockup.html`의 중성펜.
+ */
+internal fun memoryDensityGelPenBarStrokes(
+    left: Float,
+    top: Float,
+    width: Float,
+    height: Float,
+    seed: Int
+): List<MemoryDensityPenStroke> {
+    if (width <= 0f || height <= 0f) return emptyList()
+    val random = kotlin.random.Random(seed)
+    val strokes = mutableListOf<MemoryDensityPenStroke>()
+    val right = left + width
+    val bottom = top + height
+
+    val angle = Math.toRadians((-55.0 + (random.nextDouble() - 0.5) * 1.5)).toFloat()
+    val dir = Offset(kotlin.math.cos(angle), kotlin.math.sin(angle))
+    val normal = Offset(-dir.y, dir.x)
+    val projections = listOf(
+        Offset(left, top), Offset(right, top), Offset(left, bottom), Offset(right, bottom)
+    ).map { it.x * normal.x + it.y * normal.y }
+    val spacing = 2.1f
+    var c = projections.min() + spacing * random.nextFloat()
+    while (c < projections.max()) {
+        val base = normal * c
+        // 직선(base + dir·t)이 막대 사각형 안에 들어오는 구간 [t0, t1]
+        var t0 = -Float.MAX_VALUE
+        var t1 = Float.MAX_VALUE
+        fun clip(p: Float, d: Float, lo: Float, hi: Float): Boolean {
+            if (kotlin.math.abs(d) < 1e-6f) return p in lo..hi
+            val a = (lo - p) / d
+            val b = (hi - p) / d
+            t0 = maxOf(t0, minOf(a, b))
+            t1 = minOf(t1, maxOf(a, b))
+            return t0 <= t1
+        }
+        if (clip(base.x, dir.x, left, right) && clip(base.y, dir.y, top, bottom)) {
+            val start = t0 - (0.35f * random.nextFloat() - 0.4f * random.nextFloat())
+            val end = t1 + (0.35f * random.nextFloat() - 0.4f * random.nextFloat())
+            if (end > start) {
+                strokes += memoryDensityRulerStroke(
+                    from = base + dir * start,
+                    to = base + dir * end,
+                    widthDp = 0.75f,
+                    alpha = 0.62f,
+                    wobble = 0.14f,
+                    random = random
+                )
+            }
+        }
+        c += spacing * (0.8f + 0.4f * random.nextFloat())
+    }
+
+    // 모서리에서 선이 1dp 남짓 지나치거나 살짝 덜 닿는다
+    fun cornerOver() = 1.2f * (random.nextFloat() * 1.2f - 0.2f)
+    listOf(
+        Offset(left, bottom) to Offset(left, top - cornerOver()),
+        Offset(left - cornerOver(), top) to Offset(right + cornerOver(), top),
+        Offset(right, top - cornerOver()) to Offset(right, bottom)
+    ).forEach { (a, b) ->
+        val (from, to) = if (random.nextBoolean()) a to b else b to a
+        strokes += memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.1f, random = random)
+    }
+    return strokes
+}
+
+/** 20장을 넘은 달의 막대 위에 같은 중성펜으로 긋는 작은 "+". */
+internal fun memoryDensityGelPenPlusStrokes(
+    center: Offset,
+    armDp: Float,
+    seed: Int
+): List<MemoryDensityPenStroke> {
+    val random = kotlin.random.Random(seed)
+    return listOf(
+        Offset(center.x - armDp, center.y) to Offset(center.x + armDp, center.y),
+        Offset(center.x, center.y - armDp) to Offset(center.x, center.y + armDp)
+    ).map { (from, to) ->
+        memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.08f, random = random)
+    }
+}
 
 /**
  * 76일차: 기억밀도의 새 정의 — "한 해 동안 어느 달에 기억을 많이 남겼는지
@@ -1624,16 +1740,16 @@ private fun GalleryDensityPage(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 76일차 후속(새싹형): 각 달의 줄기·구분선·얼굴을 한 Column에
-        // 몰아두면 구분선이 달마다 짧게 끊겨 보인다(실기기 QA 지적) —
-        // 줄기 Row와 얼굴 Row를 분리하고 그 사이에 전체 폭 구분선 하나만
-        // 둬서 12개월이 하나로 이어진 선 위에 서 있는 모습으로 만든다.
+        // 76일차 후속: 각 달의 막대·구분선·월 숫자를 한 Column에 몰아두면
+        // 구분선이 달마다 짧게 끊겨 보인다(실기기 QA 지적) — 막대 Row와
+        // 월 숫자 Row를 분리하고 그 사이에 전체 폭 구분선 하나만 둬서
+        // 12개월이 하나로 이어진 선 위에 서 있는 모습으로 만든다.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             months.forEach { month ->
-                GalleryMemoryDensityStem(
+                GalleryMemoryDensityBar(
                     month = month,
                     modifier = Modifier.weight(1f)
                 )
@@ -1663,70 +1779,76 @@ private fun GalleryDensityPage(
 }
 
 /**
- * 월 하나의 위쪽 절반 — overflow 표시와, 수치만큼 자란 줄기 + 줄기 위
- * 하트(진하기만 줄기 단계에 비례). 접근성 설명(월·기억 개수)은 이
- * composable에만 붙이고 아래 [GalleryMemoryDensityFoot]는 별도로 읽히지
- * 않게 한다.
+ * 93일차: 월 하나의 위쪽 — 엽서 수에 비례한 중성펜 막대와, 20장을 넘으면
+ * 그 위의 작은 "+". 얼굴·하트 같은 감정 장식 없이 손으로 그은 선의 흔적만으로
+ * 양을 보여준다. 접근성 설명(월·기억 개수)은 이 composable에만 붙이고 아래
+ * [GalleryMemoryDensityFoot]는 별도로 읽히지 않게 한다.
  */
 @Composable
-private fun GalleryMemoryDensityStem(
+private fun GalleryMemoryDensityBar(
     month: GalleryMemoryDensityMonth,
     modifier: Modifier = Modifier
 ) {
-    val level = memoryDensityBarLevel(month.count)
+    val heightFraction = memoryDensityHeightFraction(month.count)
     val hasOverflow = memoryDensityHasOverflow(month.count)
+    val seed = MEMORY_DENSITY_PEN_SEED + month.yearMonth.monthValue
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.semantics {
-            contentDescription = "${month.yearMonth.monthValue}월, 기억 ${month.count}개"
-        }
-    ) {
-        Box(
-            modifier = Modifier.height(MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            if (hasOverflow) {
-                Text(
-                    text = "+",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = SunsetGold
-                )
+    Box(
+        modifier = modifier
+            .semantics {
+                contentDescription = "${month.yearMonth.monthValue}월, 기억 ${month.count}개"
             }
-        }
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Bottom,
-            modifier = Modifier
-                .height(MEMORY_DENSITY_PLANT_AREA_HEIGHT)
-                .fillMaxWidth()
-        ) {
-            if (level > 0) {
-                Text(
-                    text = "♥",
-                    fontSize = 11.sp,
-                    color = SunsetGold.copy(alpha = memoryDensityHeartAlpha(level)),
-                    modifier = Modifier.padding(bottom = 1.dp)
-                )
-
-                Box(
-                    modifier = Modifier
-                        .width(MEMORY_DENSITY_STEM_WIDTH)
-                        .height(MEMORY_DENSITY_STEM_UNIT_HEIGHT * level)
-                        .background(SunsetGold)
-                )
+            .fillMaxWidth()
+            .height(MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT + MEMORY_DENSITY_PLOT_HEIGHT)
+            .drawWithCache {
+                val widthDp = size.width / density
+                val heightDp = size.height / density
+                val markDp = MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT.value
+                val barWidthDp = widthDp * MEMORY_DENSITY_BAR_WIDTH_RATIO
+                val barHeightDp = (heightDp - markDp) * heightFraction
+                val strokes = buildList {
+                    if (heightFraction > 0f) {
+                        addAll(
+                            memoryDensityGelPenBarStrokes(
+                                left = (widthDp - barWidthDp) / 2f,
+                                top = heightDp - barHeightDp,
+                                width = barWidthDp,
+                                height = barHeightDp,
+                                seed = seed
+                            )
+                        )
+                    }
+                    if (hasOverflow) {
+                        addAll(
+                            memoryDensityGelPenPlusStrokes(
+                                center = Offset(widthDp / 2f, markDp / 2f),
+                                armDp = 3f,
+                                seed = seed
+                            )
+                        )
+                    }
+                }.map { stroke ->
+                    Triple(
+                        Path().apply {
+                            stroke.points.forEachIndexed { index, point ->
+                                if (index == 0) moveTo(point.x * density, point.y * density)
+                                else lineTo(point.x * density, point.y * density)
+                            }
+                        },
+                        Stroke(width = stroke.widthDp * density, cap = StrokeCap.Round),
+                        InkPrimary.copy(alpha = stroke.alpha * MEMORY_DENSITY_PEN_OPACITY)
+                    )
+                }
+                onDrawBehind {
+                    strokes.forEach { (path, style, color) -> drawPath(path, color = color, style = style) }
+                }
             }
-        }
-    }
+    )
 }
 
 /**
- * 월 하나의 아래쪽 절반 — 고정된 무표정 얼굴과 월 숫자. 얼굴은 항상
- * 같은 모양·색("•_•", InkSecondary)이다 — 수치를 표정이나 색으로
- * 평가하지 않고, 자란 길이(위 [GalleryMemoryDensityStem])만으로 양을
- * 보여준다.
+ * 월 하나의 아래쪽 — 월 숫자만. 93일차에 고정 얼굴("•_•")을 걷어냈다.
+ * 양은 위 [GalleryMemoryDensityBar]의 막대 높이만으로 보여준다.
  */
 @Composable
 private fun GalleryMemoryDensityFoot(
@@ -1737,14 +1859,6 @@ private fun GalleryMemoryDensityFoot(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.clearAndSetSemantics {}
     ) {
-        Text(
-            text = "•_•",
-            fontSize = 12.sp,
-            color = InkSecondary
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
         Text(
             text = month.yearMonth.monthValue.toString(),
             fontSize = 11.sp,

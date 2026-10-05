@@ -14,6 +14,7 @@ import org.junit.Test
  * 76일차 후속 실기기 QA 반영: 물뿌리개 아이콘 제거, 달마다 끊기던
  * 구분선을 전체 폭 하나로 통합. 얼굴 색에 하트 진하기를 공유하는 시도는
  * 사용자 요청으로 되돌려 항상 고정된 InkSecondary를 쓴다.
+ * 93일차: 얼굴·하트를 걷어내고 중성펜 막대(비례형) + 월 숫자만 남긴 구조를 고정한다.
  */
 class GalleryMemoryDensityStructureTest {
 
@@ -36,7 +37,7 @@ class GalleryMemoryDensityStructureTest {
 
     @Test
     fun densityPage_hasNoYearScrollingOrCardDashboard() {
-        val body = functionBody("GalleryDensityPage", "GalleryMemoryDensityStem")
+        val body = functionBody("GalleryDensityPage", "GalleryMemoryDensityBar")
 
         assertTrue(body.contains("memoryDensityMonthsForYear("))
         assertFalse(
@@ -54,7 +55,7 @@ class GalleryMemoryDensityStructureTest {
     @Test
     fun densityPage_hasNoWateringCanIcon() {
         // 76일차 후속 실기기 QA: 물뿌리개 아이콘은 실기기 확인 후 제거됨.
-        val body = functionBody("GalleryDensityPage", "GalleryMemoryDensityStem")
+        val body = functionBody("GalleryDensityPage", "GalleryMemoryDensityBar")
         assertFalse("물뿌리개 아이콘은 제거되어야 함", body.contains("WateringCanIcon"))
         assertFalse("연도 라벨 옆에 별도 Icon을 추가하면 안 됨", body.contains("Icon("))
         assertFalse("WateringCanIcon 정의 자체가 남아있으면 안 됨", sourceText.contains("WateringCanIcon"))
@@ -63,47 +64,53 @@ class GalleryMemoryDensityStructureTest {
     @Test
     fun densityPage_hasExactlyOneFullWidthGroundLine() {
         // 76일차 후속 실기기 QA: 달마다 짧게 끊기던 구분선을 전체 폭 하나로
-        // 통합 — GalleryDensityPage에 정확히 하나만 있어야 하고, Stem/Foot
+        // 통합 — GalleryDensityPage에 정확히 하나만 있어야 하고, Bar/Foot
         // 각각의 per-column 구분선은 남아있으면 안 된다.
-        val pageBody = functionBody("GalleryDensityPage", "GalleryMemoryDensityStem")
+        val pageBody = functionBody("GalleryDensityPage", "GalleryMemoryDensityBar")
         assertEquals(1, Regex("HorizontalDivider\\(").findAll(pageBody).count())
         assertTrue(pageBody.contains("Modifier.fillMaxWidth(),\n            color = PaperDivider"))
 
-        val stemBody = functionBody("GalleryMemoryDensityStem", "GalleryMemoryDensityFoot")
-        assertFalse("줄기 쪽에 개별 구분선이 남아있으면 안 됨", stemBody.contains("HorizontalDivider("))
+        val barBody = functionBody("GalleryMemoryDensityBar", "GalleryMemoryDensityFoot")
+        assertFalse("막대 쪽에 개별 구분선이 남아있으면 안 됨", barBody.contains("HorizontalDivider("))
     }
 
     @Test
-    fun densityFoot_faceIsFixedShapeAndFixedColor() {
+    fun densityFoot_showsOnlyMonthNumberWithoutFace() {
+        // 93일차: 하단에는 월 숫자만 남긴다 — 고정 얼굴 "•_•"도 걷어냈다.
         val start = sourceText.indexOf("private fun GalleryMemoryDensityFoot(")
         assertTrue("GalleryMemoryDensityFoot 선언을 찾지 못함", start >= 0)
         val end = sourceText.indexOf("private fun GalleryMonthlyGridPage(", start)
         assertTrue("GalleryMonthlyGridPage 선언을 찾지 못함", end > start)
         val body = sourceText.substring(start, end)
 
-        assertFalse("얼굴 구분선이 남아있으면 안 됨(전체 폭 구분선으로 통합됨)", body.contains("HorizontalDivider("))
-        assertTrue("얼굴은 고정된 \"•_•\"여야 함", body.contains("\"•_•\""))
-        assertTrue("얼굴 색은 항상 고정된 InkSecondary여야 함(사용자 요청으로 진하기 공유 되돌림)", body.contains("color = InkSecondary"))
-        assertFalse(
-            "얼굴 색에 하트 진하기를 다시 섞으면 안 됨(사용자가 되돌려달라고 함)",
-            body.contains("memoryDensityHeartAlpha(")
-        )
+        assertFalse("월 숫자 쪽 구분선이 남아있으면 안 됨(전체 폭 구분선으로 통합됨)", body.contains("HorizontalDivider("))
+        assertTrue("월 숫자를 보여줘야 함", body.contains("month.yearMonth.monthValue.toString()"))
+        assertEquals("Text는 월 숫자 하나뿐이어야 함", 1, Regex("Text\\(").findAll(body).count())
+        assertFalse("고정 얼굴 \"•_•\"은 93일차에 제거됨", body.contains("•_•"))
         assertFalse("표정 3단계 카오모지 로직을 재사용하면 안 됨", body.contains("memoryDensityKaomoji("))
     }
 
     @Test
-    fun densityStem_usesBarLevelAndHeartAlphaNotKaomoji() {
-        val body = functionBody("GalleryMemoryDensityStem", "GalleryMemoryDensityFoot")
+    fun densityBar_drawsProportionalGelPenBarWithoutDecorations() {
+        val body = functionBody("GalleryMemoryDensityBar", "GalleryMemoryDensityFoot")
 
-        assertTrue(body.contains("memoryDensityBarLevel("))
+        assertTrue("비례형 높이 계산을 써야 함", body.contains("memoryDensityHeightFraction("))
         assertTrue(body.contains("memoryDensityHasOverflow("))
-        assertTrue("줄기 위 하트 진하기 계산을 써야 함", body.contains("memoryDensityHeartAlpha("))
+        assertTrue("막대는 중성펜 획으로 그려야 함", body.contains("memoryDensityGelPenBarStrokes("))
+        assertTrue("20장 초과 표시도 같은 펜으로 그려야 함", body.contains("memoryDensityGelPenPlusStrokes("))
+        assertFalse("막대 위 하트는 93일차에 제거됨", body.contains("♥"))
+        assertFalse("하트 진하기 계산은 93일차에 제거됨", sourceText.contains("memoryDensityHeartAlpha("))
+        assertFalse("계단식 칸 계산은 비례형으로 대체됨", sourceText.contains("memoryDensityBarLevel("))
         assertFalse("표정 3단계 카오모지 로직을 재사용하면 안 됨", body.contains("memoryDensityKaomoji("))
         assertFalse(
             "옛 원형 점(intensity 기반 크기·투명도) 문법을 재사용하면 안 됨",
             body.contains("memoryDensityIntensity(")
         )
         assertFalse("RoundedCornerShape 카드 패널을 추가하면 안 됨", body.contains("RoundedCornerShape"))
+        assertTrue(
+            "접근성 설명(월·기억 개수)은 막대 쪽에 남아 있어야 함",
+            body.contains("contentDescription = \"\${month.yearMonth.monthValue}월, 기억 \${month.count}개\"")
+        )
     }
 
     @Test

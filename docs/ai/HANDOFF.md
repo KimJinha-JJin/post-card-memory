@@ -1,4 +1,101 @@
-# HANDOFF — 92일차: 검증 환경 안전체계 전환 + 주석·README 최신화
+# HANDOFF — 94일차 전반부: 기억밀도 실기기 만족 확인, Git 마감
+
+확인일: 2026-10-05. 수동 표준 모드, 94일차 작업지시서에 따라 Codex가 93일차 미커밋 작업을 인수했어.
+
+## 현재 확인된 상태
+
+- 시작 브랜치 `feature/photo-sticker`, HEAD `efd5d133155b230a06d4b7cd60fa9fe60a2f64eb`. 원격 실조회 HEAD도 동일했어.
+- 93일차 production 1개, 테스트 2개, 문서 2개, 목업 3개의 변경을 이어받았어. 기존 변경을 삭제하거나 재구현하지 않았어.
+- 사용자 실기기 감각 QA: **2026-10-05 사용자가 “실기기 확인했어 아주 만족스러워!”라고 확인했어.** 현 디자인을 승인한 것으로 반영하고 수치 조정 없이 유지해.
+- 중성펜 외곽선·사선 칠·미세한 손떨림, 비례형 1장당 6dp, 20장 최대 120dp, 초과는 작은 `+`, 얼굴·하트 없음, 월 숫자, 월별 고정 seed를 유지해.
+- 낮은 값 1~2장·20장·21장 이상을 각각 관찰했는지와 전환 성능·획 안정성의 항목별 상세 소견은 사용자 메시지에 없어. 전체 만족 보고와 개별 항목의 증거를 구분해.
+- 코드상 비례·상한·초과 조건과 획 결정성은 관련 자동 테스트가 보호해. 이 근거를 개별 실제 기기 관찰로 확대하지 않아.
+- 94일차 production/test 수정 없음. 93일차 XML 95개를 재집계해 **907개, 실패·오류·skip 0**을 확인했어(10월 4일 실행 결과, 오늘 재실행 아님).
+- `.codex-config.candidate.toml`, `.kotlin/`, `.claude/settings.local.json`은 수정·stage·commit하지 않아. 전역 Git ignore 접근 제한으로 `.claude/`도 untracked로 보였어.
+- 93일차 HANDOFF에서 92일차 이력 표가 교체된 오류를 HEAD 원문으로 보존했어. 기억밀도 검증 결과는 이 현재 절과 93일차 내용으로 구분해.
+
+## 독립 상태와 마감 조건
+
+| 구분 | 상태 | 근거 |
+|---|---|---|
+| 기억밀도 구현 | 완료 | 93일차 변경 유지, 오늘 미세조정 없음 |
+| 로컬 자동검증 | 실행(93일차): 907/907 | 기존 XML 재집계, 관련 클래스 14+7 |
+| 로컬 build | 미실행(94일차) | production/test 추가 수정 없음, 최종 커밋 CI에서 확인 |
+| 실기기 감각 QA | 실행: 사용자 전체 만족 확인 | 항목별 관찰 상세는 미확인 |
+| 실사용 기기 instrumentation | 미실행 | 오늘 지시에서 금지 |
+| 사용자 데이터 | Codex 설치·삭제·데이터 쓰기 없음 | 기기 확인 명령만 실행, 설치 없음 |
+| commit / push / CI | 진행 예정 | 사용자 QA 승인 조건 충족, 결과는 Git·CI와 완료보고로 확인 |
+| 후반부 종이 질감 | 미착수 | 기억밀도 commit·push·CI 성공 전 production 변경 금지 |
+
+## 다음 출발점
+
+기억밀도 Git 마감과 CI 성공을 확인한 뒤 편집화면·export 구조와 기존 종이 자산을 조사해. 저장 의미나 좌표·schema 변경이 필요하면 구현을 멈추고 보고해. 종이 적용은 별도 변경·별도 commit으로 유지해.
+
+---
+
+# 이전 기록 — 93일차
+# HANDOFF — 93일차: 기억밀도 중성펜 막대(비례형) — 목업 비교 → production 적용, 실기기 QA 대기
+
+확인일: 2026-10-04. 수동 표준 모드(93일차 작업지시서, 담당 Claude Code). 목업으로 재료와 높이 규칙을 정한 뒤, 사용자가 같은 날 production 적용까지 승인했어. **실기기 감각 QA는 사용자 결정으로 94일차로 미뤘어. 그래서 commit·push는 하지 않았어**(AGENTS 9절: 필요한 QA가 남으면 commit 금지). Room, 저장 구조, 월 집계는 변경 없음. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 시작 상태
+
+- 브랜치 `feature/photo-sticker`, HEAD `efd5d13`, `git fetch` 후 origin 대비 `0/0`, 추적 작업트리 clean, `git diff --check` 통과. 92일차 종료 참고값과 일치해.
+- 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존(수정·stage 없음).
+
+## 확정된 제품 판단 (사용자 선택, 2026-10-04)
+
+- **방향:** 정보 구조는 반듯하게, 표면은 사람 손으로. 기억밀도에서 얼굴(•_•)·하트·별 같은 감정 장식을 빼고, 막대 아래에는 월 숫자만 남겨. 온기는 필압·선 겹침·작은 삐져나옴 같은 손의 흔적으로 만들어.
+- **재료: 중성펜.** 연필·색연필·크레파스·볼펜·중성펜 5종을 같은 데이터·배치·종이 결로 비교한 뒤 사용자가 골랐어. 특징은 자 대고 그은 외곽선, 사선 반복선 메움, 일정한 잉크, 뭉침 없음, 미세한 손떨림.
+- **높이 규칙: 비례형, 20장 = 꽉 찬 높이.** 5·7·10단계(1칸 = 4·3·2장)와 비교한 뒤 골랐어. 1장마다 조금씩 자라.
+- **20장 초과:** 높이는 꽉 찬 그대로 두고, 막대 위에 같은 중성펜으로 그은 작은 "+"를 붙여.
+- **진행:** 오늘 production 적용, 실기기 QA는 94일차.
+
+## 목업 파일
+
+- `docs/ai/mockups/memory-density-mockup.html`: 76일차 새싹형 목업을 1차 질감 비교판(데스크톱, 2배 확대 토글)으로 교체. 옛 새싹형은 git 기록(`06af4fe`)에 있어.
+- `docs/ai/mockups/memory-density-mobile-mockup.html`(신규): 5개 재료를 휴대폰 세로 한 화면에서 비교.
+- `docs/ai/mockups/memory-density-steps-mockup.html`(신규): 중성펜으로 높이 규칙 4종 비교, 10월 엽서 수 슬라이더.
+- 세 파일 모두 외부 의존성 없는 canvas 렌더링이고, seed가 고정돼 있어서 매번 같은 그림이 나와. production 코드나 테스트와 공유하는 코드는 없어(검색 확인). 두 세로형은 claude.ai 비공개 artifact로도 게시했어(사용자 계정).
+
+## production 변경
+
+- `ui/gallery/GalleryScreen.kt` 기억밀도 부분만 바꿨어.
+  - **지운 것:**
+    - 계산 함수와 상수: `memoryDensityBarLevel`(1칸 = 2장, 6칸), `memoryDensityHeartAlpha`, 줄기 상수
+    - 화면: 줄기·하트(`GalleryMemoryDensityStem`), 하단 `•_•` 얼굴
+  - **새로 넣은 것:**
+    - `memoryDensityHeightFraction(count)`: `count/20`을 0~1로 자른 비율
+    - `memoryDensityHasOverflow`: 기준을 12장 초과에서 20장 초과로 변경
+    - `memoryDensityGelPenBarStrokes`·`memoryDensityGelPenPlusStrokes`: 순수 함수, dp 좌표, seed 고정
+    - `GalleryMemoryDensityBar`: `drawWithCache`로 획을 Path로 만들어 `InkPrimary` × 0.9 농도로 그려
+    - `GalleryMemoryDensityFoot`: 월 숫자만 남김
+  - **크기:**
+    - 막대 영역 120dp(1장 = 6dp) + 위쪽 "+" 자리 14dp
+    - 막대 폭은 월 칸의 55%
+    - seed = 50500 + 월
+  - **유지한 것:** 접근성 설명(`N월, 기억 M개`), 전체 폭 바닥선 1개, `memoryDensityMonthsForYear`
+- 목업의 종이 결 반응은 중성펜에서 거의 0(strength 0.06)이라, production에서는 픽셀 합성 없이 획만 그려. 바탕은 갤러리의 기존 종이 배경이야.
+- 테스트:
+  - `GalleryMemoryDensityTest` 13→14건: 계단·하트 4건 삭제, 비례 높이·20장 초과·펜 획 결정성·실루엣 1.5dp 이내·빈 막대 5건 추가
+  - `GalleryMemoryDensityStructureTest` 7건 유지: 얼굴 고정 검사 → "월 숫자만", 줄기·하트 검사 → "비례형 중성펜·장식 없음·접근성 유지"
+- `TEST-COVERAGE-MAP.md`: JVM 906→907, 갤러리 보호 범위, 93일차 확인 메모를 갱신했어.
+
+## 남은 위험과 후속 후보(승인된 작업 아님)
+
+- **94일차 실기기 QA(필수, 재개 조건):** 사용자가 Android Studio로 debug 빌드를 실행해서 확인해. 기기 데이터를 지우는 설치 방식은 금지야. 확인할 것:
+  - 갤러리 기억밀도 페이지에서 막대가 중성펜으로 그은 듯 보이는지(선 굵기·농도·손떨림)
+  - 1~2장인 달의 낮은 막대가 읽히는지
+  - 20장 이상인 달은 꽉 찬 높이인지, 21장 이상이면 "+"가 붙는지
+  - 얼굴·하트가 없고 월 숫자만 남았는지
+  - 페이지 전환과 스크롤이 버벅이지 않는지
+- QA에서 조정이 나오면 같은 문법 안에서 값만 바꿔: 막대 영역 120dp, 막대 폭 55%, 선 굵기 0.75/0.95dp, 농도 0.9. QA 통과 뒤에 commit·push하고 CI를 확인해.
+- 목업의 웹 canvas 질감과 Compose 실기기 화면의 인상이 같은지는 아직 미검증이야.
+- 92일차 후보(SaveTest 격리 조사, 원격 CI instrumentation, Codex 캐시 동기화, 메모리 실측, `GalleryViewMode` dead code 판단)는 그대로 유지돼.
+
+---
+
+# 이전 기록 — 92일차: 검증 환경 안전체계 전환 + 주석·README 최신화
 
 확인일: 2026-10-03. 수동 표준 모드(92일차 수정지시서 3건, 담당 Claude Code). **92일차는 원래 계획이던 "메모리 실측 DAY"가 아니야.** 메모리 실측은 하지 않고 보류했어. 앱 기능·production 로직·test 로직 변경 없이 ① 로컬 emulator 폐기와 실기기 instrumentation 안전 등급 도입(`f8b79e5`), ② AGENTS·workflow 정책 보강(`4c24a3a`), ③ 오래된 주석과 README를 현재 사실에 맞게 정리(이 HANDOFF를 포함한 커밋)했어. **이 문서의 다음 후보는 실행 승인이 아니야.**
 

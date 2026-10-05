@@ -10,11 +10,10 @@ import org.junit.Test
 
 /**
  * 76일차: 기억밀도가 "여러 연도를 이어붙인 원형 점 grid"에서 "지정한 한
- * 해의 1월→12월 줄기 그래프"로 재정의되며, 그 계산 로직
- * ([memoryDensityMonthsForYear], [memoryDensityBarLevel],
- * [memoryDensityHasOverflow])을 검증한다. 76일차 후속(새싹형)으로 표정
- * 3단계는 폐기되고, 줄기 위 하트의 진하기([memoryDensityHeartAlpha])만
- * 줄기 단계에 비례해 검증한다.
+ * 해의 1월→12월 그래프"로 재정의되며, 그 월별 집계([memoryDensityMonthsForYear])를
+ * 검증한다. 93일차에 줄기·하트·얼굴을 걷어내고 중성펜 막대(비례형, 20장 = 꽉 참)로
+ * 바뀌어, 높이 비율([memoryDensityHeightFraction]), 20장 초과 표시
+ * ([memoryDensityHasOverflow]), 펜 획 계산([memoryDensityGelPenBarStrokes])을 검증한다.
  */
 class GalleryMemoryDensityTest {
 
@@ -106,45 +105,67 @@ class GalleryMemoryDensityTest {
         assertEquals((1..12).toList(), result.map { it.yearMonth.monthValue })
     }
 
-    // ── 31절: 막대 단위(1칸 = 엽서 2장, 최대 6칸) ──────────────────────
+    // ── 93일차: 비례형 높이(20장 = 꽉 참) ──────────────────────────────
 
     @Test
-    fun barLevel_matchesTwoPostcardsPerUnitUpToSixUnits() {
-        val expected = mapOf(
-            0 to 0, 1 to 1, 2 to 1, 3 to 2, 4 to 2, 5 to 3, 6 to 3,
-            7 to 4, 8 to 4, 9 to 5, 10 to 5, 11 to 6, 12 to 6, 13 to 6
-        )
-
-        expected.forEach { (count, level) ->
-            assertEquals("count=$count", level, memoryDensityBarLevel(count))
+    fun heightFraction_growsOnePostcardAtATimeUpToTwenty() {
+        assertEquals(0f, memoryDensityHeightFraction(0), 0.0001f)
+        assertEquals(0.05f, memoryDensityHeightFraction(1), 0.0001f)
+        assertEquals(0.5f, memoryDensityHeightFraction(10), 0.0001f)
+        assertEquals(1f, memoryDensityHeightFraction(20), 0.0001f)
+        val fractions = (0..20).map { memoryDensityHeightFraction(it) }
+        for (i in 1 until fractions.size) {
+            assertTrue("${i}장이 ${i - 1}장보다 높아야 함(계단 없이 1장마다 자람)", fractions[i] > fractions[i - 1])
         }
     }
 
     @Test
-    fun barLevel_largeValueStaysCappedAtSixUnits() {
-        assertEquals(6, memoryDensityBarLevel(100))
+    fun heightFraction_staysFullAboveTwentyAndZeroForNegative() {
+        assertEquals(1f, memoryDensityHeightFraction(21), 0.0001f)
+        assertEquals(1f, memoryDensityHeightFraction(100), 0.0001f)
+        assertEquals(0f, memoryDensityHeightFraction(-3), 0.0001f)
     }
 
     @Test
-    fun overflow_onlyTrueAboveTwelvePostcards() {
-        assertFalse(memoryDensityHasOverflow(12))
-        assertTrue(memoryDensityHasOverflow(13))
+    fun overflow_onlyTrueAboveTwentyPostcards() {
+        assertFalse(memoryDensityHasOverflow(20))
+        assertTrue(memoryDensityHasOverflow(21))
         assertTrue(memoryDensityHasOverflow(100))
     }
 
-    // ── 76일차 후속(새싹형): 하트 진하기는 줄기 단계에 비례 ──────────────
+    // ── 93일차: 중성펜 막대 획 ────────────────────────────────────────
 
     @Test
-    fun heartAlpha_isMinimumAtLevelOneAndFullAtMaxLevel() {
-        assertEquals(0.5f, memoryDensityHeartAlpha(1), 0.001f)
-        assertEquals(1.0f, memoryDensityHeartAlpha(6), 0.001f)
+    fun gelPenBar_sameSeedDrawsSameStrokes() {
+        val first = memoryDensityGelPenBarStrokes(4f, 30f, 14f, 90f, seed = 7)
+        val second = memoryDensityGelPenBarStrokes(4f, 30f, 14f, 90f, seed = 7)
+
+        assertEquals(first.size, second.size)
+        first.zip(second).forEach { (a, b) ->
+            assertEquals(a.points, b.points)
+            assertEquals(a.alpha, b.alpha, 0f)
+        }
     }
 
     @Test
-    fun heartAlpha_increasesMonotonicallyWithLevel() {
-        val alphas = (1..6).map { memoryDensityHeartAlpha(it) }
-        for (i in 1 until alphas.size) {
-            assertTrue("level ${i + 1} 하트가 이전 단계보다 진해야 함", alphas[i] > alphas[i - 1])
+    fun gelPenBar_staysInsideBarSilhouetteWithinOneAndAHalfDp() {
+        // 손맛은 표면에만: 반복선·외곽선 어느 점도 막대 사각형에서 1.5dp 넘게 벗어나지 않는다.
+        val left = 4f
+        val top = 30f
+        val width = 14f
+        val height = 90f
+        (1..20).forEach { seed ->
+            val strokes = memoryDensityGelPenBarStrokes(left, top, width, height, seed)
+            assertTrue("seed=$seed: 획이 있어야 함", strokes.isNotEmpty())
+            strokes.flatMap { it.points }.forEach { p ->
+                assertTrue("seed=$seed x=${p.x}", p.x >= left - 1.5f && p.x <= left + width + 1.5f)
+                assertTrue("seed=$seed y=${p.y}", p.y >= top - 1.5f && p.y <= top + height + 1.5f)
+            }
         }
+    }
+
+    @Test
+    fun gelPenBar_emptyBarDrawsNothing() {
+        assertTrue(memoryDensityGelPenBarStrokes(4f, 30f, 14f, 0f, seed = 1).isEmpty())
     }
 }

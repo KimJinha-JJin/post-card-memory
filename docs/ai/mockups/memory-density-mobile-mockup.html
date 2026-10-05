@@ -1,152 +1,147 @@
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>기억 밀도 질감 목업 (93일차)</title>
+<title>기억 밀도 재료 비교</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <style>
+  /* Layout: 휴대폰 세로 한 화면 = 앱 화면. 다섯 재료를 같은 높이 행으로 쌓아 스크롤 없이 비교.
+     넓은 화면에서는 같은 비율(390×844)의 폰 틀 안에 담는다. 앱 종이 톤 하나로 고정한 단일 테마. */
   :root {
-    --paper-canvas: #F4ECDE;
-    --paper-surface: #FFFBF3;
+    --desk: #E3DACA;          /* 폰 틀 바깥 책상 */
+    --paper-canvas: #F4ECDE;  /* 앱 종이 배경 */
     --paper-divider: #DBCBB0;
     --ink-primary: #1A1324;
     --ink-secondary: #5B5046;
     --sunset-gold: #8C5F00;
+    --font-ui: -apple-system, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+    color-scheme: light;
   }
-  * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
-    background: #e9e2d3;
-    font-family: -apple-system, "Segoe UI", "Noto Sans KR", sans-serif;
+    background: var(--desk);
     color: var(--ink-primary);
+    font-family: var(--font-ui);
     display: flex;
-    flex-direction: column;
     align-items: center;
-    padding: 24px 16px 60px;
-  }
-  h1 {
-    font-size: 15px;
-    font-weight: 600;
-    margin: 0 0 4px;
-  }
-  .note {
-    max-width: 420px;
-    font-size: 12px;
-    color: var(--ink-secondary);
-    line-height: 1.5;
-    margin: 0 0 14px;
-    text-align: center;
-  }
-  .controls {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 18px;
-  }
-  button.zoom {
-    font-size: 12px;
-    padding: 7px 12px;
-    border-radius: 999px;
-    border: 1px solid var(--paper-divider);
-    background: var(--paper-surface);
-    color: var(--ink-primary);
-    cursor: pointer;
-  }
-  button.zoom[aria-pressed="true"] { border-color: var(--sunset-gold); }
-  .grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 22px 20px;
     justify-content: center;
-    max-width: 100%;
-  }
-  .sample { max-width: 100%; }
-  .sample-label {
-    font-size: 12px;
-    color: var(--ink-secondary);
-    margin: 0 0 6px 2px;
-  }
-  .sample-label b { color: var(--ink-primary); }
-  .phone {
-    width: 360px;
-    max-width: 100%;
-    background: var(--paper-canvas);
-    padding: 20px 16px 20px;
-    border-radius: 4px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.12);
     overflow: hidden;
   }
-  .year-label {
-    font-size: 15px;
-    font-weight: 600;
-    margin: 0 0 12px;
-  }
-  .chart { display: block; }
-  .ground-line {
+  .device {
+    height: 100%;
     width: 100%;
-    height: 1px;
-    background: var(--paper-divider);
-    margin: 0 0 5px;
+    background: var(--paper-canvas);
+    display: flex;
+    flex-direction: column;
+    padding-block: 14px 10px;
+    padding-inline: 16px;
+    gap: 6px;
+    min-height: 0;
   }
-  .row { display: flex; gap: 2px; }
-  .month-num {
+  @media (min-width: 520px) {
+    body { padding-block: 16px; box-sizing: border-box; }
+    .device {
+      height: min(100%, 880px);
+      width: auto;
+      aspect-ratio: 390 / 844;
+      max-width: 100%;
+      border-radius: 28px;
+      box-shadow: 0 0 0 9px #2B2520, 0 18px 40px rgba(40, 30, 20, 0.28);
+    }
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header .meta {
+    font-size: 11px;
+    color: var(--ink-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .rows {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: repeat(5, minmax(0, 1fr));
+  }
+  .sample {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-block: 6px 4px;
+    border-top: 1px dashed var(--paper-divider);
+  }
+  .sample:first-child { border-top: 0; }
+  .sample-label {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.2;
+    min-width: 0;
+  }
+  .sample-label b { font-weight: 700; white-space: nowrap; }
+  .sample-label span {
+    color: var(--ink-secondary);
+    font-size: 10.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .chart-box { flex: 1; min-height: 0; position: relative; }
+  .chart-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .ground-line { height: 1px; background: var(--paper-divider); }
+  .months { display: flex; gap: 2px; padding-top: 2px; }
+  .months div {
     flex: 1;
     min-width: 0;
     text-align: center;
-    font-size: 11px;
+    font-size: 9.5px;
+    line-height: 1.1;
     color: var(--ink-secondary);
+    font-variant-numeric: tabular-nums;
   }
-  .legend {
-    max-width: 420px;
-    margin-top: 24px;
-    font-size: 11px;
+  footer {
+    font-size: 10px;
+    line-height: 1.35;
     color: var(--ink-secondary);
-    line-height: 1.7;
+    text-align: center;
   }
-  .legend b { color: var(--ink-primary); }
 </style>
-</head>
-<body>
 
-<h1>기억 밀도 목업 — 손그림 재료 비교</h1>
-<p class="note">
-  앱 밖의 독립 HTML 목업입니다(production 코드와 공유하는 것 없음).
-  얼굴·하트·overflow 표시를 지우고 하단엔 월 숫자만 남겼습니다.
-  종이·배치·막대 폭·데이터·높이 규칙은 모든 시안이 같고 <b>재료 질감만</b> 다릅니다.
-  질감은 고정 seed라 새로고침해도 똑같이 그려집니다.
-</p>
-
-<div class="controls">
-  <button class="zoom" data-zoom="1" aria-pressed="true">실제 크기</button>
-  <button class="zoom" data-zoom="2" aria-pressed="false">2배 확대</button>
-</div>
-
-<div class="grid" id="grid"></div>
-
-<div class="legend">
-  <div><b>공통 데이터</b>: 0, 1, 3, 6, 9, 14, 20, 11, 2, 5, 17, 8장 (빈 달 ~ 매우 높은 달)</div>
-  <div><b>높이</b>: 비교용 임시 비례식(20장 = 최대 높이). 단계 수는 아직 정하지 않음</div>
-  <div><b>종이</b>: 모든 시안이 같은 seed의 종이 결을 공유 — 안료는 결의 볼록한 곳부터 묻음</div>
+<div class="device">
+  <header>
+    <h1>기억 밀도 · 재료 비교</h1>
+    <span class="meta">2026년 · 같은 데이터</span>
+  </header>
+  <div class="rows" id="rows"></div>
+  <footer>재료 질감만 다르고 종이·막대·높이·데이터는 모두 같아요</footer>
 </div>
 
 <script>
-  // ---------- 고정 비교 조건 ----------
+  // ---------- 고정 비교 조건 (93일차 데스크톱 목업과 같은 데이터) ----------
   const COUNTS = [0, 1, 3, 6, 9, 14, 20, 11, 2, 5, 17, 8];
   const MAX_COUNT = 20;
-  const CHART_W = 328;          // phone 360 - 좌우 padding 16*2
-  const CHART_H = 132;
-  const PLOT_TOP = 6;
   const COL_GAP = 2;
-  const BAR_W = 14;
+  const PLOT_TOP = 3;
   const PAPER_RGB = [0xF4, 0xEC, 0xDE];
 
-  function barRects() {
-    const colW = (CHART_W - COL_GAP * 11) / 12;
-    const maxH = CHART_H - PLOT_TOP;
+  function barRects(W, H) {
+    const colW = (W - COL_GAP * 11) / 12;
+    const barW = Math.round(colW * 0.55 * 2) / 2;
+    const maxH = H - PLOT_TOP;
     return COUNTS.map((c, i) => {
       if (c <= 0) return null;
-      const h = Math.max(3, (c / MAX_COUNT) * maxH);
-      const x = i * (colW + COL_GAP) + (colW - BAR_W) / 2;
-      return { i, x, y: CHART_H - h, w: BAR_W, h };
+      const h = Math.max(2.5, (c / MAX_COUNT) * maxH);
+      const x = i * (colW + COL_GAP) + (colW - barW) / 2;
+      return { i, x, y: H - h, w: barW, h };
     });
   }
 
@@ -172,29 +167,25 @@
     const c = hash2(ix, iy + 1, seed), d = hash2(ix + 1, iy + 1, seed);
     return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
   }
-  // 종이 결: CSS px 좌표 기준이라 확대해도 같은 종이를 확대한 모양이 된다.
   function paperTooth(x, y) {
     const fine = valueNoise(x * 1.15, y * 1.15, 11);
     const mid = valueNoise(x * 0.38, y * 0.38, 23);
-    const fiber = valueNoise(x * 0.12, y * 0.9, 37); // 가로로 길게 누운 섬유
+    const fiber = valueNoise(x * 0.12, y * 0.9, 37);
     return 0.55 * fine + 0.27 * mid + 0.18 * fiber;
   }
-
   const paperCache = {};
-  function paperField(scale) {
-    if (paperCache[scale]) return paperCache[scale];
-    const w = Math.round(CHART_W * scale), h = Math.round(CHART_H * scale);
+  function paperField(W, H, scale) {
+    const key = W + "x" + H + "@" + scale;
+    if (paperCache[key]) return paperCache[key];
+    const w = Math.round(W * scale), h = Math.round(H * scale);
     const t = new Float32Array(w * h);
     for (let py = 0; py < h; py++) {
-      for (let px = 0; px < w; px++) {
-        t[py * w + px] = paperTooth((px + 0.5) / scale, (py + 0.5) / scale);
-      }
+      for (let px = 0; px < w; px++) t[py * w + px] = paperTooth((px + 0.5) / scale, (py + 0.5) / scale);
     }
-    return (paperCache[scale] = { w, h, t });
+    return (paperCache[key] = { w, h, t });
   }
 
   // ---------- 손 스트로크 도구 ----------
-  // 자를 대고 그은 선: 실루엣은 곧고, 아주 작은 떨림과 필압 변화만 있다.
   function rulerStroke(ctx, x1, y1, x2, y2, o, rng) {
     const len = Math.hypot(x2 - x1, y2 - y1);
     if (len < 0.3) return;
@@ -205,15 +196,12 @@
     const ph1 = rng() * 6.28, ph2 = rng() * 6.28;
     const f1 = 0.08 + rng() * 0.06, f2 = 0.3 + rng() * 0.2;
     const base = o.alpha * (o.pressureMin + rng() * (1 - o.pressureMin));
-    let dropLeft = 0;
-    let prev = null;
+    let dropLeft = 0, prev = null;
     for (let k = 0; k <= n; k++) {
-      const s = k / n;
-      const d = s * len;
+      const d = (k / n) * len;
       const wob = o.wobble * (0.7 * Math.sin(d * f1 + ph1) + 0.3 * Math.sin(d * f2 + ph2));
       const pt = [x1 + dx * d + nx * wob, y1 + dy * d + ny * wob];
       if (prev) {
-        // 선 시작·끝의 농도: 연필류는 끝이 가늘게 빠지고, 볼펜은 시작·끝이 살짝 진하다.
         let prof = 1;
         if (o.endDark) prof = 1 + o.endDark * (Math.exp(-d / 1.5) + Math.exp(-(len - d) / 1.5));
         if (o.taper) prof *= Math.min(1, 0.45 + d / o.taper) * Math.min(1, 0.55 + (len - d) / o.taper);
@@ -230,9 +218,6 @@
       prev = pt;
     }
   }
-
-  // 사각형 안을 한 방향 평행 스트로크로 메운다. 끝점은 막대 경계에서
-  // 조금 모자라거나 조금 삐져나간다(clip 하지 않음).
   function hatchRect(ctx, r, o, rng) {
     const ang = (o.angle + (rng() - 0.5) * (o.angleJitter || 0)) * Math.PI / 180;
     const dx = Math.cos(ang), dy = Math.sin(ang);
@@ -240,11 +225,10 @@
     const y0 = r.y + r.h * (o.from || 0), y1 = r.y + r.h * (o.to == null ? 1 : o.to);
     const rect = { x: r.x, y: y0, w: r.w, h: y1 - y0 };
     if (rect.h <= 0.5) return;
-    const corners = [[rect.x, rect.y], [rect.x + rect.w, rect.y], [rect.x, rect.y + rect.h], [rect.x + rect.w, rect.y + rect.h]];
-    const cs = corners.map(([x, y]) => x * nx + y * ny);
+    const cs = [[rect.x, rect.y], [rect.x + rect.w, rect.y], [rect.x, rect.y + rect.h], [rect.x + rect.w, rect.y + rect.h]]
+      .map(([x, y]) => x * nx + y * ny);
     const cMin = Math.min(...cs), cMax = Math.max(...cs);
     for (let c = cMin + o.spacing * rng(); c < cMax; c += o.spacing * (0.8 + 0.4 * rng())) {
-      // 법선 오프셋 c 위의 직선과 사각형 교차 (Liang–Barsky)
       const px = nx * c, py = ny * c;
       let t0 = -1e9, t1 = 1e9;
       const clipAxis = (p, d, lo, hi) => {
@@ -258,7 +242,6 @@
       if (!clipAxis(py, dy, rect.y, rect.y + rect.h)) continue;
       let e0 = t0 - (o.overshoot * rng() - o.shortfall * rng());
       let e1 = t1 + (o.overshoot * rng() - o.shortfall * rng());
-      // 부분 덧칠은 시작 높이가 스트로크마다 달라서 위쪽 경계가 일직선이 되지 않는다
       if (o.from) {
         const cut = rng() * Math.min(rect.h * 0.45, 14);
         if (dy * (e1 - e0) > 0) e0 = Math.min(e1, e0 + cut / Math.abs(dy)); else e1 = Math.max(e0, e1 - cut / Math.abs(dy));
@@ -266,37 +249,29 @@
       rulerStroke(ctx, px + dx * e0, py + dy * e0, px + dx * e1, py + dy * e1, o, rng);
     }
   }
-
-  // 자 대고 그은 외곽선. 모서리에서 선이 살짝 지나치거나 덜 닿는다.
   function outlineRect(ctx, r, o, rng, sides) {
     const ov = () => o.cornerOver * (rng() * 1.2 - 0.2);
     const L = r.x, R = r.x + r.w, T = r.y, B = r.y + r.h;
     const all = { left: [L, B + 0.2, L, T - ov()], top: [L - ov(), T, R + ov(), T], right: [R, T - ov(), R, B + 0.2] };
     (sides || ["left", "top", "right"]).forEach((s) => {
       const [x1, y1, x2, y2] = all[s];
-      // 손이 아래→위로 긋든 위→아래로 긋든 섞는다
       if (rng() < 0.5) rulerStroke(ctx, x1, y1, x2, y2, o, rng);
       else rulerStroke(ctx, x2, y2, x1, y1, o, rng);
     });
   }
 
-  // ---------- 재료 정의 ----------
-  // draw(): 오프스크린에 '안료 양'(alpha)만 쌓는다.
-  // tooth: 종이 결 반응. strength가 클수록 결의 오목한 곳에 안료가 덜 묻는다.
-  // fillIn: 안료가 쌓일수록(덧칠) 오목한 곳까지 메워지는 정도.
+  // ---------- 재료 (데스크톱 목업과 같은 값) ----------
   const MATERIALS = [
     {
-      key: "pencil", name: "A 연필", desc: "흑연 · 종이 결 비침 · 사선 반복 손칠",
+      name: "A 연필", desc: "흑연 · 종이 결 비침 · 사선 손칠",
       ink: [0x3B, 0x3A, 0x40], maxOpacity: 0.88, seed: 101,
       tooth: { strength: 0.75, center: 0.5, soft: 0.13, fillIn: 0.45 },
       draw(ctx, bars, rng) {
         ctx.lineCap = "butt";
         bars.forEach((r) => {
           if (!r) return;
-          // 1차 손칠: 사선 반복
           hatchRect(ctx, r, { angle: -58, angleJitter: 4, spacing: 1.35, width: 0.95, alpha: 0.55,
             pressureMin: 0.45, wobble: 0.18, overshoot: 0.5, shortfall: 0.9, taper: 2.2, flutter: 0.25 }, rng);
-          // 2차 덧칠: 막대 아래쪽 일부만 각도 바꿔 한 번 더 → 겹친 곳이 자연스럽게 진해짐
           if (r.h > 10) hatchRect(ctx, r, { angle: -48, angleJitter: 6, spacing: 1.9, width: 0.95, alpha: 0.4,
             pressureMin: 0.4, wobble: 0.2, overshoot: 0.4, shortfall: 1.2, taper: 2.2, flutter: 0.3,
             from: 0.25 + rng() * 0.35, to: 1 }, rng);
@@ -306,14 +281,13 @@
       },
     },
     {
-      key: "colorpencil", name: "B 색연필", desc: "안료가 종이 요철에 걸림 · 같은 방향 반복 칠 · 겹칠수록 진함",
+      name: "B 색연필", desc: "안료가 요철에 걸림 · 겹칠수록 진함",
       ink: [0xB0, 0x5E, 0x3A], maxOpacity: 0.92, seed: 202,
       tooth: { strength: 0.8, center: 0.47, soft: 0.11, fillIn: 0.5 },
       draw(ctx, bars, rng) {
         ctx.lineCap = "butt";
         bars.forEach((r) => {
           if (!r) return;
-          // 같은 방향으로 여러 번: 얇고 불균일하게 시작해서 덧칠로 진해진다
           hatchRect(ctx, r, { angle: -66, angleJitter: 3, spacing: 1.5, width: 1.6, alpha: 0.45,
             pressureMin: 0.35, wobble: 0.22, overshoot: 0.7, shortfall: 0.8, taper: 3, flutter: 0.3, widthJitter: 0.3 }, rng);
           hatchRect(ctx, r, { angle: -62, angleJitter: 5, spacing: 1.7, width: 1.6, alpha: 0.38,
@@ -328,30 +302,26 @@
       },
     },
     {
-      key: "crayon", name: "C 크레파스", desc: "두툼한 왁스 · 굵은 스트로크 · 미세한 빈틈 · 아주 작은 삐져나옴",
+      name: "C 크레파스", desc: "두툼한 왁스 · 굵은 결 · 미세한 빈틈",
       ink: [0xBE, 0x67, 0x38], maxOpacity: 0.92, seed: 303,
       tooth: { strength: 0.9, center: 0.43, soft: 0.07, fillIn: 0.2 },
       draw(ctx, bars, rng) {
-        ctx.lineCap = "butt"; // 짧은 구간을 이어 그리므로 round면 이음새마다 구슬 무늬가 생긴다
+        ctx.lineCap = "butt";
         bars.forEach((r) => {
           if (!r) return;
-          // 외곽을 먼저 크레파스로 따라 그어 실루엣을 잡는다
           outlineRect(ctx, r, { width: 2.4, alpha: 0.6, pressureMin: 0.6, wobble: 0.22, cornerOver: 0.6,
             flutter: 0.2, step: 1.4 }, rng);
-          // 굵게 문지르기(완만한 각도) + 위에 한 번 더 문지른 덩어리
           hatchRect(ctx, r, { angle: -22, angleJitter: 5, spacing: 2.5, width: 3.0, alpha: 0.5,
             pressureMin: 0.5, wobble: 0.3, overshoot: 0.9, shortfall: 0.6, flutter: 0.2, widthJitter: 0.35, step: 1.4 }, rng);
           hatchRect(ctx, r, { angle: -28, angleJitter: 8, spacing: 3.2, width: 3.0, alpha: 0.4,
             pressureMin: 0.4, wobble: 0.3, overshoot: 0.6, shortfall: 1.2, flutter: 0.25, widthJitter: 0.35, step: 1.4,
             from: 0.3 + rng() * 0.4, to: 1 }, rng);
-          // 왁스 덩어리: 몇 개 막대에만, 막대 안쪽에 아주 작게
           if (rng() < 0.45 && r.h > 12) {
             ctx.globalAlpha = 0.55;
             ctx.beginPath();
             ctx.ellipse(r.x + 2 + rng() * (r.w - 4), r.y + 3 + rng() * (r.h - 6), 1.1 + rng() * 0.6, 0.7 + rng() * 0.4, rng() * 3, 0, 6.29);
             ctx.fill();
           }
-          // 가장자리 부스러기: 드물게 바깥쪽에 1px 남짓
           if (rng() < 0.3) {
             ctx.globalAlpha = 0.45;
             const side = rng() < 0.5 ? r.x - 1.6 : r.x + r.w + 1.6;
@@ -363,12 +333,11 @@
       },
     },
     {
-      key: "ballpoint", name: "D 볼펜", desc: "자 대고 그은 외곽 · 반복선 메움 · 드문 끊김 · 볼펜똥 3군데",
+      name: "D 볼펜", desc: "자 대고 그은 외곽 · 드문 끊김 · 볼펜똥 3군데",
       ink: [0x24, 0x33, 0x7E], maxOpacity: 0.95, seed: 404,
       tooth: { strength: 0.18, center: 0.4, soft: 0.2, fillIn: 0.2 },
       draw(ctx, bars, rng) {
         ctx.lineCap = "butt";
-        // 볼펜똥은 고정된 세 막대에만 (12개 전체 금지)
         const blobBars = new Set([6, 10, 3]);
         bars.forEach((r) => {
           if (!r) return;
@@ -380,10 +349,8 @@
           const line = { width: 0.8, alpha: 0.85, pressureMin: 0.8, wobble: 0.08, cornerOver: 2.0,
             endDark: 0.45, dropout: 0.01, flutter: 0.1, step: 1 };
           outlineRect(ctx, r, line, rng);
-          // 한쪽 변은 한 번 더 따라 그은 흔적(겹친 곳이 진해짐)
           if (rng() < 0.4) outlineRect(ctx, r, { ...line, alpha: 0.5, cornerOver: 0.8 }, rng, [rng() < 0.5 ? "left" : "right"]);
           if (blobBars.has(r.i)) {
-            // 오래 긋다 끝에 맺힌 작은 잉크 덩어리 + 짧은 꼬리
             const bx = rng() < 0.5 ? r.x : r.x + r.w;
             const by = r.y + (rng() < 0.6 ? 0 : r.h * (0.3 + rng() * 0.4));
             ctx.globalAlpha = 0.95;
@@ -401,7 +368,7 @@
       },
     },
     {
-      key: "gelpen", name: "E 중성펜 (선택)", desc: "볼펜보다 매끈·일정한 잉크 · 뭉침 없음 · 미세한 손떨림만",
+      name: "E 중성펜", desc: "매끈하고 일정한 잉크 · 뭉침 없음 (선택)",
       ink: [0x1F, 0x1C, 0x24], maxOpacity: 0.9, seed: 505,
       tooth: { strength: 0.06, center: 0.4, soft: 0.2, fillIn: 0.2 },
       draw(ctx, bars, rng) {
@@ -416,43 +383,35 @@
     },
   ];
 
-  // ---------- 합성 ----------
   function smoothstep(a, b, x) {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
     return t * t * (3 - 2 * t);
   }
 
-  function renderMaterial(canvas, mat, scale) {
-    const paper = paperField(scale);
+  function renderMaterial(canvas, mat, W, H, scale) {
+    const paper = paperField(W, H, scale);
     const { w, h } = paper;
     canvas.width = w; canvas.height = h;
-
-    // 1) 안료 양을 오프스크린에 쌓는다(같은 seed → 매번 같은 그림)
     const off = document.createElement("canvas");
     off.width = w; off.height = h;
     const octx = off.getContext("2d");
     octx.setTransform(scale, 0, 0, scale, 0, 0);
     octx.strokeStyle = "#000";
     octx.fillStyle = "#000";
-    mat.draw(octx, barRects(), mulberry32(mat.seed));
+    mat.draw(octx, barRects(W, H), mulberry32(mat.seed));
     const pig = octx.getImageData(0, 0, w, h).data;
-
-    // 2) 종이 결과 합쳐 실제 색으로
     const ctx = canvas.getContext("2d");
     const out = ctx.createImageData(w, h);
-    const d = out.data;
-    const tc = mat.tooth;
+    const d = out.data, tc = mat.tooth;
     for (let p = 0; p < w * h; p++) {
       const T = paper.t[p];
-      // 종이 자체 색: 결에 따라 아주 약간 명암
       const shade = 1 + (T - 0.5) * 0.06;
       const pr = PAPER_RGB[0] * shade, pg = PAPER_RGB[1] * shade, pb = PAPER_RGB[2] * shade;
       const A = pig[p * 4 + 3] / 255;
       let dep = 0;
       if (A > 0) {
         const edge = tc.center - A * tc.fillIn;
-        const caught = smoothstep(edge - tc.soft, edge + tc.soft, T);
-        dep = A * (1 - tc.strength + tc.strength * caught) * mat.maxOpacity;
+        dep = A * (1 - tc.strength + tc.strength * smoothstep(edge - tc.soft, edge + tc.soft, T)) * mat.maxOpacity;
       }
       d[p * 4] = pr + (mat.ink[0] - pr) * dep;
       d[p * 4 + 1] = pg + (mat.ink[1] - pg) * dep;
@@ -462,62 +421,32 @@
     ctx.putImageData(out, 0, 0);
   }
 
-  function devicePixelRatioSafe() { return window.devicePixelRatio || 1; }
-
   // ---------- 화면 구성 ----------
-  const grid = document.getElementById("grid");
-  const canvases = MATERIALS.map((mat) => {
-    const wrap = document.createElement("div");
-    wrap.className = "sample";
-    wrap.innerHTML =
-      '<div class="sample-label"><b>' + mat.name + '</b> — ' + mat.desc + '</div>' +
-      '<div class="phone"><div class="year-label">2026년</div></div>';
-    const phone = wrap.querySelector(".phone");
-    const canvas = document.createElement("canvas");
-    canvas.className = "chart";
-    phone.appendChild(canvas);
-    const ground = document.createElement("div");
-    ground.className = "ground-line";
-    phone.appendChild(ground);
-    const row = document.createElement("div");
-    row.className = "row";
-    for (let i = 0; i < 12; i++) {
-      const m = document.createElement("div");
-      m.className = "month-num";
-      m.textContent = String(i + 1);
-      row.appendChild(m);
-    }
-    phone.appendChild(row);
-    grid.appendChild(wrap);
-    return { canvas, mat, phone };
+  const rowsEl = document.getElementById("rows");
+  const samples = MATERIALS.map((mat) => {
+    const el = document.createElement("section");
+    el.className = "sample";
+    el.innerHTML =
+      '<div class="sample-label"><b>' + mat.name + '</b><span>' + mat.desc + '</span></div>' +
+      '<div class="chart-box"><canvas></canvas></div><div class="ground-line"></div>' +
+      '<div class="months">' + Array.from({ length: 12 }, (_, i) => "<div>" + (i + 1) + "</div>").join("") + "</div>";
+    rowsEl.appendChild(el);
+    return { mat, box: el.querySelector(".chart-box"), canvas: el.querySelector("canvas") };
   });
 
-  function renderAll(zoom) {
-    const scale = Math.max(1, Math.round(devicePixelRatioSafe() * zoom));
-    canvases.forEach(({ canvas, mat, phone }) => {
-      phone.style.width = (360 * zoom) + "px";
-      phone.style.padding = (20 * zoom) + "px " + (16 * zoom) + "px";
-      phone.querySelector(".year-label").style.fontSize = (15 * zoom) + "px";
-      phone.querySelectorAll(".month-num").forEach((m) => (m.style.fontSize = (11 * zoom) + "px"));
-      renderMaterial(canvas, mat, scale);
-      canvas.style.width = (CHART_W * zoom) + "px";
-      canvas.style.height = (CHART_H * zoom) + "px";
+  function renderAll() {
+    const scale = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    samples.forEach(({ mat, box, canvas }) => {
+      const W = Math.floor(box.clientWidth), H = Math.floor(box.clientHeight);
+      if (W < 20 || H < 10) return;
+      renderMaterial(canvas, mat, W, H, scale);
     });
   }
 
-  document.querySelectorAll("button.zoom").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("button.zoom").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
-      renderAll(Number(btn.dataset.zoom));
-    });
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderAll, 120);
   });
-
-  const zoomFromHash = location.hash === "#zoom2" ? 2 : 1;
-  if (zoomFromHash === 2) {
-    document.querySelectorAll("button.zoom").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.zoom === "2")));
-  }
-  renderAll(zoomFromHash);
+  renderAll();
 </script>
-
-</body>
-</html>
