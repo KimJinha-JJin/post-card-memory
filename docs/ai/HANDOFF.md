@@ -1,3 +1,64 @@
+# HANDOFF — 95일차: 메인 상단 시계·손·커피잔 배치 후속 수정
+
+## 마감 승인
+
+2026-10-06 사용자가 현재 배치의 실기기 확인 완료를 알리고 이 상태의 commit·push를 명시 요청함. 실기기 감각 QA는 사용자 확인 완료. 로컬 빌드는 기존 Gradle 플러그인 해석 오류로 실행 불가 상태를 유지. 이번 코드 2개·이미지 3개와 이 HANDOFF만 Git 마감 대상이며, 종이 질감 이미지·설정 후보·.claude/·.kotlin/는 제외. GitHub Actions는 push 후 JVM 테스트·debug APK 빌드·instrumentation APK 컴파일 결과를 확인할 예정이며 실제 instrumentation 실행은 아님.
+
+## 최신 후속 변경 — 왼손의 화면 밖 진입
+
+2026-10-06 사용자 직접 요청으로 왼손을 100×75dp → 112×84dp(12% 확대), 장면 기준 x=-8dp·y=-5dp로 이동. 손을 시계 묶음 밖의 장면 레이어로 옮기되 기존 장면 `clipToBounds` 안에서만 그림. 호출부의 왼쪽 16dp 여백을 제거하고 시계 묶음 내부에 같은 16dp 여백을 옮겨 시계·숫자창의 화면 위치를 유지. 오른손·컵·김 설정 유지. 손목 왼쪽 8dp와 상단 5dp는 화면/장면 경계에서 잘림. 검지 끝은 화면 약 (99.5,38.3)dp, 스누즈 버튼 영역 약 x90~124dp·y39~48dp에 맞춤. 숫자창 시작 x84.5dp·y58.6dp 및 메뉴가 있는 별도 상단 줄을 유지. 실제 접촉감·손가락과 숫자창 간격은 실기기 확인 대기.
+
+검증: diff 공백 검사 통과. assembleDebug 오프라인 실행은 이전과 같은 foojay 0.10.0 플러그인 해석 실패로 컴파일 전 실행 불가. 기존 테스트의 입력·의미와 시계 로직 변경 없음; 테스트 재실행 없음. 실기기 감각 QA·instrumentation·CI·설치·commit·push 미실행. 아래 기록의 왼손 크기·배치는 이전 단계 기록이야.
+
+## 최신 후속 변경 — 오른쪽 진입 장면과 옅은 김
+
+2026-10-06 사용자 직접 요청으로 오른손+컵을 12% 확대(105.28×140.373dp). viewport 높이는 108dp로 유지해 손목 하단 약 32dp를 자름. Row 대신 높이 122dp의 clipped Box 안에서 시계는 BottomStart, 컵은 BottomEnd 고정. `GalleryScreen.kt`의 해당 호출부 오른쪽 16dp 여백만 제거해 컵·손목이 화면 오른쪽 끝에 닿음. 왼쪽·상하 여백 유지. 자산·시계 숫자·날짜·갱신 로직 미변경.
+
+사용자가 재구현을 허용한 김만 `GalleryCoffeeSteam`으로 추가: 2줄, 두께 0.65dp, 최대 alpha 0.13, 4.8초 주기, 상승 8dp, 좌우 흔들림 최대 0.7dp, 선 길이 11dp. 두 줄의 위상을 반 주기 분리하고 시작·끝 opacity 0으로 반복 경계가 튀지 않게 함. 컵 이미지 상단 투명 영역 안에 그림. 애니메이션 상태는 Canvas draw에서 읽으며 손·컵 자체는 정적.
+
+검증: `git diff --check` 통과. `assembleDebug` 및 `GalleryRetroClockTest`·`GalleryPaperBackgroundStructureTest` 실행 시도는 기존 foojay 0.10.0 플러그인 해석 실패로 컴파일·테스트 본문 진입 전 실행 불가. 실기기 감각 QA 미실행(오른쪽 진입 인상·손목 경계·김 강도·좁은 화면 겹침 확인 대기). instrumentation 미실행(불필요), CI 미실행, 설치·commit·push 미실행. 테스트 수·보호 범위 변경 없음. 아래 배치 수치는 이전 단계 기록이야.
+
+확인일: 2026-10-06, 담당 Codex. 사용자 직접 구현 요청으로 기존 미커밋 작업을 이어받음. 브랜치 `feature/photo-sticker`, HEAD와 로컬 origin ref 모두 `cf009c41d90fb57c5f3a7e69e95712f78081fc42`(원격 서버 조회 미실행). 아래 이전 구현 보고의 자산 크기·배치·검증 결과는 현재 후속 수정의 검증 결과가 아님.
+
+- 실제 교체 자산: 몸체 1695×928, 왼손 1448×1086, 오른손+컵 1086×1448. 자산 자체는 이번 작업에서 수정하지 않음.
+- `GalleryRetroClock.kt` 배치만 후속 수정: 왼손 100×75dp, 몸체 앞 여백 54dp·위 여백 30dp. 검지 끝 약 (96,39)dp를 스누즈 버튼 영역에 맞춤. 오른손+컵 94×125.333dp를 94×108dp 영역에 위 정렬하고 하단 약 17dp를 clip. 선반선 앞 6dp 간격 제거로 손목이 선에서 잘리도록 배치. Row 간격 8dp, 장면 높이 122dp·가로 합계 324dp(외부 좌우 여백 제외). 좁은 폭에서 잘릴 가능성은 실기기 확인 필요.
+- Row와 컵 영역에 `clipToBounds()` 적용. 큰 컵 이미지는 viewport 안에서만 그려 목록 위로 overflow하지 않음. 숫자·날짜 계산·7세그 렌더러·1초 갱신 루프는 이번 후속 수정에서 변경하지 않음. 기존 커피잔 코드·김 애니메이션 제거 상태 유지.
+- 로컬 자동검증: `git diff --check` 실행·통과. `assembleDebug`와 `GalleryRetroClockTest` 실행 시도는 기존 settings 플러그인 `org.gradle.toolchains.foojay-resolver-convention:0.10.0` 해석 실패로 실행 불가(오프라인·일반 실행 동일). 컴파일·테스트 본문에 도달하지 못함. 기존 XML 결과는 이번 성공 근거로 사용하지 않음. Gradle·dependency 수정 없음.
+- 실사용 기기 instrumentation 미실행(이번 배치 확인에 불필요), 실기기 감각 QA 미실행·사용자 확인 대기, GitHub Actions CI 미실행. APK 설치·기기 상태 변경 없음. 테스트 수·의미·보호 범위 변경 없어 TEST-COVERAGE-MAP 수정 없음.
+- 기존 사용자 변경과 보호 untracked 유지. commit·push 미실행. 남은 확인: 빌드 환경에서 컴파일 확인, 실제 화면에서 손끝 접점·손목 절단선·숫자 가독성·좁은 화면 가로 배치 확인.
+
+---
+
+# HANDOFF — 95일차: 메인 상단 시계·커피잔을 잡지 오림 정적 장면으로 교체
+
+확인일: 2026-10-06. 수동 표준 모드(95일차 작업지시서, 담당 Claude Code). 시작 HEAD `cf009c4`, origin 0/0, tracked clean. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+## 현재 확인된 상태 (상단 시계)
+
+- 대상: `ui/gallery/GalleryRetroClock.kt`의 `GalleryRetroClock`·`GalleryRetroClockFace`(호출부 `GalleryScreen.kt` topBar, 미변경).
+- 자산(사용자 제작, `drawable-nodpi`, untracked → commit 대상): `home_clock_collage_body.png` 1695×928, `home_clock_left_snooze_hand.png` 1683×935, `home_right_hand_coffee_cup.png` 1165×1350. 모두 RGBA 실제 투명 배경, 비율이 사전 규격(168×92 / 72×40 / 76×88dp)과 일치.
+- 변경: 크림 `PaperTray` 바디·LCD 패널 바탕/여백 제거 → 몸체 이미지 숫자창(원본 x145~1567, y290~730px = 14.5/28.6dp, 141×44dp) 가운데에 기존 7세그 숫자·AM/PM·구분선·날짜를 그대로 배치(`wrapContentSize(unbounded)`). 날짜 Text에 `lineHeight = 10.sp`만 추가(기본 24sp 줄칸이 숫자창을 넘침; 글자 크기·색·간격 유지). 왼손은 시계 묶음 Box 안 왼쪽 위(몸체를 26dp 오른쪽·10dp 아래로 둠) — 손끝이 스누즈 버튼 위, 손 아래 끝은 숫자창 테두리보다 위. 오른손+컵은 Row 옆, bottom 8dp 들어 시계 다리와 같은 높이.
+- 삭제: 선 아이콘 커피잔(`RetroClockCoffeeCupIcon`), 김 애니메이션(`RetroClockCoffeeSteam`, infinite transition), 관련 상수·import, `RetroClockPanelColor`. 시간 갱신·접근성 설명·선반선·`clearAndSetSemantics` 유지. 클릭·애니메이션 없음.
+- 모든 이미지는 Row 측정 범위 안(offset/graphicsLayer/zIndex 없음) → 아래 목록은 덮지 않고 헤더가 커져 밀려 내려감. 시계 묶음 높이 약 79.5dp → 102dp(약 +22.5dp, 사용자 사전 허용). 가로 합계 약 314dp(16+194+12+76+16).
+- 위험: 이미지 3장 원본 해상도 decode(각 약 4~6MiB ARGB, 기존 손 자산과 같은 방식). 숫자창 상하 여백이 거의 0(내용 43.5dp / 창 43.6dp)이라 빡빡해 보일 수 있음 — 실기기 판단. 시스템 글꼴 크게 설정 시 날짜 줄이 창 테두리로 넘칠 수 있음(미확인).
+
+| 구분 | 상태 |
+|---|---|
+| 구현 | 완료 |
+| 로컬 자동검증 | 실행: assembleDebug 성공, testDebugUnitTest `com.postcardmemory.ui.gallery.*` 164/164(16 suite, 실패·skip 0, `GalleryRetroClockTest` 13·`GalleryPaperBackgroundStructureTest` 5 포함), diff --check 통과. 전체 suite는 미실행(변경이 이 파일 private UI에 한정) |
+| 실사용 기기 instrumentation | 미실행(불필요·금지) |
+| 실기기 감각 QA | **사용자 확인 대기** |
+| TEST-COVERAGE-MAP | 변경 없음(테스트 변화 없음) |
+| commit / push / CI | 미승인·미실행(QA 후 사용자 승인 필요) |
+
+- 미커밋 유지: `postcard_paper_fiber_tile.png`(사용자 결정 대기), 보호 untracked 2개.
+
+## 다음 후보 (실행 승인 아님)
+
+- QA 결과에 따른 손·컵 위치/크기 미세조정, 헤더 높이 축소 여부, 이미지 해상도 축소(메모리).
+
+---
+
 # HANDOFF — 95일차: 갤러리 월 라벨 뒤 마스킹 테이프 띠
 
 확인일: 2026-10-05. 수동 표준 모드(95일차 추가 작업지시서, 담당 Claude Code). 시작 HEAD `7547e2c`, origin 0/0. **이 문서의 다음 후보는 실행 승인이 아니야.**

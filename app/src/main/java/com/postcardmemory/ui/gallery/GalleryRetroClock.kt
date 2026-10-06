@@ -7,12 +7,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,14 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -37,18 +34,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.R
 import com.postcardmemory.ui.theme.InkPrimary
 import com.postcardmemory.ui.theme.InkSecondary
 import com.postcardmemory.ui.theme.PaperDivider
-import com.postcardmemory.ui.theme.PaperTray
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import kotlin.math.PI
-import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.math.PI
+import kotlin.math.sin
 
 private val RETRO_CLOCK_MONTH_ABBR = listOf(
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
@@ -190,10 +187,6 @@ private fun SevenSegmentColon(height: Dp, dotSize: Dp, gap: Dp, color: Color) {
     }
 }
 
-// 숫자가 얹히는 저채도 LCD 패널. 새 색을 만들지 않고 InkSecondary를 아주 낮은 alpha로
-// 깔아 크림색 바디([PaperTray])와 "화면" 영역만 구분한다.
-private val RetroClockPanelColor = InkSecondary.copy(alpha = 0.10f)
-
 // 큰 자리(hh:mm)와 작은 자리(ss) 크기. 목업에서 확인한 비율을 그대로 옮겼다.
 private val RetroClockLargeDigitWidth = 15.dp
 private val RetroClockLargeDigitHeight = 26.dp
@@ -203,25 +196,17 @@ private val RetroClockSmallDigitHeight = 17.dp
 private val RetroClockSmallDigitThickness = 2.4.dp
 
 /** 시계 화면(hh:mm / ss / AM·PM 한 줄 + 날짜 한 줄)만 그린다. 폭 제약을 걸지 않아
- * 내부 글자 폭에 맞춰 스스로 닫힌다(v3, "판넬처럼 늘어나 보임" 피드백 반영). */
+ * 내부 글자 폭에 맞춰 스스로 닫힌다(v3, "판넬처럼 늘어나 보임" 피드백 반영).
+ * 95일차: 바디·LCD 패널 바탕은 오린 시계 이미지([R.drawable.home_clock_collage_body])의
+ * 숫자창이 맡으므로 여기서는 바탕색·여백 없이 글자만 그린다. */
 @Composable
 private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String, modifier: Modifier = Modifier) {
-    // 콘텐츠가 위로 치우쳐 보인다는 피드백으로, 바디 전체 높이(프레임+패널 상하 여백의 합)는
-    // 그대로 두고 위/아래 여백 배분만 8dp만큼 아래로 옮긴다 — 프레임 4/4dp→6/2dp, 패널
-    // 7/7dp→13/1dp(각각 2dp+6dp=8dp). 요소 사이 Spacer(4dp/3dp)와 가로 정렬은 손대지 않는다.
-    Box(
-        modifier = modifier
-            .background(PaperTray, RoundedCornerShape(14.dp))
-            .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 2.dp)
-    ) {
+    Box(modifier = modifier) {
         Column(
             // IntrinsicSize.Min: 안쪽 HorizontalDivider의 기본 fillMaxWidth()가 상위에서
             // 내려온 화면 전체 폭까지 다시 늘어나 버리는 것을 막는다 — 이 폭 계산이 없으면
             // 바디 폭 제약을 없앤 의미가 사라지고 v2와 같은 배너 폭으로 되돌아간다.
-            modifier = Modifier
-                .width(IntrinsicSize.Min)
-                .background(RetroClockPanelColor, RoundedCornerShape(10.dp))
-                .padding(start = 10.dp, end = 10.dp, top = 13.dp, bottom = 1.dp),
+            modifier = Modifier.width(IntrinsicSize.Min),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
@@ -277,6 +262,9 @@ private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String
                 text = dateText,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 9.sp,
+                // 기본 본문 줄높이(24sp)를 그대로 두면 날짜 한 줄이 글자보다 훨씬 큰 칸을
+                // 차지해 시계 이미지 숫자창(높이 약 44dp)을 넘친다. 글자 크기·색은 그대로다.
+                lineHeight = 10.sp,
                 color = InkSecondary,
                 letterSpacing = 0.6.sp
             )
@@ -284,112 +272,78 @@ private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String
     }
 }
 
-// 시계 오른쪽 여백을 정리해주는 작은 동반자. 컵 몸체 + 손잡이 + 김 두 줄만 — 라떼아트·
-// 표정·반짝임 등 장식은 넣지 않는다. 다른 갤러리 아이콘([PondDrawerIcon] 등)과 같은
-// stroke 기반 ImageVector.Builder 패턴을 그대로 따른다.
-// 84일차: 김 두 줄은 아이콘에서 빼 [RetroClockCoffeeSteam]이 같은 좌표로 따로 그린다 —
-// 컵은 가만히 있고 김만 아주 조금 좌우로 흔들리게 하기 위해서다.
-private val RetroClockCoffeeCupIcon: ImageVector =
-    ImageVector.Builder(
-        name = "RetroClockCoffeeCupIcon",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
-    ).apply {
-        path(
-            fill = SolidColor(Color.Transparent),
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 1.6f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round
-        ) {
-            // 컵 몸체
-            moveTo(4f, 9f)
-            lineTo(17f, 9f)
-            lineTo(17f, 15f)
-            quadTo(17f, 20f, 12f, 20f)
-            lineTo(9f, 20f)
-            quadTo(4f, 20f, 4f, 15f)
-            close()
-        }
-        path(
-            fill = SolidColor(Color.Transparent),
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 1.6f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round
-        ) {
-            // 손잡이
-            moveTo(17f, 10.5f)
-            lineTo(19.2f, 10.5f)
-            quadTo(21.5f, 10.5f, 21.5f, 12.8f)
-            quadTo(21.5f, 15.1f, 19.2f, 15.1f)
-            lineTo(17f, 15.1f)
-        }
-    }.build()
+// ══════════════ 95일차 잡지 오림 장면 ══════════════
+// "한 손엔 커피, 다른 손은 알람시계 스누즈 버튼 위"인 아침을 정적 오림 이미지 세 장으로
+// 붙인다. 손과 컵은 정적이고, 컵 위의 옅은 김만 움직인다. 클릭·눌림 상태는 없다.
+// 아래 좌표는 모두 drawable-nodpi 원본의 실측 픽셀을 화면 dp로 환산한 값이라, 이미지를
+// 바꾸면 다시 재야 한다.
 
-// 시계 바디 옆 커피잔 크기. 바디보다 확실히 작아 "동반자"로 읽히는 선.
-private val RETRO_CLOCK_CUP_SIZE = 22.dp
+// 시계 몸체 이미지(1695×928px)의 화면 크기.
+private val RETRO_CLOCK_BODY_WIDTH = 168.dp
+private val RETRO_CLOCK_BODY_HEIGHT = 92.dp
 
-// 김: 알고 보면 보이고 모르고 보면 그냥 살아 있는 정도. 두 줄은 주기가 달라
-// 복제품처럼 같이 움직이지 않는다. 좌우 폭은 "꼭대기" 기준이고 컵에 붙은 밑동은
-// 움직이지 않는다(위로 갈수록 조금씩 더 흔들림).
-private val RETRO_CLOCK_STEAM_LEFT_SWAY = 1.2.dp
-private val RETRO_CLOCK_STEAM_RIGHT_SWAY = 1.0.dp
-private const val RETRO_CLOCK_STEAM_LEFT_PERIOD_MS = 2800
-private const val RETRO_CLOCK_STEAM_RIGHT_PERIOD_MS = 3400
-private const val RETRO_CLOCK_STEAM_ALPHA = 0.55f
+// 몸체 이미지 안의 밝은 숫자창(원본 x 145~1567px, y 290~730px). 7세그 숫자와 날짜를
+// 이 칸 한가운데에 둔다.
+private val RETRO_CLOCK_WINDOW_START = 14.5.dp
+private val RETRO_CLOCK_WINDOW_TOP = 28.6.dp
+private val RETRO_CLOCK_WINDOW_WIDTH = 141.dp
+private val RETRO_CLOCK_WINDOW_HEIGHT = 44.dp
 
-/**
- * 커피잔 위 김 두 줄. 아이콘과 같은 24 viewport 좌표(예전 정적 김과 같은 모양)를
- * [RETRO_CLOCK_CUP_SIZE]에 맞춰 그리고, 줄마다 sin 한 주기로 좌우만 아주 조금
- * 흔든다. 진행값은 draw 단계에서만 읽어 매 프레임 재구성 없이 다시 그리기만 하고,
- * sin(0)=0에서 시작해 화면 진입 순간 위치가 튀지 않는다. alpha는 고정(깜빡임 없음).
- */
+// 교체된 왼손(1448×1086px)의 원본 비율을 유지한다.
+private val RETRO_CLOCK_HAND_WIDTH = 112.dp
+private val RETRO_CLOCK_HAND_HEIGHT = 84.dp
+private val RETRO_CLOCK_HAND_X = (-8).dp
+private val RETRO_CLOCK_HAND_Y = (-5).dp
+private val RETRO_CLOCK_SCENE_CLOCK_INSET = 16.dp
+
+// 손이 몸체보다 왼쪽·위로 나와 있는 만큼을 시계 묶음 안에 미리 비워 둔다 — Row 밖으로
+// 삐져나가면 Scaffold가 topBar를 본문 위에 그려 아래 목록이나 위 메뉴 버튼을 덮는다.
+// 시계 위치는 유지하고 손만 화면 경계에서 자른다. 검지 끝은 화면 약 (99.5,38.3)dp로
+// 스누즈 버튼(x90~124dp, y39~48dp) 위에 닿는다. 숫자창은 x84.5dp, y58.6dp부터다.
+private val RETRO_CLOCK_HAND_LEAD = 54.dp
+private val RETRO_CLOCK_HAND_RISE = 30.dp
+
+// 교체된 오른손+컵(1086×1448px)을 확대하고 원본 비율을 유지한다.
+private val RETRO_CLOCK_CUP_WIDTH = 105.28.dp
+private val RETRO_CLOCK_CUP_HEIGHT = 140.373.dp
+
+// 이미지의 손목 끝을 그대로 노출하면 공중에 떠 보인다. 하단 약 32dp를 장면 안에서
+// 잘라 손목이 바로 아래 선으로 이어지게 한다. 잘린 부분은 Row 밖에 그리지 않는다.
+private val RETRO_CLOCK_CUP_VIEWPORT_HEIGHT = 108.dp
+
+/** 이미지 위쪽 투명 여백 안에서만 천천히 올라가는 두 줄의 김. 상태는 draw에서 읽는다. */
 @Composable
-private fun RetroClockCoffeeSteam(color: Color, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "retroClockSteam")
-    val leftPhase by transition.animateFloat(
+private fun GalleryCoffeeSteam(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "coffeeSteam")
+    val phase = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            tween(RETRO_CLOCK_STEAM_LEFT_PERIOD_MS, easing = LinearEasing),
-            RepeatMode.Restart
+            animation = tween(4800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "retroClockSteamLeft"
+        label = "coffeeSteamRise"
     )
-    val rightPhase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(RETRO_CLOCK_STEAM_RIGHT_PERIOD_MS, easing = LinearEasing),
-            RepeatMode.Restart
-        ),
-        label = "retroClockSteamRight"
-    )
-
-    Canvas(modifier = modifier) {
-        val unit = size.width / 24f
-        val stroke = Stroke(
-            width = 1.6f * unit,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round
-        )
-        val steamColor = color.copy(alpha = color.alpha * RETRO_CLOCK_STEAM_ALPHA)
-
-        fun steamPath(baseX: Float, sway: Float): Path = Path().apply {
-            // 밑동(8.6)은 고정, 중간(5.6)은 절반, 꼭대기(2.6)는 sway만큼 이동.
-            moveTo(baseX * unit, 8.6f * unit)
-            quadraticBezierTo((baseX + 1.4f) * unit + sway * 0.25f, 7.0f * unit, baseX * unit + sway * 0.5f, 5.6f * unit)
-            quadraticBezierTo((baseX - 1.4f) * unit + sway * 0.75f, 4.2f * unit, baseX * unit + sway, 2.6f * unit)
+    Canvas(modifier) {
+        repeat(2) { index ->
+            val progress = (phase.value + index * 0.5f) % 1f
+            val alpha = sin(PI * progress).toFloat() * 0.13f
+            val sway = sin(2 * PI * progress).toFloat() * 0.7.dp.toPx()
+            val x = (if (index == 0) 25.dp else 43.dp).toPx()
+            val bottom = 23.dp.toPx() - progress * 8.dp.toPx()
+            val path = Path().apply {
+                moveTo(x, bottom)
+                quadraticBezierTo(
+                    x + sway, bottom - 5.dp.toPx(),
+                    x + sway * 0.5f, bottom - 11.dp.toPx()
+                )
+            }
+            drawPath(
+                path = path,
+                color = InkSecondary.copy(alpha = alpha),
+                style = Stroke(width = 0.65.dp.toPx(), cap = StrokeCap.Round)
+            )
         }
-
-        val leftSway = RETRO_CLOCK_STEAM_LEFT_SWAY.toPx() * sin(2f * PI.toFloat() * leftPhase)
-        val rightSway = RETRO_CLOCK_STEAM_RIGHT_SWAY.toPx() * sin(2f * PI.toFloat() * rightPhase)
-
-        drawPath(steamPath(8.3f, leftSway), color = steamColor, style = stroke)
-        drawPath(steamPath(12f, rightSway), color = steamColor, style = stroke)
     }
 }
 
@@ -413,8 +367,8 @@ private fun RetroClockCoffeeSteam(color: Color, modifier: Modifier = Modifier) {
  *
  * 숫자는 새 폰트를 추가하지 않고 Canvas로 직접 그린다(1순위였던 "프로젝트에 이미 있는
  * 7세그 폰트/자산"은 조사 결과 없었고, 새 폰트 리소스 추가도 하지 않음 — 13·16절).
- * 색은 바디(크림 [PaperTray])와 화면(`InkSecondary`를 낮은 alpha로 얹은 저채도 패널)만
- * 구분하고 새 색상을 만들지 않는다.
+ * 95일차: 크림색 바디·LCD 패널·선 아이콘 커피잔·흔들리는 김을 걷어내고, 시계 몸체·스누즈
+ * 버튼 위 왼손·커피잔을 든 오른손을 잡지 오림 이미지로 바꿨다. 숫자·날짜·시간 갱신은 그대로다.
  *
  * 시간 상태는 이 composable 안에서만 `remember`+`LaunchedEffect`로 매초(정확히는 다음 초
  * 경계까지 delay) 갱신한다 — 연못 파문([PondRippleOverlay])과 같은 "로컬 상태·로컬 루프"
@@ -442,25 +396,65 @@ internal fun GalleryRetroClock(modifier: Modifier = Modifier) {
             contentDescription = retroClockAccessibilityDescriptionFor(now)
         }
     ) {
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            GalleryRetroClockFace(
-                timeText = timeText,
-                dateText = dateText
-            )
-            Box(modifier = Modifier.size(RETRO_CLOCK_CUP_SIZE)) {
-                Icon(
-                    imageVector = RetroClockCoffeeCupIcon,
+        Box(
+            modifier = Modifier.fillMaxWidth()
+                .height(RETRO_CLOCK_HAND_RISE + RETRO_CLOCK_BODY_HEIGHT)
+                .clipToBounds()
+        ) {
+            // 몸체 → 숫자 → 왼손 순으로 겹친다. 손은 숫자창 위쪽 띠에만 얹혀 숫자를 가리지 않는다.
+            Box(
+                modifier = Modifier.align(Alignment.BottomStart)
+                    .padding(start = RETRO_CLOCK_SCENE_CLOCK_INSET)
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.home_clock_collage_body),
                     contentDescription = null,
-                    tint = InkSecondary,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .padding(start = RETRO_CLOCK_HAND_LEAD, top = RETRO_CLOCK_HAND_RISE)
+                        .size(RETRO_CLOCK_BODY_WIDTH, RETRO_CLOCK_BODY_HEIGHT)
                 )
-                RetroClockCoffeeSteam(
-                    color = InkSecondary,
-                    modifier = Modifier.fillMaxSize()
+                Box(
+                    modifier = Modifier
+                        .padding(
+                            start = RETRO_CLOCK_HAND_LEAD + RETRO_CLOCK_WINDOW_START,
+                            top = RETRO_CLOCK_HAND_RISE + RETRO_CLOCK_WINDOW_TOP
+                        )
+                        .size(RETRO_CLOCK_WINDOW_WIDTH, RETRO_CLOCK_WINDOW_HEIGHT),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // unbounded: 큰 글꼴 설정에서 날짜 줄이 커져도 숫자창 높이에 눌려
+                    // 잘리지 않고 가운데 기준으로만 넘치게 한다.
+                    GalleryRetroClockFace(
+                        timeText = timeText,
+                        dateText = dateText,
+                        modifier = Modifier.wrapContentSize(unbounded = true)
+                    )
+                }
+            }
+            // 손목 쪽을 화면 끝에서 자르고, 위쪽도 장면의 clip 안에만 그린다.
+            Image(
+                painter = painterResource(R.drawable.home_clock_left_snooze_hand),
+                contentDescription = null,
+                modifier = Modifier
+                    .offset(x = RETRO_CLOCK_HAND_X, y = RETRO_CLOCK_HAND_Y)
+                    .size(RETRO_CLOCK_HAND_WIDTH, RETRO_CLOCK_HAND_HEIGHT)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(RETRO_CLOCK_CUP_WIDTH, RETRO_CLOCK_CUP_VIEWPORT_HEIGHT)
+                    .clipToBounds()
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.home_right_hand_coffee_cup),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .wrapContentSize(Alignment.TopStart, unbounded = true)
+                        .requiredSize(RETRO_CLOCK_CUP_WIDTH, RETRO_CLOCK_CUP_HEIGHT)
                 )
+                GalleryCoffeeSteam(modifier = Modifier.fillMaxSize())
             }
         }
-        Spacer(Modifier.height(6.dp))
         // "선반 위 물건" 느낌만 주는, 존재감을 최소화한 얇은 공유 선반선.
         HorizontalDivider(thickness = 0.5.dp, color = PaperDivider.copy(alpha = 0.6f))
     }

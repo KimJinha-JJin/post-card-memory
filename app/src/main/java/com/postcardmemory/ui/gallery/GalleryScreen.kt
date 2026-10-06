@@ -809,12 +809,11 @@ fun GalleryScreen(
 
                     // 작은 레트로 탁상시계 + 커피잔. 검색·정렬 아이콘이 있는 타이틀 Row와
                     // 겹치지 않게 그 아래 별도 줄에 둔다. 아래 fillMaxWidth는 시계가 놓이는
-                    // 자리의 폭일 뿐이고, 시계 바디 자체는 내부 글자 폭에 맞춰 스스로 닫힌다
-                    // (GalleryRetroClockFace의 IntrinsicSize.Min) — 폭을 여기서 제한하지 않는다.
+                    // 자리의 폭이다. 양손은 화면 끝에서 잘리고, 시계의 왼쪽 여백은 내부에서 유지한다.
                     GalleryRetroClock(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .padding(top = 6.dp, bottom = 6.dp)
                     )
 
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
