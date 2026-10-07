@@ -24,6 +24,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -114,7 +115,11 @@ internal fun visitCountLabel(totalVisitDays: Int?): String =
 private val WeekendSaturday = SealInkNavy
 private val WeekendSunday = SealInkRed
 private val VisitCalendarOrnamentColor = InkSecondary.copy(alpha = 0.29f)
-private val VisitCalendarBottomOrnamentColor = InkSecondary.copy(alpha = 0.39f)
+// 96일차 후속: 하단 양끝 ୨୧ 자리에 붙인 신문 오림 리본. 자산(1448×1086)은 둘레에 투명 여백이 있어
+// 리본 자체는 가운데 약 65%×42%다 — 이미지 폭 24dp면 리본은 약 16×8dp로 9sp 기호와 비슷하다.
+// 원본 비율·알파 그대로, 그림자 없음. 값은 실기기 QA로 다듬는 미감 값이다.
+private val VISIT_CALENDAR_BOTTOM_RIBBON_WIDTH = 24.dp
+private const val VISIT_CALENDAR_BOTTOM_RIBBON_ASPECT = 1448f / 1086f
 
 /**
  * 요일 하나에 대한 기본 글자색. 날짜 칸([visitDateColor])과 상단 요일 머리글이 주말색을
@@ -712,15 +717,20 @@ private fun VisitCalendarYearPicker(
 
 @Composable
 private fun VisitCalendarBottomOrnament() {
+    // 두 자리가 한 번만 decode한 같은 bitmap을 함께 쓴다.
+    val ribbon = ImageBitmap.imageResource(R.drawable.visit_calendar_newspaper_ribbon)
+    val ribbonModifier = Modifier
+        .width(VISIT_CALENDAR_BOTTOM_RIBBON_WIDTH)
+        .aspectRatio(VISIT_CALENDAR_BOTTOM_RIBBON_ASPECT)
     Row(
         modifier = Modifier.fillMaxWidth().height(21.dp).clearAndSetSemantics { },
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("୨୧", color = VisitCalendarBottomOrnamentColor, fontSize = 9.sp)
+        Image(bitmap = ribbon, contentDescription = null, modifier = ribbonModifier)
         // 90일차: 폭 전체 가로선은 달력 종이 밑변과 이중 경계를 만들어 사이드바 구획선처럼
-        // 보여(실기기 QA) 빼고, 양끝 ୨୧ 표시만 남긴다.
+        // 보여(실기기 QA) 빼고, 양끝 표시만 남긴다. 96일차 후속: ୨୧ 기호를 신문 오림 리본으로 교체.
         Spacer(Modifier.weight(1f))
-        Text("୨୧", color = VisitCalendarBottomOrnamentColor, fontSize = 9.sp)
+        Image(bitmap = ribbon, contentDescription = null, modifier = ribbonModifier)
     }
 }
 

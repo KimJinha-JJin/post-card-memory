@@ -1,3 +1,16 @@
+# HANDOFF — 96일차 추가: 방문 달력 하단 신문 오림 리본 (구현·자동검증·실기기 QA 완료)
+
+확인일: 2026-10-07. 수동 표준 모드(96일차 추가 작업지시서 + 사용자 방향 3번 선택), 담당 Claude Code. 시작 HEAD `63fddb3`(origin과 같음), tracked clean. **다음 후보는 실행 승인이 아니다.**
+
+- **사실:** 기존 하단 장식 `VisitCalendarBottomOrnament`는 달력 장 **밖**(종이 아래, "다녀간 날들" 줄 위)의 21dp 줄 양끝 `୨୧` 2개(9sp, InkSecondary α0.39)였고, 장과 함께 넘어가지 않으며 MONTH/YEAR 고르기 화면에서도 보인다. 사용자가 이 구조 유지 + 양끝 기호만 교체(3번)를 선택.
+- **변경(미커밋):** `VisitCalendarDrawer.kt` — 양끝 `୨୧` Text를 사용자 제공 자산 `drawable-nodpi/visit_calendar_newspaper_ribbon.png`(1448×1086 RGBA, 원본 무가공, untracked)의 `Image` 2개로 교체. 폭 24dp·원본 비율(높이 18dp, 21dp 줄 안). 자산 둘레 투명 여백 때문에 실제 리본은 약 16×8dp이고 양끝에서 약 4dp 안쪽에 보임. bitmap 1회 decode 후 공유, 알파 원본, 그림자·회전 없음, `clearAndSetSemantics { }` 유지. 쓰이지 않게 된 `VisitCalendarBottomOrnamentColor` 삭제. 장 높이·장 내부·넘김·가운데 장식 변경 없음.
+- **자동검증:** `testDebugUnitTest --tests com.postcardmemory.ui.gallery.*` 180/180(16 suite), assembleDebug 성공, diff --check 통과. 테스트 변경 없음 → TEST-COVERAGE-MAP 변경 없음. instrumentation 불필요.
+- **실기기 감각 QA: 사용자 승인(2026-10-07, 첫 시도 값 그대로 "좋아, 이대로 승인")** — 크기, 축소 후 형태, 검은 덩어리 여부, 튀는 정도, 손 자산과 같은 신문 하프톤 세계관, MONTH/YEAR 화면 확인 항목 기준.
+- **Git:** 사용자 승인으로 `VisitCalendarDrawer.kt`, `visit_calendar_newspaper_ribbon.png`, 이 HANDOFF를 commit·push. CI 결과는 완료보고에서 확인(성공 기록만을 위한 docs-only commit은 만들지 않음). 제외 유지: `postcard_paper_fiber_tile.png`, `.codex-config.candidate.toml`, `.kotlin/`.
+- 위험: 1448×1086 ARGB 원본 decode(약 6MiB, 기존 손 자산과 같은 방식).
+
+---
+
 # HANDOFF — 96일차 후속: 방문 달력 오늘 날짜 펜 동그라미 (구현·QA 완료)
 
 확인일: 2026-10-07. 수동 표준 모드, 담당 Claude Code. 시작 HEAD `8d4f084`(origin과 같음). **아래 다음 후보는 실행 승인이 아니다.**
@@ -5,7 +18,7 @@
 - **변경:** `VisitCalendarDrawer.kt` — 오늘 날짜 숫자 둘레에 기존 `SealInkRed`로 얇은 펜(0.6~0.7dp)을 떼지 않고 2.4~3.2바퀴 휘갈긴 동그라미(`visitTodayPenCircle`, 순수 함수, seed=`visitTodayCircleSeed(date)`). 숫자 Text의 drawBehind라 글자를 덮지 않고, 방문 여부와 무관. 접근성 설명에 ", 오늘" 추가. 새 색·자산·데이터 변경 없음. 실기기 QA 세 번(세로 타원→거의 원, 살짝 아래로, 휘갈긴 한 줄)으로 다듬음.
 - **실기기 감각 QA:** 사용자 승인(2026-10-07, "동그라미 크기 딱 마음에 들어").
 - **자동검증:** 전체 `testDebugUnitTest` 923/923(XML 95, 실패·오류·skip 0), `@Test` 923개/파일 94개(+helper 1), assembleDebug 성공, diff --check 통과. instrumentation 미실행(불필요). TEST-COVERAGE-MAP 갱신 완료(919→923, 구조 162→163).
-- **Git:** 사용자 승인으로 위 코드 1개·테스트 2개·TEST-COVERAGE-MAP·이 HANDOFF를 commit·push. CI 결과는 완료보고에서 확인(성공 기록만을 위한 docs-only commit은 만들지 않음). 직전 `8d4f084`의 CI run `37566877002` 성공 확인. 제외 유지: `postcard_paper_fiber_tile.png`(사용자 결정 대기), `.codex-config.candidate.toml`, `.kotlin/`.
+- **Git:** 사용자 승인으로 위 코드 1개·테스트 2개·TEST-COVERAGE-MAP·이 HANDOFF를 commit·push. `63fddb3`으로 push, CI run `37570495418` 성공. 직전 `8d4f084`의 CI run `37566877002` 성공 확인. 제외 유지: `postcard_paper_fiber_tile.png`(사용자 결정 대기), `.codex-config.candidate.toml`, `.kotlin/`.
 - 다음 후보(실행 승인 아님): 펜 자국·동그라미 위 날짜 글자 가독성 장기 관찰, 95일차 HANDOFF의 CI 성공 기록 보정.
 
 ---
