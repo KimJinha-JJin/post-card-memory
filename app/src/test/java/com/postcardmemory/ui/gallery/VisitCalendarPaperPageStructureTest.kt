@@ -202,6 +202,33 @@ class VisitCalendarPaperPageStructureTest {
     }
 
     @Test
+    fun pickerCellsSitOnCalendarPaperScrapsWithoutBecomingCards() {
+        listOf(
+            "private fun VisitCalendarMonthPicker(" to ".visitCalendarPickerPaperScrap(paper, visitCalendarMonthPickerScrapSeed(year, month))",
+            "private fun VisitCalendarYearPicker(" to ".visitCalendarPickerPaperScrap(paper, visitCalendarYearPickerScrapSeed(year))"
+        ).forEach { (picker, scrap) ->
+            val body = functionBody(picker)
+            val height = body.indexOf(".height(40.dp)")
+            val paper = body.indexOf(scrap)
+            val click = body.indexOf(".clickable(")
+            assertTrue("$picker 칸 높이 40dp 그대로", height >= 0)
+            assertTrue("$picker 칸마다 다른 seed의 종이 자투리를 글자 뒤에 깔아야 함", paper > height && click > paper)
+            assertTrue("$picker 현재 표시 동그라미 유지", body.contains("VisitCalendarCurrentPeriodMarker()"))
+            assertFalse("$picker 카드·단색 배경·테두리 금지",
+                listOf(".background(", ".border(", "Card(", ".shadow(").any { body.contains(it) })
+        }
+        val scrap = functionBody("private fun Modifier.visitCalendarPickerPaperScrap(")
+        assertTrue("달력 장과 같은 종이 bitmap을 잘라 써야 함", scrap.contains("ImageShader(paper)"))
+        assertTrue("달력 장과 같은 손으로 자른 윤곽", scrap.contains("visitCalendarPaperEdgeOutline("))
+        assertFalse("새 자산을 불러오면 안 됨", scrap.contains("R.drawable"))
+        listOf("VisitCalendarMonthPicker(", "VisitCalendarYearPicker(").forEach { call ->
+            val at = calendarBody.indexOf("$call\n")
+            assertTrue("$call 은 이미 불러온 달력 종이를 받아야 함",
+                at >= 0 && calendarBody.substring(at, minOf(at + 300, calendarBody.length)).contains("paper = calendarPaper"))
+        }
+    }
+
+    @Test
     fun hierarchyTransitionAndDrawerSurfaceAreUnchanged() {
         val hierarchy = functionBody("private fun AnimatedContentTransitionScope<VisitCalendarNavLevel>.visitCalendarHierarchyTransition(")
         assertTrue("단계 전환은 fade + scale 그대로여야 함", hierarchy.contains("fadeIn(") && hierarchy.contains("scaleIn("))

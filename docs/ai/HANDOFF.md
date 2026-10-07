@@ -1,3 +1,18 @@
+# HANDOFF — 96일차 추가: 월/연도 고르기 칸 뒤 종이 자투리 (구현·자동검증·실기기 QA 완료)
+
+확인일: 2026-10-07. 수동 표준 모드(96일차 추가 작업지시서), 담당 Claude Code. 사용자 선택으로 승인된 화살표를 먼저 `dfac9c6`로 commit·push한 뒤 시작(HEAD = origin). **실험 단계 — 다음 후보는 실행 승인이 아니다.**
+
+- **조사 사실:** MONTH_PICKER(`VisitCalendarMonthPicker`)·YEAR_PICKER(`VisitCalendarYearPicker`) 모두 4열×4행, 칸 = weight(1f)×40dp 가운데 정렬 글자(월 13sp·연도 12sp). 선택은 글자색 InkPrimary+Medium, 현재 월/연도는 26dp 옅은 원. 카드·테두리·배경 없음. `visit_calendar_paper.png`(1122×1402)는 화면 위에서 이미 1회 로드돼 picker 호출부에서 그대로 전달 가능. 종이 자산은 전체가 고른 결이라 하단도 깨끗.
+- **변경(미커밋):** `VisitCalendarDrawer.kt` — 두 picker에 `paper` 파라미터(이미 로드한 `calendarPaper` 전달), 칸마다 글자 뒤 `visitCalendarPickerPaperScrap`: 칸에서 4dp씩 안쪽(높이 32dp) 자투리를 손으로 자른 윤곽(`visitCalendarPaperEdgeOutline` 재사용)으로 채우고 달력 장과 같은 아주 옅은 접촉 그림자. 자투리 위치는 순수 함수 `visitCalendarPickerScrapCrop`이 종이 하단 55%~끝에서 칸 seed(월: 96_600+year×13+month, 연도: 146_600+year)로 골라 칸마다 결·가장자리가 다름. 종이결 배율은 종이 폭 = grid 한 줄 폭. 새 자산·테이프·리본·펜 없음. 칸 크기·글자·선택 표시·현재 원·클릭·swipe 그대로.
+- **테스트:** `VisitCalendarTest` +2(자투리 위치 결정성·하단 영역·종이 안 / 한 화면 16칸 seed 모두 다르고 위치 14곳 이상·윤곽 다름), `VisitCalendarPaperPageStructureTest` +1(두 picker 칸 40dp·자투리→clickable 순서·현재 원 유지·카드/배경/테두리/그림자 modifier 금지·같은 종이 bitmap·새 자산 금지·호출부 `paper = calendarPaper`). 자동검증: gallery 187/187(16 suite), assembleDebug 성공, diff --check 통과.
+- **실기기 감각 QA: 사용자 승인(2026-10-07, 첫 시도 값 그대로 "좋아, 이대로 승인")** — 자연스러움, 메인 달력과 같은 세계관, 카드 UI 아님, 복붙 느낌, 장식 없이 충분한지 기준.
+- **최종 자동검증:** 전체 `testDebugUnitTest` 930/930(XML 95, 실패·오류·skip 0), `@Test` 930개. TEST-COVERAGE-MAP 갱신 완료(927→930, 구조 164→165).
+- **Git:** 사용자 승인으로 `VisitCalendarDrawer.kt`, `VisitCalendarTest.kt`, `VisitCalendarPaperPageStructureTest.kt`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 HANDOFF를 commit·push. CI 결과는 완료보고에서 확인(성공 기록만을 위한 docs-only commit은 만들지 않음). 제외 유지: `postcard_paper_fiber_tile.png`, `.codex-config.candidate.toml`, `.kotlin/`.
+- 화살표 `dfac9c6` CI run `37574403863` 성공.
+- 다음 후보(실행 승인 아님): 종이 질감 타일 PNG 사용 여부 결정, 95일차 HANDOFF CI 성공 기록 보정.
+
+---
+
 # HANDOFF — 96일차 추가: 방문 달력 월 이동 화살표 신문 오림 (구현·자동검증·실기기 QA 완료)
 
 확인일: 2026-10-07. 수동 표준 모드(96일차 추가 작업지시서), 담당 Claude Code. 시작 HEAD `33a2ce9`(origin과 같음), tracked clean. **다음 후보는 실행 승인이 아니다.**
@@ -7,7 +22,7 @@
 - **테스트:** `VisitCalendarTest` +3(결정성·seed별 다른 윤곽 / 300 seed×양방향: 윤곽 6~9점·상자 안·끝점 세로 가운데·폭 8~10·높이 10~12·망점 10개 이상·종이 비침 3~30% / 좌우 거울상), `VisitCalendarPaperPageStructureTest` +1(버튼·onClick·접근성 설명·크기 유지, `Icons.` 복귀 금지, 배경·테두리·그림자 금지). 자동검증: gallery 184/184(16 suite), assembleDebug 성공, diff --check 통과. 핵심 해결 시도 외: 함수 이름 충돌 컴파일 오류 1회(Modifier를 `visitCalendarNewsprintArrowMark`로 개명).
 - **실기기 감각 QA: 사용자 승인(2026-10-07, 첫 시도 값 그대로 "좋아, 이대로 승인")** — 이전/다음 인식, 신문 세계관, 튀는 정도, 누르기 편의 기준.
 - **최종 자동검증:** 전체 `testDebugUnitTest` 927/927(XML 95, 실패·오류·skip 0), `@Test` 927개. TEST-COVERAGE-MAP 갱신 완료(923→927, 구조 163→164).
-- **Git:** 사용자 승인(다음 실험 전에 먼저 마감)으로 commit·push. CI 결과는 완료보고에서 확인. 대상: `VisitCalendarDrawer.kt`, `VisitCalendarTest.kt`, `VisitCalendarPaperPageStructureTest.kt`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 HANDOFF. 제외 유지: `postcard_paper_fiber_tile.png`, `.codex-config.candidate.toml`, `.kotlin/`. 직전 `33a2ce9`(리본) CI run `37572520232` 성공.
+- **Git:** 사용자 승인(다음 실험 전에 먼저 마감)으로 `dfac9c6` commit·push, CI run `37574403863` 성공. 대상: `VisitCalendarDrawer.kt`, `VisitCalendarTest.kt`, `VisitCalendarPaperPageStructureTest.kt`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 HANDOFF. 제외 유지: `postcard_paper_fiber_tile.png`, `.codex-config.candidate.toml`, `.kotlin/`. 직전 `33a2ce9`(리본) CI run `37572520232` 성공.
 
 ---
 

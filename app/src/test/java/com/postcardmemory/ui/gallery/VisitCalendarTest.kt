@@ -653,6 +653,34 @@ class VisitCalendarTest {
         assertEquals(left.outline.map { Offset(20f - it.x, it.y) }, right.outline)
     }
 
+    @Test fun pickerPaperScrapsComeFromTheBottomOfThePaperAndStayInside() {
+        val seeds = (2020..2032).flatMap { year -> (1..12).map { visitCalendarMonthPickerScrapSeed(year, it) } } +
+            (1990..2060).map { visitCalendarYearPickerScrapSeed(it) }
+        seeds.forEach { seed ->
+            val crop = visitCalendarPickerScrapCrop(seed, 1122, 1402, 280, 130)
+            assertEquals(crop, visitCalendarPickerScrapCrop(seed, 1122, 1402, 280, 130))
+            assertTrue("$seed 가로 $crop", crop.x in 0..(1122 - 280))
+            assertTrue("$seed 하단 영역 $crop", crop.y in (1402 * VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP).toInt()..(1402 - 130))
+        }
+        // 종이보다 큰 자투리도 종이 밖을 가리키지 않는다.
+        assertEquals(0, visitCalendarPickerScrapCrop(1, 100, 100, 200, 200).x)
+        assertEquals(0, visitCalendarPickerScrapCrop(1, 100, 100, 200, 200).y)
+    }
+
+    @Test fun pickerPaperScrapsAreNotTheSamePieceCopiedIntoEveryCell() {
+        val monthCells = monthPickerGridCells(2026).map { (year, month) -> visitCalendarMonthPickerScrapSeed(year, month) }
+        val yearCells = yearPickerGridYears(2020).map { visitCalendarYearPickerScrapSeed(it) }
+        listOf(monthCells, yearCells).forEach { seeds ->
+            assertEquals(16, seeds.toSet().size)
+            val crops = seeds.map { visitCalendarPickerScrapCrop(it, 1122, 1402, 280, 130) }
+            assertTrue("자투리 위치가 거의 다 달라야 함 ${crops.toSet().size}", crops.toSet().size >= 14)
+            assertNotEquals(
+                visitCalendarPaperEdgeOutline(70f, 32f, seeds[0]),
+                visitCalendarPaperEdgeOutline(70f, 32f, seeds[1])
+            )
+        }
+    }
+
     @Test fun todayCircleIsNothingForAnUnmeasuredNumber() {
         assertTrue(visitTodayPenCircle(0f, 13f, 1).isEmpty())
         assertTrue(visitTodayPenCircle(12f, 0f, 1).isEmpty())

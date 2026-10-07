@@ -608,6 +608,88 @@ private fun rememberVisitCalendarPickerSwipeModifier(
     }
 }
 
+// 96일차 추가(실험): 월/연도 고르기 칸마다 글자 뒤에 달력 종이의 자투리 한 조각. 새 자산 없이
+// 이미 불러온 visit_calendar_paper를 칸마다 다른 하단 위치에서 잘라 써 종이결이 복붙되지 않고,
+// 가장자리는 달력 장과 같은 손으로 자른 윤곽·같은 아주 옅은 접촉 그림자를 칸마다 다른 seed로 쓴다.
+// 칸 크기·글자·선택 표시·현재 표시 동그라미·터치는 그대로다. 값은 실기기 QA로 다듬는 미감 값이다.
+private val VISIT_CALENDAR_PICKER_SCRAP_INSET_X = 4.dp
+private val VISIT_CALENDAR_PICKER_SCRAP_INSET_Y = 4.dp
+private const val VISIT_CALENDAR_PICKER_SCRAP_SEED = 96_600
+// 자투리는 종이 아래쪽 이 비율부터 끝까지에서만 고른다.
+internal const val VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP = 0.55f
+
+internal fun visitCalendarMonthPickerScrapSeed(year: Int, month: Int): Int =
+    VISIT_CALENDAR_PICKER_SCRAP_SEED + year * 13 + month
+
+internal fun visitCalendarYearPickerScrapSeed(year: Int): Int = VISIT_CALENDAR_PICKER_SCRAP_SEED + 50_000 + year
+
+/**
+ * [paperWidth]×[paperHeight] 종이에서 [cropWidth]×[cropHeight] 자투리를 잘라 낼 왼쪽 위(px).
+ * 종이 하단([VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP]~끝) 안에서 seed마다 다르게 고르고, 같은 seed면 같다.
+ */
+internal fun visitCalendarPickerScrapCrop(
+    seed: Int,
+    paperWidth: Int,
+    paperHeight: Int,
+    cropWidth: Int,
+    cropHeight: Int
+): IntOffset {
+    val random = kotlin.random.Random(seed)
+    val maxX = (paperWidth - cropWidth).coerceAtLeast(0)
+    val top = (paperHeight * VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP).toInt()
+    val maxY = (paperHeight - cropHeight).coerceAtLeast(0)
+    val minY = top.coerceAtMost(maxY)
+    return IntOffset(
+        if (maxX == 0) 0 else random.nextInt(maxX + 1),
+        if (maxY == minY) minY else minY + random.nextInt(maxY - minY + 1)
+    )
+}
+
+/** 칸 뒤에 [visitCalendarPickerScrapCrop] 자리의 종이 자투리를 손으로 자른 윤곽으로 깐다. */
+private fun Modifier.visitCalendarPickerPaperScrap(paper: ImageBitmap, seed: Int, gridWidthCells: Int = 4): Modifier =
+    drawWithCache {
+        val insetX = VISIT_CALENDAR_PICKER_SCRAP_INSET_X.toPx()
+        val insetY = VISIT_CALENDAR_PICKER_SCRAP_INSET_Y.toPx()
+        val pieceWidth = (size.width - insetX * 2).coerceAtLeast(1f)
+        val pieceHeight = (size.height - insetY * 2).coerceAtLeast(1f)
+        // 종이결 크기를 달력 장과 맞춘다 — 종이 한 장의 폭이 grid 한 줄 폭에 놓이는 배율.
+        val scale = size.width * gridWidthCells / paper.width
+        val crop = visitCalendarPickerScrapCrop(
+            seed = seed,
+            paperWidth = paper.width,
+            paperHeight = paper.height,
+            cropWidth = (pieceWidth / scale).toInt().coerceAtLeast(1),
+            cropHeight = (pieceHeight / scale).toInt().coerceAtLeast(1)
+        )
+        val brush = ShaderBrush(
+            ImageShader(paper).apply {
+                setLocalMatrix(
+                    android.graphics.Matrix().apply {
+                        setTranslate(-crop.x.toFloat(), -crop.y.toFloat())
+                        postScale(scale, scale)
+                        postTranslate(insetX, insetY)
+                    }
+                )
+            }
+        )
+        val outline = Path().apply {
+            visitCalendarPaperEdgeOutline(pieceWidth / density, pieceHeight / density, seed).forEachIndexed { index, point ->
+                val x = insetX + point.x * density
+                val y = insetY + point.y * density
+                if (index == 0) moveTo(x, y) else lineTo(x, y)
+            }
+            close()
+        }
+        onDrawBehind {
+            VISIT_CALENDAR_PAPER_SHADOW_LAYERS.forEach { (dx, dy, alpha) ->
+                translate(left = dx * density, top = dy * density) {
+                    drawPath(outline, color = VisitCalendarPaperShadowColor, alpha = alpha)
+                }
+            }
+            drawPath(outline, brush = brush)
+        }
+    }
+
 /**
  * pickerYear의 1~12월 + 다음 해 1~4월을 4열×4행으로. 다음 해 4칸은 연하게 구분해
  * YEAR_PICKER의 4×4 리듬과 맞춘다. 카드·pill·border 없이 텍스트 중심 grid만 쓴다.
@@ -617,6 +699,7 @@ private fun VisitCalendarMonthPicker(
     pickerYear: Int,
     displayedMonth: YearMonth,
     today: YearMonth,
+    paper: ImageBitmap,
     onMonthSelected: (year: Int, month: Int) -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
@@ -636,6 +719,7 @@ private fun VisitCalendarMonthPicker(
                         modifier = Modifier
                             .weight(1f)
                             .height(40.dp)
+                            .visitCalendarPickerPaperScrap(paper, visitCalendarMonthPickerScrapSeed(year, month))
                             .clickable(onClick = { onMonthSelected(year, month) }),
                         contentAlignment = Alignment.Center
                     ) {
@@ -671,6 +755,7 @@ private fun VisitCalendarYearPicker(
     decadeStart: Int,
     highlightYear: Int?,
     today: YearMonth,
+    paper: ImageBitmap,
     onYearSelected: (Int) -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
@@ -689,6 +774,7 @@ private fun VisitCalendarYearPicker(
                         modifier = Modifier
                             .weight(1f)
                             .height(40.dp)
+                            .visitCalendarPickerPaperScrap(paper, visitCalendarYearPickerScrapSeed(year))
                             .clickable(onClick = { onYearSelected(year) }),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1690,6 +1776,7 @@ internal fun MonthlyVisitCalendar(
                                 pickerYear = year,
                                 displayedMonth = displayedMonth,
                                 today = todayYearMonth,
+                                paper = calendarPaper,
                                 onMonthSelected = { selectedYear, month ->
                                     displayedMonth = YearMonth.of(selectedYear, month)
                                     onNavLevelChange(VisitCalendarNavLevel.CALENDAR)
@@ -1726,6 +1813,7 @@ internal fun MonthlyVisitCalendar(
                                 decadeStart = start,
                                 highlightYear = highlightedYearFor(start, displayedMonth),
                                 today = todayYearMonth,
+                                paper = calendarPaper,
                                 onYearSelected = { year ->
                                     pickerYear = year
                                     onNavLevelChange(VisitCalendarNavLevel.MONTH_PICKER)
