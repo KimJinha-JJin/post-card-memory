@@ -56,10 +56,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -71,7 +80,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.R
@@ -813,6 +821,153 @@ internal fun visitedDaysForMonth(
         loadedByMonth[month].orEmpty()
     }
 
+// 96일차 3단계: 방문일 민트 표시를 매끈한 상자 대신 민트 중성펜으로 슥슥 칠한 자국으로 그린다.
+// 색(#16A7A1 / 오늘 #117E7A)은 그대로고 질감만 바뀐다. 옅은 잉크 바탕 위에 짧은 사선 획을 겹쳐,
+// 획이 지나간 곳·겹친 곳이 조금 더 진하고 획 사이로 종이가 비친다. 첫 QA에서 바탕 α0.75는
+// "팔레트에 묻은 물감" 같다고 해 α0.5로 옅게 했다. 칸 글자색은 여전히 단색 기준 자동 대비라
+// 가독성은 실기기로 확인한다. 값은 실기기 QA로 다듬는 미감 값이다.
+private const val VISIT_DAY_PEN_SEED = 96_300
+private const val VISIT_DAY_PEN_WASH_ALPHA = 0.5f
+internal const val VISIT_DAY_PEN_EDGE_WOBBLE_DP = 0.35f
+
+/** 칠한 자국의 한 획(dp). */
+internal class VisitDayPenStroke(
+    val points: List<Offset>,
+    val widthDp: Float,
+    val alpha: Float
+)
+
+/** 칠한 자국 하나: 잉크가 고르게 먹은 바탕 [wash](손떨림 있는 외곽) + 그 위의 [strokes]. */
+internal class VisitDayPenMark(
+    val wash: List<Offset>,
+    val strokes: List<VisitDayPenStroke>
+)
+
+internal fun visitDayPenSeed(date: LocalDate): Int = VISIT_DAY_PEN_SEED + date.toEpochDay().toInt()
+
+/** 손으로 그은 살짝 휘는 한 획. 중성펜이라 획 안의 농도는 거의 일정하다. */
+private fun visitDayFreehandStroke(
+    from: Offset,
+    to: Offset,
+    widthDp: Float,
+    alpha: Float,
+    random: kotlin.random.Random
+): VisitDayPenStroke {
+    val length = (to - from).getDistance()
+    val dir = if (length > 0f) (to - from) / length else Offset.Zero
+    val normal = Offset(-dir.y, dir.x)
+    val segments = maxOf(2, kotlin.math.ceil(length / 2f).toInt())
+    val bow = (random.nextFloat() - 0.5f) * 0.4f // 획 전체가 살짝 휘는 정도
+    val phase = random.nextFloat() * 6.28f
+    val points = (0..segments).map { k ->
+        val t = k.toFloat() / segments
+        val offset = bow * kotlin.math.sin(t * Math.PI.toFloat()) + 0.06f * kotlin.math.sin(t * 9f + phase)
+        from + dir * (length * t) + normal * offset
+    }
+    return VisitDayPenStroke(points, widthDp, alpha)
+}
+
+/**
+ * 방문일 칸([widthDp]×[heightDp]) 하나를 민트 중성펜으로 칠한 자국. 같은 날짜(seed)면 항상 같은
+ * 자국이다 — 재구성돼도 획이 흔들리지 않는다. 외곽은 칸 경계에서 1dp 남짓 안쪽·바깥쪽으로만
+ * 흔들려 날짜 칸 배치는 그대로다.
+ */
+internal fun visitDayGelPenMark(widthDp: Float, heightDp: Float, seed: Int): VisitDayPenMark? {
+    if (widthDp <= 0f || heightDp <= 0f) return null
+    val random = kotlin.random.Random(seed)
+
+    // 바탕: 칸보다 0.5dp 안쪽 사각형을 3dp 간격 점으로 돌며 손떨림만큼 흔든다.
+    val inset = 0.5f
+    val corners = listOf(
+        Offset(inset, inset), Offset(widthDp - inset, inset),
+        Offset(widthDp - inset, heightDp - inset), Offset(inset, heightDp - inset)
+    )
+    val wash = corners.indices.flatMap { i ->
+        val from = corners[i]
+        val to = corners[(i + 1) % corners.size]
+        val length = (to - from).getDistance()
+        val dir = (to - from) / length
+        val normal = Offset(-dir.y, dir.x)
+        val steps = maxOf(2, kotlin.math.ceil(length / 3f).toInt())
+        (0 until steps).map { k ->
+            from + dir * (length * k / steps) + normal * ((random.nextFloat() * 2f - 1f) * VISIT_DAY_PEN_EDGE_WOBBLE_DP)
+        }
+    }
+
+    // 획: 약한 사선(-20° 안팎)으로 칸을 가로지르며 1.3dp 남짓 간격으로 반복. 끝은 칸 경계에서
+    // 조금 모자라거나 살짝 삐져나가고, 가끔 한 줄을 두 번에 나눠 그어 이음매가 겹쳐 진해진다.
+    val strokes = mutableListOf<VisitDayPenStroke>()
+    fun hatch(angleDeg: Float, spacing: Float, widthDp0: Float, alpha0: Float, keep: Float) {
+        val angle = Math.toRadians(angleDeg.toDouble()).toFloat()
+        val dir = Offset(kotlin.math.cos(angle), kotlin.math.sin(angle))
+        val normal = Offset(-dir.y, dir.x)
+        val projections = listOf(
+            Offset(0f, 0f), Offset(widthDp, 0f), Offset(0f, heightDp), Offset(widthDp, heightDp)
+        ).map { it.x * normal.x + it.y * normal.y }
+        var c = projections.min() + spacing * random.nextFloat()
+        while (c < projections.max()) {
+            val base = normal * c
+            var t0 = -Float.MAX_VALUE
+            var t1 = Float.MAX_VALUE
+            fun clip(p: Float, d: Float, lo: Float, hi: Float): Boolean {
+                if (kotlin.math.abs(d) < 1e-6f) return p in lo..hi
+                val a = (lo - p) / d
+                val b = (hi - p) / d
+                t0 = maxOf(t0, minOf(a, b))
+                t1 = minOf(t1, maxOf(a, b))
+                return t0 <= t1
+            }
+            if (random.nextFloat() < keep &&
+                clip(base.x, dir.x, 0.6f, widthDp - 0.6f) && clip(base.y, dir.y, 0.6f, heightDp - 0.6f)
+            ) {
+                val start = t0 + (random.nextFloat() * 1.2f - 0.5f)
+                val end = t1 - (random.nextFloat() * 1.2f - 0.5f)
+                if (end - start > 1.5f) {
+                    val strokeWidth = widthDp0 * (0.92f + random.nextFloat() * 0.16f)
+                    val strokeAlpha = alpha0 * (0.88f + random.nextFloat() * 0.24f)
+                    if (end - start > 14f && random.nextFloat() < 0.3f) {
+                        // 두 번에 나눠 그은 줄: 이음매가 1dp 남짓 겹친다.
+                        val mid = start + (end - start) * (0.35f + random.nextFloat() * 0.3f)
+                        strokes += visitDayFreehandStroke(base + dir * start, base + dir * (mid + 0.6f), strokeWidth, strokeAlpha, random)
+                        strokes += visitDayFreehandStroke(base + dir * (mid - 0.6f), base + dir * end, strokeWidth, strokeAlpha, random)
+                    } else {
+                        strokes += visitDayFreehandStroke(base + dir * start, base + dir * end, strokeWidth, strokeAlpha, random)
+                    }
+                }
+            }
+            c += spacing * (0.8f + 0.4f * random.nextFloat())
+        }
+    }
+    // 첫 번째로 슥슥 칠하고, 각도를 조금 바꿔 듬성듬성 한 번 더 지나간다.
+    hatch(angleDeg = -20f + (random.nextFloat() - 0.5f) * 6f, spacing = 1.3f, widthDp0 = 1.15f, alpha0 = 0.4f, keep = 1f)
+    hatch(angleDeg = -12f + (random.nextFloat() - 0.5f) * 6f, spacing = 2.6f, widthDp0 = 1.05f, alpha0 = 0.28f, keep = 0.55f)
+    return VisitDayPenMark(wash, strokes)
+}
+
+/** [visitDayGelPenMark]를 [color] 잉크로 그린다. 칸 크기가 정해질 때만 path를 만든다. */
+private fun Modifier.visitDayGelPenMark(color: Color, seed: Int): Modifier = drawWithCache {
+    val mark = visitDayGelPenMark(size.width / density, size.height / density, seed)
+    fun pathOf(points: List<Offset>, closed: Boolean) = Path().apply {
+        points.forEachIndexed { index, point ->
+            if (index == 0) moveTo(point.x * density, point.y * density)
+            else lineTo(point.x * density, point.y * density)
+        }
+        if (closed) close()
+    }
+    val washPath = mark?.let { pathOf(it.wash, closed = true) }
+    val strokes = mark?.strokes.orEmpty().map { stroke ->
+        Triple(
+            pathOf(stroke.points, closed = false),
+            Stroke(width = stroke.widthDp * density, cap = StrokeCap.Round),
+            stroke.alpha
+        )
+    }
+    onDrawBehind {
+        washPath?.let { drawPath(it, color = color, alpha = VISIT_DAY_PEN_WASH_ALPHA) }
+        strokes.forEach { (path, style, alpha) -> drawPath(path, color = color, alpha = alpha, style = style) }
+    }
+}
+
 /** 한 달 분량의 날짜 grid만 그린다. [VisitCalendarMonthPage]의 종이 위에 함께 인쇄돼 움직인다. */
 @Composable
 private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>, today: LocalDate) {
@@ -833,13 +988,14 @@ private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>
                         if (date != null) {
                             // 방문 표시는 1차로 채움 색이 맡는다. 셀 전체를 꽉 채우지 않고
                             // 안쪽에 여백을 둬 습관 트래커의 딱딱한 사각형처럼 보이지 않게 한다.
+                            // 96일차: 채움은 민트 중성펜으로 칠한 자국이다(색은 그대로).
                             if (visited) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.Center)
                                         .fillMaxSize()
                                         .padding(3.dp)
-                                        .background(visitDayFillColor(date, today), RoundedCornerShape(2.dp))
+                                        .visitDayGelPenMark(visitDayFillColor(date, today), visitDayPenSeed(date))
                                 )
                             }
                             val cellTextColor = if (visited) visitDayFillContrastColor(date, today) else visitDateColor(date)
@@ -893,9 +1049,185 @@ private val VISIT_CALENDAR_PAGE_BOTTOM_PADDING = 8.dp
 // 장의 경계는 윤곽선 없이 종이 자체의 색·질감과 drawer(PaperSurface)의 색 차로만 읽힌다.
 // 윤곽선은 카드형 박스처럼 보여 90일차 QA에서 제거했다.
 
+// 96일차: 장 가장자리를 가위로 손질한 종이처럼 아주 미세하게 흔든다. 값은 실기기 QA로 다듬는 미감 값이다.
+internal const val VISIT_CALENDAR_PAPER_EDGE_MAX_INSET_DP = 0.5f
+private const val VISIT_CALENDAR_PAPER_EDGE_STEP_DP = 4f
+private const val VISIT_CALENDAR_PAPER_EDGE_SEED = 96_000
+
+// 종이 밑에 깔리는 접촉 그림자. 장 아래·오른쪽으로 1dp 남짓만 비쳐 거의 느껴지지 않게 둔다.
+private val VisitCalendarPaperShadowColor = Color(0xFF3B3226)
+private val VISIT_CALENDAR_PAPER_SHADOW_LAYERS = listOf(
+    Triple(0.3f, 0.8f, 0.06f), // dx dp, dy dp, alpha
+    Triple(0.5f, 1.4f, 0.03f)
+)
+
+/** 달마다 다른, 같은 달이면 언제나 같은 가장자리 모양을 고르는 seed. */
+internal fun visitCalendarPaperEdgeSeed(month: YearMonth): Int =
+    VISIT_CALENDAR_PAPER_EDGE_SEED + month.year * 12 + month.monthValue
+
+/**
+ * 손으로 자른 종이 장의 윤곽(dp, 위→오른쪽→아래→왼쪽 순서의 다각형 꼭짓점). 모든 점은 장
+ * 사각형 안쪽 0~[maxInsetDp] 띠 안에만 놓여 장의 크기·배치는 그대로고, 종이만 그 안에서 살짝
+ * 덜 잘려 나간다. 변마다 긴 물결(가위질 한 번) + 짧은 물결 + 아주 작은 떨림을 섞는다.
+ * 같은 seed면 항상 같은 모양이다 — 재구성돼도 가장자리가 흔들리지 않는다.
+ */
+internal fun visitCalendarPaperEdgeOutline(
+    widthDp: Float,
+    heightDp: Float,
+    seed: Int,
+    maxInsetDp: Float = VISIT_CALENDAR_PAPER_EDGE_MAX_INSET_DP
+): List<Offset> {
+    if (widthDp <= 0f || heightDp <= 0f) return emptyList()
+    val random = kotlin.random.Random(seed)
+    val edges = listOf(
+        Offset(0f, 0f) to Offset(widthDp, 0f),
+        Offset(widthDp, 0f) to Offset(widthDp, heightDp),
+        Offset(widthDp, heightDp) to Offset(0f, heightDp),
+        Offset(0f, heightDp) to Offset(0f, 0f)
+    )
+    val points = mutableListOf<Offset>()
+    edges.forEach { (from, to) ->
+        val length = (to - from).getDistance()
+        val dir = (to - from) / length
+        // 시계 방향으로 돌기 때문에 진행 방향의 오른쪽이 장 안쪽이다.
+        val inward = Offset(-dir.y, dir.x)
+        val phase1 = random.nextFloat() * 6.28f
+        val phase2 = random.nextFloat() * 6.28f
+        val freq1 = 0.05f + random.nextFloat() * 0.05f
+        val freq2 = 0.25f + random.nextFloat() * 0.15f
+        val segments = maxOf(2, kotlin.math.ceil(length / VISIT_CALENDAR_PAPER_EDGE_STEP_DP).toInt())
+        for (k in 0 until segments) {
+            val d = length * k / segments
+            val wave = 0.5f + 0.5f * (0.65f * kotlin.math.sin(d * freq1 + phase1) + 0.35f * kotlin.math.sin(d * freq2 + phase2))
+            val jitter = random.nextFloat() * 0.15f
+            val inset = (maxInsetDp * (wave * 0.85f + jitter)).coerceIn(0f, maxInsetDp)
+            points += from + dir * d + inward * inset
+        }
+    }
+    return points
+}
+
+// 96일차 2단계: 장 윗변 가운데에 반쯤 걸쳐 붙인 짧은 마스킹테이프 한 조각. 출첵 민트와 겨루지
+// 않게 아이보리~연베이지를 반투명하게 쓴다 — 베이지 종이(평균 약 #E8D4BA) 위에서는 살짝 밝은 띠로,
+// drawer 바탕(PaperSurface) 위에서는 살짝 탁한 띠로 읽힌다. 값은 실기기 QA로 다듬는 미감 값이다.
+private val VisitCalendarTapeColor = Color(0xFFF6EEDC)
+private const val VISIT_CALENDAR_TAPE_ALPHA = 0.62f
+private val VisitCalendarTapeFiberColor = Color(0xFFB8A27E)
+private const val VISIT_CALENDAR_TAPE_FIBER_WIDTH_DP = 0.35f
+private const val VISIT_CALENDAR_TAPE_SEED = 96_200
+internal const val VISIT_CALENDAR_TAPE_HEIGHT_DP = 11f
+internal const val VISIT_CALENDAR_TAPE_MIN_ANGLE_DEG = 1f
+internal const val VISIT_CALENDAR_TAPE_MAX_ANGLE_DEG = 2f
+// 테이프 중심은 장 윗변보다 조금 아래 — 위쪽 절반은 장 위 6dp 틈에, 아래쪽은 제목 글자 위 여백에 놓인다.
+private const val VISIT_CALENDAR_TAPE_CENTER_Y_DP = 1.5f
+
+/**
+ * 테이프 한 조각의 모양(dp). [outline]과 [fibers]는 테이프 중심이 (0, 0)인 자기 좌표이고,
+ * 그릴 때 장 윗변 가운데 + [centerOffsetXDp] 위치로 옮겨 [angleDeg]만큼 돌린다.
+ * [fibers]는 (시작, 끝, alpha) — 길이 방향으로 지나가는 아주 옅은 종이 섬유.
+ */
+internal class VisitCalendarTapePiece(
+    val outline: List<Offset>,
+    val fibers: List<Triple<Offset, Offset, Float>>,
+    val lengthDp: Float,
+    val angleDeg: Float,
+    val centerOffsetXDp: Float
+)
+
+internal fun visitCalendarTapeSeed(month: YearMonth): Int =
+    VISIT_CALENDAR_TAPE_SEED + month.year * 12 + month.monthValue
+
+/**
+ * 손으로 뜯어 붙인 테이프 한 조각. 긴 변은 공장에서 잘린 그대로 거의 곧고, 양 끝만 손으로
+ * 찢어 들쭉날쭉하다 — 두 끝은 서로 다른 난수와 기울기를 써서 좌우대칭이 되지 않는다.
+ * 길이·위치·각도(±1~2°)는 달마다 조금씩 다르고, 같은 seed면 항상 같은 조각이다.
+ */
+internal fun visitCalendarTapePiece(seed: Int): VisitCalendarTapePiece {
+    val random = kotlin.random.Random(seed)
+    val length = 40f + random.nextFloat() * 8f
+    val halfL = length / 2f
+    val halfH = VISIT_CALENDAR_TAPE_HEIGHT_DP / 2f
+    val angleSign = if (random.nextBoolean()) 1f else -1f
+    val angle = angleSign * (VISIT_CALENDAR_TAPE_MIN_ANGLE_DEG +
+        random.nextFloat() * (VISIT_CALENDAR_TAPE_MAX_ANGLE_DEG - VISIT_CALENDAR_TAPE_MIN_ANGLE_DEG))
+    val centerOffsetX = (random.nextFloat() - 0.5f) * 6f
+
+    fun straightEdge(fromX: Float, toX: Float, y: Float): List<Offset> {
+        val steps = maxOf(2, kotlin.math.ceil(kotlin.math.abs(toX - fromX) / 4f).toInt())
+        return (0 until steps).map { k ->
+            Offset(fromX + (toX - fromX) * k / steps, y + (random.nextFloat() - 0.5f) * 0.16f)
+        }
+    }
+
+    // 찢긴 끝: 위→아래(또는 아래→위)로 1dp 남짓 간격의 톱니. inwardSign은 테이프 안쪽 방향.
+    fun tornEnd(x: Float, fromY: Float, toY: Float, inwardSign: Float): List<Offset> {
+        val slant = (random.nextFloat() - 0.5f) * 2f // 끝 전체가 비스듬히 찢긴 정도(dp)
+        val steps = 8 + random.nextInt(4)
+        return (0 until steps).map { k ->
+            val t = k.toFloat() / steps
+            val y = fromY + (toY - fromY) * t
+            val tooth = random.nextFloat() * 1.4f
+            Offset(x + inwardSign * (tooth + (slant * (t - 0.5f)).coerceAtLeast(-0.6f) + 0.6f), y)
+        }
+    }
+
+    val outline = buildList {
+        addAll(straightEdge(-halfL, halfL, -halfH))
+        addAll(tornEnd(halfL, -halfH, halfH, inwardSign = -1f))
+        addAll(straightEdge(halfL, -halfL, halfH))
+        addAll(tornEnd(-halfL, halfH, -halfH, inwardSign = 1f))
+    }
+
+    val fibers = List(5 + random.nextInt(4)) {
+        val y = -halfH + 1.2f + random.nextFloat() * (VISIT_CALENDAR_TAPE_HEIGHT_DP - 2.4f)
+        val fiberLength = 6f + random.nextFloat() * 14f
+        val startX = -halfL + 3f + random.nextFloat() * (length - 6f - fiberLength).coerceAtLeast(0f)
+        val tilt = (random.nextFloat() - 0.5f) * 0.8f
+        Triple(
+            Offset(startX, y),
+            Offset(startX + fiberLength, (y + tilt).coerceIn(-halfH + 0.8f, halfH - 0.8f)),
+            0.05f + random.nextFloat() * 0.06f
+        )
+    }
+    return VisitCalendarTapePiece(outline, fibers, length, angle, centerOffsetX)
+}
+
+/** [visitCalendarTapePiece]를 px path로. drawWithCache에서 장 크기가 정해질 때만 만든다. */
+private fun visitCalendarTapePath(tape: VisitCalendarTapePiece, density: Float): Path = Path().apply {
+    tape.outline.forEachIndexed { index, point ->
+        if (index == 0) moveTo(point.x * density, point.y * density)
+        else lineTo(point.x * density, point.y * density)
+    }
+    close()
+}
+
+/** 장 윗변 가운데에 테이프를 붙인다. 장 위쪽 틈까지 걸쳐 그리며, 장과 함께 넘어간다. */
+private fun DrawScope.drawVisitCalendarTape(tape: VisitCalendarTapePiece, tapePath: Path) {
+    val centerX = size.width / 2f + tape.centerOffsetXDp * density
+    val centerY = VISIT_CALENDAR_TAPE_CENTER_Y_DP * density
+    withTransform({
+        translate(left = centerX, top = centerY)
+        rotate(degrees = tape.angleDeg, pivot = Offset.Zero)
+    }) {
+        drawPath(tapePath, color = VisitCalendarTapeColor, alpha = VISIT_CALENDAR_TAPE_ALPHA)
+        tape.fibers.forEach { (from, to, alpha) ->
+            drawLine(
+                color = VisitCalendarTapeFiberColor,
+                start = from * density,
+                end = to * density,
+                strokeWidth = VISIT_CALENDAR_TAPE_FIBER_WIDTH_DP * density,
+                cap = StrokeCap.Round,
+                alpha = alpha
+            )
+        }
+    }
+}
+
 /**
  * 종이 한 장에 인쇄된 것처럼 함께 움직이는 달력 한 달. 종이 bitmap은 호출부가 한 번만
  * 불러와 넘기고, 여기서는 늘리지 않고 비율을 유지한 채 장을 꽉 채우도록 가운데를 잘라 그린다.
+ * 96일차: 종이는 [visitCalendarPaperEdgeOutline] 모양으로 오려 그리고(경계 안티에일리어싱을 위해
+ * clip 대신 종이 무늬를 채운 path), 그 밑에 아주 옅은 접촉 그림자를 깐다.
  * 이 composable 안에서는 파라미터로 받은 [month]만 읽는다.
  */
 @Composable
@@ -917,13 +1249,37 @@ private fun VisitCalendarMonthPage(
                 val srcWidth = (dstWidth / scale).toInt().coerceIn(1, paper.width)
                 val srcHeight = (dstHeight / scale).toInt().coerceIn(1, paper.height)
                 val srcOffset = IntOffset((paper.width - srcWidth) / 2, (paper.height - srcHeight) / 2)
-                onDrawBehind {
-                    drawImage(
-                        image = paper,
-                        srcOffset = srcOffset,
-                        srcSize = IntSize(srcWidth, srcHeight),
-                        dstSize = IntSize(dstWidth, dstHeight)
+                // 가운데를 잘라 장에 맞추던 기존 계산을 그대로 종이 무늬의 위치·배율로 옮긴다.
+                val paperShader = ImageShader(paper).apply {
+                    setLocalMatrix(
+                        android.graphics.Matrix().apply {
+                            setTranslate(-srcOffset.x.toFloat(), -srcOffset.y.toFloat())
+                            postScale(dstWidth.toFloat() / srcWidth, dstHeight.toFloat() / srcHeight)
+                        }
                     )
+                }
+                val paperBrush = ShaderBrush(paperShader)
+                val outline = Path().apply {
+                    visitCalendarPaperEdgeOutline(
+                        widthDp = size.width / density,
+                        heightDp = size.height / density,
+                        seed = visitCalendarPaperEdgeSeed(month)
+                    ).forEachIndexed { index, point ->
+                        if (index == 0) moveTo(point.x * density, point.y * density)
+                        else lineTo(point.x * density, point.y * density)
+                    }
+                    close()
+                }
+                val tape = visitCalendarTapePiece(visitCalendarTapeSeed(month))
+                val tapePath = visitCalendarTapePath(tape, density)
+                onDrawBehind {
+                    VISIT_CALENDAR_PAPER_SHADOW_LAYERS.forEach { (dx, dy, alpha) ->
+                        translate(left = dx * density, top = dy * density) {
+                            drawPath(outline, color = VisitCalendarPaperShadowColor, alpha = alpha)
+                        }
+                    }
+                    drawPath(outline, brush = paperBrush)
+                    drawVisitCalendarTape(tape, tapePath)
                 }
             }
             .padding(

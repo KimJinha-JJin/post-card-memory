@@ -1,3 +1,38 @@
+# HANDOFF — 96일차: 방문 달력 질감 보강 (구현·QA 완료, Git 마감 대기)
+
+- **3단계·전체 실기기 QA: 사용자 승인(2026-10-07, 옅게 조정 후 "귀여워 너무 마음에 들어").** 첫 QA에서 "팔레트에 묻은 물감 느낌"이라 바탕 α0.75→0.5, 획 α0.42→0.4·0.3→0.28로 옅게 조정. 날짜 글자색 규칙은 바꾸지 않음.
+- **최종 자동검증:** 전체 `testDebugUnitTest` 919/919(XML 95, 실패·오류·skip 0), `@Test` 919개/테스트 파일 94개(+helper 1), assembleDebug 성공, diff --check 통과. TEST-COVERAGE-MAP 갱신 완료(907→919, 구조 159→162, 96일차 항목 추가).
+- **Git 마감 대상:** `VisitCalendarDrawer.kt`, `VisitCalendarTest.kt`, `VisitCalendarPaperPageStructureTest.kt`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 HANDOFF. 제외: `postcard_paper_fiber_tile.png`(사용자 결정 대기), `.codex-config.candidate.toml`, `.kotlin/`. commit·push는 사용자 승인 대기.
+- 다음 후보(실행 승인 아님): 펜 자국 위 날짜 글자 가독성은 장기 사용 중 관찰, 95일차 HANDOFF의 CI 성공 기록 보정(10-06 run 성공 확인됨).
+
+- **2단계 실기기 QA: 사용자 승인(2026-10-07, "이 테이프 때문에 더 질감이 잘 살았어").**
+- **3단계 구현(미커밋):** `VisitCalendarMonthGrid` 방문일 표시를 `.background(색, RoundedCornerShape(2.dp))` → `Modifier.visitDayGelPenMark(visitDayFillColor(date, today), visitDayPenSeed(date))`. 색 상수·오늘 진한 색·글자 자동 대비·카오모지·셀 크기 미변경. 자국 = 손떨림 외곽(±0.35dp)의 잉크 바탕 α0.5 + 약한 사선(-20°±3) 획 1.15dp·간격 1.3dp·α0.4 + 각도 바꾼 두 번째 듬성 패스(-12°±3, α0.28). 첫 QA("귀여운데 팔레트에 묻은 물감 같음")로 바탕 α0.75·획 0.42·0.3에서 옅게 조정, 가끔 한 줄을 두 번에 나눠 이음매가 겹침. seed=날짜라 같은 날은 항상 같은 자국. 순수 생성 함수 `visitDayGelPenMark`(기억밀도 코드와 공유 안 함 — 수치만 같은 문구류 느낌으로 맞춤).
+- 테스트 추가: `VisitCalendarTest` +3(같은 날 같은 자국·다른 날 다른 자국 / 400일 동안 바탕이 칸 안 손떨림 띠·획 15개 이상·칸 밖 1dp 이내·굵기 0.9~1.4·α0.2~0.55·각도 -30~-5° / 측정 전 null), `VisitCalendarPaperPageStructureTest` +1(채움 색 그대로 중성펜 자국, `.background(` 복귀 금지). 자동검증: gallery 176/176(16 suite), assembleDebug 성공, diff --check 통과. **3단계·전체 실기기 QA 사용자 확인 대기.** 위험: 글자색은 단색 기준 자동 대비(크림 글자)라 칠한 농도가 옅어 보이면 날짜 가독성 확인 필요.
+- **1단계 실기기 QA: 사용자 승인("좋아 적당해", 2026-10-07).**
+- **2단계 구현(미커밋):** 장 윗변 가운데에 코드로 그린 마스킹테이프 한 조각(`visitCalendarTapePiece`, 순수 함수, seed=`visitCalendarTapeSeed(month)`). 아이보리 #F6EEDC α0.62, 높이 11dp, 길이 40~48dp, 중심 x ±3dp, 각도 ±1~2°, 긴 변은 곧고 양 끝만 서로 다른 톱니(최대 안쪽 2.5dp), 길이 방향 섬유 5~8가닥(#B8A27E α0.05~0.11, 0.35dp). 중심 y=+1.5dp라 위쪽은 장 위 6dp 틈에, 아래는 제목 위 여백에 걸침. 종이 위에 그려 장과 함께 넘어감. 갤러리 민트 테이프 자산은 쓰지 않음.
+- 테스트 추가: `VisitCalendarTest` +2(같은 달 같은 조각·이웃 달 다른 조각 / 2020~2030 전 월 각도 1~2°·길이·테이프 안 섬유·좌우 끝 비대칭), `VisitCalendarPaperPageStructureTest` +1(이 달의 테이프를 종이 다음에 그림, 자산 미사용). 자동검증: gallery 172/172(16 suite), assembleDebug 성공, diff --check 통과. **2단계 실기기 QA 사용자 확인 대기.**
+
+## 1단계 기록
+
+확인일: 2026-10-07. 수동 표준 모드(96일차 작업지시서, 담당 Claude Code). 시작 HEAD `71ef5e3`, origin 0/0, tracked clean. **이 문서의 다음 후보는 실행 승인이 아니야.**
+
+- 사용자 확정 방향: 새 종이를 얹지 않고 현재 달력 장(`VisitCalendarMonthPage`) 자체를 손으로 자른 종이처럼(가장자리 약 0.5dp, 달마다 다르고 같은 달은 고정, 그림자 거의 없음). 2단계 테이프는 아이보리~연베이지 반투명·각도 ±1~2°(민트 아님). 3단계 민트 중성펜 출첵. 단계마다 실기기 확인 후 다음 단계.
+- **1단계 구현(미커밋):** `VisitCalendarDrawer.kt` — `visitCalendarPaperEdgeOutline`(순수 함수, dp 다각형, 장 안쪽 0~0.5dp 띠, seed=`visitCalendarPaperEdgeSeed(month)`) 모양으로 종이 bitmap을 `ImageShader`+`ShaderBrush`로 채운 path로 그림(clipPath는 경계 계단 현상 우려로 미사용). 기존 가운데 자르기 배율 계산은 shader matrix로 그대로 옮김. 밑에 접촉 그림자 2겹(0.3/0.8dp α0.06, 0.5/1.4dp α0.03, 색 #3B3226). 장 크기·배치·넘김 애니메이션·날짜 grid·방문 표시·색·월/연도 선택 화면 미변경. 테이프·중성펜 미착수.
+- 테스트: `VisitCalendarTest` +4(같은 달 같은 모양, 이웃 달 다른 모양, 2020~2030 전 월 장 밖 이탈 없음·0.5dp 띠 안·반듯한 사각형 아님, 측정 전 빈 윤곽). `VisitCalendarPaperPageStructureTest`: 장 안 종이 그리기 확인 문자열을 `drawImage(` → `ImageShader(paper)`로 바꾸고(의미 동일: 종이가 장 안에서 그려짐), +1(이 장의 month seed로 오린 path로 그림, clipPath 없음). 윤곽선 금지(`Stroke(`/`.border(`)·늘리기 금지 검사는 그대로 통과.
+
+| 구분 | 상태 |
+|---|---|
+| 구현 | 1·2·3단계 완료 (3단계 옅게 조정 포함) |
+| 로컬 자동검증 | 실행: `testDebugUnitTest --tests com.postcardmemory.ui.gallery.*` 176/176(16 suite) → 최종 전체 919/919(XML 95), assembleDebug 성공, diff --check 통과 |
+| 실사용 기기 instrumentation | 미실행(불필요·금지) |
+| 실기기 감각 QA | 1·2·3단계·전체 사용자 승인 |
+| TEST-COVERAGE-MAP | 갱신 완료(907→919, 구조 159→162) |
+| commit / push / CI | 미승인·미실행 (사용자 승인 대기) |
+
+- 미커밋 유지: `postcard_paper_fiber_tile.png`(사용자 결정 대기), 보호 untracked 2개.
+
+---
+
 # HANDOFF — 95일차: 메인 상단 시계·손·커피잔 배치 후속 수정
 
 ## 마감 승인

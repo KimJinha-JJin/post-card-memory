@@ -456,4 +456,121 @@ class VisitCalendarTest {
             assertTrue(visitCalendarPageTurnAlpha(lift, forward = true) >= visitCalendarPageTurnAlpha(lift, forward = false))
         }
     }
+
+    @Test fun paperEdgeOutlineIsTheSameShapeEveryTimeForTheSameMonth() {
+        val seed = visitCalendarPaperEdgeSeed(YearMonth.of(2026, 10))
+        assertEquals(seed, visitCalendarPaperEdgeSeed(YearMonth.of(2026, 10)))
+        assertEquals(
+            visitCalendarPaperEdgeOutline(256f, 330f, seed),
+            visitCalendarPaperEdgeOutline(256f, 330f, seed)
+        )
+    }
+
+    @Test fun paperEdgeOutlineDiffersBetweenNeighbouringMonths() {
+        val months = listOf(YearMonth.of(2026, 9), YearMonth.of(2026, 10), YearMonth.of(2026, 11), YearMonth.of(2027, 1))
+        val seeds = months.map(::visitCalendarPaperEdgeSeed)
+        assertEquals(seeds.size, seeds.toSet().size)
+        val outlines = seeds.map { visitCalendarPaperEdgeOutline(256f, 330f, it) }
+        assertEquals(outlines.size, outlines.toSet().size)
+    }
+
+    @Test fun paperEdgeOutlineStaysInsideThePageWithinTheTinyCutBand() {
+        val width = 256f
+        val height = 330f
+        val band = VISIT_CALENDAR_PAPER_EDGE_MAX_INSET_DP
+        val epsilon = 1e-3f
+        (2020..2030).flatMap { y -> (1..12).map { YearMonth.of(y, it) } }.forEach { month ->
+            val outline = visitCalendarPaperEdgeOutline(width, height, visitCalendarPaperEdgeSeed(month))
+            assertTrue(outline.size > 4)
+            outline.forEach { p ->
+                // 장 밖으로 나가지 않는다 — 장 크기·배치는 그대로다.
+                assertTrue(p.x >= -epsilon && p.x <= width + epsilon)
+                assertTrue(p.y >= -epsilon && p.y <= height + epsilon)
+                // 어느 변에서든 띠 안에 있다 — 가장자리만 미세하게 흔들린다.
+                val distanceToEdge = minOf(p.x, p.y, width - p.x, height - p.y)
+                assertTrue("$month $p", distanceToEdge <= band + epsilon)
+            }
+            assertTrue("$month 가장자리가 반듯한 사각형이면 안 됨", outline.any { p -> minOf(p.x, p.y, width - p.x, height - p.y) > 0.05f })
+        }
+    }
+
+    @Test fun tapePieceIsTheSameEveryTimeForTheSameMonthAndDiffersBetweenMonths() {
+        val october = visitCalendarTapePiece(visitCalendarTapeSeed(YearMonth.of(2026, 10)))
+        val again = visitCalendarTapePiece(visitCalendarTapeSeed(YearMonth.of(2026, 10)))
+        assertEquals(october.outline, again.outline)
+        assertEquals(october.fibers, again.fibers)
+        assertEquals(october.angleDeg, again.angleDeg, 0f)
+        val november = visitCalendarTapePiece(visitCalendarTapeSeed(YearMonth.of(2026, 11)))
+        assertNotEquals(october.outline, november.outline)
+    }
+
+    @Test fun tapePieceIsAShortSlightlyTiltedStripWithUnevenTornEnds() {
+        val halfH = VISIT_CALENDAR_TAPE_HEIGHT_DP / 2f
+        (2020..2030).flatMap { y -> (1..12).map { YearMonth.of(y, it) } }.forEach { month ->
+            val tape = visitCalendarTapePiece(visitCalendarTapeSeed(month))
+            val magnitude = kotlin.math.abs(tape.angleDeg)
+            assertTrue("$month 각도 ${tape.angleDeg}", magnitude >= VISIT_CALENDAR_TAPE_MIN_ANGLE_DEG && magnitude <= VISIT_CALENDAR_TAPE_MAX_ANGLE_DEG)
+            assertTrue("$month 길이 ${tape.lengthDp}", tape.lengthDp in 40f..48f)
+            val halfL = tape.lengthDp / 2f
+            tape.outline.forEach { p ->
+                assertTrue("$month $p", kotlin.math.abs(p.x) <= halfL + 1e-3f && kotlin.math.abs(p.y) <= halfH + 0.1f)
+            }
+            tape.fibers.forEach { (from, to, alpha) ->
+                listOf(from, to).forEach { p -> assertTrue("$month 섬유는 테이프 안", kotlin.math.abs(p.x) < halfL && kotlin.math.abs(p.y) < halfH) }
+                assertTrue("$month 섬유는 아주 옅어야 함", alpha <= 0.12f)
+            }
+            // 양 끝은 찢긴 모양이 서로 달라 좌우대칭이 아니다.
+            val rightEnd = tape.outline.filter { it.x > halfL - 3f }.map { halfL - it.x }
+            val leftEnd = tape.outline.filter { it.x < -halfL + 3f }.map { it.x + halfL }
+            assertTrue(rightEnd.size > 2 && leftEnd.size > 2)
+            assertNotEquals("$month", rightEnd.sorted(), leftEnd.sorted())
+        }
+    }
+
+    @Test fun gelPenMarkIsTheSameEveryTimeForTheSameDateAndDiffersBetweenDays() {
+        val day = LocalDate.of(2026, 10, 7)
+        val first = visitDayGelPenMark(29f, 28f, visitDayPenSeed(day))!!
+        val again = visitDayGelPenMark(29f, 28f, visitDayPenSeed(day))!!
+        assertEquals(first.wash, again.wash)
+        assertEquals(first.strokes.map { it.points }, again.strokes.map { it.points })
+        val next = visitDayGelPenMark(29f, 28f, visitDayPenSeed(day.plusDays(1)))!!
+        assertNotEquals(first.strokes.map { it.points }, next.strokes.map { it.points })
+    }
+
+    @Test fun gelPenMarkIsShortGentlyDiagonalStrokesThatStayOnTheCell() {
+        val width = 29f
+        val height = 28f
+        (0L until 400L).map { LocalDate.of(2026, 1, 1).plusDays(it) }.forEach { day ->
+            val mark = visitDayGelPenMark(width, height, visitDayPenSeed(day))!!
+            // 바탕 외곽은 칸 안쪽에서 손떨림만큼만 흔들린다.
+            mark.wash.forEach { p ->
+                assertTrue("$day $p", p.x in 0f..width && p.y in 0f..height)
+                assertTrue("$day $p", minOf(p.x, p.y, width - p.x, height - p.y) <= 0.5f + VISIT_DAY_PEN_EDGE_WOBBLE_DP + 1e-3f)
+            }
+            assertTrue("$day 획이 충분히 반복돼야 함", mark.strokes.size >= 15)
+            mark.strokes.forEach { stroke ->
+                stroke.points.forEach { p ->
+                    assertTrue("$day 획은 칸에서 1dp 넘게 삐져나가면 안 됨 $p", p.x in -1f..width + 1f && p.y in -1f..height + 1f)
+                }
+                // 중성펜: 굵기·농도가 고르고 바탕보다 옅게 겹친다(색연필·크레파스처럼 진하게 뭉치지 않음).
+                assertTrue(stroke.widthDp in 0.9f..1.4f)
+                assertTrue(stroke.alpha in 0.2f..0.55f)
+                // 약한 사선: 거의 가로~-30° 사이로 오른쪽 위를 향한다.
+                val dx = stroke.points.last().x - stroke.points.first().x
+                val dy = stroke.points.last().y - stroke.points.first().y
+                val angle = Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble())
+                assertTrue("$day 각도 $angle", angle in -30.0..-5.0)
+            }
+        }
+    }
+
+    @Test fun gelPenMarkIsNothingForAnUnmeasuredCell() {
+        assertNull(visitDayGelPenMark(0f, 28f, 1))
+        assertNull(visitDayGelPenMark(29f, 0f, 1))
+    }
+
+    @Test fun paperEdgeOutlineIsEmptyForAnUnmeasuredPage() {
+        assertTrue(visitCalendarPaperEdgeOutline(0f, 330f, 1).isEmpty())
+        assertTrue(visitCalendarPaperEdgeOutline(256f, 0f, 1).isEmpty())
+    }
 }

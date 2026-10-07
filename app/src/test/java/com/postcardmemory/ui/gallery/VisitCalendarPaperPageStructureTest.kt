@@ -99,7 +99,7 @@ class VisitCalendarPaperPageStructureTest {
     @Test
     fun page_containsEverythingPrintedOnThePaper() {
         listOf(
-            "drawImage(",
+            "ImageShader(paper)",
             "\${month.year}년 \${month.monthValue}월",
             "VisitCalendarTopOrnament()",
             "VISIT_CALENDAR_WEEKDAY_HEADERS",
@@ -111,6 +111,38 @@ class VisitCalendarPaperPageStructureTest {
             "달력 한 장은 자기 month만 읽어야 함(나가는 장이 다음 달로 바뀌지 않게)",
             pageBody.contains("displayedMonth")
         )
+    }
+
+    @Test
+    fun paper_isCutAlongThisMonthsOwnHandCutEdge() {
+        assertTrue(
+            "종이는 이 장의 month로 고른 가장자리 모양으로 오려 그려야 함",
+            pageBody.contains("seed = visitCalendarPaperEdgeSeed(month)")
+        )
+        assertTrue("오린 종이는 path로 채워 그려야 함", pageBody.contains("drawPath(outline, brush = paperBrush)"))
+        assertFalse("가장자리는 안티에일리어싱 없는 clip이 아니라 채운 path여야 함", pageBody.contains("clipPath("))
+    }
+
+    @Test
+    fun visitedDay_isMarkedWithTheGelPenInTheUnchangedFillColor() {
+        val grid = functionBody("private fun VisitCalendarMonthGrid(")
+        assertTrue(
+            "방문일은 기존 채움 색 그대로 그 날짜의 중성펜 자국으로 칠해야 함",
+            grid.contains(".visitDayGelPenMark(visitDayFillColor(date, today), visitDayPenSeed(date))")
+        )
+        assertFalse("매끈한 단색 상자로 돌아가면 안 됨", grid.contains(".background("))
+    }
+
+    @Test
+    fun tape_isStuckOnThisMonthsPageAndTurnsWithIt() {
+        assertTrue(
+            "테이프는 이 장의 month로 고른 조각이어야 함",
+            pageBody.contains("visitCalendarTapePiece(visitCalendarTapeSeed(month))")
+        )
+        val paper = pageBody.indexOf("drawPath(outline, brush = paperBrush)")
+        val tape = pageBody.indexOf("drawVisitCalendarTape(")
+        assertTrue("테이프는 장 안에서 종이 위에 붙어야 함", paper >= 0 && tape > paper)
+        assertFalse("테이프는 자산 이미지가 아니라 코드 그림이어야 함", sourceText.contains("gallery_date_paper_strip"))
     }
 
     @Test
