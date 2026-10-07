@@ -615,6 +615,44 @@ class VisitCalendarTest {
         assertEquals("세 바퀴 남짓과 네 바퀴 가까이가 모두 나와야 함", setOf(3, 4), turnCounts)
     }
 
+    @Test fun newsprintArrowIsTheSameEveryTimeAndCutDifferentlyForEachSeed() {
+        assertEquals(visitCalendarNewsprintArrow(true, 7), visitCalendarNewsprintArrow(true, 7))
+        assertNotEquals(visitCalendarNewsprintArrow(true, 7).outline, visitCalendarNewsprintArrow(true, 8).outline)
+    }
+
+    @Test fun newsprintArrowStaysAClearlyPointingDarkTriangleWithAFewPaperDots() {
+        (0 until 300).forEach { seed ->
+            listOf(true, false).forEach { pointsLeft ->
+                val arrow = visitCalendarNewsprintArrow(pointsLeft, seed)
+                val outline = arrow.outline
+                // 반듯한 디지털 삼각형이 아니라 가위로 몇 번 끊어 자른 윤곽, 상자 안.
+                assertTrue("$seed 윤곽 점 ${outline.size}", outline.size in 6..9)
+                outline.forEach { p -> assertTrue("$seed 상자 밖 $p", p.x in 1f..19f && p.y in 1f..19f) }
+                // 방향이 즉시 읽힌다: 끝점은 세로 가운데, 몸통보다 한쪽으로 확실히 나와 있다.
+                val tip = if (pointsLeft) outline.minBy { it.x } else outline.maxBy { it.x }
+                val back = if (pointsLeft) outline.maxOf { it.x } else outline.minOf { it.x }
+                assertTrue("$seed 끝점 높이 ${tip.y}", tip.y in 9f..11f)
+                assertTrue("$seed 폭", kotlin.math.abs(back - tip.x) in 8f..10f)
+                assertTrue("$seed 높이", outline.maxOf { it.y } - outline.minOf { it.y } in 10f..12f)
+                // 망점은 잉크 안쪽에만 있고, 비치는 종이가 잉크를 이기지 않는다(조작부 가독성).
+                assertTrue("$seed 망점 ${arrow.dots.size}", arrow.dots.size >= 10)
+                arrow.dots.forEach { dot ->
+                    assertTrue("$seed 망점 크기 ${dot.radiusDp}", dot.radiusDp in 0.1f..0.38f)
+                    assertTrue("$seed 망점이 윤곽 밖", dot.center.x in outline.minOf { it.x }..outline.maxOf { it.x })
+                }
+                val dotArea = arrow.dots.sumOf { Math.PI * it.radiusDp * it.radiusDp }
+                val triangleArea = 0.5 * 9 * 11
+                assertTrue("$seed 종이가 너무 많이 비침 ${dotArea / triangleArea}", dotArea / triangleArea in 0.03..0.3)
+            }
+        }
+    }
+
+    @Test fun newsprintArrowsMirrorEachOther() {
+        val left = visitCalendarNewsprintArrow(true, 1)
+        val right = visitCalendarNewsprintArrow(false, 1)
+        assertEquals(left.outline.map { Offset(20f - it.x, it.y) }, right.outline)
+    }
+
     @Test fun todayCircleIsNothingForAnUnmeasuredNumber() {
         assertTrue(visitTodayPenCircle(0f, 13f, 1).isEmpty())
         assertTrue(visitTodayPenCircle(12f, 0f, 1).isEmpty())

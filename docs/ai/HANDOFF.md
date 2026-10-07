@@ -1,3 +1,16 @@
+# HANDOFF — 96일차 추가: 방문 달력 월 이동 화살표 신문 오림 (구현·자동검증·실기기 QA 완료)
+
+확인일: 2026-10-07. 수동 표준 모드(96일차 추가 작업지시서), 담당 Claude Code. 시작 HEAD `33a2ce9`(origin과 같음), tracked clean. **다음 후보는 실행 승인이 아니다.**
+
+- **조사 사실:** ◀ ▶는 달력 장 위에 겹쳐 고정된 `IconButton`(기본 48dp 터치) 안의 Material `KeyboardArrowLeft/Right`(꺾쇠, 20dp, InkSecondary). disabled 상태 없음, 접근성 설명 "이전 달"/"다음 달", 넘김은 `displayedMonth` 변경으로만 시작.
+- **변경(미커밋):** `VisitCalendarDrawer.kt` — Icon만 20dp `Box`(+`semantics { contentDescription }`)로 바꾸고 코드로 그린 신문 오림 삼각형(`visitCalendarNewsprintArrow`, 순수 함수, 고정 seed 96_500/96_501, ◀▶ 윤곽은 서로 거울상)을 그림. 폭 9·높이 11dp 삼각형, 변마다 1~2번 꺾인 가위 윤곽(±0.25dp), 잉크 InkPrimary α0.82 + 0.5dp 옅은 번짐(α0.18) + 45° 망점(간격 1.15dp, 반지름 0.1~0.38dp, 종이색 #E9E1D3, 가장자리 0.5dp 안쪽만). IconButton·onClick·위치·터치 영역 그대로, 배경·테두리·그림자 없음. 새 이미지 자산 없음. 쓰지 않게 된 auto-mirrored 화살표 import 삭제.
+- **테스트:** `VisitCalendarTest` +3(결정성·seed별 다른 윤곽 / 300 seed×양방향: 윤곽 6~9점·상자 안·끝점 세로 가운데·폭 8~10·높이 10~12·망점 10개 이상·종이 비침 3~30% / 좌우 거울상), `VisitCalendarPaperPageStructureTest` +1(버튼·onClick·접근성 설명·크기 유지, `Icons.` 복귀 금지, 배경·테두리·그림자 금지). 자동검증: gallery 184/184(16 suite), assembleDebug 성공, diff --check 통과. 핵심 해결 시도 외: 함수 이름 충돌 컴파일 오류 1회(Modifier를 `visitCalendarNewsprintArrowMark`로 개명).
+- **실기기 감각 QA: 사용자 승인(2026-10-07, 첫 시도 값 그대로 "좋아, 이대로 승인")** — 이전/다음 인식, 신문 세계관, 튀는 정도, 누르기 편의 기준.
+- **최종 자동검증:** 전체 `testDebugUnitTest` 927/927(XML 95, 실패·오류·skip 0), `@Test` 927개. TEST-COVERAGE-MAP 갱신 완료(923→927, 구조 163→164).
+- **Git:** 사용자 승인(다음 실험 전에 먼저 마감)으로 commit·push. CI 결과는 완료보고에서 확인. 대상: `VisitCalendarDrawer.kt`, `VisitCalendarTest.kt`, `VisitCalendarPaperPageStructureTest.kt`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 HANDOFF. 제외 유지: `postcard_paper_fiber_tile.png`, `.codex-config.candidate.toml`, `.kotlin/`. 직전 `33a2ce9`(리본) CI run `37572520232` 성공.
+
+---
+
 # HANDOFF — 96일차 추가: 방문 달력 하단 신문 오림 리본 (구현·자동검증·실기기 QA 완료)
 
 확인일: 2026-10-07. 수동 표준 모드(96일차 추가 작업지시서 + 사용자 방향 3번 선택), 담당 Claude Code. 시작 HEAD `63fddb3`(origin과 같음), tracked clean. **다음 후보는 실행 승인이 아니다.**

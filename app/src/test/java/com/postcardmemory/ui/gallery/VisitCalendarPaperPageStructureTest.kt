@@ -184,6 +184,24 @@ class VisitCalendarPaperPageStructureTest {
     }
 
     @Test
+    fun monthArrowsKeepTheirButtonsAndOnlyLookCutFromNewsprint() {
+        listOf(
+            Triple("minusMonths(1)", "\"이전 달\"", "pointsLeft = true"),
+            Triple("plusMonths(1)", "\"다음 달\"", "pointsLeft = false")
+        ).forEach { (move, label, direction) ->
+            val button = calendarBody.indexOf("IconButton(onClick = { displayedMonth = displayedMonth.$move })")
+            assertTrue("$label 버튼(48dp 터치 영역·클릭)은 그대로여야 함", button > monthTransition)
+            val inside = calendarBody.substring(button, calendarBody.indexOf("\n                                }", button))
+            assertTrue("$label 접근성 설명 유지", inside.contains("contentDescription = $label"))
+            assertTrue("$label 화살표는 신문 오림 삼각형", inside.contains(".visitCalendarNewsprintArrowMark($direction"))
+            assertTrue("$label 화살표 크기 유지", inside.contains("Modifier.size(VISIT_CALENDAR_ARROW_SIZE)"))
+            assertFalse("$label 디지털 아이콘으로 돌아가면 안 됨", inside.contains("Icons."))
+            assertFalse("$label 버튼 배경·테두리·그림자 금지",
+                listOf(".background(", ".border(", ".shadow(").any { inside.contains(it) })
+        }
+    }
+
+    @Test
     fun hierarchyTransitionAndDrawerSurfaceAreUnchanged() {
         val hierarchy = functionBody("private fun AnimatedContentTransitionScope<VisitCalendarNavLevel>.visitCalendarHierarchyTransition(")
         assertTrue("단계 전환은 fade + scale 그대로여야 함", hierarchy.contains("fadeIn(") && hierarchy.contains("scaleIn("))

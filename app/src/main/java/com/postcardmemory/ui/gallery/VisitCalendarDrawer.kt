@@ -34,8 +34,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -66,6 +64,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
@@ -711,6 +710,113 @@ private fun VisitCalendarYearPicker(
                     }
                 }
             }
+        }
+    }
+}
+
+// 96일차 추가: 월 이동 ◀ ▶을 오래된 신문에 인쇄된 작은 삼각형을 가위로 오려 붙인 듯한 표시로.
+// 버튼(IconButton 48dp 터치 영역·클릭·접근성 설명)은 그대로 두고 보이는 화살표만 바꾼다.
+// 가위로 몇 번 끊어 자른 삼각형에 잉크를 칠하고, 45° 망점으로 종이가 비쳐 보이게 한다(하프톤).
+// 흰 테두리·그림자 없음. 조작부라 장식 리본보다 또렷하게 InkPrimary 계열 잉크를 쓴다.
+// 값은 실기기 QA로 다듬는 미감 값이다.
+private val VISIT_CALENDAR_ARROW_SIZE = 20.dp
+private const val VISIT_CALENDAR_ARROW_BOX_DP = 20f
+private const val VISIT_CALENDAR_ARROW_SEED_PREVIOUS = 96_500
+private const val VISIT_CALENDAR_ARROW_SEED_NEXT = 96_501
+private val VisitCalendarArrowInk = InkPrimary.copy(alpha = 0.82f)
+private val VisitCalendarArrowNewsprint = Color(0xFFE9E1D3)
+
+/** 망점 하나(dp, 화살표 상자 기준). 잉크 사이로 비치는 종이다. */
+internal data class VisitCalendarHalftoneDot(val center: Offset, val radiusDp: Float)
+
+/** 오려 낸 삼각형 화살표의 윤곽과 망점(dp, [VISIT_CALENDAR_ARROW_BOX_DP] 정사각 상자 기준). */
+internal data class VisitCalendarNewsprintArrow(val outline: List<Offset>, val dots: List<VisitCalendarHalftoneDot>)
+
+/** [pointsLeft]면 ◀, 아니면 ▶. 같은 seed면 항상 같은 모양이다. */
+internal fun visitCalendarNewsprintArrow(pointsLeft: Boolean, seed: Int): VisitCalendarNewsprintArrow {
+    val random = kotlin.random.Random(seed)
+    fun jitter(amount: Float) = (random.nextFloat() - 0.5f) * 2f * amount
+    // ◀ 기준: 끝 (5.5, 10), 뒤 위 (14.5, 4.5), 뒤 아래 (14.5, 15.5) — 폭 9dp·높이 11dp.
+    val corners = listOf(
+        Offset(5.5f + jitter(0.3f), 10f + jitter(0.3f)),
+        Offset(14.5f + jitter(0.3f), 4.5f + jitter(0.3f)),
+        Offset(14.5f + jitter(0.3f), 15.5f + jitter(0.3f))
+    )
+    // 변마다 가위를 1~2번 고쳐 잡은 듯 중간에서 살짝 꺾인다.
+    val cut = mutableListOf<Offset>()
+    corners.indices.forEach { i ->
+        val a = corners[i]
+        val b = corners[(i + 1) % corners.size]
+        cut += a
+        val edge = b - a
+        val normal = Offset(-edge.y, edge.x) / edge.getDistance()
+        val bends = 1 + random.nextInt(2)
+        (1..bends).forEach { k ->
+            val t = k.toFloat() / (bends + 1) + jitter(0.08f)
+            cut += a + edge * t + normal * jitter(0.25f)
+        }
+    }
+    val outline = if (pointsLeft) cut else cut.map { Offset(VISIT_CALENDAR_ARROW_BOX_DP - it.x, it.y) }
+    // 45° 망점. 잉크 농도가 조금씩 일렁여 비치는 종이 점 크기가 다르고, 가장자리는 잉크가 번져 점이 없다.
+    val pitch = 1.15f
+    val phaseA = random.nextFloat() * 6.28f
+    val phaseB = random.nextFloat() * 6.28f
+    val dots = mutableListOf<VisitCalendarHalftoneDot>()
+    val steps = (VISIT_CALENDAR_ARROW_BOX_DP * 1.5f / pitch).toInt()
+    val diagonal = Offset(0.7071f, 0.7071f)
+    val antiDiagonal = Offset(-0.7071f, 0.7071f)
+    val origin = Offset(VISIT_CALENDAR_ARROW_BOX_DP / 2f, VISIT_CALENDAR_ARROW_BOX_DP / 2f)
+    for (i in -steps..steps) for (j in -steps..steps) {
+        val center = origin + diagonal * (i * pitch) + antiDiagonal * (j * pitch)
+        val tone = 0.5f + 0.3f * kotlin.math.sin(center.x * 0.55f + phaseA) * kotlin.math.cos(center.y * 0.45f + phaseB) +
+            jitter(0.2f)
+        val radius = (0.12f + 0.24f * tone).coerceIn(0.1f, 0.38f)
+        if (visitCalendarPointInPolygon(center, outline) &&
+            visitCalendarDistanceToOutline(center, outline) >= radius + 0.5f
+        ) {
+            dots += VisitCalendarHalftoneDot(center, radius)
+        }
+    }
+    return VisitCalendarNewsprintArrow(outline, dots)
+}
+
+private fun visitCalendarPointInPolygon(p: Offset, polygon: List<Offset>): Boolean {
+    var inside = false
+    var j = polygon.size - 1
+    for (i in polygon.indices) {
+        val a = polygon[i]
+        val b = polygon[j]
+        if ((a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside
+        j = i
+    }
+    return inside
+}
+
+private fun visitCalendarDistanceToOutline(p: Offset, polygon: List<Offset>): Float =
+    polygon.indices.minOf { i ->
+        val a = polygon[i]
+        val b = polygon[(i + 1) % polygon.size]
+        val ab = b - a
+        val t = (((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / (ab.x * ab.x + ab.y * ab.y)).coerceIn(0f, 1f)
+        (p - (a + ab * t)).getDistance()
+    }
+
+/** [visitCalendarNewsprintArrow]을 그린다: 아주 옅은 잉크 번짐 → 잉크 → 비치는 종이 망점. */
+private fun Modifier.visitCalendarNewsprintArrowMark(pointsLeft: Boolean, seed: Int): Modifier = drawWithCache {
+    val arrow = visitCalendarNewsprintArrow(pointsLeft, seed)
+    val unit = size.minDimension / VISIT_CALENDAR_ARROW_BOX_DP
+    val path = Path().apply {
+        arrow.outline.forEachIndexed { index, point ->
+            if (index == 0) moveTo(point.x * unit, point.y * unit) else lineTo(point.x * unit, point.y * unit)
+        }
+        close()
+    }
+    val bleed = Stroke(width = 0.5f * unit, join = StrokeJoin.Round)
+    onDrawBehind {
+        drawPath(path, color = VisitCalendarArrowInk, alpha = 0.18f, style = bleed)
+        drawPath(path, color = VisitCalendarArrowInk)
+        arrow.dots.forEach { dot ->
+            drawCircle(VisitCalendarArrowNewsprint, radius = dot.radiusDp * unit, center = dot.center * unit)
         }
     }
 }
@@ -1531,21 +1637,20 @@ internal fun MonthlyVisitCalendar(
                                 modifier = Modifier.fillMaxWidth().height(VISIT_CALENDAR_PAGE_TITLE_HEIGHT),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // 96일차 추가: 터치 영역·클릭·접근성 설명은 그대로, 보이는 화살표만 신문 오림.
                                 IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                        "이전 달",
-                                        tint = InkSecondary,
-                                        modifier = Modifier.size(20.dp)
+                                    Box(
+                                        Modifier.size(VISIT_CALENDAR_ARROW_SIZE)
+                                            .semantics { contentDescription = "이전 달" }
+                                            .visitCalendarNewsprintArrowMark(pointsLeft = true, seed = VISIT_CALENDAR_ARROW_SEED_PREVIOUS)
                                     )
                                 }
                                 Spacer(Modifier.weight(1f))
                                 IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                        "다음 달",
-                                        tint = InkSecondary,
-                                        modifier = Modifier.size(20.dp)
+                                    Box(
+                                        Modifier.size(VISIT_CALENDAR_ARROW_SIZE)
+                                            .semantics { contentDescription = "다음 달" }
+                                            .visitCalendarNewsprintArrowMark(pointsLeft = false, seed = VISIT_CALENDAR_ARROW_SEED_NEXT)
                                     )
                                 }
                             }
