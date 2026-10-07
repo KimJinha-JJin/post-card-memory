@@ -1,8 +1,20 @@
-# HANDOFF — 96일차: 방문 달력 질감 보강 (구현·QA 완료, Git 마감 대기)
+# HANDOFF — 96일차 후속: 방문 달력 오늘 날짜 펜 동그라미 (구현·QA 완료)
+
+확인일: 2026-10-07. 수동 표준 모드, 담당 Claude Code. 시작 HEAD `8d4f084`(origin과 같음). **아래 다음 후보는 실행 승인이 아니다.**
+
+- **변경:** `VisitCalendarDrawer.kt` — 오늘 날짜 숫자 둘레에 기존 `SealInkRed`로 얇은 펜(0.6~0.7dp)을 떼지 않고 2.4~3.2바퀴 휘갈긴 동그라미(`visitTodayPenCircle`, 순수 함수, seed=`visitTodayCircleSeed(date)`). 숫자 Text의 drawBehind라 글자를 덮지 않고, 방문 여부와 무관. 접근성 설명에 ", 오늘" 추가. 새 색·자산·데이터 변경 없음. 실기기 QA 세 번(세로 타원→거의 원, 살짝 아래로, 휘갈긴 한 줄)으로 다듬음.
+- **실기기 감각 QA:** 사용자 승인(2026-10-07, "동그라미 크기 딱 마음에 들어").
+- **자동검증:** 전체 `testDebugUnitTest` 923/923(XML 95, 실패·오류·skip 0), `@Test` 923개/파일 94개(+helper 1), assembleDebug 성공, diff --check 통과. instrumentation 미실행(불필요). TEST-COVERAGE-MAP 갱신 완료(919→923, 구조 162→163).
+- **Git:** 사용자 승인으로 위 코드 1개·테스트 2개·TEST-COVERAGE-MAP·이 HANDOFF를 commit·push. CI 결과는 완료보고에서 확인(성공 기록만을 위한 docs-only commit은 만들지 않음). 직전 `8d4f084`의 CI run `37566877002` 성공 확인. 제외 유지: `postcard_paper_fiber_tile.png`(사용자 결정 대기), `.codex-config.candidate.toml`, `.kotlin/`.
+- 다음 후보(실행 승인 아님): 펜 자국·동그라미 위 날짜 글자 가독성 장기 관찰, 95일차 HANDOFF의 CI 성공 기록 보정.
+
+---
+
+# HANDOFF — 96일차: 방문 달력 질감 보강 (구현·QA 완료, `8d4f084`로 commit·push·CI 성공)
 
 - **3단계·전체 실기기 QA: 사용자 승인(2026-10-07, 옅게 조정 후 "귀여워 너무 마음에 들어").** 첫 QA에서 "팔레트에 묻은 물감 느낌"이라 바탕 α0.75→0.5, 획 α0.42→0.4·0.3→0.28로 옅게 조정. 날짜 글자색 규칙은 바꾸지 않음.
 - **최종 자동검증:** 전체 `testDebugUnitTest` 919/919(XML 95, 실패·오류·skip 0), `@Test` 919개/테스트 파일 94개(+helper 1), assembleDebug 성공, diff --check 통과. TEST-COVERAGE-MAP 갱신 완료(907→919, 구조 159→162, 96일차 항목 추가).
-- **Git 마감 대상:** `VisitCalendarDrawer.kt`, `VisitCalendarTest.kt`, `VisitCalendarPaperPageStructureTest.kt`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 HANDOFF. 제외: `postcard_paper_fiber_tile.png`(사용자 결정 대기), `.codex-config.candidate.toml`, `.kotlin/`. commit·push는 사용자 승인 대기.
+- **Git 마감 대상:** `VisitCalendarDrawer.kt`, `VisitCalendarTest.kt`, `VisitCalendarPaperPageStructureTest.kt`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 HANDOFF. 제외: `postcard_paper_fiber_tile.png`(사용자 결정 대기), `.codex-config.candidate.toml`, `.kotlin/`. → 이후 `8d4f084`로 commit·push, CI run `37566877002` 성공.
 - 다음 후보(실행 승인 아님): 펜 자국 위 날짜 글자 가독성은 장기 사용 중 관찰, 95일차 HANDOFF의 CI 성공 기록 보정(10-06 run 성공 확인됨).
 
 - **2단계 실기기 QA: 사용자 승인(2026-10-07, "이 테이프 때문에 더 질감이 잘 살았어").**

@@ -968,6 +968,89 @@ private fun Modifier.visitDayGelPenMark(color: Color, seed: Int): Modifier = dra
     }
 }
 
+// 96일차 후속: 오늘 날짜 숫자 둘레를 얇은 펜으로 몇 번 휘갈긴 동그라미. 방문 여부와 별개라
+// 방문하지 않은 오늘에도 보이고, 방문한 오늘의 민트 칠 위에서도 구분되도록 민트와 겹치지 않는
+// 일요일 빨강 잉크(SealInkRed)를 쓴다 — 새 색을 추가하지 않는다. 바퀴끼리 조금씩 어긋나고
+// 시작점과 끝점이 맞물리지 않으며 농도도 조금씩 다르다. 숫자 뒤에 그려 글자를 덮지 않는다.
+// 값은 실기기 QA로 다듬는 미감 값이다.
+private const val VISIT_TODAY_CIRCLE_SEED = 96_400
+private val VisitTodayCircleInk = SealInkRed
+
+internal fun visitTodayCircleSeed(date: LocalDate): Int = VISIT_TODAY_CIRCLE_SEED + date.toEpochDay().toInt()
+
+/**
+ * 날짜 숫자 글자 상자([widthDp]×[heightDp]) 둘레를 감는 손그림 동그라미 바퀴들(dp, 글자 상자 기준).
+ * 같은 날짜(seed)면 항상 같은 모양이다.
+ */
+internal fun visitTodayPenCircle(widthDp: Float, heightDp: Float, seed: Int): List<VisitDayPenStroke> {
+    if (widthDp <= 0f || heightDp <= 0f) return emptyList()
+    val random = kotlin.random.Random(seed)
+    // 둘째 QA: 숫자보다 살짝 아래로 내려 감싼다.
+    val center = Offset(widthDp / 2f, heightDp / 2f + 1.3f)
+    // 숫자 글자 상자는 세로로 길어 상자에 맞추면 세로 타원이 된다(첫 QA). 높이·너비 중 큰 쪽에
+    // 맞춘 거의 동그란 원으로, 가로를 아주 조금만 더 넓게 둔다.
+    val radius = maxOf(heightDp / 2f + 3f, widthDp / 2f + 5.5f, 10f)
+    val radiusX = radius * 1.05f
+    val radiusY = radius
+    // 셋째 QA: 바퀴마다 따로 그은 원 대신, 얇은 펜으로 펜을 떼지 않고 2.4~3.2바퀴 빙빙 휘갈긴
+    // 한 줄. 도는 동안 중심이 한쪽으로 밀리고 반지름이 커지거나 작아져 바퀴끼리 벌어지며,
+    // 모양도 완전한 타원이 아니라 조금 울퉁불퉁하다.
+    val turns = 2.4f + random.nextFloat() * 0.8f
+    val start = random.nextFloat() * 2f * Math.PI.toFloat()
+    val tilt = Math.toRadians(((random.nextFloat() - 0.5f) * 20f).toDouble()).toFloat()
+    val c0 = center + Offset((random.nextFloat() - 0.5f) * 0.8f, (random.nextFloat() - 0.5f) * 0.6f)
+    val shift = Offset((random.nextFloat() - 0.5f) * 2.4f, (random.nextFloat() - 0.5f) * 1.8f)
+    val scale0 = 0.94f + random.nextFloat() * 0.06f
+    val scale1 = 1f + random.nextFloat() * 0.08f
+    val (scaleFrom, scaleTo) = if (random.nextBoolean()) scale0 to scale1 else scale1 to scale0
+    val lump2 = random.nextFloat() * 6.28f
+    val lump3 = random.nextFloat() * 6.28f
+    val phase = random.nextFloat() * 6.28f
+    val pointsPerTurn = 40
+    val total = kotlin.math.ceil(turns * pointsPerTurn).toInt()
+    val points = (0..total).map { k ->
+        val t = k.toFloat() / total
+        val a = start + turns * 2f * Math.PI.toFloat() * t
+        val lumpy = 1f + 0.05f * kotlin.math.sin(2f * a + lump2 + 0.6f * t) + 0.025f * kotlin.math.sin(3f * a + lump3)
+        val scale = (scaleFrom + (scaleTo - scaleFrom) * t) * lumpy
+        val wobble = 0.12f * kotlin.math.sin(t * 17f + phase)
+        val x = (radiusX * scale + wobble) * kotlin.math.cos(a)
+        val y = (radiusY * scale + wobble) * kotlin.math.sin(a)
+        c0 + shift * t + Offset(
+            x * kotlin.math.cos(tilt) - y * kotlin.math.sin(tilt),
+            x * kotlin.math.sin(tilt) + y * kotlin.math.cos(tilt)
+        )
+    }
+    // 한 줄이지만 바퀴마다 손 힘이 달라 농도가 조금씩 다르다 — 바퀴 단위로 끊어 이어 그린다.
+    val width = 0.6f + random.nextFloat() * 0.1f
+    return points.indices.step(pointsPerTurn).map { from ->
+        VisitDayPenStroke(
+            points = points.subList(from, minOf(from + pointsPerTurn + 1, points.size)),
+            widthDp = width,
+            alpha = 0.5f + random.nextFloat() * 0.3f
+        )
+    }.filter { it.points.size > 1 }
+}
+
+/** 오늘 날짜 숫자에 붙여 [visitTodayPenCircle]을 글자 뒤에 그린다. */
+private fun Modifier.visitTodayPenCircle(seed: Int): Modifier = drawWithCache {
+    val strokes = visitTodayPenCircle(size.width / density, size.height / density, seed).map { stroke ->
+        Triple(
+            Path().apply {
+                stroke.points.forEachIndexed { index, point ->
+                    if (index == 0) moveTo(point.x * density, point.y * density)
+                    else lineTo(point.x * density, point.y * density)
+                }
+            },
+            Stroke(width = stroke.widthDp * density, cap = StrokeCap.Round),
+            stroke.alpha
+        )
+    }
+    onDrawBehind {
+        strokes.forEach { (path, style, alpha) -> drawPath(path, color = VisitTodayCircleInk, alpha = alpha, style = style) }
+    }
+}
+
 /** 한 달 분량의 날짜 grid만 그린다. [VisitCalendarMonthPage]의 종이 위에 함께 인쇄돼 움직인다. */
 @Composable
 private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>, today: LocalDate) {
@@ -981,7 +1064,8 @@ private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>
                     Box(
                         modifier = Modifier.weight(1f).height(34.dp).clearAndSetSemantics {
                             if (date != null) {
-                                contentDescription = "$date" + if (visited) ", 방문 기록 있음" else ""
+                                contentDescription = "$date" + (if (date == today) ", 오늘" else "") +
+                                    if (visited) ", 방문 기록 있음" else ""
                             }
                         }
                     ) {
@@ -999,9 +1083,11 @@ private fun VisitCalendarMonthGrid(month: YearMonth, visitedEpochDays: Set<Long>
                                 )
                             }
                             val cellTextColor = if (visited) visitDayFillContrastColor(date, today) else visitDateColor(date)
+                            // 오늘 동그라미는 방문 여부와 상관없이 오늘 숫자에만 붙는다.
                             Text(
                                 date.dayOfMonth.toString(),
-                                modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
+                                modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp)
+                                    .then(if (date == today) Modifier.visitTodayPenCircle(visitTodayCircleSeed(date)) else Modifier),
                                 color = cellTextColor,
                                 fontSize = 11.sp
                             )

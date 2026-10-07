@@ -134,6 +134,21 @@ class VisitCalendarPaperPageStructureTest {
     }
 
     @Test
+    fun today_isCircledOnItsNumberWhetherOrNotItWasVisited() {
+        val grid = functionBody("private fun VisitCalendarMonthGrid(")
+        val circle = grid.indexOf(
+            ".then(if (date == today) Modifier.visitTodayPenCircle(visitTodayCircleSeed(date)) else Modifier)"
+        )
+        assertTrue("오늘 동그라미는 오늘 날짜 숫자에 붙어야 함", circle >= 0)
+        val number = grid.lastIndexOf("date.dayOfMonth.toString()", circle)
+        assertTrue("동그라미는 날짜 숫자 Text의 modifier여야 함", number >= 0 && circle - number < 300)
+        assertFalse(
+            "동그라미는 방문 여부(visited)에 묶이면 안 됨",
+            grid.substring(number, circle).contains("visited")
+        )
+    }
+
+    @Test
     fun tape_isStuckOnThisMonthsPageAndTurnsWithIt() {
         assertTrue(
             "테이프는 이 장의 month로 고른 조각이어야 함",

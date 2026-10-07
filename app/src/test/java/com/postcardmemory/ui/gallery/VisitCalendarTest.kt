@@ -2,6 +2,7 @@ package com.postcardmemory.ui.gallery
 
 import com.postcardmemory.utils.millisUntilNextMidnight
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import com.postcardmemory.ui.detail.LABEL_STICKER_DARK_TEXT_ARGB
 import com.postcardmemory.ui.detail.LABEL_STICKER_LIGHT_TEXT_ARGB
@@ -562,6 +563,61 @@ class VisitCalendarTest {
                 assertTrue("$day 각도 $angle", angle in -30.0..-5.0)
             }
         }
+    }
+
+    @Test fun todayCircleIsTheSameEveryTimeForTheSameDateAndDiffersBetweenDays() {
+        val day = LocalDate.of(2026, 10, 7)
+        val first = visitTodayPenCircle(12f, 13f, visitTodayCircleSeed(day))
+        assertEquals(first.map { it.points }, visitTodayPenCircle(12f, 13f, visitTodayCircleSeed(day)).map { it.points })
+        assertNotEquals(
+            first.map { it.points },
+            visitTodayPenCircle(12f, 13f, visitTodayCircleSeed(day.plusDays(1))).map { it.points }
+        )
+    }
+
+    @Test fun todayCircleIsAFewThinScribbledTurnsAroundTheNumberWithoutCoveringIt() {
+        val turnCounts = mutableSetOf<Int>()
+        listOf(6f to 13f, 12.5f to 13f, 6f to 16f).forEach { (width, height) ->
+            val center = Offset(width / 2f, height / 2f)
+            (0L until 400L).map { LocalDate.of(2026, 1, 1).plusDays(it) }.forEach { day ->
+                val turns = visitTodayPenCircle(width, height, visitTodayCircleSeed(day))
+                turnCounts += turns.size
+                assertTrue("$day 몇 바퀴 휘갈겨야 함", turns.size in 3..4)
+                // 펜을 떼지 않은 한 줄: 다음 바퀴는 앞 바퀴가 끝난 자리에서 이어진다.
+                turns.zipWithNext().forEach { (a, b) -> assertEquals("$day", a.points.last(), b.points.first()) }
+                // 바퀴마다 농도가 조금씩 다르다.
+                assertEquals("$day", turns.size, turns.map { it.alpha }.toSet().size)
+                val all = turns.flatMap { it.points }
+                // 끝이 시작점과 맞물리지 않는다(닫힌 도형이 아님).
+                assertNotEquals("$day", all.first(), all.last())
+                turns.forEach { turn ->
+                    // 얇은 펜 선, 디지털 테두리처럼 진하지 않다.
+                    assertTrue("$day 굵기 ${turn.widthDp}", turn.widthDp in 0.5f..0.75f)
+                    assertTrue("$day 농도 ${turn.alpha}", turn.alpha in 0.4f..0.85f)
+                }
+                val radius = maxOf(height / 2f + 3f, width / 2f + 5.5f, 10f)
+                all.forEach { p ->
+                    val d = p - center
+                    // 숫자 글자(상자보다 조금 안쪽)를 가로지르지 않는다.
+                    val inner = (d.x / (width / 2f + 1f)).let { it * it } + (d.y / (height / 2f - 2f)).let { it * it }
+                    assertTrue("$day 숫자 위를 지나면 안 됨 $p", inner >= 1f)
+                    // 숫자 둘레를 감는 크기에 머문다(칸 밖으로 크게 번지지 않음).
+                    assertTrue("$day 너무 큼 $p", kotlin.math.abs(d.x) <= radius * 1.3f + 3f)
+                    assertTrue("$day 너무 큼 $p", kotlin.math.abs(d.y) <= radius * 1.3f + 3f)
+                }
+                // 세로 타원이 아니라 거의 동그란 원이다(첫 QA: 세로로 길쭉해 보임).
+                val spanX = all.maxOf { it.x } - all.minOf { it.x }
+                val spanY = all.maxOf { it.y } - all.minOf { it.y }
+                assertTrue("$day 세로로 길쭉하면 안 됨 $spanX x $spanY", spanX >= spanY * 0.85f)
+                assertTrue("$day 가로로도 납작하면 안 됨 $spanX x $spanY", spanX <= spanY * 1.35f)
+            }
+        }
+        assertEquals("세 바퀴 남짓과 네 바퀴 가까이가 모두 나와야 함", setOf(3, 4), turnCounts)
+    }
+
+    @Test fun todayCircleIsNothingForAnUnmeasuredNumber() {
+        assertTrue(visitTodayPenCircle(0f, 13f, 1).isEmpty())
+        assertTrue(visitTodayPenCircle(12f, 0f, 1).isEmpty())
     }
 
     @Test fun gelPenMarkIsNothingForAnUnmeasuredCell() {
