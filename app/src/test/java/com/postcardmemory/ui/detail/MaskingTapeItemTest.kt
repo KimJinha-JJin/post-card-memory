@@ -134,7 +134,7 @@ class MaskingTapeItemTest {
     }
 
     // ---- 45일차: scale UI 제거 후에도 기존 scale/lengthScale/thicknessScale
-    // 값이 그대로 라운드트립되는지(작업지시서 28절) ----
+    // 값이 그대로 라운드트립되는지 ----
 
     @Test
     fun serialize_thenParse_preservesExistingScaleAlongsideLengthAndThickness() {

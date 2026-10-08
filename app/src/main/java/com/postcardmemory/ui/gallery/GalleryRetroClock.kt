@@ -162,7 +162,7 @@ private fun sevenSegmentPaths(width: Float, height: Float, thickness: Float): Ma
 }
 
 // 꺼진 세그먼트도 아주 흐리게 남겨서(진짜 LCD의 "유령상") 숫자 하나가 완성된 글리프처럼
-// 읽히게 한다 — 발광이 아니라 구조감을 가져오는 장치다(지시서 14절: 발광 복제가 목표가 아님).
+// 읽히게 한다 — 발광을 복제하려는 게 아니라 구조감을 가져오는 장치다.
 private val RetroClockSegmentOffColor = InkPrimary.copy(alpha = 0.09f)
 
 @Composable
@@ -196,16 +196,15 @@ private val RetroClockSmallDigitHeight = 17.dp
 private val RetroClockSmallDigitThickness = 2.4.dp
 
 /** 시계 화면(hh:mm / ss / AM·PM 한 줄 + 날짜 한 줄)만 그린다. 폭 제약을 걸지 않아
- * 내부 글자 폭에 맞춰 스스로 닫힌다(v3, "판넬처럼 늘어나 보임" 피드백 반영).
- * 95일차: 바디·LCD 패널 바탕은 오린 시계 이미지([R.drawable.home_clock_collage_body])의
- * 숫자창이 맡으므로 여기서는 바탕색·여백 없이 글자만 그린다. */
+ * 내부 글자 폭에 맞춰 스스로 닫힌다. 바디·LCD 패널 바탕은 오린 시계 이미지
+ * ([R.drawable.home_clock_collage_body])의 숫자창이 맡으므로 여기서는 바탕색·여백 없이
+ * 글자만 그린다. */
 @Composable
 private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String, modifier: Modifier = Modifier) {
     Box(modifier = modifier) {
         Column(
             // IntrinsicSize.Min: 안쪽 HorizontalDivider의 기본 fillMaxWidth()가 상위에서
-            // 내려온 화면 전체 폭까지 다시 늘어나 버리는 것을 막는다 — 이 폭 계산이 없으면
-            // 바디 폭 제약을 없앤 의미가 사라지고 v2와 같은 배너 폭으로 되돌아간다.
+            // 내려온 폭까지 늘어나지 않고 글자 묶음 폭에 맞도록 고정한다.
             modifier = Modifier.width(IntrinsicSize.Min),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -242,10 +241,10 @@ private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String
                     }
                 }
                 Spacer(Modifier.width(6.dp))
-                // 지시서 17절: PM은 "절제된 보조 텍스트" 방향을 택함 — 메인 시간보다 튀지
+                // PM은 "절제된 보조 텍스트"다 — 메인 시간보다 튀지
                 // 않게 일반 텍스트로 유지하고, 우측 끝에 붙이지 않고 ss 바로 옆 고정 간격에
-                // 둬 hh:mm/ss/PM이 한 시간 정보 묶음으로 읽히게 한다. 바디 자체는 이 묶음
-                // 폭에 맞춰 닫히므로(v3) PM 뒤에 별도로 남겨두는 여백은 없다.
+                // 둬 hh:mm/ss/PM이 한 시간 정보 묶음으로 읽히게 한다. 시계 화면은 이 묶음
+                // 폭에 맞춰 닫히므로 PM 뒤에 별도로 남겨두는 여백은 없다.
                 Text(
                     text = timeText.meridiem,
                     fontWeight = FontWeight.SemiBold,
@@ -348,27 +347,15 @@ private fun GalleryCoffeeSteam(modifier: Modifier = Modifier) {
 }
 
 /**
- * 메인 갤러리 상단의 작은 레트로 디지털 탁상시계 + 커피잔. 네온·유광·그림자·badge·장식문구
- * 없이, "hh:mm은 크게, ss·AM/PM은 작지만 같은 가로선, 날짜는 가장 작게 아래 줄"이라는 정보
- * 위계와 "작은 기계" 비율만으로 옛날 탁상시계의 문법을 옮긴다.
+ * 메인 갤러리 상단의 잡지 오림 탁상시계 장면. 시계 몸체·스누즈 버튼 위 왼손·커피잔을 든
+ * 오른손은 정적 오림 이미지이고, 그 위에 직접 그린 숫자·날짜와 컵 위의 옅은 김만 움직인다.
+ * 네온·유광·badge·장식문구 없이, "hh:mm은 크게, ss·AM/PM은 작지만 같은 가로선, 날짜는
+ * 가장 작게 아래 줄"이라는 정보 위계로 옛날 탁상시계의 문법을 옮긴다.
  *
- * 77일차 추가 v2: 시계 폭이 화면을 거의 다 먹어 배너처럼 보인다는 피드백을 받아, 원인(내부
- * `Spacer(Modifier.weight(1f))`가 상위 `Row(fillMaxWidth())`의 화면 전체 너비를 그대로
- * 상속)을 고치고 시계 폭을 화면 폭의 고정 비율로 한 번 제한했다. 숫자는 Text가 아니라 직접
- * 그린 7세그먼트 [Path]로 바꿔 "진짜 디지털 시계" 인상을 냈다.
- *
- * 77일차 추가 v3: 고정 비율(화면 폭의 58%)조차 실제 숫자 폭과 무관하게 바디를 늘려 "억지로
- * 당긴 판넬"처럼 보인다는 피드백을 받아, [GalleryRetroClockFace]에서 폭 제약을 완전히
- * 제거했다 — 바디는 이제 내부 hh:mm/ss/PM 묶음과 날짜 줄 중 더 넓은 쪽 글자 폭에만 맞춰
- * 감싸듯 닫힌다(`Box`/`Column` 기본 wrap-content). 두 줄은 [Alignment.CenterHorizontally]로
- * 가운데 정렬해 폭이 다른 두 줄이 한 몸체 안에 자연스럽게 들어앉게 했다.
- * (`docs/ai/mockups/gallery-retro-clock-mockup.html`에서 Chrome headless로 캡처해
- * 사용자 확인을 받은 디자인을 그대로 옮김.)
- *
- * 숫자는 새 폰트를 추가하지 않고 Canvas로 직접 그린다(1순위였던 "프로젝트에 이미 있는
- * 7세그 폰트/자산"은 조사 결과 없었고, 새 폰트 리소스 추가도 하지 않음 — 13·16절).
- * 95일차: 크림색 바디·LCD 패널·선 아이콘 커피잔·흔들리는 김을 걷어내고, 시계 몸체·스누즈
- * 버튼 위 왼손·커피잔을 든 오른손을 잡지 오림 이미지로 바꿨다. 숫자·날짜·시간 갱신은 그대로다.
+ * 몸체는 고정 크기 이미지다. 글자 폭에 맞춰 닫히는 것은 숫자창 가운데에 놓인
+ * [GalleryRetroClockFace]뿐이고, 폭이 다른 두 줄은 [Alignment.CenterHorizontally]로
+ * 가운데 정렬해 한 묶음으로 읽히게 한다. 숫자는 Text가 아니라 직접 그린 7세그먼트
+ * [Path]다 — 프로젝트에 7세그 폰트/자산이 없고, 새 폰트 리소스도 추가하지 않는다.
  *
  * 시간 상태는 이 composable 안에서만 `remember`+`LaunchedEffect`로 매초(정확히는 다음 초
  * 경계까지 delay) 갱신한다 — 연못 파문([PondRippleOverlay])과 같은 "로컬 상태·로컬 루프"

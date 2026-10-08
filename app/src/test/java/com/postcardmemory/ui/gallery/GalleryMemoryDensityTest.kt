@@ -29,7 +29,7 @@ class GalleryMemoryDensityTest {
                 .toEpochMilli()
         )
 
-    // ── 33절: 월별 grouping ──────────────────────────────────────────
+    // ── 월별 grouping ──────────────────────────────────────────
 
     @Test
     fun emptyPostcards_stillReturnsAllTwelveMonthsAtZero() {

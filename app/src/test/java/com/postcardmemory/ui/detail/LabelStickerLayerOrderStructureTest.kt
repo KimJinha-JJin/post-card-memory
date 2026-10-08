@@ -86,8 +86,7 @@ class LabelStickerLayerOrderStructureTest {
 
     /**
      * 라벨만 낙서 위로 올린 변경이라, 텍스트 스티커·도장 등 나머지 요소와
-     * 낙서의 관계는 그대로여야 한다(작업지시서 12절 D — 다른 요소 순서까지
-     * 동시에 바뀌면 안 됨).
+     * 낙서의 관계는 그대로여야 한다(다른 요소 순서까지 동시에 바뀌면 안 됨).
      */
     @Test
     fun exporterKeepsOtherOverlaysBelowDoodles() {

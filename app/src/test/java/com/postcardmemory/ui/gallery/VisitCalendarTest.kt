@@ -140,7 +140,7 @@ class VisitCalendarTest {
         assertFalse(future.toEpochDay() in visitedEpochDays)
     }
 
-    // 75일차 추가 수정지시서: 계층형 월/연도 탐색기 (달력 → 월 선택 → 연도 선택).
+    // 계층형 월/연도 탐색기 (달력 → 월 선택 → 연도 선택).
 
     @Test fun decadeStartForComputesTheTenYearBucketAcrossBoundaries() {
         assertEquals(1990, decadeStartFor(1999))

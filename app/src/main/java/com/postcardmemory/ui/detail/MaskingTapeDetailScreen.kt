@@ -815,7 +815,7 @@ private fun MaskingTapeEditDialog(
 /**
  * 길이·굵기·회전이 공유하는 편집 패널 slider 한 줄. 라벨과(있다면) 보조
  * 값 표시를 위에 두고 그 아래 공용 EditorSlider를 그린다. 숫자 입력창은
- * 만들지 않는다 — 사용자는 결과를 보고 조절한다(작업지시서 14/19절).
+ * 만들지 않는다 — 사용자는 결과를 보고 조절한다.
  */
 @Composable
 private fun MaskingTapeAdjustSlider(

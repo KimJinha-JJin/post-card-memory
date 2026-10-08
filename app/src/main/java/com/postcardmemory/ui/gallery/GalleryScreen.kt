@@ -843,7 +843,7 @@ fun GalleryScreen(
             )
         } else if (postcards.isEmpty()) {
             // 62일차 2차: 엽서가 하나도 없을 때의 빈 상태는 어떤 보기
-            // 형식을 보고 있든 공통이어야 한다(작업지시서 30절 — 보기마다
+            // 형식을 보고 있든 공통이어야 한다(보기마다
             // 서로 다른 빈 상태를 만들지 않는다). pager 진입 전에 걸러
             // 앞으로 추가될 보기(월별/타임라인/캘린더/우표/기억 밀도)도
             // 자동으로 같은 빈 상태를 쓰게 한다.
@@ -917,7 +917,7 @@ fun GalleryScreen(
             // orderedActiveFormats를 key에 함께 넣으면, 목록이 바뀐 바로 그
             // 순간(아직 pagerState.currentPage가 이동하기 전) 옛 index를
             // 새 목록에 대입해 currentPageFormat을 엉뚱한 값으로 덮어써
-            // 버린다 — 바로 아래 44절 보정 effect가 참조하는 lastKnownFormat
+            // 버린다 — 바로 아래 보정 effect가 참조하는 lastKnownFormat
             // 자체가 오염된다. pagerState.currentPage 변화에만 반응해야
             // "실제로 페이지가 이동한 뒤"에만 currentPageFormat을 갱신한다.
             LaunchedEffect(pagerState.currentPage) {
@@ -931,7 +931,7 @@ fun GalleryScreen(
             // 보고 있던 보기가 여전히 활성 상태면 그 보기로, 방금 꺼진
             // 보기를 보고 있었다면 가장 가까운 유효한 페이지로 이동한다.
             // 인덱스만 clamp하면 중간 페이지가 꺼졌을 때 엉뚱한 보기로
-            // 이동할 수 있어(작업지시서 44절), 보기 자체를 기준으로 찾는다.
+            // 이동할 수 있어, 보기 자체를 기준으로 찾는다.
             // 이 effect가 scrollToPage로 pagerState.currentPage를 바꾸면
             // 위 effect가 그 결과로 다시 실행되어 currentPageFormat을
             // 최종적으로 맞는 값으로 동기화한다.
@@ -1466,14 +1466,14 @@ private fun GalleryPaperBackground(modifier: Modifier = Modifier) {
 
 /**
  * 활성 보기 목록이 바뀐 뒤 pager가 위치해야 할 새 페이지 index를 계산한다
- * (작업지시서 44절 — 보기 비활성화 edge case). 순수 함수라 Compose 없이도
+ * (보기 비활성화 edge case). 순수 함수라 Compose 없이도
  * 검증 가능하다.
  *
  * - [lastKnownFormat]이 여전히 [activeFormats]에 있으면 그 새 위치로 이동한다
  *   (중간 보기가 꺼져 인덱스가 당겨져도 같은 보기를 계속 보게 된다).
  * - 없으면(지금 보던 보기 자체가 꺼짐) [currentIndex]를 유효 범위로 clamp한다.
- * - [activeFormats]가 비어 있으면 0을 돌려준다(45절에 따라 실제로는 발생하지
- *   않아야 하는 방어적 경로).
+ * - [activeFormats]가 비어 있으면 0을 돌려준다(활성 보기는 항상 고정 2개라
+ *   실제로는 발생하지 않아야 하는 방어적 경로).
  */
 internal fun resolveGalleryPagerTargetIndex(
     activeFormats: List<GalleryPageFormat>,
@@ -1500,7 +1500,7 @@ internal fun orderedGalleryPageFormats(
     GalleryPageFormat.entries.filter { it in activeFormats }
 
 /**
- * 활성 보기가 둘 이상일 때만 그리는 점 indicator(6절) — 점이면 점답게,
+ * 활성 보기가 둘 이상일 때만 그리는 점 indicator — 점이면 점답게,
  * pill이나 floating box로 감싸지 않는다.
  */
 @Composable
@@ -1709,8 +1709,8 @@ internal fun memoryDensityGelPenPlusStrokes(
 /**
  * 76일차: 기억밀도의 새 정의 — "한 해 동안 어느 달에 기억을 많이 남겼는지
  * 조용히 바라보는 화면". dashboard·통계판이 아니라 1월→12월로 흐르는 작은
- * 화단이다. 사진을 보여주거나 탭해서 상세로 들어가는 상호작용은 오늘
- * 범위가 아니다(작업지시서 23·26절) — 순수 조회 화면.
+ * 화단이다. 사진을 보여주거나 탭해서 상세로 들어가는 상호작용은 두지
+ * 않는다 — 순수 조회 화면.
  */
 @Composable
 private fun GalleryDensityPage(

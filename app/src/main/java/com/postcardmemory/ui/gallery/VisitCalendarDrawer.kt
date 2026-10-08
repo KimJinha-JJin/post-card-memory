@@ -99,7 +99,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // 방문한 날짜마다 작게 찍히는 얼굴 도장. 짧은 후보만 써서 좁은 날짜 cell 폭을 넘기지 않는다.
-// 공휴일 데이터가 없어(73일차 조사) 요일 기본색만 적용하고 공휴일 우선순위는 보류한다.
 // "^_^"는 다른 후보와 선 느낌·폭이 달라 박스 안에서 혼자 따로 노는 인상이 있어 제거했다(4차 QA 피드백).
 internal val VISIT_DAY_KAOMOJI = listOf("•ᴗ•", "˙ᵕ˙", "ᵔᴗᵔ", "ᵔ.ᵔ")
 
@@ -608,7 +607,7 @@ private fun rememberVisitCalendarPickerSwipeModifier(
     }
 }
 
-// 96일차 추가(실험): 월/연도 고르기 칸마다 글자 뒤에 달력 종이의 자투리 한 조각. 새 자산 없이
+// 월/연도 고르기 칸마다 글자 뒤에 달력 종이의 자투리 한 조각. 새 자산 없이
 // 이미 불러온 visit_calendar_paper를 칸마다 다른 하단 위치에서 잘라 써 종이결이 복붙되지 않고,
 // 가장자리는 달력 장과 같은 손으로 자른 윤곽·같은 아주 옅은 접촉 그림자를 칸마다 다른 seed로 쓴다.
 // 칸 크기·글자·선택 표시·현재 표시 동그라미·터치는 그대로다. 값은 실기기 QA로 다듬는 미감 값이다.

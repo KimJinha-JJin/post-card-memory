@@ -304,8 +304,8 @@ private val SEAL_BASE_SIZE = 90.dp
 
 /**
  * 마스킹테이프 기준(scale=1) 렌더 크기. 가로로 긴 다꾸 테이프 형태를
- * 유지하기 위해 스티커·도장과 달리 가로·세로를 따로 둔다(작업지시서 19절:
- * 길이·폭을 따로 조절하는 기능은 만들지 않되, 기본 형태 자체는 직사각형).
+ * 유지하기 위해 스티커·도장과 달리 가로·세로를 따로 둔다(길이·폭을
+ * 따로 조절하는 기능은 만들지 않되, 기본 형태 자체는 직사각형).
  */
 internal val MASKING_TAPE_BASE_WIDTH = 132.dp
 internal val MASKING_TAPE_BASE_HEIGHT = 40.dp

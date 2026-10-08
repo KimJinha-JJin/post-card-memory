@@ -47,9 +47,9 @@ const val MASKING_TAPE_MAX_ROTATION_DEGREES = 180f
 /**
  * 찢긴/삐뚤빼뚤한 가장자리를 표현할 때 쓰는 고정 좌표. 매 프레임 또는
  * 인스턴스마다 달라지는 무작위 값이 아니라, 모든 마스킹테이프가 같은
- * 모양을 재현하도록 고정한다(작업지시서 16절: 화면·공유 결과가 달라지는
- * 랜덤 요소 금지). yFraction은 세로 위치(0~1), xOffsetFraction은 테이프
- * 높이 대비 가로 삐침 정도다.
+ * 모양을 재현하도록 고정한다(화면·공유 결과가 달라지는 랜덤 요소 금지).
+ * yFraction은 세로 위치(0~1), xOffsetFraction은 테이프 높이 대비 가로
+ * 삐침 정도다.
  */
 internal val MASKING_TAPE_TORN_EDGE_Y_FRACTIONS =
     listOf(0f, 0.18f, 0.36f, 0.52f, 0.7f, 0.86f, 1f)
