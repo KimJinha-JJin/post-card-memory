@@ -1,3 +1,24 @@
+# HANDOFF — 97일차: 주석 감사 + 낡은 주석·끊어진 지시서 참조 정리 (주석-only, commit·push·CI 성공)
+
+확인일: 2026-10-08. 수동 표준 모드(97일차 1·2단계 작업지시서), 담당 Claude Code.
+
+- **시작 상태:** `feature/photo-sticker`, HEAD `4ce281e`, local/origin 0/0, tracked clean. 보호 untracked 3종(`.codex-config.candidate.toml`, `.kotlin/`, `postcard_paper_fiber_tile.png`) 존재 — 미수정·미stage.
+- **1단계(읽기 전용 감사) 결과:** 조사 221파일(main 116, test 95, androidTest 7, gradle `.kts` 3 별도), 주석 포함 204파일, 주석 줄 5,885(`//` 1,564줄, KDoc 839블록/4,098줄, `/* */` 46블록/223줄) — 문자열·template을 구분한 자체 lexer 기준 **근사치**. TODO/FIXME 0, STOP 1(`VisitCalendarDrawer` 대체공휴일, 현재 코드와 일치), 작업일차 주석 187개(78파일; `AppIntroScreen`의 "33일차"는 누적 방문일 도메인 용어라 작업일 아님), QA 42·실기기 41, 저장소 밖 "작업지시서 N절" 인용 20곳(13파일). 좋은 주석 예: `PostcardTemplate.kt` 휴면 사유, `PostcardDatabase` MIGRATION_14_15, `DetailViewModel` 배경 이미지 파일 비삭제 이유, `PhotoStickerEdgeStyle` 난수 순서 계약.
+- **2단계 승인 범위:** 1순위(낡은 주석 갱신) + 2순위(작업지시서 참조 정리)만.
+- **변경 (`32f871f`, 13파일 +47/−64, 주석만):**
+  - `GalleryRetroClock.kt` — v2/v3 폭 변천사를 걷어내고 현재 구조(몸체 = 고정 크기 오림 이미지, 글자 폭에 맞춰 닫히는 것은 `GalleryRetroClockFace`뿐)로 갱신. Face 쪽 "(v3)"·"v2 배너 폭" 근거도 현재화.
+  - `GalleryMemoryDensityStructureTest.kt` — KDoc이 제거된 얼굴·하트 구조를 "고정한다"던 모순을 현재 계약(비례형 중성펜 막대 + 전체 폭 구분선 하나 + 월 숫자, 걷어낸 요소 재유입 방지)으로 갱신. 테스트 본문·assertion·이름 불변.
+  - `VisitCalendarDrawer.kt` — 자투리 주석의 낡은 "96일차 추가(실험)" 머리말 제거(새 날짜 태그로 대체하지 않음), 102줄 공휴일 중복 주석 삭제(133줄 KDoc·STOP 계약 유지).
+  - 작업지시서 참조 19곳 정리(main: `DetailScreen`, `LabelStickerItem`, `MaskingTapeDetailScreen`, `MaskingTapeItem`, `GalleryRetroClock`, `GalleryScreen` / test: `LabelStickerLayerOrderStructureTest`, `MaskingTapeItemTest`, `GalleryMemoryDensityTest`, `GalleryMonthlyGridStructureTest`, `VisitCalendarTest`). 문서 좌표만 제거하고 설계 이유는 보존. `AGENTS.md 5절` 참조 2곳은 실존 문서라 유지.
+- **코드 비변경 확인:** 13파일 각각 HEAD와 작업본의 주석 제거 코드가 동일(`ALL CODE IDENTICAL`), diff의 비주석 +/− 줄 0. `git diff --check` 통과.
+- **검증:** 주석-only라 로컬 테스트 미실행(위 기계 대조로 대체). GitHub Actions CI run `37738657682` 성공(JVM unit test·assembleDebug·assembleDebugAndroidTest). 실기기 QA 불필요(실행 동작 변경 없음). TEST-COVERAGE-MAP 변경 없음(테스트 수·의미 불변).
+- **Git:** `32f871f` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
+- **보류(실행 승인 아님):** 연대기형 테스트 KDoc 축약(`StickerEditModeToolbarStructureTest`, `SaveErrorDialogStructureTest`, `EditorSubcategoryNavBarStructureTest`, `GalleryViewSelectionStructureTest`, `GalleryScreen` 63→88일차 클러스터 설명 등), 복제 설명 정본화(haptic 이유 4곳, 3단 보기→연못 이식 5곳), `Postcard.kt:23` layoutStyle SQL 기본값 `'STANDARD'` 계약 주석 추가, `DatabaseModule.kt` 주석 추가, `PostcardRepository.kt` 주석 추가.
+- **새로 발견한 후속 후보:** `GalleryScreen.kt` 빈 상태 주석의 "앞으로 추가될 보기(월별/타임라인/캘린더/우표/기억 밀도)"는 76일차에 삭제된 보기를 미래형으로 나열하는 낡은 주석. "실기기 QA에서 보정한다"(도장·사진·테이프 손 좌표 3곳)는 보정 완료 여부 기록 미확인.
+- **기존 미결정 유지:** `postcard_paper_fiber_tile.png` 사용·삭제 여부, 95일차 HANDOFF CI 성공 기록 보정 — 오늘 건드리지 않음.
+
+---
+
 # HANDOFF — 96일차 추가: 월/연도 고르기 칸 뒤 종이 자투리 (구현·자동검증·실기기 QA 완료)
 
 확인일: 2026-10-07. 수동 표준 모드(96일차 추가 작업지시서), 담당 Claude Code. 사용자 선택으로 승인된 화살표를 먼저 `dfac9c6`로 commit·push한 뒤 시작(HEAD = origin). **실험 단계 — 다음 후보는 실행 승인이 아니다.**
