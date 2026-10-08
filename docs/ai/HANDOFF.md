@@ -17,6 +17,22 @@
 - **새로 발견한 후속 후보:** `GalleryScreen.kt` 빈 상태 주석의 "앞으로 추가될 보기(월별/타임라인/캘린더/우표/기억 밀도)"는 76일차에 삭제된 보기를 미래형으로 나열하는 낡은 주석. "실기기 QA에서 보정한다"(도장·사진·테이프 손 좌표 3곳)는 보정 완료 여부 기록 미확인.
 - **기존 미결정 유지:** `postcard_paper_fiber_tile.png` 사용·삭제 여부, 95일차 HANDOFF CI 성공 기록 보정 — 오늘 건드리지 않음.
 
+## 97일차 추가 작업: 주석 감사 후속 정리 (주석-only, commit·push·CI 성공)
+
+위 보류·후속 후보를 97일차 추가 작업지시서 범위에서 이어 처리했어. 시작 HEAD `f8aa232`, local/origin 0/0, tracked clean.
+
+- **변경 (`0652fd7`, 10파일 +56/−80, 주석만):**
+  - `GalleryScreen.kt` — 빈 상태 주석의 "앞으로 추가될 보기" 목록 제거(이유만 남김). pager 주석·`GalleryMonthlyGridPage`/`Item` KDoc에서 "76일차 3단 보기 삭제" 경위를 빼고 현재 구조만 남김.
+  - `Postcard.kt` — `layoutStyle` SQL 기본값 `'STANDARD'`와 Kotlin `"STAMP"`가 일부러 다르다는 계약 주석 추가(맞추면 schema 검증·Migration 영향, 옛 값은 MIGRATION_14_15가 정규화).
+  - `DatabaseModule.kt` — destructive fallback을 쓰지 않고 Migration 누락 시 실패해야 한다는 주석 추가. 등록 구조 테스트는 fallback 부재와 이유를 잠그지 않아 추가함(주석은 `.addMigrations(` 밖이라 테스트 파싱 무영향).
+  - `PostcardRepository.kt` — 두 삭제 메서드는 Room 행만 지우며 사용자 삭제는 `PostcardDeletionManager`를 거친다는 주석 추가. 근거: `deletePostcardById` 호출부는 Manager 한 곳, 상세·갤러리 삭제 모두 Manager 경유.
+  - 연대기형 테스트 KDoc 축약: `StickerEditModeToolbarStructureTest`, `SaveErrorDialogStructureTest`, `EditorSubcategoryNavBarStructureTest`, `GalleryViewSelectionStructureTest` — 현재 테스트가 막는 계약만 남김.
+  - 복제 설명: haptic 이유는 production 3곳 유지, 테스트(`AppIntroVisitPostmarkStructureTest`) 1곳만 축약. 3단 보기→연못 설명은 main 3곳·test 2곳(`GalleryMonthlyGridStructureTest`)에서 경위 제거.
+- **조사 후 수정하지 않음:** 손 좌표 "실기기 QA에서 보정한다" 3곳(`SealStampInteraction`, `PhotoStickerPlaceInteraction`, `MaskingTapePlaceInteraction`) — 값은 첫 commit(`0a19187`·`c8a2cf5`·`b9cd53b`) 이후 불변, 기능 QA는 통과했지만 anchor를 항목별로 확인·보정한 기록이 없어 **확인 불가로 유지**. 사용자가 확정으로 판단하면 현재형으로 바꿀 수 있음.
+- **코드 비변경 확인:** 10파일 모두 주석 제거 코드가 HEAD와 동일(`ALL CODE IDENTICAL`), 새 주석에 구조 테스트 위험 토큰 없음, `git diff --check` 통과.
+- **검증:** 로컬 테스트 미실행(주석-only, 기계 대조로 대체). CI run `37742063755` 성공(JVM unit test·assembleDebug·assembleDebugAndroidTest). 실기기 QA 불필요. TEST-COVERAGE-MAP 변경 없음.
+- **남은 후속 후보(실행 승인 아님):** `PostcardRepository.deletePostcard(postcard)`는 production 호출부 0인 dead 메서드(정리는 코드 변경이라 별도 승인). `SaveErrorDialogStructureTest` KDoc의 저장소 밖 문서 참조("제2차 감사 보고서 부록") 남음. 손 좌표 QA 주석 3곳 확정 여부는 사용자 판단 대기.
+
 ---
 
 # HANDOFF — 96일차 추가: 월/연도 고르기 칸 뒤 종이 자투리 (구현·자동검증·실기기 QA 완료)
