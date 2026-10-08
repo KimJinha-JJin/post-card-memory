@@ -18,12 +18,8 @@ import org.junit.Test
  * [com.postcardmemory.testsupport.readStructureTestSource]에 정리해 뒀다.
  * 그래서 여기서는 소스를 텍스트로 읽어 구조적 불변식을 고정한다.
  *
- * 제3차(2026-08-07)에서 7개 다이얼로그의 AlertDialog UI를 공통 Composable
- * `SaveResultAlertDialog`(SaveResultAlertDialog.kt)로 추출했다. 56일차 사진
- * 탭 개편에서 "사진 바꾸기" 기능 자체가 제거되며 imageError 다이얼로그도 함께
- * 사라져 6개로 줄었고, 58일차 제8차에서 폰트/날짜형식 업데이트 상태 자체가
- * 항상 Idle로만 남는 dead runtime으로 확인돼 fontError/dateFormatError
- * 다이얼로그까지 제거되며 4개로 줄었다. 이 테스트가 고정하는 지점은 두 층으로
+ * 4개 다이얼로그는 모두 공통 Composable `SaveResultAlertDialog`
+ * (SaveResultAlertDialog.kt)로 그린다. 이 테스트가 고정하는 지점은 두 층으로
  * 나뉜다:
  *  - DetailScreen.kt: 4개 호출부가 여전히 올바른 상태 조건에서, 올바른 제목·
  *    제목색·본문·reset 콜백으로 SaveResultAlertDialog를 호출하는지

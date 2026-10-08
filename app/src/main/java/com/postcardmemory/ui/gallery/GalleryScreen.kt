@@ -842,11 +842,10 @@ fun GalleryScreen(
                 raceEnabled = isRaceModeOn
             )
         } else if (postcards.isEmpty()) {
-            // 62일차 2차: 엽서가 하나도 없을 때의 빈 상태는 어떤 보기
-            // 형식을 보고 있든 공통이어야 한다(보기마다
-            // 서로 다른 빈 상태를 만들지 않는다). pager 진입 전에 걸러
-            // 앞으로 추가될 보기(월별/타임라인/캘린더/우표/기억 밀도)도
-            // 자동으로 같은 빈 상태를 쓰게 한다.
+            // 엽서가 하나도 없을 때의 빈 상태는 어떤 보기 형식을 보고
+            // 있든 공통이어야 한다(보기마다 서로 다른 빈 상태를 만들지
+            // 않는다). pager 진입 전에 걸러 모든 보기가 자동으로 같은 빈
+            // 상태를 쓰게 한다.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -883,11 +882,10 @@ fun GalleryScreen(
                 }
             }
         } else {
-            // 62일차 보기 시스템에서 갤러리를 HorizontalPager 페이지로 묶었다.
-            // 76일차에 "3단 보기" 페이지가 삭제돼 지금은 월별 보기(MONTHLY)와
+            // 갤러리는 HorizontalPager 페이지로 묶여, 월별 보기(MONTHLY)와
             // 기억 밀도 보기(DENSITY) 두 페이지가 고정 순서로 있다(위
-            // activePageFormats). 연못 모드는 76일차부터 별도 화면이 아니라
-            // 월별 grid 안에서 그려진다(isPondModeOn 전달).
+            // activePageFormats). 연못 모드는 별도 화면이 아니라 월별 grid
+            // 안에서 그려진다(isPondModeOn 전달).
             //
             // 검색·정렬 적용 결과(displayedPostcards)는 여기 pager 레벨에서
             // 한 번만 계산해 두 페이지에 동일하게 내려보낸다 — 월별 보기를
@@ -1883,11 +1881,9 @@ private val monthlyGridDayLabelFormatter: DateTimeFormatter =
  * `item(span = { GridItemSpan(maxLineSpan) })`으로 헤더에만 전체 폭을
  * 줘서 스크롤 컨테이너를 하나로 유지한다.
  *
- * 76일차: 3단 보기가 삭제되며 그 페이지 전용이던 연못 물리 오버레이
- * (탭/드래그 파문, [PondRippleOverlay])를 이 grid로 그대로 옮겼다.
- * 검색 결과가 없을 때의 안내([SearchEmptyState])도 3단 보기가 맡던
- * 역할을 그대로 이어받는다("엽서가 하나도 없음" 판정은 여전히 호출부인
- * pager 레벨이 먼저 처리한다).
+ * 연못 물리 오버레이(탭/드래그 파문, [PondRippleOverlay])도 이 grid 위에
+ * 그린다. 검색 결과가 없을 때의 안내([SearchEmptyState])도 이 페이지가
+ * 맡는다("엽서가 하나도 없음" 판정은 호출부인 pager 레벨이 먼저 처리한다).
  */
 @Composable
 private fun GalleryMonthlyGridPage(
@@ -2061,9 +2057,8 @@ private fun GalleryMonthlyGridPage(
  * 선택 표시·뒷면 편지 배지)만 그리는 가벼운 [StampCardContent]를 그대로
  * 쓰고, 날짜 자리만 "일(day)"로 바꾼다.
  *
- * 76일차: 3단 보기가 삭제되며 그 페이지 전용이던 연못 모드가 이 grid로
- * 이식됐다 — 연못 모드가 켜졌을 때만 물리·기울임 연출이 붙은 무거운
- * [StampCard]로 바꿔 그린다(평상시 렌더링 비용은 그대로 유지).
+ * 연못 모드가 켜졌을 때만 물리·기울임 연출이 붙은 무거운 [StampCard]로
+ * 바꿔 그린다(평상시 렌더링 비용은 그대로 유지).
  */
 @Composable
 private fun GalleryMonthlyGridItem(

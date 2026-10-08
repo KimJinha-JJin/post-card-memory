@@ -155,8 +155,8 @@ class AppIntroVisitPostmarkStructureTest {
 
     @Test
     fun postmark_hapticUsesVibratorNotTheUnfeltHapticFeedbackApi() {
-        // 68일차 갤러리 QA에서 LocalHapticFeedback이 실기기에서 전혀 느껴지지
-        // 않는 것으로 확인됐다. 같은 함정으로 돌아가지 않게 고정한다.
+        // LocalHapticFeedback은 실기기에서 느껴지지 않아 Vibrator를 직접 쓴다
+        // (이유는 AppIntroScreen 주석). 그 API로 돌아가지 않게 고정한다.
         assertTrue(
             "갤러리와 같은 Vibrator + createOneShot을 써야 함",
             introSource.contains("VibrationEffect.createOneShot(")

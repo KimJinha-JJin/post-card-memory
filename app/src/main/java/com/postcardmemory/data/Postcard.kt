@@ -20,6 +20,10 @@ data class Postcard(
     val backgroundPattern: String = "NONE",
     @ColumnInfo(defaultValue = "'SERIF'")
     val messageFont: String = "SERIF",
+    // SQL 기본값 'STANDARD'와 Kotlin 기본값 "STAMP"는 일부러 다르다.
+    // 'STANDARD'는 이미 내보낸 Room schema와 기존 DB의 컬럼 정의에 맞춘
+    // 값이라, 단순 정리 목적으로 'STAMP'로 맞추면 schema 검증과 Migration에
+    // 영향을 준다. 옛 값을 가진 행은 MIGRATION_14_15가 STAMP로 정규화한다.
     @ColumnInfo(defaultValue = "'STANDARD'")
     val layoutStyle: String = "STAMP",
     @ColumnInfo(defaultValue = "'DOT'")

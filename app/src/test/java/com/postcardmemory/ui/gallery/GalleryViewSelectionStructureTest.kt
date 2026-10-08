@@ -7,16 +7,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 63일차 추가 구현: 좌측 패널([GalleryFeatureDrawer])이 완전히 제거되고
- * 그 진입 기능(미래 우체통, 특별한 갤러리 3종)이 우측 하단 + 클러스터
- * ([GalleryFabCluster])로 흡수된 구조를 고정한다.
- *
- * 76일차: 3단/캘린더/우표/타임라인 보기가 삭제되며 체크박스 기반 "보기
- * 형식 관리" selector 자체가 사라지고, 월별/기억 밀도 2페이지만 항상
- * 활성화된 채 pager 좌우 스와이프로 전환되는 구조를 고정한다.
- *
- * 88일차: + 클러스터가 신문 오림 손 다섯 장의 부채([GalleryQuickSelectHands])로
- * 바뀐 뒤에도 기존 callback·노출 조건·접근성 이름이 유지되는 구조를 고정한다.
+ * 갤러리의 보기 전환과 기능 진입 구조를 고정한다.
+ *  - 좌측 패널(`GalleryFeatureDrawer`)은 없고, 그 진입 기능(미래 우체통, 특별한
+ *    갤러리 3종)은 우측 하단 + 클러스터([GalleryFabCluster])가 맡는다.
+ *  - 체크박스 기반 "보기 형식 관리" selector 없이, 월별/기억 밀도 2페이지가
+ *    항상 활성화된 채 pager 좌우 스와이프로 전환된다.
+ *  - + 클러스터는 신문 오림 손 다섯 장의 부채([GalleryQuickSelectHands])로
+ *    그려지지만 기존 callback·노출 조건·접근성 이름은 그대로 유지된다.
  */
 class GalleryViewSelectionStructureTest {
 

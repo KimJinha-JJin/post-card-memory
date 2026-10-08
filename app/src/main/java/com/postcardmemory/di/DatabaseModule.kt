@@ -20,6 +20,9 @@ object DatabaseModule {
     fun provideDatabase(
         @ApplicationContext context: Context
     ): PostcardDatabase {
+        // 사용자 엽서를 지키기 위해 destructive fallback은 쓰지 않는다.
+        // Migration 등록이 빠지면 DB를 비우고 넘어가지 말고 실패해야 하므로,
+        // 모든 버전 간 Migration을 아래에 빠짐없이 등록한다.
         return Room.databaseBuilder(
             context,
             PostcardDatabase::class.java,

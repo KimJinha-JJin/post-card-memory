@@ -94,9 +94,9 @@ class GalleryMonthlyGridStructureTest {
 
         val itemBody = sourceText.substring(itemStart, itemEnd)
 
-        // 76일차: 3단 보기가 삭제되며 그 페이지 전용이던 연못 모드가 이
-        // grid로 이식됐다 — 평상시엔 가벼운 StampCardContent를 그대로 쓰고,
-        // 연못 모드가 켜졌을 때만 물리 연출이 붙은 StampCard로 바꿔 그린다.
+        // 연못 모드는 이 grid 안에서 그려진다 — 평상시엔 가벼운
+        // StampCardContent를 그대로 쓰고, 연못 모드가 켜졌을 때만 물리 연출이
+        // 붙은 StampCard로 바꿔 그린다.
         assertTrue(
             "평상시(연못 모드 꺼짐)에는 가벼운 StampCardContent를 그대로 써야 함",
             itemBody.contains("StampCardContent(")
@@ -125,8 +125,8 @@ class GalleryMonthlyGridStructureTest {
 
         val body = sourceText.substring(start, end)
 
-        // 76일차: 3단 보기가 삭제되며 그 페이지의 연못 물리 오버레이(탭/드래그
-        // 파문)가 월별 보기로 그대로 옮겨졌다.
+        // 연못 물리 오버레이(탭/드래그 파문)와 검색 결과 없음 안내는 월별
+        // 보기가 맡는다.
         assertTrue(body.contains("PondRippleOverlay("))
         assertTrue(body.contains("pondController.gridBoundsInWindow"))
         assertTrue(

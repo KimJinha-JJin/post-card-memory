@@ -7,42 +7,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 제6차(2026-08-07)에서 `StickerEditModeToolbar`(및 Toolbar 전용 helper인
- * `StickerEditModeButton`)를 DetailScreen.kt에서 StickerEditModeToolbar.kt로
- * 물리적으로 분리했다. `src/test` JVM 환경에는 Robolectric이 없어 Composable을
+ * 선택한 사진 스티커의 Property(배경제거·레이어순서) 툴바인
+ * `StickerEditModeToolbar`가 StickerEditModeToolbar.kt에 떨어진 순수 UI 조각으로
+ * 남는 구조를 고정한다. `src/test` JVM 환경에는 Robolectric이 없어 Composable을
  * 직접 렌더링할 수 없으므로([[SaveErrorDialogStructureTest]] 상단 주석 참고),
  * 소스 텍스트 기준으로 다음을 고정한다:
- *  - 분리된 파일에만 두 함수 정의가 존재하고(DetailScreen.kt에는 남지 않음)
- *    ViewModel/Repository/Context/gesture/저장/Undo를 참조하지 않음
- *  - `StickerEditModeButton`은 Toolbar 파일 안에서만 쓰이는 private helper로
- *    남아 DetailScreen.kt 어디에서도 더 이상 참조되지 않음
- *  - `StickerEditMode` enum은 접근 범위만 private→internal로 넓어졌을 뿐
- *    멤버(Move/Scale/Rotate)는 그대로임
- *  - DetailScreen.kt의 단일 호출부가 기존과 동일한 상태·콜백으로 연결됨
+ *  - Toolbar 정의는 분리된 파일에 정확히 하나만 있고 DetailScreen.kt에는 남지 않음
+ *  - 항목은 공용 `EditorTextAction` 평면 텍스트 Action이며, 예전 filled Box인
+ *    `StickerEditModeButton`이나 툴바를 감싸는 NeutralLight 둥근 배경이 다시
+ *    생기지 않음
+ *  - ViewModel/Repository/Context/gesture/저장/Undo를 직접 참조하지 않음
+ *  - 호출부는 DetailScreen.kt가 아니라 `PhotoStickerPickerPanel` 안(복제·삭제와
+ *    같은 "선택한 스티커" 블록) 한 곳이고, 상태·콜백이 그대로 연결됨
  *
- * 제3차에서 "AlertDialog(" 부분 문자열이 "SaveResultAlertDialog(" 안에도
- * 걸려 개수를 잘못 세었던 오탐을 반복하지 않기 위해 함수 선언 검사는 줄 시작
- * 앵커로 제한하고, 호출부 경계는 들여쓰기 공백 수 대신 괄호 깊이를 직접
- * 스캔해 잘라낸다.
- *
- * 이후 디자인 폴리시 작업(2026-08-20)에서 pinch/twist 제스처가 이동·크기·
- * 회전을 이미 전부 처리하게 되면서 Move/Scale/Rotate 모드 전환 버튼과
- * 좌우·상하대칭 버튼을 툴바에서 제거했다. `editMode`/`onModeSelected`/
- * `onToggleFlipHorizontal`/`onToggleFlipVertical` 파라미터가 그래서 빠졌다.
- * `StickerEditMode` enum 자체와 기존 flip 데이터·렌더링은 그대로다.
- *
- * 53일차(2026-08-25) 스티커 UI/UX 문법 파일럿에서 Property(배경제거·레이어순서)와
- * Object Action(복제·삭제)이 스크롤 본문의 서로 다른 위치에 떨어져 있던 걸
- * "선택한 스티커" 컨텍스트 하나로 모았다. 그 결과 `StickerEditModeToolbar` 호출부가
- * DetailScreen.kt에서 `PhotoStickerDetailScreen.kt`의 `PhotoStickerPickerPanel`
- * 안(복제·삭제 버튼과 같은 블록)으로 옮겨갔다. DetailScreen.kt는 이제 상태·콜백을
- * `PhotoStickerPickerPanel`에 파라미터로 전달만 하고 Toolbar를 직접 호출하지 않는다.
- *
- * 같은 날 제8차(Selected-object Action Box 철거)에서 이 툴바를 감싸던
- * NeutralLight 둥근 배경과, 각 항목을 감싸던 filled Box인
- * `StickerEditModeButton`을 완전히 삭제했다. 이제 공용
- * `EditorTextAction`/`EditorActionDivider`(ui.components)로 평면 텍스트
- * Action만 남는다 — 상태 판단·제스처·콜백 배선은 그대로다.
+ * "AlertDialog("가 "SaveResultAlertDialog(" 안에도 걸리는 것 같은 부분 문자열
+ * 오탐을 피하려고, 함수 선언 검사는 줄 시작 앵커로 제한하고 호출부 경계는
+ * 들여쓰기 공백 수 대신 괄호 깊이를 직접 스캔해 잘라낸다.
  */
 class StickerEditModeToolbarStructureTest {
 

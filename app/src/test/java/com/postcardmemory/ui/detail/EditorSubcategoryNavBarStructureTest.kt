@@ -7,13 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 53일차 제7단계: 스티커 탭의 사진/텍스트/라벨 subcategory navigation을
- * 스크롤 콘텐츠 안 pill형 EditorSegmentedTabRow에서, 스크롤 밖 고정 영역의
- * 평평한 EditorSubcategoryNavBar(EditorBottomTabBar.kt)로 옮겼다. 54일차부터는
- * 마스킹테이프 탭의 기본 디자인/커스텀/사진 생성 방식 선택도, 55일차 후속
- * (낙서 도구형 개편)부터는 낙서 탭의 펜/형광펜/점선/지우개 도구 선택도, 56일차
- * 사진 탭 2단 구조 개편부터는 사진 탭의 레이아웃/사진 편집 선택도, 이어진 배경
- * UI 개편부터는 배경 탭의 색상/패턴 선택도 같은 역할이라 같은 컴포저블을
+ * 편집 탭의 subcategory 선택은 스크롤 콘텐츠 안 pill형 EditorSegmentedTabRow가
+ * 아니라, 스크롤 밖 고정 영역의 평평한 EditorSubcategoryNavBar
+ * (EditorBottomTabBar.kt)가 맡는다. 사진(레이아웃/사진 편집), 배경(색상/패턴),
+ * 스티커(사진/텍스트/라벨), 마스킹테이프(기본 디자인/커스텀/사진), 낙서
+ * (펜/형광펜/점선/지우개 도구) 선택이 같은 역할이라 같은 컴포저블을
  * 재사용한다 — 다섯 호출부 모두 각자의 페이지 조건 안에서만 렌더돼야 한다.
  * `src/test` JVM 환경에는 Robolectric이 없어 Composable을 직접 렌더링할 수
  * 없으므로([[StickerEditModeToolbarStructureTest]] 참고) 소스 텍스트 기준으로
