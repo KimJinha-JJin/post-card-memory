@@ -1,4 +1,4 @@
-# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거 → PostcardImageStorage 제거 → 테스트 유효성 감사·중복 11건 제거, commit·push·CI 성공)
+# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거 → PostcardImageStorage 제거 → 테스트 유효성 감사·중복 11건 제거 → 보호 공백 2개 보강, commit·push·CI 성공)
 
 확인일: 2026-10-09. 수동 표준 모드(98일차 1·2단계 작업지시서), 담당 Claude Code.
 
@@ -83,6 +83,22 @@
 - **삭제 후 재스캔:** 변경 테스트 파일 미사용 import 0, 빈 테스트 클래스 0, 삭제 테스트 이름을 가리키는 주석·문서 0(archive 제외), 새 helper 고아 없음. 새 삭제 후보 없음.
 - **Git:** `1215e7d` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
 - **다음 후보(실행 승인 아님):** ① 보호 공백 — 스티커/도장 포함 초안 완전 왕복 테스트 없음, `awaitPendingStyleSaves` 목록에서 새 저장 Job 누락을 잡는 테스트 없음(현재는 `draftAutosaveJob`(별도 처리) 외 전 Job 포함 확인) ② production 후보 — `DetailScreen`의 `stickerEditMode`가 재대입되지 않아 Scale/Rotate 제스처 분기 도달 불가, `presetLabelTapeStyles`·`tapePalette()` 화면 미사용, `LabelTapeStyle` KDoc의 "프리셋 그리드" 표현 낡음 ③ C 나머지 11건·D 22건 판단 ④ 구조 테스트 helper 중복(자체 파일 읽기 12파일, `extractBalancedCall` 4벌), `FutureMailOpeningGuardTest.kt`에 클래스 2개, `everyDecorationHistoryHasClearFunctionAndIsUsedInAllThreePaths` 이름이 실제 검사보다 강함.
+
+## 98일차 추가: 테스트 보호 공백 2개 보강 (commit·push·CI 성공)
+
+98일차 추가 작업지시서(보호 공백 보강) 범위. 시작 HEAD `5aa77b4`, local/origin 0/0, tracked clean, 보호 untracked 3종 그대로.
+
+- **조사 결과 — 초안:** 실제 경로는 `PostcardDraftStorage.saveDraftAtomically(filesDir, draft)`(임시 파일 → `AtomicFileReplace`) / `loadDraft(filesDir, id)` → `PostcardEditDraft.serialize()`·`parsePostcardEditDraft()`. 두 함수 모두 Context 없는 internal 오버로드가 있어 JVM `TemporaryFolder`로 production 경로를 그대로 쓸 수 있음. JVM 불가: `PhotoStickerItem`(Uri 3개)과 `style == PHOTO` 마스킹테이프(`photoUri`) — Robolectric·`returnDefaultValues` 없음, `Uri.parse` 실패 시 항목이 조용히 버려짐. 도장(`PostcardSealItem`)은 Uri를 쓰지 않음(기존 `PostcardEditDraftTest` 머리 주석이 틀렸음). 초안이 담는 요소: 사진 스티커·도장·낙서·텍스트 스티커·마스킹테이프·라벨 스티커와 각 선택 id(사진·배경·문구 등은 Room 실시간 저장이라 초안 밖).
+- **조사 결과 — 이탈 저장:** `awaitPendingStyleSaves()`의 `listOfNotNull` join 목록 19개 = `DetailViewModel`의 `Job?` 필드 20개 − `draftAutosaveJob`(debounce라 join 대신 cancel 후 `persistDraftNow()` 즉시 실행). 기존 보호선은 Fake/replica(`DetailScreenExitSaveGuaranteeTest`·`DetailScreenExitSaveLossTest`)뿐이라 실제 목록 누락은 못 잡았음. ViewModel은 JVM에서 생성 불가 → 구조 테스트 외 seam 없음, production 변경 불필요.
+- **변경 (`0e0a274`, 4파일 +281/−15, production 코드 무변경):**
+  - `PostcardDraftStorageTest.saveDraftAtomically_thenLoadDraft_draftWithEveryNonPhotoDecorationKeepsAllFields` — 도장 2(offset 없는 미니 도장 포함)·낙서 2(펜·형광펜)·텍스트 스티커 1(외곽선 색)·마스킹테이프 2(프리셋, 커스텀 색/무늬/가장자리/길이/굵기)·라벨 2(프리셋, 커스텀 색)·선택 id를 실제 저장→파일→읽기 후 객체 전체 equals. 정규화되지 않는 값만 사용. Fake·replica 없음.
+  - 새 파일 `PendingStyleSaveCoverageStructureTest.everyDeclaredSaveJob_isJoinedOnExit_orExplicitlyHandledSeparately` — 소스에서 `Job?` 필드 전체 추출 → (선언 − 예외) ⊆ join 목록. 예외 맵은 이유 주석 + 대체 처리(`draftAutosaveJob?.cancel()`, `persistDraftNow()`) 존재와 "예외가 실제 선언돼 있는지"(추출 깨짐·낡은 예외 감지)까지 확인. 개수·이름 목록 고정 없음. 한계: Job 필드 없이 바로 launch하는 저장은 못 잡음.
+  - `PostcardEditDraftTest` 머리 주석·낙서 섹션 주석 정정(도장은 Uri 미사용, 완전 왕복은 `PostcardDraftStorageTest`가 담당).
+  - `TEST-COVERAGE-MAP.md` — JVM 888→890, 파일 91→92, XML 92→93, 구조 165→166, 초안·lifecycle 항목 보호 범위, CI 행, 98일차 7단계 메모.
+- **mutation 확인(작업트리 임시 적용 → scratchpad 백업으로 원상복구, `git diff app/src/main` 0 확인, commit에 없음):** 초안 직렬화의 텍스트 스티커/마스킹테이프 줄 순서 교환 → 새 초안 테스트만 실패(기존 `PostcardEditDraftTest` 29건 전부 통과 — 실제로 비어 있던 공백). 텍스트 스티커 외곽선 색 역직렬화 누락 → 새 테스트 + 기존 `TextStickerItemTest` 2건 실패. join 목록에서 `confirmSaveJob` 제거 / 목록에 없는 새 `Job?` 필드 추가 → 새 구조 테스트가 해당 이름을 메시지에 담아 실패.
+- **검증:** 신규 2건 단독 통과, 관련(`PostcardDraftStorageTest` 30·`PostcardEditDraftTest` 29) 통과, 전체 `testDebugUnitTest` 890/890(XML 93, 실패·오류·skip 0, 전부 이번 실행 생성), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과, `app/src/androidTest` 무변경(20건/7파일). GitHub Actions CI run `37915260950` 성공(JVM unit test·assembleDebug·assembleDebugAndroidTest). 실기기 QA 불필요(테스트·주석·문서만, 앱 동작 무변경). DB/schema/migration 무변경.
+- **Git:** `0e0a274` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
+- **남은 공백(실행 승인 아님):** 사진 스티커·사진 테이프를 포함한 초안 완전 왕복(JVM 불가, androidTest로 만들면 SAFE 등급 검토·승인 실행 필요), Job 없이 launch하는 저장 경로 감지, ViewModel 상태 → 초안 객체 조립(`persistDraftNow`)과 초안 → 화면 복원 적용 단계는 여전히 실행 검증 없음. 이전 후보(StickerEditMode 죽은 분기, `presetLabelTapeStyles`·`tapePalette()`, C 11·D 22, helper 중복)는 이번에 손대지 않음.
 
 ---
 
