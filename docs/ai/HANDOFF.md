@@ -1,4 +1,4 @@
-# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거, commit·push·CI 성공)
+# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거 → PostcardImageStorage 제거, commit·push·CI 성공)
 
 확인일: 2026-10-09. 수동 표준 모드(98일차 1·2단계 작업지시서), 담당 Claude Code.
 
@@ -16,7 +16,7 @@
 - **템플릿 폴더 실기기 실측(읽기 전용, 사용자 승인):** 기기 `R3KYB00HAYY`(SM-S936N) 1대만 연결 확인. 설치 앱은 DEBUGGABLE, firstInstallTime 2026-10-05 14:19(그날 재설치·백업 복원과 일치). `adb shell run-as com.postcardmemory ls -la files/`, `ls -laR files/postcard_templates`만 실행 — `postcard_templates/`는 존재(백업 복원으로 생김)하지만 `templates/`·`previews/` 모두 **비어 있음(숨김 포함 0개)**. 수정·삭제·이동 0건. → 사용자 템플릿 파일 0개 확인, 템플릿 subsystem 제거의 파일 보존 전제는 해소(제거 자체는 미승인).
 - **사용자 결정(2단계 후):** 봉투 DB 컬럼·migration·schema 유지. 다음 코드 클린 후보 확정 = schema와 무관한 Repository/DAO 고아 메서드 + `EditorEmptyHint`·`EditorSegmentedTabRow`·`GalleryViewMode`. `PostcardImageStorage`와 전용 테스트 제거는 별도 묶음으로 보류.
 - **Git:** `480a5ef` commit·push, local/origin 0/0, CI 성공. 보호 untracked 3종 그대로.
-- **다음 후보(실행 승인 아님):** ① ~~확정된 코드 클린 묶음~~ → 아래 3단계에서 완료(`0fd4c1f`) ② ~~템플릿 subsystem 제거~~ → 아래 4단계에서 완료(`f59796d`) ③ 보류 묶음: `PostcardImageStorage`+전용 테스트 ④ `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장은 이제 일부 낡음(gate는 JVM으로 재현됨).
+- **다음 후보(실행 승인 아님):** ① ~~확정된 코드 클린 묶음~~ → 아래 3단계에서 완료(`0fd4c1f`) ② ~~템플릿 subsystem 제거~~ → 아래 4단계에서 완료(`f59796d`) ③ ~~보류 묶음: `PostcardImageStorage`+전용 테스트~~ → 아래 5단계에서 완료(`84bf188`) ④ `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장은 이제 일부 낡음(gate는 JVM으로 재현됨).
 
 
 ## 98일차 3단계: 확정 dead code 제거 (commit·push·CI 성공)
@@ -49,7 +49,23 @@
 - **검증:** 로컬 `testDebugUnitTest` 905/905(XML 93, 실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 실사용 기기 instrumentation 불필요(`app/src/androidTest` 무변경). GitHub Actions CI run `37901299271` 성공(JVM unit test·assembleDebug·assembleDebugAndroidTest). 3단계 HANDOFF commit `56cd147`의 CI run `37899936549`도 성공. 실기기 QA 불필요(화면에 진입 경로가 없던 코드 제거, schema·저장 포맷 불변).
 - **삭제 후 재스캔:** 지운 파일이 쓰던 프로젝트 선언 83개 중 새로 고아가 된 것 0개(한 파일에만 남은 이름은 지역 변수 동명이인뿐). 미사용 import 없음(지운 파일 외 import 변경 불필요).
 - **Git:** `f59796d` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
-- **다음 후보(실행 승인 아님):** 98일차 5단계 `PostcardImageStorage`+전용 테스트 제거(작업지시서상 예정, 별도 commit). 기타: `PostcardDeletionManagerTest` KDoc 일부 낡음, B등급 중복 helper.
+- **다음 후보(실행 승인 아님):** ~~98일차 5단계 `PostcardImageStorage`+전용 테스트 제거~~ → 아래 5단계에서 완료(`84bf188`). 기타: `PostcardDeletionManagerTest` KDoc 일부 낡음, B등급 중복 helper.
+
+## 98일차 5단계: PostcardImageStorage + 전용 테스트 제거 (commit·push·CI 성공)
+
+98일차 5단계 작업지시서 범위. 시작 HEAD `4508d5f`, local/origin 0/0, tracked clean, 보호 untracked 3종 그대로.
+
+- **참조 재확인:** `PostcardImageStorage`/`deleteIfOwnedByApp`는 production·androidTest·Manifest·XML 참조 0. 남은 언급은 전용 테스트와 `BackgroundColorSaveRaceTest` 주석 2곳뿐(reflection·구조 테스트 참조 없음). object가 쓰던 `isInsideDirectory`는 `AppFileOwnership.kt`의 공용 helper로 `PostcardDeletionManager`·`PhotoStickerImageStorage`·`MaskingTapePhotoStorage`·`DetailViewModel`이 계속 사용 → 유지.
+- **변경 (`84bf188`, 4파일 +10/−127):**
+  - 삭제 production `utils/PostcardImageStorage.kt`(36줄).
+  - 삭제 test `utils/PostcardImageStorageTest.kt`(83줄, 6건: filesDir 안 삭제·밖 보존·null/빈 경로·없는 파일·같은 경로). object만 직접 검증 → 남길 부분 없음. 경계 판정은 `AppFileOwnershipTest`, 실제 엽서 파일 삭제는 `PostcardDeletionManagerTest`·`PostcardDeletionDatabaseFirstGateTest`·`DecorationDirectoryContractTest`가 계속 보호.
+  - `BackgroundColorSaveRaceTest.kt` 주석 2곳만 "98일차에 제거된 옛 헬퍼"로 수정(KDoc 링크 → 일반 코드 표기, 테스트 동작 무변경).
+  - `TEST-COVERAGE-MAP.md` — JVM 905→899, 테스트 파일 92→91, XML 93→92, CI 행 갱신, 98일차 5단계 메모 추가.
+- **유지(미변경):** `PostcardDeletionManager`·삭제 순서·경로 안전 검사, 일반 이미지·사진 스티커 저장, exporter·공유 캐시 정리, Room schema JSON(diff 없음)·migration·DB version 19, 기존 엽서 파일·템플릿 빈 폴더.
+- **검증:** 로컬 `testDebugUnitTest` 899/899(XML 92, 실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 실사용 기기 instrumentation 불필요(`app/src/androidTest` 무변경). GitHub Actions CI run `37902444635` 성공(JVM unit test·assembleDebug·assembleDebugAndroidTest). 실기기 QA 불필요(호출부 0 코드 제거, 저장 흐름·schema 무변경).
+- **삭제 후 재스캔:** 새 고아 선언·미사용 import·전용 상수/fixture 없음(지운 파일은 `Context`·`File`만 import, 자체 상수 없음).
+- **Git:** `84bf188` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
+- **다음 후보(실행 승인 아님):** `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장 일부 낡음, B등급 중복 helper. 98일차 작업지시서상 예정 단계는 모두 끝남.
 
 ---
 
