@@ -49,7 +49,6 @@ import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.InkPrimary
 import com.postcardmemory.ui.theme.NeutralLight
-import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.SealInkWhite
 import com.postcardmemory.ui.theme.SunsetGold

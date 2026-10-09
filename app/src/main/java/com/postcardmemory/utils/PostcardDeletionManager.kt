@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 
 /** 파일/디렉터리 하나를 정리하려다 실패한 경우의 기록. */
 data class AssetDeletionFailure(
@@ -179,6 +180,44 @@ internal fun cleanupPostcardOwnedAssets(
 }
 
 /**
+ * DB-우선 삭제 gate. [deleteDatabaseRow]가 성공한 뒤에만 [cleanupOwnedAssets]를
+ * 부르고, 일반 오류로 실패하면 파일을 하나도 건드리지 않은 실패 결과를 돌려준다.
+ *
+ * coroutine 취소는 실패 결과로 바꾸지 않고 그대로 다시 던진다 — 취소를 "DB 삭제
+ * 실패"로 삼키면 이미 취소된 호출자가 남은 엽서까지 계속 삭제를 시도하게 된다.
+ * 이때도 파일 정리 단계로는 넘어가지 않는다.
+ *
+ * Context 없이 순수 JUnit에서 이 gate만 검증할 수 있도록 Manager에서 떼어 둔다.
+ */
+internal suspend fun deletePostcardDatabaseFirst(
+    postcard: Postcard,
+    deleteDatabaseRow: suspend (Long) -> Unit,
+    cleanupOwnedAssets: (Postcard) -> PostcardDeletionResult
+): PostcardDeletionResult {
+    val databaseDeleted =
+        try {
+            deleteDatabaseRow(postcard.id)
+            true
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            false
+        }
+
+    if (!databaseDeleted) {
+        return PostcardDeletionResult(
+            postcardId = postcard.id,
+            databaseDeleted = false,
+            deletedAssets = emptyList(),
+            missingAssets = emptyList(),
+            failedAssets = emptyList()
+        )
+    }
+
+    return cleanupOwnedAssets(postcard)
+}
+
+/**
  * 상세 화면 삭제와 갤러리 삭제가 동일한 정책을 쓰도록 모은 공통 계층.
  *
  * 정책: Room 삭제가 성공한 뒤에만 파일을 정리한다. 파일을 먼저 지우고
@@ -194,24 +233,12 @@ class PostcardDeletionManager @Inject constructor(
 
     suspend fun deletePostcard(
         postcard: Postcard
-    ): PostcardDeletionResult {
-        val databaseDeleted =
-            runCatching {
-                repository.deletePostcardById(postcard.id)
-            }.isSuccess
-
-        if (!databaseDeleted) {
-            return PostcardDeletionResult(
-                postcardId = postcard.id,
-                databaseDeleted = false,
-                deletedAssets = emptyList(),
-                missingAssets = emptyList(),
-                failedAssets = emptyList()
-            )
-        }
-
-        return cleanupPostcardOwnedAssets(context.filesDir, postcard)
-    }
+    ): PostcardDeletionResult =
+        deletePostcardDatabaseFirst(
+            postcard = postcard,
+            deleteDatabaseRow = { id -> repository.deletePostcardById(id) },
+            cleanupOwnedAssets = { cleanupPostcardOwnedAssets(context.filesDir, it) }
+        )
 
     suspend fun deletePostcards(
         postcards: List<Postcard>

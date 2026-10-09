@@ -2,7 +2,6 @@ package com.postcardmemory.utils
 
 import com.postcardmemory.data.Postcard
 import java.io.File
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule

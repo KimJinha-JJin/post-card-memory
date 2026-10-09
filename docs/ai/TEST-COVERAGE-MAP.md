@@ -60,11 +60,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 930건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 932건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 930개, 테스트를 담은 파일 94개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 95개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 165개(구조 전용 파일에 있는 157개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 932개, 테스트를 담은 파일 95개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 96개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 165개(구조 전용 파일에 있는 157개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 930개는 96일차 추가(2026-10-07, 월/연도 고르기 종이 자투리) 최종 로컬 결과 XML 95개에서 930/930 통과(실패·오류·skip 0)를 확인했어. instrumentation은 2026-10-02 같은 검증 전용 emulator에서 `PostcardDeletionOrchestrationTest` 3/3, 이어 전체 20/20을 다시 실제 실행해 통과했어(boot 직후 첫 시도는 emulator lowmemorykiller가 test process를 죽여 status 없이 끝났고, 환경 문제로 분류해 test emulator만 재부팅 후 같은 APK로 통과). 그 전 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 932개는 98일차(2026-10-09, 삭제 gate 취소 전파 수정 + `PostcardDeletionDatabaseFirstGateTest` 2건 추가) 최종 로컬 결과 XML 96개에서 932/932 통과(실패·오류·skip 0)를 확인했어. instrumentation은 2026-10-02 같은 검증 전용 emulator에서 `PostcardDeletionOrchestrationTest` 3/3, 이어 전체 20/20을 다시 실제 실행해 통과했어(boot 직후 첫 시도는 emulator lowmemorykiller가 test process를 죽여 status 없이 끝났고, 환경 문제로 분류해 test emulator만 재부팅 후 같은 APK로 통과). 그 전 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -109,10 +109,11 @@ JVM 930개는 96일차 추가(2026-10-07, 월/연도 고르기 종이 자투리)
 ### 기능: 파일 저장 / 삭제
 
 - **보호 수준:** 중간 — 개별 파일 저장·소유권 판정과 DB 삭제 gate(81일차부터)는 강함, 고아 파일 정리는 진단 전용으로 약함.
-- **현재 보호하는 테스트:** `AtomicFileReplaceTest`, `AppFileOwnershipTest`, `ProvisionalFileTest`, `PostcardDeletionManagerTest`, `OrphanFileDiagnosticsTest`, `DecorationDirectoryContractTest`(91일차 신규 3건), `PostcardTempCleanupTest`, 공유 캐시 정리 테스트, `PostcardDeletionOrchestrationTest`(instrumentation, 81일차 신규).
+- **현재 보호하는 테스트:** `AtomicFileReplaceTest`, `AppFileOwnershipTest`, `ProvisionalFileTest`, `PostcardDeletionManagerTest`, `PostcardDeletionDatabaseFirstGateTest`(98일차 신규 2건), `OrphanFileDiagnosticsTest`, `DecorationDirectoryContractTest`(91일차 신규 3건), `PostcardTempCleanupTest`, 공유 캐시 정리 테스트, `PostcardDeletionOrchestrationTest`(instrumentation, 81일차 신규).
 - **실제 production 직접 검증:** 실제 임시 파일로 교체·쓰기 실패·취소·소유 범위·엽서별 파일 정리·오래된 캐시 정리를 검사해. **81일차부터는 실제 Room + 실제 filesDir로 `DB 삭제 실패 → 파일 삭제 0건·DB 행 유지`, `DB 삭제 성공 → 소유 파일 실제 삭제`, `동일 삭제 재호출 → 멱등성 안전`까지 3건을 검증 전용 emulator에서 실제 실행해 3/3 통과를 확인했어.**
 - **91일차 디렉터리 계약:** 꾸미기 상태 파일 6종과 엽서별 자산 디렉터리 3종(`sticker_bgs`·`sticker_originals`·`masking_tape_photos`)의 위치를 `DecorationStateFile`/`PostcardAssetDirectory`(`utils/PostcardOwnedFileLayout.kt`) 한 곳에 두고, 저장(DetailViewModel)·삭제·고아 진단이 모두 그 정의를 써. `DecorationDirectoryContractTest`는 저장 경로 함수로 실제 파일을 만든 뒤 production 삭제가 전부 지우고(다른 엽서는 보존) production 진단이 전부 찾는지(엽서가 있으면 0건) 실제 파일 I/O로 확인해. 디렉터리 문자열은 production 상수를 참조하지 않는 리터럴로 독립 고정해. 삭제 목록에서 한 종류를 빼는 일시 변형으로 실패하는 것을 확인했어.
 - **디렉터리 계약이 증명하지 못하는 것:** DetailViewModel이 실제로 enum 경로로 저장한다는 사실 자체(Robolectric 없이 ViewModel을 만들 수 없어 실제 저장 호출은 미검증 — 코드 리뷰와 기존 계측으로만 확인), 새 꾸미기 종류가 enum에 등록되지 않고 다른 경로로 저장되는 경우, 초안 전용 `draft_sticker_bgs`·`drafts/edit_state`(PostcardDraftStorage 관할, 진단만 같은 상수 사용).
+- **98일차 DB-우선 gate JVM 검증:** `PostcardDeletionDatabaseFirstGateTest`가 Manager가 그대로 위임하는 `deletePostcardDatabaseFirst`를 실제 `cleanupPostcardOwnedAssets` + TemporaryFolder로 불러, `DB 삭제 중 CancellationException → 실패 결과로 삼키지 않고 호출자에게 전파·파일 정리 0건`과 `일반 DB 오류 → databaseDeleted=false·파일 정리 0건`을 검사해. gate를 예전 `runCatching`으로 되돌리는 일시 변형에서 취소 테스트가 실패하는 것을 확인했어. 실제 Room DAO와 Manager의 Hilt/Context 연결 자체는 검사하지 않아(그 부분은 FORBIDDEN 등급 `PostcardDeletionOrchestrationTest`가 맡고 실사용 기기에서는 실행 불가).
 - **간접 검증:** `PostcardDeletionManagerTest`는 이름과 달리 파일 정리 helper만 호출해(JVM, 실제 Room 없이 파일 helper만 검사).
 - **현재 믿어도 되는 것:** 검증한 파일 경계와 실패 조건에서 다른 엽서 파일·앱 외부 경로를 보호하는 안전망, 그리고 DB 삭제가 실패하면 사용자 파일이 절대 지워지지 않는다는 것.
 - **아직 믿으면 안 되는 것:** DB 삭제 성공 직후 파일 정리 전에 프로세스가 종료돼 생기는 고아 파일(DB 행 없음 + 파일 잔존)의 자동 방지 — 이건 설계상 수용한 약한 위험이고 `OrphanFileDiagnostics`는 읽기 전용 진단이지 자동 삭제가 아니야. Android URI 권한·기기 파일시스템 모든 조건도 아직 공백이야.
@@ -278,7 +279,7 @@ JVM 930개는 96일차 추가(2026-10-07, 월/연도 고르기 종이 자투리)
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 930개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 927개 기준 CI run `37574403863`(`dfac9c6`) 성공, 930개는 로컬 930/930 통과(CI는 push 후 확인) |
+| JVM unit test 932개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 930개 기준 CI run `37742063755`(`0652fd7`) 성공, 932개는 로컬 932/932 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 과거 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고, 그 emulator는 2026-10-03 폐기). 원격 CI의 격리된 instrumentation 환경은 후속 후보야. |
