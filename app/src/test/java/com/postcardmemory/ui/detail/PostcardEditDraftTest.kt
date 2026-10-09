@@ -13,14 +13,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * PhotoStickerItem/PostcardSealItem은 android.net.Uri를 직접 다루는데
+ * PhotoStickerItem(과 사진 마스킹테이프)은 android.net.Uri를 직접 다루는데
  * 이 프로젝트엔 Robolectric이나 unitTests.returnDefaultValues 설정이
  * 없어 순수 JUnit에서 Uri 인스턴스 생성 자체가 실패한다. 그래서 아래
- * 테스트는 스티커/도장을 포함하지 않는 시나리오(메타데이터, 손상 처리,
- * revision 가드)만 다룬다. 스티커/도장 필드가 포함된 초안의 완전한 왕복을
- * 검증하는 테스트는 현재 JVM에도 androidTest에도 없다(보호 공백 — 98일차 감사에서
- * 확인, 후속 후보). 사진 스티커 한 줄의 직렬화 왕복만 androidTest의
- * PhotoStickerEdgeStyleInstrumentedTest가 따로 다룬다.
+ * 테스트는 사진 스티커를 넣지 않고 메타데이터·손상 처리·revision 가드와
+ * Uri 없는 요소별 직렬화 왕복을 다룬다. 도장(PostcardSealItem)은 Uri를 쓰지
+ * 않는다 — 도장·낙서·텍스트 스티커·마스킹테이프·라벨을 함께 넣은 초안이
+ * 실제 저장 경로(saveDraftAtomically → loadDraft)로 그대로 돌아오는지는
+ * PostcardDraftStorageTest가 확인한다(98일차). 사진 스티커 한 줄의 직렬화
+ * 왕복은 androidTest의 PhotoStickerEdgeStyleInstrumentedTest가 따로 다룬다.
  */
 class PostcardEditDraftTest {
 
@@ -103,7 +104,7 @@ class PostcardEditDraftTest {
         assertNull(result)
     }
 
-    // ---- 낙서(DoodleStroke)는 Uri를 다루지 않으므로 스티커/도장과 달리 전체 왕복을 검증할 수 있다 ----
+    // ---- 낙서(DoodleStroke)는 Uri를 다루지 않으므로 사진 스티커와 달리 전체 왕복을 검증할 수 있다 ----
 
     private fun sampleDoodleStroke(id: String = "stroke-1") =
         DoodleStroke(

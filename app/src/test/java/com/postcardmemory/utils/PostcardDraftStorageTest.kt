@@ -1,6 +1,16 @@
 package com.postcardmemory.utils
 
+import androidx.compose.ui.geometry.Offset
+import com.postcardmemory.ui.detail.LabelStickerItem
+import com.postcardmemory.ui.detail.LabelTapeStyle
+import com.postcardmemory.ui.detail.MaskingTapeEdgeStyle
+import com.postcardmemory.ui.detail.MaskingTapeItem
+import com.postcardmemory.ui.detail.MaskingTapePatternKind
+import com.postcardmemory.ui.detail.MaskingTapeStyle
 import com.postcardmemory.ui.detail.PostcardEditDraft
+import com.postcardmemory.ui.detail.PostcardSealItem
+import com.postcardmemory.ui.detail.SealType
+import com.postcardmemory.ui.detail.TextStickerItem
 import java.io.File
 import java.io.IOException
 import org.junit.Assert.assertEquals
@@ -86,6 +96,131 @@ class PostcardDraftStorageTest {
         assertNotNull(loaded)
         assertEquals(5L, loaded!!.postcardId)
         assertEquals(3L, loaded.revision)
+    }
+
+    /**
+     * 위 왕복은 빈 초안만 다루고, PostcardEditDraftTest는 직렬화 문자열 단위로
+     * 요소 종류를 하나씩 확인한다. 여기서는 실제 앱의 자동저장·복원 경로
+     * (saveDraftAtomically → 파일 → loadDraft)로, 여러 꾸미기 요소를 함께 가진
+     * 초안 하나가 의미 그대로 돌아오는지 본다 — 한 요소의 줄 수·순서가 어긋나면
+     * 뒤따르는 요소까지 밀려 깨지므로, 요소별 테스트로는 잡히지 않는 회귀다.
+     *
+     * 포함하지 않은 것: 사진 스티커(PhotoStickerItem)와 사진 마스킹테이프
+     * (style == PHOTO)는 android.net.Uri를 만들어야 하는데 JVM에는 Robolectric이
+     * 없어 Uri.parse가 동작하지 않는다. 사진 스티커 한 줄의 왕복은 androidTest의
+     * PhotoStickerEdgeStyleInstrumentedTest가 따로 다룬다.
+     *
+     * 모든 값은 저장 형식이 정규화하지 않는 범위(회전 -180~180 등)로 골라서,
+     * 객체 전체 equals가 곧 "저장 계약에 있는 모든 필드가 보존됐다"는 뜻이 된다.
+     */
+    @Test
+    fun saveDraftAtomically_thenLoadDraft_draftWithEveryNonPhotoDecorationKeepsAllFields() {
+        val filesDir = tempFolder.newFolder("files")
+        val original = PostcardEditDraft(
+            postcardId = 77L,
+            createdAtMillis = 1_700_000_000_000L,
+            updatedAtMillis = 1_700_000_123_456L,
+            revision = 12L,
+            stickers = emptyList(),
+            selectedStickerId = null,
+            seals = listOf(
+                PostcardSealItem(
+                    id = "seal-postmark",
+                    type = SealType.CIRCLE_POSTMARK,
+                    offset = Offset(0.25f, -0.5f),
+                    scale = 1.3f,
+                    rotationDegrees = -15f,
+                    colorArgb = 0xFF8A2F2FL
+                ),
+                PostcardSealItem(
+                    // 아직 자리를 잡지 않은 도장(offset 없음) + 미니 도장 기본 배율
+                    id = "seal-paw",
+                    type = SealType.DOG_PAW,
+                    offset = null,
+                    scale = SealType.DOG_PAW.defaultScale,
+                    rotationDegrees = 30f
+                )
+            ),
+            selectedSealId = "seal-paw",
+            doodleStrokes = listOf(
+                DoodleStroke(
+                    id = "stroke-pen",
+                    points = listOf(DoodlePoint(0f, 0f), DoodlePoint(0.4f, 0.6f)),
+                    colorArgb = 0xFF252525L,
+                    width = DoodleStrokeWidth.THIN
+                ),
+                DoodleStroke(
+                    id = "stroke-highlighter",
+                    points = listOf(
+                        DoodlePoint(0.1f, 0.9f),
+                        DoodlePoint(0.5f, 0.85f),
+                        DoodlePoint(0.9f, 0.8f)
+                    ),
+                    colorArgb = 0xFFFFE066L,
+                    width = DoodleStrokeWidth.THICK,
+                    tool = DoodleTool.HIGHLIGHTER
+                )
+            ),
+            textStickers = listOf(
+                TextStickerItem(
+                    id = "text-1",
+                    text = "여름 바다 ( ˶ˆᗜˆ˵ )",
+                    offset = Offset(-0.2f, 0.35f),
+                    scale = 1.15f,
+                    rotationDegrees = 7.5f,
+                    colorArgb = 0xFF334455L,
+                    outlineColorArgb = 0xFFFAF7F0L
+                )
+            ),
+            selectedTextStickerId = "text-1",
+            maskingTapes = listOf(
+                MaskingTapeItem(
+                    id = "tape-preset",
+                    style = MaskingTapeStyle.LAVENDER_DOT,
+                    offset = Offset(0.3f, -0.1f),
+                    scale = 0.9f,
+                    rotationDegrees = 8f
+                ),
+                MaskingTapeItem(
+                    id = "tape-custom",
+                    style = MaskingTapeStyle.CUSTOM,
+                    offset = Offset(-0.45f, 0.05f),
+                    scale = 1.1f,
+                    rotationDegrees = -22f,
+                    lengthScale = 1.6f,
+                    thicknessScale = 0.7f,
+                    edgeStyle = MaskingTapeEdgeStyle.STRAIGHT,
+                    customBaseColorArgb = 0xFFB8E0D2L,
+                    customPatternColorArgb = 0xFF2E5E4EL,
+                    customPatternKind = MaskingTapePatternKind.STAR
+                )
+            ),
+            selectedMaskingTapeId = null,
+            labelStickers = listOf(
+                LabelStickerItem(
+                    id = "label-preset",
+                    text = "SUMMER 2026",
+                    style = LabelTapeStyle.RED,
+                    offset = Offset(0.4f, -0.2f),
+                    rotationDegrees = -6f
+                ),
+                LabelStickerItem(
+                    id = "label-custom",
+                    text = "민트 라벨",
+                    style = LabelTapeStyle.CUSTOM,
+                    offset = Offset(-0.35f, 0.44f),
+                    scale = 1.25f,
+                    rotationDegrees = 12f,
+                    customTapeColorArgb = 0xFF7FD4C1L
+                )
+            ),
+            selectedLabelStickerId = "label-custom"
+        )
+
+        assertTrue(PostcardDraftStorage.saveDraftAtomically(filesDir, original))
+        val loaded = PostcardDraftStorage.loadDraft(filesDir, 77L)
+
+        assertEquals(original, loaded)
     }
 
     @Test
