@@ -1,4 +1,4 @@
-# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거 → PostcardImageStorage 제거, commit·push·CI 성공)
+# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거 → PostcardImageStorage 제거 → 테스트 유효성 감사·중복 11건 제거, commit·push·CI 성공)
 
 확인일: 2026-10-09. 수동 표준 모드(98일차 1·2단계 작업지시서), 담당 Claude Code.
 
@@ -66,6 +66,23 @@
 - **삭제 후 재스캔:** 새 고아 선언·미사용 import·전용 상수/fixture 없음(지운 파일은 `Context`·`File`만 import, 자체 상수 없음).
 - **Git:** `84bf188` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
 - **다음 후보(실행 승인 아님):** `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장 일부 낡음, B등급 중복 helper. 98일차 작업지시서상 예정 단계는 모두 끝남.
+
+## 98일차 추가: 테스트 유효성 감사 → 확실한 중복 테스트 11건 제거 (commit·push·CI 성공)
+
+98일차 추가 작업지시서 2건(읽기 전용 감사 → 후속 정리) 범위. 시작 HEAD `46c232c`, local/origin 0/0, tracked clean, 보호 untracked 3종 그대로.
+
+- **감사(읽기 전용) 결론:** JVM 899개/91파일 + androidTest 20개/7파일 전수. 대략 A(유지 필수) ~453, B(유지 가치) ~410, C(정리 후보) 22, D(판단 보류) 22 — A/B는 파일 단위 근사치. 본문 해시로 찾은 완전 중복은 `ConfirmSaveLogicTest` 4개뿐, assert 없는 테스트 4개는 모두 "예외 안 남" 검사라 유효, 미사용 test helper 없음, production 이름을 테스트만 쓰는 경우는 `presetLabelTapeStyles`·`tapePalette()`와 의도된 test seam(`VisitRecordStorage.load`, `FutureMailOpeningGuard.isOpening`)뿐. androidTest 정리 후보 없음.
+- **변경 (`1215e7d`, 12파일 +56/−186):**
+  - 삭제 11건: `ConfirmSaveLogicTest` 3(전부 저장 성공 — `whenStickersAndSealsBothSaved`와 본문 동일), `AppIntroMessageLogicTest` 4(33일차 2건 → `atEachDriverNumberMilestone`·`milestoneMessages_matchFixedSpec`, 32·34일차 2건 → `daysAdjacentToDriverNumberMilestones`; 77일차 회귀 방지 `atNonMilestoneVisitDays` 유지), `PostcardOverlayExportLogicTest` 3(`rectangularFallbackSize_*` → `fallbackSize_widthHeight_*` 2건), `VisitCalendarTest` 1(`todayVisitColorApplies…` → `visitDayFillColorIsDarkerOnlyForToday…`, 나머지 단언은 fixture Set 동어반복).
+  - 살아 있는 테스트의 죽은 단언 1줄: `MaskingTapeCreationGrammarStructureTest.selectedTapeActionsStayFlatTextActions`의 `EditorOutlineButton`(78일차 삭제) 부재 단언 → 편집·복제·삭제 존재 검사는 그대로.
+  - 설명 정정(테스트 동작 무변경): `ConfirmSaveHistoryClearStructureTest`(“최소 4회” → 실제 `>= 3`이 증명하는 범위), `StickerEditModeTest`(툴바는 배경제거·뒤로·앞으로만, enum 미사용 사실), `PostcardTest`(두 기본값의 migration 확인은 `PostcardFullMigrationChainTest` 담당·CONDITIONAL), `PostcardOverlayExportLogicTest` 헤더(현재 범위)와 가로세로 fallback 섹션 설명, `PostcardEditDraftTest`(스티커/도장 포함 초안 완전 왕복 테스트는 없음 — 보호 공백 명시), `StickerPositionCalculationsStructureTest`(“9개 호출부” 고정 숫자·검사하지 않는 시그니처 주장 제거).
+  - production 주석만: `LabelStickerItem.kt`의 `presetLabelTapeStyles` KDoc(현재 화면은 프리셋 줄이 아니라 색상 선택기, 이 값은 테스트만 참조). 실행 코드 무변경.
+  - `TEST-COVERAGE-MAP.md` — JVM 899→888, 파일 91·XML 92·구조 165 불변, CI 행 갱신, 98일차 6단계 메모.
+- **유지(이번 승인 밖, 미변경):** C 나머지 11건(삭제된 이름 부재 단언 6 + DetailScreen 분리 흔적 `noLongerDeclares…` 5), D 22건 전부(`StickerEditModeTest`, `presetLabelTapeStyles_excludesCustomMarkerEntry`, `GalleryPagerTargetIndex` 방어 경로 3, `DetailScreenExitSaveLossTest` 3, `StyleSaveRaceTest` 3, 선언 개수 6, 호출부 개수 2, 순수성 토큰 2, `noLongerCallsToolbarDirectly` 1), androidTest 20건, Fake/replica 저장 경합 테스트.
+- **검증:** 로컬 `testDebugUnitTest` 888/888(XML 92, 실패·오류·skip 0; 파일별 ConfirmSave 12·AppIntroMessage 14·OverlayExport 53·VisitCalendar 53), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과, `app/src/androidTest` 무변경. GitHub Actions CI run `37911387665` 성공(JVM unit test·assembleDebug·assembleDebugAndroidTest). 실기기 QA 불필요(테스트·주석만, 앱 동작 무변경).
+- **삭제 후 재스캔:** 변경 테스트 파일 미사용 import 0, 빈 테스트 클래스 0, 삭제 테스트 이름을 가리키는 주석·문서 0(archive 제외), 새 helper 고아 없음. 새 삭제 후보 없음.
+- **Git:** `1215e7d` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
+- **다음 후보(실행 승인 아님):** ① 보호 공백 — 스티커/도장 포함 초안 완전 왕복 테스트 없음, `awaitPendingStyleSaves` 목록에서 새 저장 Job 누락을 잡는 테스트 없음(현재는 `draftAutosaveJob`(별도 처리) 외 전 Job 포함 확인) ② production 후보 — `DetailScreen`의 `stickerEditMode`가 재대입되지 않아 Scale/Rotate 제스처 분기 도달 불가, `presetLabelTapeStyles`·`tapePalette()` 화면 미사용, `LabelTapeStyle` KDoc의 "프리셋 그리드" 표현 낡음 ③ C 나머지 11건·D 22건 판단 ④ 구조 테스트 helper 중복(자체 파일 읽기 12파일, `extractBalancedCall` 4벌), `FutureMailOpeningGuardTest.kt`에 클래스 2개, `everyDecorationHistoryHasClearFunctionAndIsUsedInAllThreePaths` 이름이 실제 검사보다 강함.
 
 ---
 
