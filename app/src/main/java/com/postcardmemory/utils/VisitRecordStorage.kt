@@ -8,7 +8,7 @@ import java.time.ZoneId
  * 방문 기록 전용 독립 저장소. 엽서 데이터(Room)와 완전히 분리된
  * `filesDir/visits/visit_record.txt` 한 파일만 쓴다 — 이 앱에는
  * SharedPreferences나 DataStore 선례가 아예 없고, 작은 앱 전역 상태는
- * [PostcardDraftStorage]·[PostcardTemplateStorage]처럼 filesDir 하위 전용
+ * [PostcardDraftStorage]처럼 filesDir 하위 전용
  * 폴더에 원자적으로 쓰는 것이 기존 방식이다. 방문 기록 하나 때문에 Room
  * 스키마나 Migration을 건드리지 않는다.
  *

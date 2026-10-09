@@ -16,7 +16,7 @@ import org.junit.rules.TemporaryFolder
 /**
  * 방문 기록 파일 저장소를 실제 파일로 검증한다. Context나 Room 없이
  * filesDir만 받는 internal 오버로드를 쓰므로 순수 JUnit에서 돌아간다
- * (ConfirmedEditStateStorageTest, PostcardTemplateStorageTest와 같은 방식).
+ * (ConfirmedEditStateStorageTest와 같은 방식).
  */
 class VisitRecordStorageTest {
 

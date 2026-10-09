@@ -18,8 +18,8 @@ import org.junit.Test
  * DetailViewModel.updateBackgroundColor의 경합 안전성 검증.
  *
  * updateBackgroundColor는 Context/Room/Hilt에 묶여 있어 Robolectric·mockk
- * 없이 순수 JUnit에서 직접 호출할 수 없다(StyleSaveRaceTest,
- * TemplateStyleSaveRollbackTest와 동일한 제약). 대신 실제 구현과 동일한
+ * 없이 순수 JUnit에서 직접 호출할 수 없다(StyleSaveRaceTest와
+ * 동일한 제약). 대신 실제 구현과 동일한
  * 구조 — 공유 styleWriteMutex로 DAO 쓰기를 직렬화하고, Mutex를 획득한
  * 순간 호출 당시 캡처값이 아니라 그 시점의 화면 상태를 다시 읽어서 쓰는
  * 구조 — 를 가짜 화면 상태·가짜 Room·가짜 파일 시스템으로 재현해 검증한다.

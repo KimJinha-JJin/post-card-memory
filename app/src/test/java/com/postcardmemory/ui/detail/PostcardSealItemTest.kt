@@ -54,8 +54,8 @@ class PostcardSealItemTest {
     }
 
     // ---- 인식하지 못하는 SealType은 다른 도장으로 대체하지 않고 이 항목만 버린다 ----
-    // (건강검진 후속 라운드에서 발견: deserializePhotoStickerItem, PostcardTemplate.
-    // parseTemplateSeal은 둘 다 손상된 개별 항목을 null로 버리는데, 이 함수만
+    // (건강검진 후속 라운드에서 발견: deserializePhotoStickerItem과 당시의 템플릿
+    // 파서(98일차에 템플릿 기능과 함께 제거)는 둘 다 손상된 개별 항목을 null로 버리는데, 이 함수만
     // CIRCLE_POSTMARK로 조용히 대체하는 유일한 예외였다. 현재 삭제/변경된
     // SealType은 없어 오늘 도달 가능한 결함은 아니지만, 프로젝트 전체 패턴과
     // 정렬해 향후 enum 이름이 바뀌어도 엉뚱한 도장으로 둔갑하지 않게 한다.)
