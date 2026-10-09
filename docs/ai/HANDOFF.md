@@ -1,4 +1,4 @@
-# HANDOFF — 98일차: 코드 클린 day (읽기 전용 dead code 감사 → 미사용 import 정리 + 삭제 gate 취소 전파 수정, commit·push·CI 성공)
+# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거, commit·push·CI 성공)
 
 확인일: 2026-10-09. 수동 표준 모드(98일차 1·2단계 작업지시서), 담당 Claude Code.
 
@@ -16,7 +16,22 @@
 - **템플릿 폴더 실기기 실측(읽기 전용, 사용자 승인):** 기기 `R3KYB00HAYY`(SM-S936N) 1대만 연결 확인. 설치 앱은 DEBUGGABLE, firstInstallTime 2026-10-05 14:19(그날 재설치·백업 복원과 일치). `adb shell run-as com.postcardmemory ls -la files/`, `ls -laR files/postcard_templates`만 실행 — `postcard_templates/`는 존재(백업 복원으로 생김)하지만 `templates/`·`previews/` 모두 **비어 있음(숨김 포함 0개)**. 수정·삭제·이동 0건. → 사용자 템플릿 파일 0개 확인, 템플릿 subsystem 제거의 파일 보존 전제는 해소(제거 자체는 미승인).
 - **사용자 결정(2단계 후):** 봉투 DB 컬럼·migration·schema 유지. 다음 코드 클린 후보 확정 = schema와 무관한 Repository/DAO 고아 메서드 + `EditorEmptyHint`·`EditorSegmentedTabRow`·`GalleryViewMode`. `PostcardImageStorage`와 전용 테스트 제거는 별도 묶음으로 보류.
 - **Git:** `480a5ef` commit·push, local/origin 0/0, CI 성공. 보호 untracked 3종 그대로.
-- **다음 후보(실행 승인 아님):** ① 확정된 코드 클린 묶음(Repository 래퍼 7개 + 고아 DAO 쿼리 — 봉투 3개·font/date 3개·`@Delete deletePostcard`; `EditorEmptyHint`/`EditorSegmentedTabRow`/`GalleryViewMode`) ② 템플릿 subsystem 제거 여부(파일 0개 확인됨, 별도 승인 필요) ③ 보류 묶음: `PostcardImageStorage`+전용 테스트 ④ `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장은 이제 일부 낡음(gate는 JVM으로 재현됨).
+- **다음 후보(실행 승인 아님):** ① ~~확정된 코드 클린 묶음~~ → 아래 3단계에서 완료(`0fd4c1f`) ② 템플릿 subsystem 제거 여부(파일 0개 확인됨, 별도 승인 필요) ③ 보류 묶음: `PostcardImageStorage`+전용 테스트 ④ `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장은 이제 일부 낡음(gate는 JVM으로 재현됨).
+
+
+## 98일차 3단계: 확정 dead code 제거 (commit·push·CI 성공)
+
+98일차 3단계 작업지시서 범위. 시작 HEAD `d1bbe2a`, local/origin 0/0, tracked clean.
+
+- **변경 (`0fd4c1f`, 4파일 +2/−227):**
+  - `PostcardRepository.kt` — 호출부 0 래퍼 7개 삭제: `deletePostcard(postcard)`, `updatePostcardMessageFont`, `updatePostcardDateFormat`, `updatePostcardDateTextScale`, `updatePostcardEnvelopeStyle`, `updatePostcardEnvelopePostmarked`, `clearPostcardEnvelope`. 삭제 안내 주석은 `deletePostcardById` 하나를 가리키도록 단수로 수정.
+  - `PostcardDao.kt` — 위 래퍼만 쓰던 쿼리 7개 삭제(`@Delete deletePostcard`, font/date 3개, 봉투 3개와 그 KDoc 2개) + `import androidx.room.Delete`.
+  - `EditorSharedControls.kt` — `EditorEmptyHint`, `EditorSegmentedTabRow` 삭제, 이 둘만 쓰던 import 2개(`border`, `PaperField`) 삭제, `EditorQuietHint` KDoc의 `EditorEmptyHint` 언급 제거.
+  - `ui/gallery/GalleryViewMode.kt` — 파일 삭제.
+- **유지(미변경):** 봉투 Entity 컬럼·`MIGRATION_16_17`·schema JSON(ksp 재생성 후에도 diff 없음)·DB version 19, 템플릿 subsystem과 `updatePostcardTemplateStyle`, `PostcardImageStorage`·전용 테스트, 부재 단언 구조 테스트(`EditorSubcategoryNavBarStructureTest`, `MaskingTapeCreationGrammarStructureTest`, `GalleryViewSelectionStructureTest`).
+- **검증:** 로컬 `testDebugUnitTest` 932/932(XML 96, 실패·오류·skip 0, 테스트 수 변화 없음 → TEST-COVERAGE-MAP 변경 없음), `assembleDebug`·`assembleDebugAndroidTest` 성공(androidTest의 `PostcardDao by dao` 위임 컴파일 포함), `git diff --check` 통과. GitHub Actions CI run `37899321199` 성공. 실기기 QA 불필요(호출부 0 코드 제거, UI·schema·저장 포맷 불변).
+- **삭제 후 재스캔:** 새로 고아가 된 선언·import 없음. 남은 호출부 0 후보는 기존 별도 묶음(템플릿 subsystem, `PostcardImageStorage`)뿐.
+- **Git:** `0fd4c1f` commit·push, local/origin 0/0. 보호 untracked 3종 그대로.
 
 ---
 
