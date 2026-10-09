@@ -1,7 +1,6 @@
 package com.postcardmemory.data
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -88,11 +87,6 @@ interface PostcardDao {
         postcard: Postcard
     ): Long
 
-    @Delete
-    suspend fun deletePostcard(
-        postcard: Postcard
-    )
-
     @Query(
         "DELETE FROM postcards " +
                 "WHERE id = :id"
@@ -140,18 +134,6 @@ interface PostcardDao {
     @Query(
         """
         UPDATE postcards
-        SET messageFont = :messageFont
-        WHERE id = :id
-        """
-    )
-    suspend fun updatePostcardMessageFont(
-        id: Long,
-        messageFont: String
-    )
-
-    @Query(
-        """
-        UPDATE postcards
         SET layoutStyle = :layoutStyle
         WHERE id = :id
         """
@@ -164,18 +146,6 @@ interface PostcardDao {
     @Query(
         """
         UPDATE postcards
-        SET dateFormat = :dateFormat
-        WHERE id = :id
-        """
-    )
-    suspend fun updatePostcardDateFormat(
-        id: Long,
-        dateFormat: String
-    )
-
-    @Query(
-        """
-        UPDATE postcards
         SET messageTextScale = :messageTextScale
         WHERE id = :id
         """
@@ -183,18 +153,6 @@ interface PostcardDao {
     suspend fun updatePostcardMessageTextScale(
         id: Long,
         messageTextScale: Float
-    )
-
-    @Query(
-        """
-        UPDATE postcards
-        SET dateTextScale = :dateTextScale
-        WHERE id = :id
-        """
-    )
-    suspend fun updatePostcardDateTextScale(
-        id: Long,
-        dateTextScale: Float
     )
 
     @Query(
@@ -378,44 +336,6 @@ interface PostcardDao {
         tapedFilmPhotoOffsetX: Float,
         tapedFilmPhotoOffsetY: Float,
         tapedFilmPhotoZoom: Float
-    )
-
-    /** 봉투에 넣기/바꾸기 전용. 소인 상태는 건드리지 않는다 — 봉투를 바꿔도 이미 찍은 소인은 유지된다. */
-    @Query(
-        """
-        UPDATE postcards
-        SET envelopeStyle = :envelopeStyle
-        WHERE id = :id
-        """
-    )
-    suspend fun updatePostcardEnvelopeStyle(
-        id: Long,
-        envelopeStyle: String?
-    )
-
-    @Query(
-        """
-        UPDATE postcards
-        SET envelopePostmarked = :postmarked
-        WHERE id = :id
-        """
-    )
-    suspend fun updatePostcardEnvelopePostmarked(
-        id: Long,
-        postmarked: Boolean
-    )
-
-    /** 봉투에서 꺼내기 — 봉투와 소인을 함께 지운다. 엽서 내용·앞면 도장·스티커·낙서는 이 테이블과 무관해 영향받지 않는다. */
-    @Query(
-        """
-        UPDATE postcards
-        SET envelopeStyle = NULL,
-            envelopePostmarked = 0
-        WHERE id = :id
-        """
-    )
-    suspend fun clearPostcardEnvelope(
-        id: Long
     )
 
     @Query(

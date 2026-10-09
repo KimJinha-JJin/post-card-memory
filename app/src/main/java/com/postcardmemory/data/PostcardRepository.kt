@@ -42,15 +42,9 @@ class PostcardRepository @Inject constructor(
     ): Long =
         dao.insertPostcard(postcard)
 
-    // 아래 두 삭제는 Room 행만 지우고 엽서 소유 파일은 건드리지 않는다.
+    // 이 삭제는 Room 행만 지우고 엽서 소유 파일은 건드리지 않는다.
     // 사용자 삭제 흐름은 직접 호출하지 않고, DB 삭제가 성공한 뒤에만 파일을
     // 정리하는 PostcardDeletionManager를 거친다.
-    suspend fun deletePostcard(
-        postcard: Postcard
-    ) {
-        dao.deletePostcard(postcard)
-    }
-
     suspend fun deletePostcardById(
         id: Long
     ) {
@@ -89,16 +83,6 @@ class PostcardRepository @Inject constructor(
         )
     }
 
-    suspend fun updatePostcardMessageFont(
-        id: Long,
-        messageFont: String
-    ) {
-        dao.updatePostcardMessageFont(
-            id = id,
-            messageFont = messageFont
-        )
-    }
-
     suspend fun updatePostcardLayoutStyle(
         id: Long,
         layoutStyle: String
@@ -109,16 +93,6 @@ class PostcardRepository @Inject constructor(
         )
     }
 
-    suspend fun updatePostcardDateFormat(
-        id: Long,
-        dateFormat: String
-    ) {
-        dao.updatePostcardDateFormat(
-            id = id,
-            dateFormat = dateFormat
-        )
-    }
-
     suspend fun updatePostcardMessageTextScale(
         id: Long,
         messageTextScale: Float
@@ -126,16 +100,6 @@ class PostcardRepository @Inject constructor(
         dao.updatePostcardMessageTextScale(
             id = id,
             messageTextScale = messageTextScale
-        )
-    }
-
-    suspend fun updatePostcardDateTextScale(
-        id: Long,
-        dateTextScale: Float
-    ) {
-        dao.updatePostcardDateTextScale(
-            id = id,
-            dateTextScale = dateTextScale
         )
     }
 
@@ -291,32 +255,6 @@ class PostcardRepository @Inject constructor(
             tapedFilmPhotoOffsetY = tapedFilmPhotoOffsetY,
             tapedFilmPhotoZoom = tapedFilmPhotoZoom
         )
-    }
-
-    suspend fun updatePostcardEnvelopeStyle(
-        id: Long,
-        envelopeStyle: String?
-    ) {
-        dao.updatePostcardEnvelopeStyle(
-            id = id,
-            envelopeStyle = envelopeStyle
-        )
-    }
-
-    suspend fun updatePostcardEnvelopePostmarked(
-        id: Long,
-        postmarked: Boolean
-    ) {
-        dao.updatePostcardEnvelopePostmarked(
-            id = id,
-            postmarked = postmarked
-        )
-    }
-
-    suspend fun clearPostcardEnvelope(
-        id: Long
-    ) {
-        dao.clearPostcardEnvelope(id)
     }
 
     suspend fun updatePostcardBackRecipientModifier(

@@ -1,7 +1,6 @@
 package com.postcardmemory.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +40,6 @@ import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.NeutralLight
 import com.postcardmemory.ui.theme.PaperDivider
-import com.postcardmemory.ui.theme.PaperField
 import com.postcardmemory.ui.theme.SunsetGold
 
 @Composable
@@ -85,28 +83,8 @@ fun EditorUndoRedoButtons(
     }
 }
 
-@Composable
-fun EditorEmptyHint(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = text,
-        color = BrutalBlack,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                color = BrutalWhite,
-                shape = RoundedCornerShape(10.dp)
-            )
-            .padding(horizontal = 10.dp, vertical = 8.dp)
-    )
-}
-
 /**
- * 진짜 빈 상태(EditorEmptyHint)가 아니라, 항목은 있지만 선택되지 않았거나
+ * 항목은 있지만 선택되지 않았거나
  * 조작법·제약을 알려주는 조용한 한 줄 안내에 쓴다. 카드처럼 무게를 주지
  * 않도록 배경·테두리·굵은 글씨 없이 Ink 계열 보조색 텍스트만 남긴다.
  */
@@ -365,60 +343,5 @@ fun EditorFlatPresetTile(
                     shape = RoundedCornerShape(1.dp)
                 )
         )
-    }
-}
-
-/**
- * 한 편집 영역 안에서 서로 다른 하위 패널 중 하나만 보여줄 때 쓰는 텍스트
- * 칩 선택줄(예: 스티커 탭의 사진/텍스트/라벨). 엽서 레이아웃 선택
- * (`PostcardLayoutPicker`)과 같은 시각 언어 — 균등폭 칩, 선택 시 SunsetGold
- * 옅은 채움 + 굵은 글씨, 그 외엔 PaperField 배경 + PaperDivider 테두리 —
- * 를 재사용한다. 어떤 패널을 보여줄지만 나타내는 화면 로컬 선택 상태이므로
- * 저장값이나 Room과는 무관하다.
- */
-@Composable
-fun EditorSegmentedTabRow(
-    options: List<String>,
-    selectedIndex: Int,
-    onOptionSelected: (Int) -> Unit,
-    enabled: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        options.forEachIndexed { index, option ->
-            val selected = index == selectedIndex
-            val shape = RoundedCornerShape(12.dp)
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 44.dp)
-                    .background(
-                        color = if (selected) SunsetGold.copy(alpha = 0.16f) else PaperField,
-                        shape = shape
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = PaperDivider,
-                        shape = shape
-                    )
-                    .clickable(enabled = enabled) {
-                        onOptionSelected(index)
-                    }
-                    .padding(horizontal = 6.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = option,
-                    color = BrutalBlack,
-                    fontSize = 13.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
     }
 }
