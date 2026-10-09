@@ -92,9 +92,12 @@ class ConfirmSaveHistoryClearStructureTest {
     }
 
     /**
-     * 확정 저장·초기 로드·"원래대로" 세 경로가 같은 여섯 개를 다뤄야 한다는
-     * 대칭을 고정한다. 새 꾸미기 요소를 추가하면서 한 경로에만 넣는 실수를
-     * 막는 것이 목적이다.
+     * 여섯 이력마다 clear 함수 선언이 있고, 파일 전체에서 그 호출 문자열이
+     * 3회 이상(선언 포함) 등장하는지만 확인한다. 확정 저장·초기 로드·"원래대로"
+     * 세 경로에 고르게 쓰이는지까지 경로별로 증명하지는 않는다 — 확정 저장
+     * 경로는 위 두 테스트가 따로 고정하고, 나머지 두 경로는 이 개수 하한으로만
+     * 간접 감시한다. 새 꾸미기 요소의 clear 함수를 아예 빠뜨리는 실수를 막는
+     * 것이 목적이다.
      */
     @Test
     fun everyDecorationHistoryHasClearFunctionAndIsUsedInAllThreePaths() {
@@ -105,7 +108,9 @@ class ConfirmSaveHistoryClearStructureTest {
                 detailViewModelText.contains(declaration)
             )
 
-            // 선언 1회 + 확정 저장/초기 로드/"원래대로" 3회 = 최소 4회 등장.
+            // 선언 문자열("private fun clearX() {")도 "clearX()"를 포함하므로
+            // 3회 이상 = 선언 1회 + 호출 2회 이상. 세 경로 각각의 호출을
+            // 하나씩 확인하는 검사는 아니다.
             assertTrue(
                 "[$call] 이 세 경로(확정 저장·초기 로드·원래대로) 모두에서 쓰이지 않는다",
                 Regex(Regex.escape(call)).findAll(detailViewModelText).count() >= 3

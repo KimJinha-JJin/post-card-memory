@@ -17,7 +17,11 @@ import org.junit.Test
  * - enum을 다시 `private`으로 좁히면 이 파일이 컴파일되지 않는다
  *   (테스트 소스는 `internal`까지만 볼 수 있다).
  *
- * 순서까지 고정하는 이유는 툴바가 `entries` 순서대로 버튼을 놓기 때문이다.
+ * 현재 상태(98일차 확인): 선택한 사진 스티커의 툴바(StickerEditModeToolbar)는
+ * 이 enum을 쓰지 않고 "배경제거/원본복원 · 뒤로 · 앞으로" 세 액션만 보여 준다.
+ * DetailScreen의 `stickerEditMode`는 Move로 초기화된 뒤 다시 대입되는 곳이 없어,
+ * 제스처 분기의 Scale/Rotate 쪽은 지금 사용자가 도달할 수 없다(production 정리
+ * 후보로만 기록 — 이 테스트는 enum의 현재 구성만 고정한다).
  */
 class StickerEditModeTest {
 

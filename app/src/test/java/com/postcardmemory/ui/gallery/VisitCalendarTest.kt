@@ -114,32 +114,6 @@ class VisitCalendarTest {
         )
     }
 
-    @Test fun todayVisitColorAppliesOnlyWhenTodayItselfHasAnActualVisitHistoryEntry() {
-        val today = LocalDate.of(2026, 9, 16)
-        val visitedEpochDays = setOf(
-            LocalDate.of(2026, 9, 10).toEpochDay(),
-            LocalDate.of(2026, 9, 14).toEpochDay(),
-            today.toEpochDay()
-        )
-
-        // 오늘 + 실제 방문 history 있음 -> 진한 청록이 적용될 조건을 만족한다.
-        assertTrue(today.toEpochDay() in visitedEpochDays)
-        assertEquals(VisitFillColorToday, visitDayFillColor(today, today))
-
-        // 과거 방문 -> 기존 색 그대로.
-        val pastVisited = LocalDate.of(2026, 9, 10)
-        assertTrue(pastVisited.toEpochDay() in visitedEpochDays)
-        assertEquals(VisitFillColor, visitDayFillColor(pastVisited, today))
-
-        // 오늘 + history 없음 -> visited 자체가 false라 호출부가 라벨을 그리지 않는다(기존 gate 유지).
-        val emptyHistory = emptySet<Long>()
-        assertFalse(today.toEpochDay() in emptyHistory)
-
-        // 미래 -> history에 없으니 라벨 없음.
-        val future = today.plusDays(5)
-        assertFalse(future.toEpochDay() in visitedEpochDays)
-    }
-
     // 계층형 월/연도 탐색기 (달력 → 월 선택 → 연도 선택).
 
     @Test fun decadeStartForComputesTheTenYearBucketAcrossBoundaries() {

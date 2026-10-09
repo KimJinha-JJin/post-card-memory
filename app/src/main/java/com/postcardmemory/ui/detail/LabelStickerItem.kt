@@ -98,7 +98,12 @@ enum class LabelTapeStyle(
     CUSTOM("기타", 0xFFB9B2A0L, 0xFF6B675CL, 0xFF2B2825L)
 }
 
-/** 테이프 선택 줄에 늘어놓을 프리셋들. 기타 색상은 별도 진입점으로만 만든다. */
+/**
+ * CUSTOM을 뺀 고정 프리셋 목록. 지금 라벨 생성·수정 화면의 테이프 선택
+ * (LabelTapeStyleRow)은 프리셋을 늘어놓지 않고 색상 선택기 하나만 보여 주므로
+ * 화면 코드는 이 값을 쓰지 않는다. 현재는 테스트가 "모든 프리셋"을 순회하는
+ * 기준으로만 참조한다(98일차 확인).
+ */
 val presetLabelTapeStyles: List<LabelTapeStyle> =
     LabelTapeStyle.entries.filterNot { it == LabelTapeStyle.CUSTOM }
 

@@ -17,8 +17,10 @@ import org.junit.Test
  * 이 프로젝트엔 Robolectric이나 unitTests.returnDefaultValues 설정이
  * 없어 순수 JUnit에서 Uri 인스턴스 생성 자체가 실패한다. 그래서 아래
  * 테스트는 스티커/도장을 포함하지 않는 시나리오(메타데이터, 손상 처리,
- * revision 가드)만 다루고, 스티커/도장 필드가 포함된 완전한 왕복은
- * 실기기/계측 테스트 영역으로 남겨둔다.
+ * revision 가드)만 다룬다. 스티커/도장 필드가 포함된 초안의 완전한 왕복을
+ * 검증하는 테스트는 현재 JVM에도 androidTest에도 없다(보호 공백 — 98일차 감사에서
+ * 확인, 후속 후보). 사진 스티커 한 줄의 직렬화 왕복만 androidTest의
+ * PhotoStickerEdgeStyleInstrumentedTest가 따로 다룬다.
  */
 class PostcardEditDraftTest {
 

@@ -134,15 +134,13 @@ class MaskingTapeCreationGrammarStructureTest {
     @Test
     fun selectedTapeActionsStayFlatTextActions() {
         // 53~54일차에 확정된 평면 contextual action을 되돌리지 않는다.
+        // (예전 외곽선 버튼 EditorOutlineButton은 78일차에 컴포저블 자체가
+        // 삭제돼, 그 이름의 부재 단언은 98일차에 걷어냈다.)
         listOf("\"편집\"", "\"복제\"", "\"삭제\"").forEach { label ->
             assertTrue(
                 "$label 액션이 있어야 함",
                 panelText.contains(label)
             )
         }
-        assertFalse(
-            "선택된 테이프 액션을 다시 외곽선 버튼으로 되돌리면 안 됨",
-            panelText.contains("EditorOutlineButton")
-        )
     }
 }

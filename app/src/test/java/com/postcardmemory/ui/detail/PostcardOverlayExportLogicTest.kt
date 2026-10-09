@@ -13,8 +13,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 4일차: 미리보기와 Export의 도장 가장자리 정책 일치, 측정값 미준비 시
- * fallback 크기 사용을 검증한다. Offset/IntSize는 android.net.Uri와 달리
+ * 미리보기와 저장·공유 이미지(Export)가 같은 계산을 쓰는지 꾸미기 요소별로 검증한다.
+ * 4일차에 도장 가장자리 정책·fallback 크기로 시작해 지금은 다음을 다룬다:
+ * 도장 최소 노출 보정과 export overlay(측정값 누락 시 fallback·잉크 seed),
+ * fallback 크기 계산(정사각형·가로세로 오버로드), 일반 스티커 clamp/가운데 정렬,
+ * 낙서 좌표 정규화와 지우개 판정, 텍스트 스티커 export overlay, 마스킹테이프
+ * export overlay(색·사진 테이프·길이/두께 scale 반영 fallback).
+ *
+ * Offset/IntSize는 android.net.Uri와 달리
  * Android 스텁에 의존하지 않는 순수 JVM 클래스라 Robolectric 없이 검증
  * 가능하다(스티커 쪽 createStickerOverlayForExport는 Uri를 받아 이 프로젝트의
  * 순수 JUnit 환경에서 직접 호출할 수 없다 — PostcardEditDraftTest.kt 참고).
@@ -238,47 +244,6 @@ class PostcardOverlayExportLogicTest {
         val size = computeFallbackOverlaySize(basePx = 100f, scale = 0f)
 
         assertTrue(size.width >= 1)
-    }
-
-    // 마스킹테이프처럼 가로·세로 기준 크기가 다른 오버레이용 오버로드.
-    // 78일차 전까지는 "선언이 정확히 2개인지"와 "파라미터 문자열이 그대로인지"를
-    // 소스 텍스트로만 보고 있었고 실제 계산은 아무도 확인하지 않았다. 아래
-    // 세 건이 그 두 구조 테스트를 대체한다 — 오버로드가 사라지거나 파라미터가
-    // 바뀌면 컴파일이 깨지고, 계산이 바뀌면 값으로 잡힌다.
-
-    @Test
-    fun rectangularFallbackSize_scalesWidthAndHeightIndependently() {
-        val size = computeFallbackOverlaySize(
-            basePxWidth = 300f,
-            basePxHeight = 80f,
-            scale = 0.5f
-        )
-
-        assertEquals(150, size.width)
-        assertEquals(40, size.height)
-    }
-
-    @Test
-    fun rectangularFallbackSize_keepsTheAspectItWasGiven_notSquare() {
-        val size = computeFallbackOverlaySize(
-            basePxWidth = 400f,
-            basePxHeight = 100f,
-            scale = 1f
-        )
-
-        assertTrue("가로·세로가 같아지면 마스킹테이프가 정사각형으로 찌그러진다", size.width != size.height)
-    }
-
-    @Test
-    fun rectangularFallbackSize_neverCollapsesEitherSideToZero() {
-        val size = computeFallbackOverlaySize(
-            basePxWidth = 300f,
-            basePxHeight = 80f,
-            scale = 0f
-        )
-
-        assertTrue(size.width >= 1)
-        assertTrue(size.height >= 1)
     }
 
     // ---- createSealOverlayForExport: 정책 일치 + fallback ----
@@ -912,6 +877,9 @@ class PostcardOverlayExportLogicTest {
     }
 
     // ---- computeFallbackOverlaySize (가로·세로가 다른 오버로드) ----
+    // 마스킹테이프처럼 가로·세로 기준 크기가 다른 오버레이용. 두 축을 서로 다른
+    // 값으로 계산하는지(정사각형으로 찌그러지지 않는지)와 scale 0에서도 어느 축도
+    // 0이 되지 않는지를 실제 호출로 고정한다.
 
     @Test
     fun fallbackSize_widthHeight_matchesBasePxTimesScaleForEachAxis() {

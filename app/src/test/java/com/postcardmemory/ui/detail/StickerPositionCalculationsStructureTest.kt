@@ -12,10 +12,13 @@ import org.junit.Test
  * 소스 텍스트 기준으로 다음을 고정한다:
  *  - 분리된 파일에만 함수 정의가 존재하고(DetailScreen.kt에는 남지 않음)
  *    ViewModel/Repository/Context/gesture/저장/Undo는 전혀 참조하지 않음
- *  - 기존 시그니처(파라미터·반환 타입)가 그대로 유지됨
- *  - DetailScreen.kt의 9개 호출부(제스처 핸들러 5곳 포함)가 전부 그대로 남아
- *    있음 — 이 계산은 gesture 코드와 물리적으로 분리됐을 뿐, 호출부의 gesture
- *    로직 자체는 이번에 전혀 이동하지 않았다
+ *  - DetailScreen.kt의 호출부 개수가 기록된 기대값과 같음 — 이 계산은 gesture
+ *    코드와 물리적으로 분리됐을 뿐 호출부의 gesture 로직은 옮기지 않았으므로,
+ *    개수가 바뀌면 의도한 변경인지 확인하라는 신호다(기대값과 그 변화 이력은
+ *    아래 테스트 안 주석 참고)
+ *
+ * 시그니처 자체는 이 파일이 아니라 실제 호출로 값을 확인하는
+ * StickerPositionCalculationsTest가 컴파일 단계에서 지킨다.
  *
  * 제3차의 "AlertDialog(" 부분 문자열 오탐을 반복하지 않기 위해 함수 선언
  * 검사는 줄 시작 앵커로 제한한다. "centeredStickerOffset"은 이 저장소 어디

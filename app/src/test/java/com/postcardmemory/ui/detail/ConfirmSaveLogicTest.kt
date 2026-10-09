@@ -73,40 +73,12 @@ class ConfirmSaveLogicTest {
     }
 
     @Test
-    fun shouldConfirmSaveSucceed_whenStickersSealsAndDoodlesAllSaved() {
-        assertTrue(
-            shouldConfirmSaveSucceed(
-                stickersSaved = true,
-                sealsSaved = true,
-                doodlesSaved = true,
-                textStickersSaved = true,
-                maskingTapesSaved = true,
-                labelStickersSaved = true
-            )
-        )
-    }
-
-    @Test
     fun shouldConfirmSaveSucceed_failsWhenDoodlesSaveFailsEvenIfRestSucceed() {
         assertFalse(
             shouldConfirmSaveSucceed(
                 stickersSaved = true,
                 sealsSaved = true,
                 doodlesSaved = false,
-                textStickersSaved = true,
-                maskingTapesSaved = true,
-                labelStickersSaved = true
-            )
-        )
-    }
-
-    @Test
-    fun shouldConfirmSaveSucceed_whenStickersSealsDoodlesAndTextStickersAllSaved() {
-        assertTrue(
-            shouldConfirmSaveSucceed(
-                stickersSaved = true,
-                sealsSaved = true,
-                doodlesSaved = true,
                 textStickersSaved = true,
                 maskingTapesSaved = true,
                 labelStickersSaved = true
@@ -122,20 +94,6 @@ class ConfirmSaveLogicTest {
                 sealsSaved = true,
                 doodlesSaved = true,
                 textStickersSaved = false,
-                maskingTapesSaved = true,
-                labelStickersSaved = true
-            )
-        )
-    }
-
-    @Test
-    fun shouldConfirmSaveSucceed_whenStickersSealsDoodlesTextStickersAndMaskingTapesAllSaved() {
-        assertTrue(
-            shouldConfirmSaveSucceed(
-                stickersSaved = true,
-                sealsSaved = true,
-                doodlesSaved = true,
-                textStickersSaved = true,
                 maskingTapesSaved = true,
                 labelStickersSaved = true
             )
