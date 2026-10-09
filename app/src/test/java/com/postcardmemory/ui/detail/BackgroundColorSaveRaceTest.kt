@@ -40,8 +40,8 @@ import org.junit.Test
  * delete()가 한 번도 실행되지 않아 `deletedFiles`가 영원히 비어 있었고, 그 결과
  * "지워지지 않았다"는 단언들이 전부 무조건 참이었다(78일차 감사에서 발견).
  * 지금은 [FakeViewModel.saveBackgroundImagePath]가 교체 성공 후 옛 파일을 정리하도록
- * 연결돼 있어(실제 [com.postcardmemory.utils.PostcardImageStorage.deleteIfOwnedByApp]가
- * 맡기로 한 역할), 삭제가 실제로 일어나고 기록된다. 그래서 다른 테스트의 "이 파일은
+ * 연결돼 있어(과거 `PostcardImageStorage.deleteIfOwnedByApp`가 맡던 역할로, 그
+ * 헬퍼는 호출부 0이 되어 98일차에 제거됐다), 삭제가 실제로 일어나고 기록된다. 그래서 다른 테스트의 "이 파일은
  * 지워지지 않았다"가 비로소 실패할 수 있는 단언이 된다 — 계측이 살아 있음은
  * `replacingBackgroundImage_deletesOnlyTheReplacedFile`가 직접 보장한다.
  *
@@ -193,8 +193,8 @@ class BackgroundColorSaveRaceTest {
         ): Job {
             val currentUi = ui ?: return Job().apply { complete() }
 
-            // 교체 대상 파일은 호출 시점에 캡처한다 — 실제 정리 헬퍼
-            // (PostcardImageStorage.deleteIfOwnedByApp)도 "교체 전 경로"를 받는다.
+            // 교체 대상 파일은 호출 시점에 캡처한다 — 98일차에 제거된 옛 정리 헬퍼
+            // (PostcardImageStorage.deleteIfOwnedByApp)도 "교체 전 경로"를 받았다.
             val replacedPath = currentUi.backgroundImagePath
 
             ui = currentUi.copy(

@@ -60,11 +60,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 905건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 899건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 905개, 테스트를 담은 파일 92개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 93개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 165개(구조 전용 파일에 있는 157개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 899개, 테스트를 담은 파일 91개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 92개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 165개(구조 전용 파일에 있는 157개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 905개는 98일차(2026-10-09) 4단계 템플릿 기능 제거(템플릿 전용 테스트 3파일 27건 삭제) 후 최종 로컬 결과 XML 93개에서 905/905 통과(실패·오류·skip 0)를 확인했어. 직전 932개(삭제 gate 취소 전파 수정 + `PostcardDeletionDatabaseFirstGateTest` 2건 추가)는 XML 96개에서 932/932 통과했어. instrumentation은 2026-10-02 같은 검증 전용 emulator에서 `PostcardDeletionOrchestrationTest` 3/3, 이어 전체 20/20을 다시 실제 실행해 통과했어(boot 직후 첫 시도는 emulator lowmemorykiller가 test process를 죽여 status 없이 끝났고, 환경 문제로 분류해 test emulator만 재부팅 후 같은 APK로 통과). 그 전 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 899개는 98일차(2026-10-09) 5단계 `PostcardImageStorage` 제거(전용 테스트 1파일 6건 삭제) 후 최종 로컬 결과 XML 92개에서 899/899 통과(실패·오류·skip 0)를 확인했어. 그 전 905개(4단계 템플릿 기능 제거, 템플릿 전용 테스트 3파일 27건 삭제)는 XML 93개에서 905/905, CI run `37901299271`(`f59796d`)에서 통과했어. 직전 932개(삭제 gate 취소 전파 수정 + `PostcardDeletionDatabaseFirstGateTest` 2건 추가)는 XML 96개에서 932/932 통과했어. instrumentation은 2026-10-02 같은 검증 전용 emulator에서 `PostcardDeletionOrchestrationTest` 3/3, 이어 전체 20/20을 다시 실제 실행해 통과했어(boot 직후 첫 시도는 emulator lowmemorykiller가 test process를 죽여 status 없이 끝났고, 환경 문제로 분류해 test emulator만 재부팅 후 같은 APK로 통과). 그 전 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -279,7 +279,7 @@ JVM 905개는 98일차(2026-10-09) 4단계 템플릿 기능 제거(템플릿 전
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 905개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 932개 기준 CI run `37899321199`(`0fd4c1f`) 성공, 905개는 로컬 905/905 통과(CI는 push 후 확인) |
+| JVM unit test 899개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 905개 기준 CI run `37901299271`(`f59796d`) 성공, 899개는 로컬 899/899 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 과거 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고, 그 emulator는 2026-10-03 폐기). 원격 CI의 격리된 instrumentation 환경은 후속 후보야. |
@@ -330,6 +330,8 @@ JVM 905개는 98일차(2026-10-09) 4단계 템플릿 기능 제거(템플릿 전
 **96일차 추가 — 월/연도 고르기 종이 자투리:** 두 고르기 화면의 칸마다 글자 뒤에, 이미 불러온 달력 종이의 하단을 칸마다 다른 위치에서 잘라 손으로 자른 윤곽(달력 장과 같은 함수)·같은 옅은 접촉 그림자로 깔았어. 새 자산 없음, 칸 크기·글자·선택 표시·현재 원·터치 그대로. `VisitCalendarTest` 52→54(순수 함수 2건), `VisitCalendarPaperPageStructureTest` 12→13(구조 1건)이라 JVM 927→930개, 구조 164→165개(파일 수 변화 없음). 로컬 XML 930/930 통과, `assembleDebug` 성공, `app/src/androidTest` 변경 없음. 사용자 실기기 감각 QA 승인(첫 시도 값 그대로).
 
 **98일차 4단계 — 템플릿 기능 제거:** 화면에서 템플릿을 만들거나 불러올 경로가 이미 없고, 템플릿을 적용한 엽서·실기기 템플릿 파일이 모두 0개로 확인돼 템플릿 기능 코드 전체를 지웠어. 템플릿만 검증하던 `PostcardTemplateTest` 15건(직렬화·스타일 추출/적용·선택 유지 판정), `BuiltInTemplatesTest` 5건(기본 템플릿 목록), `PostcardTemplateStorageTest` 7건(템플릿 파일 저장·읽기·삭제)을 함께 지워 JVM 932→905개, 테스트 파일 95→92개, 결과 XML 96→93개가 됐어. 세 파일 모두 일반 엽서 스타일 저장·Room·다른 파일 저장소 계약은 잠그지 않아 남길 부분이 없었어(구조 테스트·Fake/replica 아님, 구조 165개 변화 없음). 템플릿은 Room 컬럼이 따로 없어서 schema·migration·DB version은 그대로이고, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 905/905 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
+
+**98일차 5단계 — `PostcardImageStorage` 제거:** 옛 중심 사진 교체 뒤 이전 파일을 지우던 `PostcardImageStorage.deleteIfOwnedByApp`는 사진 교체 기능이 사라진 뒤 production 호출부가 0이어서 object째 지웠어. 그 object만 직접 부르던 `PostcardImageStorageTest` 6건(filesDir 안 파일 삭제·밖 파일 보존·null/빈 경로·없는 파일·같은 경로)을 함께 지워 JVM 905→899개, 테스트 파일 92→91개, 결과 XML 93→92개가 됐어. 소유 범위 경계(`isInsideDirectory`)는 production 공용 helper로 그대로 남았고 `AppFileOwnershipTest`가 계속 직접 검증하며, 실제 엽서 파일 삭제는 `PostcardDeletionManagerTest`·`PostcardDeletionDatabaseFirstGateTest`·`DecorationDirectoryContractTest`가 계속 맡아 보호 범위가 줄지 않았어. `BackgroundColorSaveRaceTest`의 대역 주석 2곳은 테스트 동작 변경 없이 "98일차에 제거된 옛 헬퍼"로 고쳤어. schema·migration·DB version·`app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 899/899 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
 
 ## 마지막 요약
 
