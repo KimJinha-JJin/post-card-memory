@@ -1,6 +1,34 @@
-# HANDOFF — 98일차: 코드 클린 day (dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거 → PostcardImageStorage 제거 → 테스트 유효성 감사·중복 11건 제거 → 보호 공백 2개 보강, commit·push·CI 성공)
+# HANDOFF — 99일차: 편집 상태 ↔ 초안 연결부 읽기 전용 조사 (production·test 수정 0, 사진 파일 정리의 확정본 참조 누락 위험 발견)
 
-확인일: 2026-10-09. 수동 표준 모드(98일차 1·2단계 작업지시서), 담당 Claude Code.
+확인일: 2026-10-10. 수동 표준 모드(99일차 작업지시서), 담당 Claude Code.
+
+- **시작·종료 상태:** `feature/photo-sticker`, HEAD `74d6901`, local/origin 0/0, tracked clean, `git diff --check` 이상 없음. 보호 untracked 3종 그대로. 조사 중 production·test 수정 0건, 이 HANDOFF 기록만 docs-only commit.
+- **1부(남은 production 화석, 읽기 전용):**
+  - `StickerEditMode` — **dead.** `stickerEditMode`는 초기값 `Move` 외 대입 0, `stickerEditModeOwnerId`는 `null` 대입만 있어 `resolvedStickerEditMode`는 항상 `Move`. `DetailScreen.kt`의 Scale/Rotate 제스처 분기와 Rotate·Scale 핸들은 도달 불가. setter는 `8f75bdb`(08-20, 툴바 단순화)에서 제거되고 분기만 남음. `remember` 전용이라 저장 무관. 제거 시 Move 블록 보존·`StickerEditModeTest` 정리·실기기 제스처 확인 필요.
+  - `presetLabelTapeStyles` — production 사용 0(`cd72eb9` 09-03 색상 선택기 교체 후), `LabelStickerItemTest` 3건만 참조. 직렬화는 `LabelTapeStyle.entries`를 name으로 찾으므로 무관. **`LabelTapeStyle` enum 값은 기존 라벨 해석에 필수 — 함께 지우면 안 됨.**
+  - `LabelStickerItem.tapePalette()` — 도입(`0d5dd4c`) 이후 production 호출 0, 테스트 1곳만. 화면·exporter는 `labelTapePalette()` 직접 호출.
+  - 세 항목 모두 오늘 미삭제(정리 후보, 실행 승인 아님).
+- **2부(화면 ↔ 초안 연결부) 결론:** 초안 조립 지점은 production 전체에서 `DetailViewModel.persistDraftNow()` 하나(autosave 900ms·`flushDraftNow` ON_STOP·`awaitPendingStyleSaves` 이탈 모두 여기로 수렴). ViewModel 상태 11개(꾸미기 목록 6 + 선택 id 5) ↔ `PostcardEditDraft` 필드 11개 ↔ `loadStickerSealStateAndAutoRestoreDraft` 복원 11개가 1:1 대칭. `PhotoStickerItem`·`MaskingTapeItem`(사진 테이프 = `style == PHOTO` + `photoUri`) 각 13필드도 직렬화 1:1. undo/redo·`StickerEditMode`·조준 세션·탭·앞뒷면 보기는 의도적 transient, 배경·스타일·문구·뒷면은 Room 별도 저장.
+  - 비대칭(위험 낮음): 사진 스티커는 복원 시 URI 검증·누끼 복구(`validateAndRepairRestoredStickers`)를 하지만 사진 테이프 `photoUri`는 검증 없이 복원(파일 없으면 사진 없는 빈 테이프로 표시, 크래시 없음). 복원에서 빠진 스티커의 `selectedStickerId`가 남아도 소비부가 전부 `==`/`find`라 "선택 없음"으로 동작.
+  - 판단 보류: 진입 직후 확정 상태 표시 ~ 초안 덮어쓰기 사이 수 ms 창에서 한 편집은 초안 복원에 덮일 수 있음(실기기 없이는 판단 불가, 영속 데이터 손상 아님).
+  - 실행 검증 없는 단계: `persistDraftNow` 조립, 초안 → 화면 적용, `validateAndRepairRestoredStickers`, `revertToConfirmedState`, `promoteDraftStickerBackgrounds`. 모두 private + Context라 JVM 불가 → 오늘 테스트 추가 0.
+
+### ⚠️ 공백 A — 사진 파일 정리가 확정본 참조를 보지 않음 (현재 위험, 미수정)
+
+- **위치:** `DetailViewModel.isStickerFileStillReferenced`(사진 스티커 원본·누끼)와 `isMaskingTapePhotoStillReferenced`(사진 테이프 사진)가 "현재 목록 + undo/redo 스택"만 참조로 본다. `confirmedStickersBaseline`·`confirmedMaskingTapesBaseline`과 디스크의 확정 상태 파일은 참조 판정에 들어가지 않는다. 최종 삭제 함수 `PhotoStickerImageStorage.deleteOriginalIfUnreferenced`·`MaskingTapePhotoStorage.deleteIfUnreferenced`도 넘겨받은 목록만 본다. 확정 저장은 사진 테이프 파일을 다른 위치로 옮기지 않으므로 확정 상태와 편집 중 상태가 같은 `masking_tape_photos/` 파일을 공유한다.
+- **재현 경로(코드 추적, 실기기 미재현):** 확정 저장된 사진 스티커/사진 테이프를 편집 화면에서 삭제(삭제 직전 스냅샷이 undo 스택에 들어가 정리 후보로 보류) → 같은 세션에서 같은 종류를 스티커 30회(`STICKER_HISTORY_LIMIT`)/테이프 50회(`MASKING_TAPE_HISTORY_LIMIT`) 넘게 편집해 그 스냅샷이 스택에서 밀려남 → sweep이 원본 파일을 **실제 삭제**. 이후 "원래대로"(`revertToConfirmedState`)를 누르거나 완료 없이 확정본이 쓰이는 곳에서 그 사진이 깨진다. 파일 삭제라 되돌릴 수 없다.
+- **기존 기록과의 관계:** 스티커 쪽은 `docs/detail-structure-audit-2026-08-06.md` §12 위험 1에 "되돌리기 후 깨진 이미지 표시, 낮음(파일 자체 손상 아님)"으로 기록돼 있었다. 이번 조사로 ① 실제로는 확정본이 참조하는 **파일 삭제**이고 ② 이후 추가된 사진 마스킹테이프에도 같은 구조가 있음을 확인했다.
+- **보호 현황:** JVM·structure·androidTest 모두 없음. `MaskingTapePhotoStorage`·`PhotoStickerImageStorage` 삭제 함수 직접 테스트도 없음.
+- **수정 시 고려점(설계 미확정):** 참조 집합에 확정 baseline을 포함하는 것이 최소 후보지만 삭제 정책 변경이라 별도 승인 필요. 확정 저장 성공 후 baseline 갱신 시점, 다른 엽서·초안의 공유 여부, `OrphanFileDiagnostics`와의 관계를 함께 확인해야 한다. DB/schema 무관.
+- **재개 조건:** 사용자가 공백 A 수정 작업을 별도로 승인할 것. 그전까지 production 무변경.
+
+- **독립 상태:** 구현 없음(조사만) / 자동 검증 미실행(코드 변경 없음, 불필요) / 실기기 QA 불필요(문서-only) / TEST-COVERAGE-MAP 변경 없음(테스트 변화 없음) / repository HANDOFF 최신화 / commit·push는 이 기록 commit으로 수행.
+- **다음 후보(실행 승인 아님):** ① 100일차 1부 — 사진 스티커·사진 테이프 포함 초안 왕복(SAFE androidTest 후보 검토) ② 공백 A 수정 여부 결정 ③ 사진 테이프 `photoUri` 복원 검증(공백 A와 묶어 검토) ④ 1부 정리 후보 3건.
+
+
+## 98일차 1·2단계: 코드 클린 day 시작 (dead code 감사 → import 정리 + 삭제 gate 취소 전파, commit·push·CI 성공)
+
+확인일: 2026-10-09. 수동 표준 모드(98일차 1·2단계 작업지시서), 담당 Claude Code. 98일차 전체 흐름: dead code 감사 → import 정리 + 삭제 gate 취소 전파 → 고아 Repository/DAO·옛 UI 제거 → 템플릿 subsystem 제거 → PostcardImageStorage 제거 → 테스트 유효성 감사·중복 11건 제거 → 보호 공백 2개 보강.
 
 - **시작 상태:** `feature/photo-sticker`, HEAD `4225a04`, local/origin 0/0, tracked clean. 보호 untracked 3종(`.codex-config.candidate.toml`, `.kotlin/`, `postcard_paper_fiber_tile.png`) — 미수정·미stage.
 - **1단계(읽기 전용 감사) 결론:** A등급(삭제 가치 높음) — `PostcardRepository`의 호출부 0 래퍼 7개(`deletePostcard`, `updatePostcardMessageFont/DateFormat/DateTextScale`, `updatePostcardEnvelopeStyle/EnvelopePostmarked`, `clearPostcardEnvelope`), `EditorEmptyHint`, `EditorSegmentedTabRow`, `GalleryViewMode`, `PostcardImageStorage`(+`PostcardImageStorageTest` 6건). B — `updatePostcardTemplateStyle`(휴면 템플릿 쓰기 경로), `presetLabelTapeStyles`/`tapePalette()`(test 전용), 중복 helper(`rotateBitmapUsingExif` 3벌, `createPinkingPath` 화면/exporter 2벌, `getFileExtension` 2벌, exporter 스티커용 `drawCenterCroppedBitmap`). C(유지) — legacy enum 항목, 봉투 컬럼, 템플릿 subsystem, `OrphanFileDiagnostics`, `PondController.sequence`, test seam, Hilt/framework 진입점. **1단계 보고의 "미사용 import production 22개"는 오집계 — 실제 21개.**
