@@ -1,20 +1,22 @@
-# HANDOFF — 98일차: 코드 클린 day (읽기 전용 dead code 감사 → 미사용 import 정리 + 삭제 gate 취소 전파 수정, 미커밋)
+# HANDOFF — 98일차: 코드 클린 day (읽기 전용 dead code 감사 → 미사용 import 정리 + 삭제 gate 취소 전파 수정, commit·push·CI 성공)
 
 확인일: 2026-10-09. 수동 표준 모드(98일차 1·2단계 작업지시서), 담당 Claude Code.
 
 - **시작 상태:** `feature/photo-sticker`, HEAD `4225a04`, local/origin 0/0, tracked clean. 보호 untracked 3종(`.codex-config.candidate.toml`, `.kotlin/`, `postcard_paper_fiber_tile.png`) — 미수정·미stage.
 - **1단계(읽기 전용 감사) 결론:** A등급(삭제 가치 높음) — `PostcardRepository`의 호출부 0 래퍼 7개(`deletePostcard`, `updatePostcardMessageFont/DateFormat/DateTextScale`, `updatePostcardEnvelopeStyle/EnvelopePostmarked`, `clearPostcardEnvelope`), `EditorEmptyHint`, `EditorSegmentedTabRow`, `GalleryViewMode`, `PostcardImageStorage`(+`PostcardImageStorageTest` 6건). B — `updatePostcardTemplateStyle`(휴면 템플릿 쓰기 경로), `presetLabelTapeStyles`/`tapePalette()`(test 전용), 중복 helper(`rotateBitmapUsingExif` 3벌, `createPinkingPath` 화면/exporter 2벌, `getFileExtension` 2벌, exporter 스티커용 `drawCenterCroppedBitmap`). C(유지) — legacy enum 항목, 봉투 컬럼, 템플릿 subsystem, `OrphanFileDiagnostics`, `PondController.sequence`, test seam, Hilt/framework 진입점. **1단계 보고의 "미사용 import production 22개"는 오집계 — 실제 21개.**
-- **2단계 변경 (미커밋):**
+- **2단계 변경 (`480a5ef`):**
   - 미사용 import 27줄 삭제(main 7파일 21줄, test 5파일 6줄). 파일마다 이름이 주석까지 포함해 다른 곳에 0회임을 확인. KDoc 링크용 import 2개(`GalleryScreen` LazyColumn, `AppIntroScreen` SEAL_POSTMARK_DATE_TEXT_RATIO)는 유지.
   - `PostcardDeletionManager.kt` — DB-우선 gate를 `internal suspend fun deletePostcardDatabaseFirst`로 떼고 Manager는 그대로 위임. `runCatching`(취소까지 "DB 삭제 실패"로 흡수) → `try/catch`로 `CancellationException`은 재던지고 나머지 `Throwable`은 기존과 같은 실패 결과. DB 삭제 성공 → 파일 정리 순서, 실패 시 파일 0건, public API 불변.
   - 신규 `PostcardDeletionDatabaseFirstGateTest`(JVM 2건: 취소 전파·파일 정리 0건 / 일반 DB 오류 → 실패 결과·파일 0건). gate를 `runCatching`으로 되돌리는 일시 변형에서 취소 테스트 실패 확인 후 원복.
   - `TEST-COVERAGE-MAP.md` 갱신(JVM 930→932, 테스트 파일 94→95, XML 95→96, 파일 삭제 섹션에 gate JVM 보호 추가).
-- **검증:** 로컬 `testDebugUnitTest` 932/932(XML 96, 실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest` 성공. 실사용 기기 instrumentation 미실행(불필요), CI 미실행(미push). 실기기 QA 불필요 — 취소는 사실상 ViewModel 종료(`viewModelScope` 취소) 때만 일어나 사용자에게 보이는 결과가 없음. 기존 경고 `VisitRecordTest.kt:84` 불필요한 `!!`는 이번 변경과 무관(미수정).
+- **검증:** 로컬 `testDebugUnitTest` 932/932(XML 96, 실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest` 성공. 실사용 기기 instrumentation 미실행(불필요). GitHub Actions CI run `37897882044` 성공(JVM unit test·assembleDebug·assembleDebugAndroidTest). 실기기 QA 불필요 — 취소는 사실상 ViewModel 종료(`viewModelScope` 취소) 때만 일어나 사용자에게 보이는 결과가 없음. 기존 경고 `VisitRecordTest.kt:84` 불필요한 `!!`는 이번 변경과 무관(미수정).
 - **봉투·템플릿 legacy 추가 조사(읽기 전용, 사용자 사실: 봉투 사용 엽서 0, 템플릿 적용 엽서 0):**
   - 봉투: 쓰기는 사용자가 봉투를 고를 때만(`65fe77b` 08-04 ~ `7fe0047` 08-05), 자동 기록 경로 없음 → 실제 행은 전부 NULL/0으로 봐도 됨. 컬럼 제거는 DB 19→20 + 새 `MIGRATION_19_20` 필요(minSdk 26이라 `DROP COLUMN` 불가 → 테이블 재생성·전체 행 복사), 기존 migration 수정은 불필요하지만 Entity 필드도 같이 지워야 함. 검증할 migration 계측(`PostcardFullMigrationChainTest`, CONDITIONAL)은 실사용 기기에서 실행 불가. 이득은 2컬럼뿐 → **컬럼 유지, Repository 래퍼 + DAO 쿼리 3개만 제거 추천**(schema 무영향).
-  - 템플릿: `Postcard`에 템플릿 전용 컬럼 없음(DAO `updatePostcardTemplateStyle`은 기존 스타일 컬럼 갱신일 뿐). 파일(`filesDir/postcard_templates/`)은 사용자가 "내 템플릿 저장/이름 변경/덮어쓰기"를 직접 눌렀을 때만 생성(07-24~08-28). "적용 0"은 "저장 0"과 다름. `allowBackup=true`(규칙 없음) + 10-05 런처 삭제 후 7~8월 클라우드 백업 자동 복원 → 그 시기 템플릿 파일이 지금 기기에 있을 수 있음. subsystem을 지워도 파일은 안 지워짐(삭제 코드 없음, `PostcardDeletionManager`·`OrphanFileDiagnostics` 무관) — 읽는 코드만 사라짐. **파일 존재 실측 전까지 판단 보류.**
-- **Git:** commit·push 미승인·미실행. 보호 untracked 3종 그대로.
-- **다음 후보(실행 승인 아님):** ① A등급 정리(Repository 래퍼 7개 → 봉투 DAO 3개 포함 여부 결정, `EditorEmptyHint`/`EditorSegmentedTabRow`/`GalleryViewMode`, `PostcardImageStorage`+테스트) ② 템플릿 파일 존재 실측(사용자가 기억 확인 또는 승인된 읽기 전용 `adb shell run-as` 목록 조회 — debug 빌드일 때만 가능) ③ `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장은 이제 일부 낡음(gate는 JVM으로 재현됨).
+  - 템플릿: `Postcard`에 템플릿 전용 컬럼 없음(DAO `updatePostcardTemplateStyle`은 기존 스타일 컬럼 갱신일 뿐). 파일(`filesDir/postcard_templates/`)은 사용자가 "내 템플릿 저장/이름 변경/덮어쓰기"를 직접 눌렀을 때만 생성(07-24~08-28). "적용 0"은 "저장 0"과 다름. `allowBackup=true`(규칙 없음) + 10-05 런처 삭제 후 7~8월 클라우드 백업 자동 복원 → 그 시기 템플릿 파일이 지금 기기에 있을 수 있음. subsystem을 지워도 파일은 안 지워짐(삭제 코드 없음, `PostcardDeletionManager`·`OrphanFileDiagnostics` 무관) — 읽는 코드만 사라짐. **파일 존재 실측 전까지 판단 보류.**(→ 아래 실측으로 해소)
+- **템플릿 폴더 실기기 실측(읽기 전용, 사용자 승인):** 기기 `R3KYB00HAYY`(SM-S936N) 1대만 연결 확인. 설치 앱은 DEBUGGABLE, firstInstallTime 2026-10-05 14:19(그날 재설치·백업 복원과 일치). `adb shell run-as com.postcardmemory ls -la files/`, `ls -laR files/postcard_templates`만 실행 — `postcard_templates/`는 존재(백업 복원으로 생김)하지만 `templates/`·`previews/` 모두 **비어 있음(숨김 포함 0개)**. 수정·삭제·이동 0건. → 사용자 템플릿 파일 0개 확인, 템플릿 subsystem 제거의 파일 보존 전제는 해소(제거 자체는 미승인).
+- **사용자 결정(2단계 후):** 봉투 DB 컬럼·migration·schema 유지. 다음 코드 클린 후보 확정 = schema와 무관한 Repository/DAO 고아 메서드 + `EditorEmptyHint`·`EditorSegmentedTabRow`·`GalleryViewMode`. `PostcardImageStorage`와 전용 테스트 제거는 별도 묶음으로 보류.
+- **Git:** `480a5ef` commit·push, local/origin 0/0, CI 성공. 보호 untracked 3종 그대로.
+- **다음 후보(실행 승인 아님):** ① 확정된 코드 클린 묶음(Repository 래퍼 7개 + 고아 DAO 쿼리 — 봉투 3개·font/date 3개·`@Delete deletePostcard`; `EditorEmptyHint`/`EditorSegmentedTabRow`/`GalleryViewMode`) ② 템플릿 subsystem 제거 여부(파일 0개 확인됨, 별도 승인 필요) ③ 보류 묶음: `PostcardImageStorage`+전용 테스트 ④ `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장은 이제 일부 낡음(gate는 JVM으로 재현됨).
 
 ---
 
