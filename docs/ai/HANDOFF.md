@@ -1,4 +1,21 @@
-# HANDOFF — 99일차: 편집 상태 ↔ 초안 연결부 읽기 전용 조사 (production·test 수정 0, 사진 파일 정리의 확정본 참조 누락 위험 발견)
+# HANDOFF — 100일차: 백일맞이 UI 디테일 정돈 + 최초 방문 손 도장 (commit·push·CI 성공, 실기기 QA 통과)
+
+확인일: 2026-10-11. 수동 표준 모드(100일차 작업지시서), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 보고 A~F 단위로 진행.
+
+- **시작·종료 상태:** `feature/photo-sticker`, 시작 HEAD `5385dc3`(지시서 참고값 `74d6901` 위 99일차 HANDOFF docs-only commit 1개, 예상된 차이), 종료 코드 commit `c0cf2c7` + 이 HANDOFF commit. local/origin 0/0, tracked clean, `git diff --check` 통과. 보호 untracked 3종(`.codex-config.candidate.toml`, `.kotlin/`, `postcard_paper_fiber_tile.png`) 미수정·미stage.
+- **1부 X 조사(production 기준):** 엽서 위 X는 **사진 스티커 하나뿐이었고 의미는 삭제**(빨간 원, "스티커 삭제", 확인 없이 즉시 삭제·undo 가능, 아래 패널 `삭제`와 코드상 동일). 도장·텍스트 스티커·일반/커스텀/사진 마스킹테이프·라벨은 X 없음 — 전부 같은 자원 재탭으로 해제, 패널 `편집|삭제`/`삭제`. 낙서는 선택 대상이 아닌 펜 도구(전체 지우기만). 공통: 바깥 탭·뒤로가기는 선택을 풀지 않음(뒤로가기는 조준 취소 또는 화면 나가기), 탭 전환 시 선택 표시만 숨김, 완료 버튼 없음.
+  - **사용자 결정:** 사진 스티커 삭제 X 제거(권장안). 수정 자원은 사진 스티커 하나, 나머지는 원래 일관돼 미수정. 최종 UX = 모든 꾸미기가 "재탭 = 선택 해제, 삭제는 아래 패널".
+- **2부 카메라:** 픽셀 그림 `ic_camera_button.png`는 촬영 화면 셔터(`CameraScreen`) 한 곳에서만 쓰여(공유 없음) 코드로 그린 `CameraShutterGlyph`(몸체·뷰파인더 턱·렌즈 이중 고리·플래시 점, 갤러리 손바닥 카메라 그림과 같은 실루엣, InkPrimary/PaperTray)로 교체하고 PNG 삭제. 버튼 72dp·클릭·contentDescription "촬영" 유지. 갤러리 퀵 셀렉트 카메라 손 그림·`PhotoSourceMenu`의 Material 아이콘은 무관·미변경.
+- **3부 메인 테이프:** 민트는 코드 색이 아니라 `gallery_date_paper_strip.png` 그림 자체 색(갤러리 월 라벨 전용, 꾸미기 테이프 팔레트 무관). 자산은 그대로 두고 `GALLERY_DATE_STRIP_CORAL_FILTER`(밝기 보존 ColorMatrix, 실측 평균 밝기 ≈204 → 바랜 코랄 ≈`#E0B09E`)로 그릴 때만 칠함. 첫 후보 `#DEA492`는 미리보기에서 살구색이 강해 한 단계 바래게 조정 후 확정.
+- **4부 방문 조건:** 방문 기록은 `MainActivity`의 `LaunchedEffect(Unit)`이 프로세스당 1회 IO에서 `VisitRecordStorage.recordTodayVisit`로 먼저 끝냄. `TodayVisit.isFirstVisitToday` = 이번 실행에서 오늘 기록이 실제로 새로 쓰였는지(같은 날 재실행 false, 읽기 실패 시 record null·false). "최초 방문" = 이 값(앱 설치 후 최초가 아니라 **그날 첫 실행**). 새 저장 상태·DB·schema·migration 불필요.
+- **5부 손 도장:** 편집 화면 도장 찍기 손 `SealStampHandOverlay`(`seal_stamp_hand.png`, 화면 아래에서 올라와 0.72초)를 그대로 재사용. `shouldPlayIntroStampHand(record, isFirstVisitToday)`가 참이면 인트로 0.25초 뒤 손이 소인 중심을 향해 들어오고, 소인은 손이 닿을 때까지 비워 뒀다가 접촉 순간 `stampPress`를 접촉값에서 시작해 그 자리에 찍힘(기존 진동 호출 한 곳이 같은 접촉값에서 울림). 재방문·기록 없음은 기존 소인 낙하 그대로. 인트로 길이(1800+150ms) 불변. 방문 저장은 인트로 시작 전에 끝나 애니메이션 취소·끊김과 무관, 인트로는 저장소를 부르지 않음(구조 테스트로 고정). Activity 재생성 시 인트로 전체가 다시 그려지면 손도 다시 나올 수 있지만 방문 기록은 `AppIntroState`로 중복 생성 안 됨(기존 계약).
+- **검증:** 로컬 `testDebugUnitTest` **895/895**(XML 94, 실패·오류·skip 0; 890 + `AppIntroStampHandLogicTest` 4 + 구조 1), 구조 166→167, 테스트 파일 92→93. mutation: 판정을 `visitRecord != null`로 바꾸면 신규 2건 실패(원상복구). `assembleDebug`·`assembleDebugAndroidTest` 성공. GitHub Actions CI run `38113444475`(`c0cf2c7`) 성공. 실사용 기기 instrumentation 미실행(불필요, androidTest 변경 없음).
+- **실기기 통합 QA(사용자, 기기 `R3KYB00HAYY` SM-S936N 1대):** 사용자 승인 후 `adb install -r`(firstInstallTime 10-05 유지 = 데이터 보존). 그날 앱을 열기 전 설치해 첫 실행으로 최초 조건 확인 → 손 도장·재방문(손 없음·숫자 그대로)·코랄 테이프·카메라 아이콘·사진 스티커 X 제거 **모두 첫 시도 통과**, QA 후 코드 수정 없음(승인 코드 = 최종 테스트 코드).
+- **독립 상태:** 구현 완료 / 자동 검증 통과 / 실기기 QA 완료 / TEST-COVERAGE-MAP 갱신 완료(JVM 895·파일 93·XML 94·구조 167, 100일차 항목·앱 시작 보호 범위) / repository HANDOFF 최신화 / commit `c0cf2c7` + 이 기록 commit, push 완료, 코드 CI 성공.
+- **남은 후속(실행 승인 아님, 오늘 미착수):** 99일차 공백 A(사진 파일 정리가 확정본 참조를 보지 않음) 수정 여부 결정, 사진 스티커·사진 테이프 Draft 왕복, 사진 테이프 `photoUri` 복원 검증, `StickerEditMode` dead branch, `presetLabelTapeStyles`, `tapePalette()`. 오늘 새로 발견한 별도 위험 없음.
+
+
+## 99일차: 편집 상태 ↔ 초안 연결부 읽기 전용 조사 (production·test 수정 0, 사진 파일 정리의 확정본 참조 누락 위험 발견)
 
 확인일: 2026-10-10. 수동 표준 모드(99일차 작업지시서), 담당 Claude Code.
 

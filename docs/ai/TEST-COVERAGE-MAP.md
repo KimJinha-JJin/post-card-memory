@@ -279,7 +279,7 @@ JVM 895개는 100일차(2026-10-11) 인트로 손 도장 추가(행동 4건 + �
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 895개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 888개 기준 CI run `37911387665`(`1215e7d`) 성공, 895개는 로컬 895/895 통과(CI는 push 후 확인) |
+| JVM unit test 895개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 888개 기준 CI run `37911387665`(`1215e7d`) 성공, 895개는 로컬 895/895 통과, CI run `38113444475`(`c0cf2c7`) 성공 |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 과거 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고, 그 emulator는 2026-10-03 폐기). 원격 CI의 격리된 instrumentation 환경은 후속 후보야. |
