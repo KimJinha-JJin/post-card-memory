@@ -33,6 +33,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -45,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.components.SEAL_POSTMARK_DATE_TEXT_RATIO
 import com.postcardmemory.ui.components.SealPreviewContent
+import com.postcardmemory.ui.detail.SealStampHandOverlay
 import com.postcardmemory.ui.detail.SealType
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.InkSecondary
@@ -110,6 +113,22 @@ internal val INTRO_MILESTONE_MESSAGES: Map<Int, String> = mapOf(
     44 to "Hey, man",
     63 to "Here comes the DIVA"
 )
+
+/**
+ * 100일차: 오늘 첫 방문으로 기록이 실제로 새로 남은 실행에서만, 편집 화면의 도장 찍기
+ * 손([SealStampHandOverlay])이 들어와 방문 소인을 직접 찍어 준다. 재방문이나 기록을 읽지
+ * 못한 실행(record == null)에서는 손 없이 기존 소인 움직임 그대로다.
+ *
+ * 방문 저장은 [com.postcardmemory.MainActivity]가 이 화면과 무관하게 먼저 끝낸다 —
+ * 이 판정은 이미 정해진 결과로 연출 여부만 고르며, 손이 중간에 끊겨도 기록은 그대로다.
+ */
+internal fun shouldPlayIntroStampHand(
+    visitRecord: VisitRecord?,
+    isFirstVisitToday: Boolean
+): Boolean = visitRecord != null && isFirstVisitToday
+
+/** 인트로가 먼저 보인 뒤 손이 들어오도록 잠깐 기다린다. 손 연출(≈0.72초)이 인트로 안에 끝난다. */
+private const val INTRO_STAMP_HAND_START_DELAY_MS = 250L
 
 /** [roll]이 이스터에그 확률 구간(기본 3%) 안에 들어오는지. */
 internal fun isSecretRoll(roll: Float): Boolean = roll < INTRO_SECRET_PROBABILITY
@@ -239,6 +258,21 @@ fun AppIntroScreen(
         }
     }
 
+    val playStampHand = shouldPlayIntroStampHand(visitRecord, isFirstVisitToday)
+    // 손이 들어올 차례인지, 도장이 종이에 닿았는지, 다 빠졌는지. 인트로는 프로세스당
+    // 한 번만 보이므로(AppIntroState) 한 번의 재생만 다루면 된다.
+    var stampHandStarted by remember { mutableStateOf(false) }
+    var stampHandContacted by remember { mutableStateOf(false) }
+    var stampHandFinished by remember { mutableStateOf(false) }
+    var introRootOrigin by remember { mutableStateOf(Offset.Zero) }
+    var postmarkCenterInRoot by remember { mutableStateOf<Offset?>(null) }
+
+    LaunchedEffect(playStampHand) {
+        if (!playStampHand) return@LaunchedEffect
+        delay(INTRO_STAMP_HAND_START_DELAY_MS)
+        stampHandStarted = true
+    }
+
     LaunchedEffect(Unit) {
         progress.animateTo(
             targetValue = 1f,
@@ -251,7 +285,8 @@ fun AppIntroScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(GalleryPaperWhite),
+            .background(GalleryPaperWhite)
+            .onGloballyPositioned { introRootOrigin = it.positionInRoot() },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -268,7 +303,19 @@ fun AppIntroScreen(
 
             AppIntroVisitPostmark(
                 visitRecord = visitRecord,
-                isFirstVisitToday = isFirstVisitToday
+                isFirstVisitToday = isFirstVisitToday,
+                waitsForStampHand = playStampHand,
+                stampHandContacted = stampHandContacted,
+                onPostmarkCenterInRoot = { postmarkCenterInRoot = it }
+            )
+        }
+
+        val stampTarget = postmarkCenterInRoot
+        if (playStampHand && stampHandStarted && !stampHandFinished && stampTarget != null) {
+            SealStampHandOverlay(
+                target = stampTarget - introRootOrigin,
+                onContact = { stampHandContacted = true },
+                onFinished = { stampHandFinished = true }
             )
         }
     }
@@ -289,7 +336,8 @@ fun AppIntroScreen(
  * 한 바퀴 더 돌고 같은 자리에 앉는다 — 다른 방문일에는 이 회전이 붙지 않는다.
  *
  * 이 움직임은 앱을 열 때마다 보이지만, 닿는 순간의 진동은
- * [isFirstVisitToday]일 때만 울린다.
+ * [isFirstVisitToday]일 때만 울린다. 100일차부터 그날 첫 방문([waitsForStampHand])에는
+ * 위에서 떨어지는 대신 손 도장이 닿을 때까지 비워 뒀다가 그 자리에서 찍힌다.
  *
  * 기록이 아직 없어도(null) 자리는 항상 잡아둔다 — 값이 늦게 도착해도 위쪽
  * 진행선이 다시 가운데로 밀려 흔들리지 않게 하려는 것이다.
@@ -297,7 +345,10 @@ fun AppIntroScreen(
 @Composable
 private fun AppIntroVisitPostmark(
     visitRecord: VisitRecord?,
-    isFirstVisitToday: Boolean
+    isFirstVisitToday: Boolean,
+    waitsForStampHand: Boolean = false,
+    stampHandContacted: Boolean = false,
+    onPostmarkCenterInRoot: (Offset) -> Unit = {}
 ) {
     // 0 = 아직 들려 있음, 1 = 종이에 앉음. 탄성이 1을 살짝 넘는 구간이 "통"이다.
     val stampPress = remember { Animatable(0f) }
@@ -305,8 +356,10 @@ private fun AppIntroVisitPostmark(
     val isMaxMilestone = visitRecord?.totalVisitDays == INTRO_MAX_MILESTONE_VISIT_DAY
     val context = LocalContext.current
 
-    LaunchedEffect(hasVisitRecord, isFirstVisitToday) {
+    LaunchedEffect(hasVisitRecord, isFirstVisitToday, stampHandContacted) {
         if (!hasVisitRecord) return@LaunchedEffect
+        // 손이 찍어 줄 날에는 손 도장이 종이에 닿을 때까지 소인을 비워 둔다.
+        if (waitsForStampHand && !stampHandContacted) return@LaunchedEffect
 
         // 오늘 처음 찍히는 소인일 때만, 도장이 종이에 처음 닿는 순간에 딱 한 번
         // 진동한다. 애니메이션이 끝나기를 기다리지 않고(끝은 튕김이 잦아든
@@ -318,6 +371,12 @@ private fun AppIntroVisitPostmark(
 
                 vibrateIntroPostmark(context)
             }
+        }
+
+        // 손이 찍은 소인은 위에서 떨어지지 않는다 — 닿은 자리에서 잉크가 바로 묻고
+        // 살짝 눌렸다 앉기만 한다(진동도 이 접촉 값에서 같은 한 곳이 울린다).
+        if (waitsForStampHand) {
+            stampPress.snapTo(INTRO_POSTMARK_CONTACT_PRESS)
         }
 
         stampPress.animateTo(
@@ -343,6 +402,7 @@ private fun AppIntroVisitPostmark(
         Box(
             modifier = Modifier
                 .size(INTRO_POSTMARK_SIZE)
+                .onGloballyPositioned { onPostmarkCenterInRoot(it.boundsInRoot().center) }
                 .graphicsLayer {
                     val press = stampPress.value
                     val pressScale =

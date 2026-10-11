@@ -2,8 +2,13 @@ package com.postcardmemory.ui.camera
 
 import androidx.activity.compose.BackHandler
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,13 +43,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -58,7 +61,6 @@ import coil.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.postcardmemory.R
 import com.postcardmemory.ui.components.PinkingPhotoGuide
 import com.postcardmemory.ui.theme.BrutalBlack
 import com.postcardmemory.ui.theme.BrutalCoral
@@ -368,12 +370,10 @@ private fun CameraPreviewScreen(
                             shape = CircleShape
                         )
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_camera_button),
-                        contentDescription = "촬영",
+                    CameraShutterGlyph(
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
+                            .size(36.dp)
+                            .semantics { contentDescription = "촬영" }
                     )
                 }
             }
@@ -845,5 +845,61 @@ private fun TeleportWaitingScreen(
                 modifier = Modifier.padding(top = 24.dp)
             )
         }
+    }
+}
+
+/**
+ * 100일차: 셔터 버튼 안의 카메라. 예전 픽셀 그림 대신 갤러리 손바닥 콜라주 속 카메라와
+ * 같은 단순한 잉크 실루엣(몸체·위 뷰파인더 턱·렌즈 고리·플래시 점)을 코드로 그린다.
+ */
+@Composable
+private fun CameraShutterGlyph(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val bodyTop = w * 0.26f
+        val bodyHeight = w * 0.60f
+        val ink = BrutalBlack
+        val paper = NeutralLight
+
+        // 위 뷰파인더 턱과 왼쪽 작은 버튼
+        drawRoundRect(
+            color = ink,
+            topLeft = Offset(w * 0.32f, w * 0.14f),
+            size = Size(w * 0.36f, w * 0.16f),
+            cornerRadius = CornerRadius(w * 0.04f)
+        )
+        drawRoundRect(
+            color = ink,
+            topLeft = Offset(w * 0.10f, w * 0.20f),
+            size = Size(w * 0.14f, w * 0.08f),
+            cornerRadius = CornerRadius(w * 0.03f)
+        )
+        // 몸체
+        drawRoundRect(
+            color = ink,
+            topLeft = Offset(0f, bodyTop),
+            size = Size(w, bodyHeight),
+            cornerRadius = CornerRadius(w * 0.10f)
+        )
+        // 렌즈: 종이색 고리 + 안쪽 작은 고리
+        val lensCenter = Offset(w * 0.5f, bodyTop + bodyHeight * 0.52f)
+        drawCircle(
+            color = paper,
+            radius = w * 0.21f,
+            center = lensCenter,
+            style = Stroke(width = w * 0.06f)
+        )
+        drawCircle(
+            color = paper,
+            radius = w * 0.10f,
+            center = lensCenter,
+            style = Stroke(width = w * 0.035f)
+        )
+        // 플래시 점
+        drawCircle(
+            color = paper,
+            radius = w * 0.045f,
+            center = Offset(w * 0.84f, bodyTop + bodyHeight * 0.22f)
+        )
     }
 }

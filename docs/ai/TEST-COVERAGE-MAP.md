@@ -60,11 +60,11 @@
 | Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
 | instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
 
-JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 890건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 895건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
 
-현재 실측은 JVM `@Test` 890개, 테스트를 담은 파일 92개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 93개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 166개(구조 전용 파일에 있는 158개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
+현재 실측은 JVM `@Test` 895개, 테스트를 담은 파일 93개와 공용 helper 파일 1개야. 최신 로컬 결과의 테스트 클래스 XML은 94개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 167개(구조 전용 파일에 있는 159개 + 혼합 파일에 있는 8개), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 20개/7파일(81일차에 `PostcardDeletionOrchestrationTest` 3건, 85일차에 `PhotoStickerEdgeStyleInstrumentedTest` 7건 추가), Compose UI는 3개, Robolectric은 없어.
 
-JVM 890개는 98일차(2026-10-09) 테스트 보호 공백 보강(초안 완전 왕복 1건 + 이탈 저장 Job 누락 방지 구조 1건 추가) 뒤 최종 로컬 결과 XML 93개에서 890/890 통과(실패·오류·skip 0)를 확인했어. 그 전 888개는 같은 날 테스트 유효성 감사 후속으로 완전·실질 중복 테스트 11건을 지운 뒤 최종 로컬 결과 XML 92개에서 888/888 통과(실패·오류·skip 0), CI run `37911387665`(`1215e7d`)에서 통과했어. 그 전 899개는 98일차 5단계 `PostcardImageStorage` 제거(전용 테스트 1파일 6건 삭제) 후 최종 로컬 결과 XML 92개에서 899/899 통과(실패·오류·skip 0), CI run `37902444635`(`84bf188`)에서 통과했어. 그 전 905개(4단계 템플릿 기능 제거, 템플릿 전용 테스트 3파일 27건 삭제)는 XML 93개에서 905/905, CI run `37901299271`(`f59796d`)에서 통과했어. 직전 932개(삭제 gate 취소 전파 수정 + `PostcardDeletionDatabaseFirstGateTest` 2건 추가)는 XML 96개에서 932/932 통과했어. instrumentation은 2026-10-02 같은 검증 전용 emulator에서 `PostcardDeletionOrchestrationTest` 3/3, 이어 전체 20/20을 다시 실제 실행해 통과했어(boot 직후 첫 시도는 emulator lowmemorykiller가 test process를 죽여 status 없이 끝났고, 환경 문제로 분류해 test emulator만 재부팅 후 같은 APK로 통과). 그 전 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+JVM 895개는 100일차(2026-10-11) 인트로 손 도장 추가(행동 4건 + 구조 1건) 뒤 최종 로컬 결과 XML 94개에서 895/895 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 890개는 98일차(2026-10-09) 테스트 보호 공백 보강(초안 완전 왕복 1건 + 이탈 저장 Job 누락 방지 구조 1건 추가) 뒤 최종 로컬 결과 XML 93개에서 890/890 통과(실패·오류·skip 0)를 확인했어. 그 전 888개는 같은 날 테스트 유효성 감사 후속으로 완전·실질 중복 테스트 11건을 지운 뒤 최종 로컬 결과 XML 92개에서 888/888 통과(실패·오류·skip 0), CI run `37911387665`(`1215e7d`)에서 통과했어. 그 전 899개는 98일차 5단계 `PostcardImageStorage` 제거(전용 테스트 1파일 6건 삭제) 후 최종 로컬 결과 XML 92개에서 899/899 통과(실패·오류·skip 0), CI run `37902444635`(`84bf188`)에서 통과했어. 그 전 905개(4단계 템플릿 기능 제거, 템플릿 전용 테스트 3파일 27건 삭제)는 XML 93개에서 905/905, CI run `37901299271`(`f59796d`)에서 통과했어. 직전 932개(삭제 gate 취소 전파 수정 + `PostcardDeletionDatabaseFirstGateTest` 2건 추가)는 XML 96개에서 932/932 통과했어. instrumentation은 2026-10-02 같은 검증 전용 emulator에서 `PostcardDeletionOrchestrationTest` 3/3, 이어 전체 20/20을 다시 실제 실행해 통과했어(boot 직후 첫 시도는 emulator lowmemorykiller가 test process를 죽여 status 없이 끝났고, 환경 문제로 분류해 test emulator만 재부팅 후 같은 APK로 통과). 그 전 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
 
 근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
 
@@ -221,8 +221,8 @@ JVM 890개는 98일차(2026-10-09) 테스트 보호 공백 보강(초안 완전 
 ### 기능: 앱 시작
 
 - **보호 수준:** 약함.
-- **현재 보호하는 테스트:** `AppIntroMessageLogicTest`, `AppIntroVisitPostmarkStructureTest`, 방문 파일·임시 파일 정리 helper 테스트.
-- **실제 production 직접 검증:** 인트로 문구 선택과 방문/정리 helper.
+- **현재 보호하는 테스트:** `AppIntroMessageLogicTest`, `AppIntroVisitPostmarkStructureTest`, `AppIntroStampHandLogicTest`(100일차), 방문 파일·임시 파일 정리 helper 테스트.
+- **실제 production 직접 검증:** 인트로 문구 선택, 손 도장 재생 판정(`shouldPlayIntroStampHand` — 실제 방문 저장소로 같은 날 첫 실행만 재생), 방문/정리 helper. 손이 들어오는 모양·접촉 시점·진동은 실기기 감각 QA 영역이야.
 - **간접 검증:** **앱 시작 시 방문 호출·인트로 표시 연결은 구조 검사가 주된 자동 방어선**이야.
 - **현재 믿어도 되는 것:** 문구 선택과 개별 helper 규칙.
 - **아직 믿으면 안 되는 것:** Application부터 Activity·인트로·갤러리로 이어지는 실제 시작과 DI(필요한 객체를 연결하는 설정).
@@ -271,7 +271,7 @@ JVM 890개는 98일차(2026-10-09) 테스트 보호 공백 보강(초안 완전 
 
 핵심 DetailViewModel replica 25건은 삭제 대상이라는 뜻이 아니야. **설계 의도와 경합 규칙을 설명하는 데 가치가 있지만 실제 production 동작의 직접 증거는 아니야.** 배경색 계측 2건은 실제 production 검증 일부 존재로 따로 표시해. 뒷면 저장 계측은 다른 필드의 저장을 검사하므로 슬라이더 replica의 전체 대체가 아니야.
 
-구조 테스트 159건도 역할을 나눠 읽어야 해. migration 등록, 공용 component 사용, 의존 관계처럼 형태가 계약이면 유효한 안전망이야. 버튼 반응·화면 갱신·레이어 결과를 대신 검사하면 간접 보호에 머물러. 직접 테스트와 구조 테스트를 묶어 볼 수는 있지만, 테스트 개수를 합쳐 보호가 강해졌다고 판단하지 않아.
+구조 테스트 167건도 역할을 나눠 읽어야 해. migration 등록, 공용 component 사용, 의존 관계처럼 형태가 계약이면 유효한 안전망이야. 버튼 반응·화면 갱신·레이어 결과를 대신 검사하면 간접 보호에 머물러. 직접 테스트와 구조 테스트를 묶어 볼 수는 있지만, 테스트 개수를 합쳐 보호가 강해졌다고 판단하지 않아.
 
 ## 자동 실행 여부
 
@@ -279,7 +279,7 @@ JVM 890개는 98일차(2026-10-09) 테스트 보호 공백 보강(초안 완전 
 
 | 항목 | 자동 실행 | 근거 |
 |---|---|---|
-| JVM unit test 890개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 888개 기준 CI run `37911387665`(`1215e7d`) 성공, 890개는 로컬 890/890 통과(CI는 push 후 확인) |
+| JVM unit test 895개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 888개 기준 CI run `37911387665`(`1215e7d`) 성공, 895개는 로컬 895/895 통과(CI는 push 후 확인) |
 | `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
 | `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
 | instrumentation 20개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 과거 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고, 그 emulator는 2026-10-03 폐기). 원격 CI의 격리된 instrumentation 환경은 후속 후보야. |
@@ -336,6 +336,8 @@ JVM 890개는 98일차(2026-10-09) 테스트 보호 공백 보강(초안 완전 
 **98일차 6단계 — 중복 테스트 11건 정리:** 읽기 전용 테스트 유효성 감사에서 같은 계약·같은 실패 모드를 반복한다고 확인된 테스트만 지웠어. `ConfirmSaveLogicTest` 15→12(본문이 `whenStickersAndSealsBothSaved`와 완전히 같은 "전부 저장 성공" 3건; 요소별 실패 6건은 유지), `AppIntroMessageLogicTest` 18→14(33일차 확정 문구 2건은 `atEachDriverNumberMilestone`·`milestoneMessages_matchFixedSpec`이, 32·34일차 2건은 `daysAdjacentToDriverNumberMilestones`가 같은 방식으로 이미 검사; 77일차 회귀를 막는 `atNonMilestoneVisitDays`는 유지), `PostcardOverlayExportLogicTest` 56→53(가로·세로 fallback 오버로드를 `fallbackSize_widthHeight_*` 2건이 같은 실패 모드로 이미 검사), `VisitCalendarTest` 54→53(오늘 방문 색은 `visitDayFillColorIsDarkerOnlyForToday…`가 그대로 검사하고, 지운 테스트의 나머지 단언은 테스트가 직접 만든 Set 포함 여부뿐이었어). 보호하는 동작은 줄지 않았어. JVM 899→888개, 테스트 파일 91개·결과 XML 92개·구조 165개·replica 수 변화 없음(지운 11건은 모두 행동 테스트). 같은 작업에서 `MaskingTapeCreationGrammarStructureTest`의 78일차에 삭제된 `EditorOutlineButton` 부재 단언 한 줄을 걷어냈어(테스트 수 불변, 편집·복제·삭제 평면 액션 존재 검사는 그대로). 테스트 설명 주석 몇 곳도 실제 검증 범위에 맞게 고쳤어. `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 888/888 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
 
 **98일차 7단계 — 테스트 보호 공백 보강:** 감사에서 확인한 공백 2개를 production 경로에 직접 연결된 테스트로 메웠어. ① `PostcardDraftStorageTest.saveDraftAtomically_thenLoadDraft_draftWithEveryNonPhotoDecorationKeepsAllFields` — 도장 2(offset 없는 미니 도장 포함)·낙서 2(펜·형광펜)·텍스트 스티커 1·마스킹테이프 2(프리셋·커스텀 색/무늬/가장자리/길이/굵기)·라벨 2(프리셋·커스텀 색)와 선택 id를 가진 초안을 실제 저장소 함수로 임시 폴더에 저장·읽어 객체 전체를 비교해. 사진 스티커·사진 테이프는 JVM Uri 제약으로 제외. ② `PendingStyleSaveCoverageStructureTest.everyDeclaredSaveJob_isJoinedOnExit_orExplicitlyHandledSeparately` — 선언된 `Job?` 필드 − 이유가 적힌 예외(`draftAutosaveJob`) ⊆ `awaitPendingStyleSaves()` join 목록. mutation 확인(작업트리에만 임시 적용 후 원상복구, 최종 diff 없음): 초안 직렬화의 텍스트 스티커/마스킹테이프 순서 교환·텍스트 스티커 외곽선 색 역직렬화 누락에서 ①이 실패(순서 교환은 기존 테스트 전부 통과), join 목록에서 `confirmSaveJob` 제거·목록에 없는 새 `Job?` 필드 추가에서 ②가 실패했어. production 코드 변경 없음. `PostcardEditDraftTest` 머리 주석(도장도 Uri를 쓴다는 틀린 설명, 완전 왕복 테스트가 없다는 설명)을 실제에 맞게 고쳤어. JVM 888→890개, 테스트 파일 91→92개, 결과 XML 92→93개, 구조 165→166개, replica 수 변화 없음. `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 890/890 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
+
+**100일차 — 인트로 손 도장:** 그날 첫 실행(`TodayVisit.isFirstVisitToday`)에서만 편집 화면 도장 손(`SealStampHandOverlay`)이 인트로 소인을 찍어 주게 됐어. 신규 `AppIntroStampHandLogicTest` 4건(첫 방문 재생·재방문 미재생·기록 모름 미재생, 실제 `VisitRecordStorage`로 같은 날 첫 실행만 재생하고 방문은 1회 유지)과 `AppIntroVisitPostmarkStructureTest` 1건(손 재사용·재생 판정·손이 닿기 전 소인 대기·인트로가 방문 저장소를 부르지 않음)을 더하고, 같은 파일의 기존 단언 하나는 LaunchedEffect key에 `stampHandContacted`가 더해져 그 문자열로 바꿨어(보호 의미 유지). mutation 확인: 판정을 `visitRecord != null`로 바꾸면 신규 행동 테스트 2건이 실패(원상복구). JVM 890→895개, 테스트 파일 92→93개, 결과 XML 93→94개, 구조 166→167개. 같은 날 사진 스티커 삭제 X 제거·카메라 셔터 아이콘·갤러리 월 테이프 코랄 필터는 테스트 변화 없음(미감 값 미고정). `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 895/895 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, 사용자 실기기 감각 QA 통과.
 
 ## 마지막 요약
 

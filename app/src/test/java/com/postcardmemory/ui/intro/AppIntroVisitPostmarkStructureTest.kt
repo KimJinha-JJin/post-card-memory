@@ -117,12 +117,35 @@ class AppIntroVisitPostmarkStructureTest {
         )
         assertTrue(
             "방문 기록이 도착할 때 한 번만 실행되어야 함",
-            introSource.contains("LaunchedEffect(hasVisitRecord, isFirstVisitToday)")
+            introSource.contains("LaunchedEffect(hasVisitRecord, isFirstVisitToday, stampHandContacted)")
         )
         assertFalse(
             "반복 애니메이션을 두지 않음",
             introSource.contains("infiniteRepeatable") ||
                 introSource.contains("rememberInfiniteTransition")
+        )
+    }
+
+    // ---- 100일차: 오늘 첫 방문에는 손이 소인을 찍어 준다 ----
+
+    @Test
+    fun stampHand_reusesTheEditorSealHandAndOnlyShowsTheResultOfTheVisit() {
+        assertTrue(
+            "편집 화면 도장 찍기 손을 그대로 재사용해야 함(새 손 자산·새 연출 아님)",
+            introSource.contains("SealStampHandOverlay(")
+        )
+        assertTrue(
+            "재생 여부는 기존 방문 결과(첫 방문 여부)로만 정해야 함",
+            introSource.contains("val playStampHand = shouldPlayIntroStampHand(visitRecord, isFirstVisitToday)")
+        )
+        assertTrue(
+            "손이 닿기 전에는 소인을 비워 두고 닿은 뒤에 찍혀야 함",
+            introSource.contains("if (waitsForStampHand && !stampHandContacted) return@LaunchedEffect") &&
+                introSource.contains("onContact = { stampHandContacted = true }")
+        )
+        assertFalse(
+            "손 연출이 방문 기록을 쓰거나 다시 판정하면 안 됨",
+            introSource.contains("recordTodayVisit") || introSource.contains("VisitHistoryStorage")
         )
     }
 

@@ -56,7 +56,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Draw
@@ -3462,68 +3461,6 @@ fun DetailScreen(
                                                     color = BrutalBlack,
                                                     shape = CircleShape
                                                 )
-                                        )
-                                    }
-                                }
-
-                                if (isVisuallySelected) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .offset(x = 8.dp, y = (-8).dp)
-                                            .size(26.dp)
-                                            .background(
-                                                color = GalleryDangerRed,
-                                                shape = CircleShape
-                                            )
-                                            .border(
-                                                width = 1.5.dp,
-                                                color = BrutalBlack,
-                                                shape = CircleShape
-                                            )
-                                            .clickable(
-                                                enabled = controlsEnabled
-                                            ) {
-                                                val toDelete =
-                                                    photoStickers.find {
-                                                        it.id == sticker.id
-                                                    }
-                                                val removedBgUriToDelete =
-                                                    toDelete?.removedBgUri
-
-                                                viewModel.recordStickerSnapshotForUndo()
-
-                                                val remaining =
-                                                    photoStickers.filter {
-                                                        it.id != sticker.id
-                                                    }
-                                                viewModel.setPhotoStickers(remaining)
-
-                                                removedBgUriToDelete?.let { uri ->
-                                                    viewModel
-                                                        .deleteStickerCacheUri(uri)
-                                                }
-                                                toDelete?.originalUri?.let { uri ->
-                                                    viewModel
-                                                        .deleteStickerOriginalIfUnreferenced(
-                                                            uri,
-                                                            remaining
-                                                        )
-                                                }
-                                                stickerSizes -= sticker.id
-                                                if (selectedStickerId == sticker.id) {
-                                                    viewModel.setSelectedStickerId(
-                                                        remaining.lastOrNull()?.id
-                                                    )
-                                                }
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "스티커 삭제",
-                                            tint = BrutalWhite,
-                                            modifier = Modifier.size(14.dp)
                                         )
                                     }
                                 }
