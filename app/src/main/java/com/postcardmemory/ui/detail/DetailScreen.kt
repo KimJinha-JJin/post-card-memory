@@ -89,7 +89,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -6887,20 +6886,13 @@ fun DetailScreen(
         }
 
         // 101일차: 하단 편집 메뉴를 가리지 않도록 상단 바(높이 64dp) 바로 아래에 띄운다.
-        // 테마에 inverse 색이 없어 Material 기본 보라색으로 나오던 것을 앱 종이·잉크 색으로 칠한다.
+        // 알림창 색(종이 배경·잉크 글자·금갈색 버튼)은 테마의 inverse 색이 정한다.
         SnackbarHost(
             hostState = detailSnackbarHostState,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 64.dp)
-        ) { data ->
-            Snackbar(
-                snackbarData = data,
-                containerColor = PaperSurface,
-                contentColor = InkPrimary,
-                actionColor = SunsetGold
-            )
-        }
+        )
 
         // 신문지 손은 엽서 밖(화면 아래)에서 올라와야 하므로 엽서 clip 바깥,
         // 화면 전체 위에 그린다. 엽서 콘텐츠가 아니라 저장·export와 무관하다.
