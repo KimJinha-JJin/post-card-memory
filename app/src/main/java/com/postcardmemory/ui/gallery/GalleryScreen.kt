@@ -2260,9 +2260,10 @@ private val GALLERY_DATE_STRIP_MIN_WIDTH = 136.dp
 /**
  * 100일차: 민트 테이프 그림을 바랜 코랄 테이프로 칠한다. 자산은 그대로 두고 밝기만 남긴 뒤
  * 코랄 톤을 곱해, 종이 결·찢긴 가장자리는 살리고 색만 바꾼다. 테이프 평균 밝기(≈204)가
- * 바랜 코랄 #E0B09E 근처로 오도록 맞춘 비율이다. 갤러리 월 라벨 전용이라 꾸미기 테이프 색과 무관하다.
+ * 바랜 코랄 #E0B09E 근처로 오도록 맞춘 비율이다. 꾸미기 테이프 색과 무관하다.
+ * 101일차: 편집 하단 세부 선택줄의 선택된 종이 라벨도 같은 톤으로 칠한다(PaperLabelSubcategoryNav.kt).
  */
-private val GALLERY_DATE_STRIP_CORAL_FILTER: ColorFilter = run {
+internal val GALLERY_DATE_STRIP_CORAL_FILTER: ColorFilter = run {
     val toneR = 224f / 204f
     val toneG = 176f / 204f
     val toneB = 158f / 204f

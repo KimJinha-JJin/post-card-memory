@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -27,11 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
-import com.postcardmemory.ui.theme.InkPrimary
-import com.postcardmemory.ui.theme.PaperDivider
-import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.ui.theme.SunsetGold
 
 /**
@@ -113,18 +107,14 @@ internal fun EditorBottomTabBar(
 }
 
 /**
- * 53일차 제7단계: 스티커 탭 안의 사진/텍스트/라벨 하위 종류를 고르는
- * 완전히 평평한 navigation으로 처음 만들어졌다. 54일차부터는 마스킹테이프
- * 탭의 기본 디자인/커스텀/사진 생성 방식 선택도 "같은 역할에는 같은
- * 문법을 적용한다"는 원칙에 따라 이 컴포저블을 그대로 재사용한다 — 이름은
- * 첫 사용처를 따랐을 뿐 스티커 전용 로직은 없다.
+ * 편집 탭 안의 세부 종류(사진: 레이아웃/사진 편집, 배경: 색상/패턴, 스티커:
+ * 사진/텍스트/라벨, 마스킹테이프: 기본 디자인/커스텀/사진, 낙서: 도구)를
+ * 고르는 선택줄. 53일차 스티커 탭에서 처음 만들어졌고, 같은 역할에는 같은
+ * 문법을 적용한다는 원칙에 따라 다섯 탭이 이 컴포저블을 재사용한다.
  *
- * 항목마다 별도 rounded Box나 카드를 만들지 않고, 하나의 Row 안에서 칸
- * 자체의 배경색 변화(선택 시 SunsetGold 단색 채움, 미선택 시 PaperTray)만
- * 으로 선택 상태를 나타낸다 — Box 없이도 subcategory 선택이 읽히는지
- * 확인하는 파일럿이라 개별 radius/border/underline/dot을 전부 뺐다. 칸
- * 사이 경계만 얇은 PaperDivider 세로선으로 표시해 하나의 bar 안에 여러
- * 칸이 있는 것처럼 보이게 한다.
+ * 101일차: 칸마다 종이 띠 라벨을 깔고 선택된 칸만 월 라벨 톤 띠·굵은 글자·
+ * 빠끔 얼굴로 표시한다(이전의 갈색 단색 채움과 칸 사이 세로선은 없앴다).
+ * 그림과 칸 배치는 [PaperLabelSubcategoryNavRow]가 맡는다.
  *
  * EditorBottomTabBar와 마찬가지로 스크롤 콘텐츠 밖 고정 영역에서만 쓰인다
  * — 호출부가 이 컴포저블을 EditorBottomTabBar와 같은 고정 Box 안에 둔다.
@@ -137,41 +127,11 @@ internal fun EditorSubcategoryNavBar(
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(0.92f),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        options.forEachIndexed { index, option ->
-            if (index > 0) {
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(24.dp)
-                        .background(PaperDivider)
-                )
-            }
-
-            val selected = index == selectedIndex
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 44.dp)
-                    .background(if (selected) SunsetGold else PaperTray)
-                    .clickable(enabled = enabled) {
-                        onOptionSelected(index)
-                    }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = option,
-                    color = if (selected) BrutalWhite else InkPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
+    PaperLabelSubcategoryNavRow(
+        options = options,
+        selectedIndex = selectedIndex,
+        onOptionSelected = onOptionSelected,
+        enabled = enabled,
+        modifier = modifier
+    )
 }

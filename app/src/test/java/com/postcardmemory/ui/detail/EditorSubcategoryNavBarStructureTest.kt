@@ -127,8 +127,17 @@ class EditorSubcategoryNavBarStructureTest {
         )
     }
 
+    private val paperLabelText: String by lazy {
+        readStructureTestSource(
+            listOf(
+                "src/main/java/com/postcardmemory/ui/detail/PaperLabelSubcategoryNav.kt",
+                "app/src/main/java/com/postcardmemory/ui/detail/PaperLabelSubcategoryNav.kt"
+            )
+        )
+    }
+
     @Test
-    fun editorSubcategoryNavBar_usesFlatSolidFillWithoutPerItemRoundedShape() {
+    fun editorSubcategoryNavBar_drawsPaperLabelsWithoutSolidFillOrRoundedShape() {
         val declarationStart =
             bottomTabBarText.indexOf("internal fun EditorSubcategoryNavBar(")
         assertTrue(
@@ -137,28 +146,29 @@ class EditorSubcategoryNavBarStructureTest {
         )
         val body = bottomTabBarText.substring(declarationStart)
 
-        assertFalse(
-            "항목별로 RoundedCornerShape를 적용하면 안 됨(둥근 선택 Box 제거가 이번 파일럿의 핵심)",
-            body.contains("RoundedCornerShape")
-        )
         assertTrue(
-            "선택된 칸은 SunsetGold 단색으로 채워야 함",
+            "다섯 탭 공통 선택줄은 종이 라벨 표현(PaperLabelSubcategoryNavRow)으로 그려야 함",
+            body.contains("PaperLabelSubcategoryNavRow(")
+        )
+        assertFalse(
+            "101일차: 선택된 칸을 SunsetGold 단색으로 채우던 표현은 종이 라벨로 대체됨",
             body.contains("if (selected) SunsetGold else PaperTray")
         )
         assertFalse(
-            "이 컴포저블 안에서 SunsetGold를 alpha 워시로 쓰면 안 됨(단색 채움만 허용)",
-            body.contains("SunsetGold.copy(alpha")
+            "항목별 RoundedCornerShape(둥근 선택 Box)는 쓰지 않음",
+            body.contains("RoundedCornerShape") || paperLabelText.contains("RoundedCornerShape")
+        )
+        assertFalse(
+            "종이 라벨 칸에 단색 background 채움을 두지 않음",
+            paperLabelText.contains(".background(")
         )
     }
 
     @Test
     fun editorSubcategoryNavBar_keepsMinimumTouchTarget() {
-        val declarationStart =
-            bottomTabBarText.indexOf("internal fun EditorSubcategoryNavBar(")
-        val body = bottomTabBarText.substring(declarationStart)
         assertTrue(
             "각 항목은 최소 44dp 터치 영역을 유지해야 함",
-            body.contains("heightIn(min = 44.dp)")
+            paperLabelText.contains("heightIn(min = 44.dp)")
         )
     }
 }

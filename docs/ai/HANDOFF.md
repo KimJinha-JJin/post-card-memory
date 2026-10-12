@@ -1,4 +1,30 @@
-# HANDOFF — 100일차: 백일맞이 UI 디테일 정돈 + 최초 방문 손 도장 (commit·push·CI 성공, 실기기 QA 통과)
+# HANDOFF — 101일차: 하단 세부 선택줄 종이 라벨 + 빠끔 얼굴 (구현·JVM 통과, 다섯 탭 실기기 QA 통과, commit·push)
+
+확인일: 2026-10-12. 수동 표준 모드(101일차 2부 이후 작업지시서 + 이어진 사용자 지시), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함.
+
+- **시작 상태:** `feature/photo-sticker`, HEAD `b00ac67`(100일차 코드 `c0cf2c7` 위 백일 기념 편지 docs commit 3개), local/origin 0/0, tracked clean. 보호 untracked 3종(`.codex-config.candidate.toml`, `.kotlin/`, `postcard_paper_fiber_tile.png`) 미수정·미stage.
+- **대상:** 꾸미기 하단 세부 선택줄 `EditorSubcategoryNavBar` 5곳(사진 2·배경 2·스티커 3·테이프 3·낙서 4 = 14항목). 글귀·도장엔 선택줄 없음(추가 안 함). 패널 내부 swatch·프리셋·테이프 편집용 선택줄·체크박스·슬라이더 미변경.
+- **거쳐 온 판단(테이프 줄 시범, 실기기 QA 3회):**
+  1. 코드로 그린 사각 종이(모서리 컷 + 단면선) + 선택 시 금색 펜 고리 → 사용자 판정 "테두리 질감은 좋지만 결국 상자 안 글씨 문법". **폐기.** 질감을 얹어도 사각 실루엣이면 상자로 읽힌다.
+  2. 기존 자산 재활용 조사: 투명·종이 결·비사각·중앙 빈 후보는 `gallery_date_paper_strip.png` 하나(리본은 매듭·글자, 나머지는 불투명 타일). 이 띠를 밝은 종이색(`#FDF7EB` 근처)으로 칠해 시범 → **가시성 부족**(배경 `#F4ECDE`에 묻힘).
+  3. 사용자 제안으로 선택 = 월 라벨과 같은 바랜 코랄(`GALLERY_DATE_STRIP_CORAL_FILTER` 공유), 미선택 = 연회색(`#D9D5CF` 근처) 띠. 선택 시 굵은 글자는 **사용자 승인.** 펜 고리는 "혼란스러움"으로 **기능에서 제거**(코드 삭제).
+  4. 사용자 제작 자산 `editor_label_peek.png`(1254×1254, 망점 종이 얼굴 + 아래가 평평하게 잘린 두 앞발) → 선택된 띠 위쪽 가장자리에 앞발을 걸친 정적 그림으로 붙임 → **사용자 확인 완료, 다섯 탭 확장 승인.**
+- **최종 구현:**
+  - 새 `ui/detail/PaperLabelSubcategoryNav.kt` — `PaperLabelSubcategoryNavRow`: 칸 배치(전체 92%, `weight(1f)` 균등, `heightIn(min = 44.dp)`, 위아래 10dp) 그대로, 칸 사이 세로선 제거. 칸마다 띠를 높이 25dp·좌우 6dp 안쪽으로 그림(`paperLabelBounds`), 칸 index에 따라 그대로/좌우/상하좌우 뒤집기(회전 없음). 선택 칸만 코랄 띠 + Bold + 빠끔 얼굴(띠 앞, 20dp 높이, 라벨 폭 68% 지점, 앞발 끝이 띠 위 가장자리 2.5dp 아래, 위는 선택줄 위 여백 10dp 안 — `paperLabelPeekBounds`). 사각 ripple 끔(`indication = null`), 탭·선택 의미 불변.
+  - 메모리: 띠·얼굴 모두 `inSampleSize = 4`로 decode(각 약 0.4MB), 파일 수준 캐시로 탭 전환마다 재decode 안 함. 갤러리 월 라벨은 여전히 원본 크기로 따로 불러옴(기존, 미변경).
+  - `EditorBottomTabBar.kt` — `EditorSubcategoryNavBar`는 시그니처 그대로 `PaperLabelSubcategoryNavRow`에 위임, 갈색 단색 채움 코드와 미사용 import 삭제. `DetailScreen.kt` 최종 diff 없음(시범용 `paperLabels` 플래그는 확장하며 제거).
+  - `GalleryScreen.kt` — `GALLERY_DATE_STRIP_CORAL_FILTER`를 `private` → `internal`(값·갤러리 동작 불변, 주석 보탬).
+  - 새 자산 `app/src/main/res/drawable-nodpi/editor_label_peek.png`(사용자 제작). 그림 위치를 바꿔 다시 저장하면 코드의 자르기 좌표(376,352 / 720×656)를 다시 재야 함.
+- **테스트:** `EditorSubcategoryNavBarStructureTest` 4건 유지하되 "선택 칸 SunsetGold 단색 채움" 계약을 "종이 라벨 위임·단색 채움/둥근 상자/`.background(` 부재"로 교체, 44dp 검사는 새 파일 기준. 새 `PaperLabelSubcategoryNavTest` 3건(코랄/연회색 필터·`drawPath(` 부재 구조 1, 띠 배치 1, 얼굴 배치·선택 칸 한정 1). 좌표·seed·픽셀 고정 없음.
+- **검증:** 로컬 `testDebugUnitTest` **898/898**(XML 95, 실패·오류·skip 0; 895 + 3). 시범 중 targeted 실행 모두 통과(첫 띠 시범 때 신규 펜 고리 검사가 좁은 칸에서 띠 모서리를 스쳐 1회 실패 → 지시서의 "가장자리 부근 허용"에 맞춰 글자 영역 기준으로 좁힘, 이후 펜 고리 자체 제거). `assembleDebug`·`assembleDebugAndroidTest` 이번 세션 미실행(JVM 컴파일로 main·R 리소스 참조 확인). 실사용 기기 instrumentation 불필요(androidTest 변경 없음). CI 미확인(push 전).
+- **TEST-COVERAGE-MAP:** 갱신 완료(JVM 898·테스트 파일 94·XML 95·구조 168, 스티커/테이프/도장/낙서 절에 하단 선택줄 보호 범위).
+- **독립 상태:** 구현 완료 / 자동 검증 통과(JVM) / **실기기 QA 완료 — 테이프 줄(시범) + 사진·배경(2칸)·스티커(3칸)·낙서(4칸) 모두 사용자 확인 "괜찮다", QA 후 코드 수정 없음** / repository HANDOFF 최신화 / 사용자 승인으로 이 기록과 코드를 한 commit으로 commit·push(CI 결과는 완료보고에서 확인).
+- **QA에서 본 것(통과):** 2칸 줄은 띠가 가로로 약 25% 늘어나고, 4칸 낙서 줄은 칸이 좁아(약 80~90dp) 띠가 가로로 약 40% 눌림 — 찢긴 양끝이 촘촘해 보일 수 있음. 낙서 줄 `형광펜`·`지우개` 글자와 얼굴 간격, 다섯 줄 모두 얼굴이 위 패널과 겹치지 않는지. 문제 시 줄별 띠 높이/여백 조정이 1차 후보(새 자산은 그다음).
+- **다음 판단(실행 승인 아님):** 빠끔 얼굴 애니메이션(등장 등)은 정적 형태가 확정됐으니 원하면 별도 작업으로.
+- **남은 후속(실행 승인 아님):** 100일차 목록 그대로(공백 A, 사진 스티커·테이프 Draft 왕복, 사진 테이프 `photoUri` 복원 검증, `StickerEditMode` dead branch, `presetLabelTapeStyles`, `tapePalette()`). 갤러리 월 라벨이 띠 원본(약 6MB)을 그대로 decode하는 점은 이번에 확인한 별도 최적화 후보.
+
+
+## 100일차: 백일맞이 UI 디테일 정돈 + 최초 방문 손 도장 (commit·push·CI 성공, 실기기 QA 통과)
 
 확인일: 2026-10-11. 수동 표준 모드(100일차 작업지시서), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 보고 A~F 단위로 진행.
 
