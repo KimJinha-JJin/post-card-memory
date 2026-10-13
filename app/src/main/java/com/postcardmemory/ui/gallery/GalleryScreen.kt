@@ -2258,15 +2258,16 @@ private val GALLERY_DATE_STRIP_SRC_SIZE = IntSize(2011, 379)
 private val GALLERY_DATE_STRIP_MIN_WIDTH = 136.dp
 
 /**
- * 100일차: 민트 테이프 그림을 바랜 코랄 테이프로 칠한다. 자산은 그대로 두고 밝기만 남긴 뒤
- * 코랄 톤을 곱해, 종이 결·찢긴 가장자리는 살리고 색만 바꾼다. 테이프 평균 밝기(≈204)가
- * 바랜 코랄 #E0B09E 근처로 오도록 맞춘 비율이다. 꾸미기 테이프 색과 무관하다.
+ * 100일차: 민트 테이프 그림을 다른 색 테이프로 칠한다. 자산은 그대로 두고 밝기만 남긴 뒤
+ * 톤을 곱해, 종이 결·찢긴 가장자리는 살리고 색만 바꾼다. 꾸미기 테이프 색과 무관하다.
  * 101일차: 편집 하단 세부 선택줄의 선택된 종이 라벨도 같은 톤으로 칠한다(PaperLabelSubcategoryNav.kt).
+ * 102일차: 바랜 코랄(#E0B09E) → 편집 상위 잡지 오림 삽화의 종이톤과 이어지는 바랜 갈색.
+ * 테이프 평균 밝기(≈204)가 #B89A7A 근처로 오도록 맞춘 비율이다.
  */
-internal val GALLERY_DATE_STRIP_CORAL_FILTER: ColorFilter = run {
-    val toneR = 224f / 204f
-    val toneG = 176f / 204f
-    val toneB = 158f / 204f
+internal val GALLERY_DATE_STRIP_BROWN_FILTER: ColorFilter = run {
+    val toneR = 184f / 204f
+    val toneG = 154f / 204f
+    val toneB = 122f / 204f
     fun lumaRow(tone: Float) = floatArrayOf(0.299f * tone, 0.587f * tone, 0.114f * tone, 0f, 0f)
     ColorFilter.colorMatrix(
         ColorMatrix(
@@ -2277,7 +2278,7 @@ internal val GALLERY_DATE_STRIP_CORAL_FILTER: ColorFilter = run {
 
 /**
  * 95일차: 월 라벨. 화면 폭 단색 띠 없이 뒤의 갤러리 종이 위에, 날짜 글자
- * 뒤에만 작은 가로 띠(gallery_date_paper_strip.png, 민트 테이프 그림을 코랄로 칠해 씀)를 깐다. 글자는
+ * 뒤에만 작은 가로 띠(gallery_date_paper_strip.png, 민트 테이프 그림을 바랜 갈색으로 칠해 씀)를 깐다. 글자는
  * 그대로 Text이고 종이는 배경일 뿐이다. 장 수와 아래 구분선은 그대로 둔다.
  */
 @Composable
@@ -2318,7 +2319,7 @@ private fun GalleryMonthHeader(
                             srcOffset = GALLERY_DATE_STRIP_SRC_OFFSET,
                             srcSize = GALLERY_DATE_STRIP_SRC_SIZE,
                             dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-                            colorFilter = GALLERY_DATE_STRIP_CORAL_FILTER,
+                            colorFilter = GALLERY_DATE_STRIP_BROWN_FILTER,
                             filterQuality = FilterQuality.High
                         )
                     }

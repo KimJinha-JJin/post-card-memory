@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * 101일차: 하단 세부 선택줄([EditorSubcategoryNavBar], 다섯 탭 공통)의 종이 라벨
  * 표현. 종이 띠는 칸(터치 영역) 안에 그림으로만 놓인다. 선택은 띠 색(월 라벨과 같은 바랜
- * 코랄)·굵은 글자·띠 위에 앞발을 걸친 빠끔 얼굴(탭하면 새 칸으로 건너감)로 나타내고, 라벨 둘레 펜 고리는 그리지
+ * 갈색, 102일차 이전엔 코랄)·굵은 글자·띠 위에 앞발을 걸친 빠끔 얼굴(탭하면 새 칸으로 건너감)로 나타내고, 라벨 둘레 펜 고리는 그리지
  * 않는다(실기기 QA에서 제거). 띠 색값·얼굴 위치 같은 미감 값 자체는 고정하지 않는다.
  */
 class PaperLabelSubcategoryNavTest {
@@ -26,8 +26,8 @@ class PaperLabelSubcategoryNavTest {
     @Test
     fun selectionIsShownByStripColorWithoutPenLoop() {
         assertTrue(
-            "선택된 라벨은 월 라벨과 같은 코랄 필터, 미선택은 별도 연회색 필터로 칠해야 함",
-            paperLabelText.contains("if (selected) GALLERY_DATE_STRIP_CORAL_FILTER else PAPER_LABEL_STRIP_IDLE_FILTER")
+            "선택된 라벨은 월 라벨과 같은 갈색 필터, 미선택은 별도 연회색 필터로 칠해야 함",
+            paperLabelText.contains("if (selected) GALLERY_DATE_STRIP_BROWN_FILTER else PAPER_LABEL_STRIP_IDLE_FILTER")
         )
         assertFalse(
             "라벨 둘레 펜 고리는 그리지 않음(실기기 QA에서 혼란스럽다고 제거)",

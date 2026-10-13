@@ -39,13 +39,13 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.R
-import com.postcardmemory.ui.gallery.GALLERY_DATE_STRIP_CORAL_FILTER
+import com.postcardmemory.ui.gallery.GALLERY_DATE_STRIP_BROWN_FILTER
 import com.postcardmemory.ui.theme.InkPrimary
 import kotlin.math.roundToInt
 
 // 101일차: 하단 세부 선택줄(사진·배경·스티커·마스킹테이프·낙서 다섯 탭 공통)의 칸마다 갤러리 월 라벨과 같은 종이 띠
 // (gallery_date_paper_strip.png)를 깐다. 미선택은 연회색, 선택은 월 라벨과 같은 바랜
-// 코랄 띠에 굵은 글자이고, 띠 위에 얼굴 하나가 앞발을 걸치고 빠끔 내다본다. 진한 채움도,
+// 갈색(102일차, 그전엔 바랜 코랄) 띠에 굵은 글자이고, 띠 위에 얼굴 하나가 앞발을 걸치고 빠끔 내다본다. 진한 채움도,
 // 라벨 둘레 펜 고리도 쓰지 않는다(실기기 QA에서 펜 고리는 혼란스럽다고 빠졌다). 칸(터치
 // 영역)은 기존과 같고, 종이는 칸 안쪽에 그림으로만
 // 얹힌다. 값은 실기기 QA로 다듬는 미감 값이다.
@@ -62,7 +62,7 @@ private val PAPER_LABEL_STRIP_SRC_SIZE = IntSize(2011 / PAPER_LABEL_STRIP_SAMPLE
  * 미선택 라벨: 민트 테이프 그림의 밝기만 남겨 연한 회색으로 곱한다 — 종이 결·찢긴
  * 가장자리는 살리고 색만 바꾼다. 띠 평균 밝기(≈204)가 연회색 #D9D5CF 근처(화면 배경
  * #F4ECDE보다 한 단계 어두워 묻히지 않는 정도)로 오도록 맞춘 비율이다. 선택된 라벨은
- * 갤러리 월 라벨과 같은 바랜 코랄([GALLERY_DATE_STRIP_CORAL_FILTER])로 칠한다.
+ * 갤러리 월 라벨과 같은 바랜 갈색([GALLERY_DATE_STRIP_BROWN_FILTER])으로 칠한다.
  * (첫 실기기 QA: 밝은 종이색 하나로는 배경에 묻혀 가시성이 나빴다.)
  */
 private val PAPER_LABEL_STRIP_IDLE_FILTER: ColorFilter = run {
@@ -181,7 +181,7 @@ private fun Modifier.paperLabel(
                         srcSize = PAPER_LABEL_STRIP_SRC_SIZE,
                         dstOffset = dstOffset,
                         dstSize = dstSize,
-                        colorFilter = if (selected) GALLERY_DATE_STRIP_CORAL_FILTER else PAPER_LABEL_STRIP_IDLE_FILTER,
+                        colorFilter = if (selected) GALLERY_DATE_STRIP_BROWN_FILTER else PAPER_LABEL_STRIP_IDLE_FILTER,
                         filterQuality = FilterQuality.High
                     )
                 }

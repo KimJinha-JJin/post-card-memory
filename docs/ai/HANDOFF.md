@@ -1,4 +1,25 @@
-# HANDOFF — 101일차: 하단 세부 선택줄 종이 라벨 + 빠끔 얼굴 + 건너가기 애니메이션 + 초안 복원 알림 상단 이동 + 테마 inverse 색
+# HANDOFF — 102일차: 편집 상위 기능줄 잡지 오림 삽화 + 하단 라벨·갤러리 월 라벨 바랜 갈색 + 하단 메뉴 바닥 종이 질감
+
+확인일: 2026-10-13. 수동 표준 모드(102일차 작업지시서 + 이어진 사용자 지시), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함.
+
+- **시작 상태:** `feature/photo-sticker`, HEAD `819d75e`, local/origin 0/0, tracked clean, `git diff --check` 통과, 최근 CI 3회 success(`38246874690` 등). 보호 untracked 3종(`.codex-config.candidate.toml`, `.kotlin/`, `postcard_paper_fiber_tile.png`) 미수정·미stage.
+- **상위 기능줄(사진|배경|글귀|스티커|테이프|도장|낙서):** 구현은 `EditorBottomTabBar`(DetailScreen 단일 호출부, 다른 화면 공유 없음). Material 16dp 아이콘(tint) → 사용자 제작 잡지 오림 PNG 7종 `drawable-nodpi/editor_cutout_{photo,background,text,sticker,tape,stamp,doodle}.png`(각 1254×1254 ARGB, 투명 배경, 그림 알파≈253 — 빠끔 PNG와 같은 상태).
+  - decode: `inSampleSize = 4`(장당 약 0.4MB, 원본 그대로면 7장 약 44MB), 파일 수준 캐시. 불러올 때 알파>16 영역으로 투명 여백을 자동으로 잘라내고, 공통 상자 32×24dp 안에 비율대로 맞춤(`editorCutoutDisplaySizeDp`) — 아이콘별 마법 숫자 없음. 자산을 다시 그려 넣어도 코드 좌표 갱신 불필요.
+  - 테이프: 첫 자산(가로세로 2.2:1 → 32×14dp)이 어색해 사용자가 자산을 교체(1.33:1 → 32×24dp). 다른 6개는 첫 적용 크기 그대로 사용자 만족.
+  - 선택 표시는 사용자 결정으로 기존 그대로(선택 기능명·밑줄 SunsetGold). 그림엔 선택 효과 없음. 애니메이션 추가 없음.
+  - 기능명 Text 분리 유지(11sp SemiBold), 칸 전체 `weight(1f)` 탭 영역·`"$pageLabel 편집"` 접근성 설명·enabled 그대로, 그림은 `contentDescription = null`. 그림 16→24dp로 줄 높이 약 +8dp(실기기 QA에서 문제 없음).
+  - `DetailScreen.kt`: 아이콘 목록을 drawable id로, 안 쓰게 된 Material icon import 7개 삭제.
+- **바랜 갈색(사용자 요청 확대):** 하단 세부 선택줄 선택 띠와 메인 갤러리(월별 보기) 월 라벨 테이프가 함께 바랜 코랄 → 바랜 갈색(#B89A7A 근처). `GalleryScreen.kt`의 공유 필터를 `GALLERY_DATE_STRIP_CORAL_FILTER` → `GALLERY_DATE_STRIP_BROWN_FILTER`로 이름·톤 변경하고 `PaperLabelSubcategoryNav.kt`가 계속 같은 필터를 씀(두 곳은 항상 같이 바뀜). 미선택 연회색·종이·Bold·빠끔 위치/애니메이션 불변. 테마 `BrutalCoral` 등 다른 코랄은 무관·미변경.
+- **하단 메뉴 바닥 종이 질감(사용자 요청):** 하단 고정 편집 메뉴 Box의 `background(ScreenBackgroundGray)`를 엽서 바깥과 같은 `editorPaperBackground(editorPaperTile)`로 교체(내비게이션 바 영역까지). `editorPaperBackground`에 `patternOrigin` 파라미터를 추가해 메뉴 영역 위치(`positionInParent`)만큼 무늬를 옮겨 위 종이와 섬유가 이어지게 함(그리기 단계에서만 읽음). 메뉴 바닥은 여전히 불투명. 엽서 캔버스·저장·공유 이미지 무관.
+- **테스트:** `EditorBottomTabBarStructureTest` 4→5건(파라미터 검사 `List<ImageVector>`→`List<Int>`, 새 구조 1건: 기능명 순서·오림 삽화 같은 순서·Material 아이콘 부재·접근성 설명). `PaperLabelSubcategoryNavTest` 건수 그대로, 선택 필터 계약을 갈색 필터 이름으로 교체. dp·hex·픽셀 고정 없음.
+- **검증:** 로컬 `testDebugUnitTest` **902/902**(XML 96, 실패·오류·skip 0), 구조 170→171, 테스트 파일 95 그대로. `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 실사용 기기 instrumentation 불필요(androidTest 변경 없음). 앱 설치는 사용자가 Android Studio Run으로 직접.
+- **TEST-COVERAGE-MAP:** 갱신 완료(JVM 902·구조 171, 스티커/테이프/도장/낙서 절에 상위 기능줄 보호 범위, 하단 선택줄 필터 색 표기).
+- **독립 상태:** 구현 완료 / 자동 검증 통과 / 실기기 QA 완료(상위 7개 1차·테이프 교체 후·갈색·갤러리 월 라벨·메뉴 바닥 종이 모두 사용자 "통과") / repository HANDOFF 최신화 / 사용자 승인으로 commit·push(CI 결과는 완료보고에서 확인).
+- **사용자 데이터:** Room·Draft·저장·undo/redo·navigation·선택 state 무관(화면 그림·색만 변경).
+- **남은 후속(실행 승인 아님):** 101일차 목록 그대로. 갤러리 월 라벨이 띠 원본(약 6MB)을 그대로 decode하는 점(별도 최적화 후보).
+
+
+## 101일차: 하단 세부 선택줄 종이 라벨 + 빠끔 얼굴 + 건너가기 애니메이션 + 초안 복원 알림 상단 이동 + 테마 inverse 색
 
 확인일: 2026-10-12. 수동 표준 모드(101일차 2부 이후 작업지시서 + 이어진 사용자 지시), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함.
 

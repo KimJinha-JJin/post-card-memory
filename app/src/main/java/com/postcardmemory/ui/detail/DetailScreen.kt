@@ -58,21 +58,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Texture
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -138,6 +131,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -1677,15 +1671,16 @@ fun DetailScreen(
     val customizationPageLabels = remember {
         listOf("사진", "배경", "글귀", "스티커", "테이프", "도장", "낙서")
     }
+    // 102일차: 기능마다 잡지에서 오려낸 인쇄 삽화(drawable-nodpi/editor_cutout_*.png).
     val customizationPageIcons = remember {
         listOf(
-            Icons.Default.Image,
-            Icons.Default.Wallpaper,
-            Icons.Default.TextFields,
-            Icons.Default.EmojiEmotions,
-            Icons.Default.Texture,
-            Icons.Default.Verified,
-            Icons.Default.Draw
+            R.drawable.editor_cutout_photo,
+            R.drawable.editor_cutout_background,
+            R.drawable.editor_cutout_text,
+            R.drawable.editor_cutout_sticker,
+            R.drawable.editor_cutout_tape,
+            R.drawable.editor_cutout_stamp,
+            R.drawable.editor_cutout_doodle
         )
     }
 
@@ -6808,11 +6803,18 @@ fun DetailScreen(
         }
 
         if (postcard != null && !isFocusPreviewMode) {
+            // 102일차: 하단 편집 메뉴 바닥에도 엽서 바깥과 같은 종이를 깐다. 무늬 기준점을 화면
+            // 종이와 맞춰(이 영역의 위치만큼 옮김) 경계에서 섬유가 끊겨 보이지 않게 한다.
+            var editorDockOffsetInRoot by remember { mutableStateOf(Offset.Zero) }
+
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(ScreenBackgroundGray)
+                    .onGloballyPositioned {
+                        editorDockOffsetInRoot = it.positionInParent()
+                    }
+                    .editorPaperBackground(editorPaperTile) { editorDockOffsetInRoot }
                     .navigationBarsPadding()
                     .padding(top = 4.dp, bottom = 8.dp),
                 contentAlignment = Alignment.Center
@@ -7115,15 +7117,26 @@ private val EDITOR_PAPER_TILE_SIZE = 360.dp
  * GalleryPaperBackground와 같은 타일·같은 문법 — 같은 밑색을 먼저 칠하고
  * 타일을 가로·세로 같은 배율로만 줄여 반복한다. 엽서 캔버스와 저장·공유
  * 이미지에는 들어가지 않는다.
+ *
+ * 102일차: 하단 편집 메뉴 바닥에도 같은 종이를 깐다. [patternOrigin]은 이 영역이 화면
+ * 종이 기준점에서 떨어진 거리로, 그만큼 무늬를 거꾸로 옮겨 두 영역의 섬유가 이어지게 한다.
+ * 그리기 단계에서만 읽으므로 위치가 바뀌어도 다시 그리기만 한다.
  */
-private fun Modifier.editorPaperBackground(tile: ImageBitmap): Modifier =
+private fun Modifier.editorPaperBackground(
+    tile: ImageBitmap,
+    patternOrigin: () -> Offset = { Offset.Zero }
+): Modifier =
     drawWithCache {
         val shader = ImageShader(tile, TileMode.Repeated, TileMode.Repeated)
         val scale = EDITOR_PAPER_TILE_SIZE.toPx() / tile.width
-        shader.setLocalMatrix(android.graphics.Matrix().apply { setScale(scale, scale) })
+        val matrix = android.graphics.Matrix()
         val brush = ShaderBrush(shader)
 
         onDrawBehind {
+            val origin = patternOrigin()
+            matrix.setScale(scale, scale)
+            matrix.postTranslate(-origin.x, -origin.y)
+            shader.setLocalMatrix(matrix)
             drawRect(ScreenBackgroundGray)
             drawRect(brush)
         }

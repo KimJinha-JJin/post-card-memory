@@ -56,7 +56,7 @@ class EditorBottomTabBarStructureTest {
         val expectedParams = listOf(
             "selectedPage: Int",
             "labels: List<String>",
-            "icons: List<ImageVector>",
+            "icons: List<Int>",
             "enabled: Boolean",
             "onTabSelected: (Int) -> Unit"
         )
@@ -66,6 +66,42 @@ class EditorBottomTabBarStructureTest {
                 componentText.contains(param)
             )
         }
+    }
+
+    /**
+     * 102일차: 상위 기능 7개는 Material 아이콘이 아니라 잡지 오림 삽화를 쓴다. 기능명
+     * 순서와 그림 순서가 1:1로 맞물려야 하므로 둘 다 순서까지 고정한다. 그림은 장식이고
+     * 칸 전체가 "<기능명> 편집"을 알리는 접근성 계약도 함께 지킨다.
+     */
+    @Test
+    fun customizationTabs_useCutoutIllustrationsInLabelOrder() {
+        assertTrue(
+            "상위 기능명 7개와 순서가 유지돼야 함",
+            detailScreenText.contains(
+                """listOf("사진", "배경", "글귀", "스티커", "테이프", "도장", "낙서")"""
+            )
+        )
+        val expectedCutouts = listOf(
+            "photo", "background", "text", "sticker", "tape", "stamp", "doodle"
+        ).map { "R.drawable.editor_cutout_$it" }
+        val positions = expectedCutouts.map { detailScreenText.indexOf(it) }
+        assertTrue(
+            "오림 삽화 7개가 모두 아이콘 목록에 있어야 함: $positions",
+            positions.all { it >= 0 }
+        )
+        assertEquals(
+            "오림 삽화 순서가 기능명 순서와 같아야 함",
+            positions.sorted(),
+            positions
+        )
+        assertFalse(
+            "상위 기능줄이 Material 아이콘으로 돌아가지 않아야 함",
+            componentText.contains("ImageVector") || componentText.contains("Icon(")
+        )
+        assertTrue(
+            "칸 전체가 기능명을 알리는 접근성 설명을 유지해야 함",
+            componentText.contains("contentDescription = \"\$pageLabel 편집\"")
+        )
     }
 
     @Test
