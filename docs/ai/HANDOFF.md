@@ -1,4 +1,40 @@
-# HANDOFF — 102일차: 편집 상위 기능줄 잡지 오림 삽화 + 하단 라벨·갤러리 월 라벨 바랜 갈색 + 하단 메뉴 바닥 종이 질감
+# HANDOFF — 103일차: 이미지 자원 전수 감사 + IMAGE-ASSET-MAP.md
+
+확인일: 2026-10-14. 수동 표준 모드(103일차 작업지시서), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함.
+
+- **시작 상태:** `feature/photo-sticker`, HEAD `d9d7a0a`, local/origin 0/0, tracked clean, `git diff --check` 통과, 최근 CI 3회 success(`38375538961` 등). 보호 untracked 3종 미수정·미stage.
+- **한 일:** 조사 + 신규 문서 `docs/ai/IMAGE-ASSET-MAP.md`만 작성. 이미지·production·test 코드 변경 0건(리사이즈·변환·삭제·이름 변경·decode 변경 없음).
+- **핵심 사실(상세는 지도 문서):**
+  - 앱 이미지 31장(PNG 31, `drawable` 5 + `drawable-nodpi` 26), 원본 42.94MB.
+  - 로컬 release APK 59.55MB 중 앱 이미지 40.71MB(68.4%). 이 로컬 빌드에는 보호 untracked fiber 타일이 들어 있음.
+  - 완전 중복 0건, 동적 lookup 0건. 미사용 의심 `ic_launcher_foreground.png`, 보호 `postcard_paper_fiber_tile.png`.
+  - 큰 PNG는 원본 decode 시 장당 약 6.29MB. 갤러리 첫 화면에 바로가기 손 5장·시계 3장·종이 타일·월 라벨 띠가 동시에 원본 decode됨(계산 추정 약 63MB, 실측 아님).
+  - 도장 실루엣 4장은 `drawable/`(mdpi)이라 밀도만큼 확대 decode되며, exporter와 같은 자산을 씀.
+- **강한 결합:**
+  - `gallery_date_paper_strip`: 갤러리 + 하단 선택줄, crop 좌표가 2파일에 있음.
+  - `quick_select_*`: 원본 px 블록 좌표에 묶임.
+  - `editor_label_peek`: crop 좌표에 묶임.
+  - 도장 실루엣: 화면 + export.
+  - `seal_stamp_hand`: 도장 + 첫 방문 인트로.
+- **최적화 후보 등급:**
+  - A: cutout 7장(sample 상수와 짝), 시계 3장, 달력 리본.
+  - B: 바로가기 손 5장, 월 라벨 띠, 도장 실루엣, 앱 아이콘, 빠끔 얼굴.
+  - C/D: 나머지(종이 타일·fiber는 D).
+- **검증:** 문서-only이므로 테스트·빌드 재실행 안 함. `git diff --check`, 문서 검토, `git status` 확인. 실기기 연결 없음(밀도·meminfo 미실측). 오늘 APK 재빌드 안 함(10-13 로컬 빌드 기준).
+- **TEST-COVERAGE-MAP:** 변경 없음(테스트 변화 없음).
+- **독립 상태:**
+  - 구현(문서) 완료.
+  - 자동 검증은 문서-only라 diff/status 확인만 함.
+  - 실기기 QA 불필요(앱 변경 없음).
+  - repository HANDOFF 최신화.
+  - commit·push 미승인·미실행.
+- **사용자 데이터:** 무관.
+- **다음 후보(실행 승인 아님):**
+  - A등급 1순위: cutout 7장 축소 + `EDITOR_CUTOUT_SAMPLE` 조정.
+  - 손 5장은 "자산 축소 vs decode 축소" 방식 결정 필요.
+  - 메모리 후보는 실기기 meminfo 실측을 먼저 권장.
+
+## 102일차: 편집 상위 기능줄 잡지 오림 삽화 + 하단 라벨·갤러리 월 라벨 바랜 갈색 + 하단 메뉴 바닥 종이 질감
 
 확인일: 2026-10-13. 수동 표준 모드(102일차 작업지시서 + 이어진 사용자 지시), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함.
 
