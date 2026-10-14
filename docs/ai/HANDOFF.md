@@ -32,7 +32,47 @@
 - **다음 후보(실행 승인 아님):**
   - A등급 1순위: cutout 7장 축소 + `EDITOR_CUTOUT_SAMPLE` 조정.
   - 손 5장은 "자산 축소 vs decode 축소" 방식 결정 필요.
-  - 메모리 후보는 실기기 meminfo 실측을 먼저 권장.
+  - 메모리 후보는 실기기 meminfo 실측을 먼저 권장. → 아래 후속에서 실측 완료.
+- **Git:** 감사 문서는 `063bb82`로 commit·push, CI run `38530190724` 성공.
+
+### 103일차 후속: 실기기 메모리 실측 (2026-10-14 16:59~17:07)
+
+- **방식:**
+  - 실사용 기기 SM-S936N 1대(`adb devices -l`로 확인), 450dpi(2.8125x), 설치된 debug 빌드(10-13 18:00 설치, HEAD와 동일한지는 미확인, 이미지 자산은 동일).
+  - PC에서 3초 간격으로 `dumpsys meminfo com.postcardmemory`를 연속 기록하고, 사용자가 알려 준 화면 전환 시각을 marker로 붙였다. 화면마다 약 20초 머물렀다.
+  - 경로: 갤러리 → 부채 → 갤러리 → 편집 → 도장 패널 → 갤러리 → 달력 → 갤러리. **2바퀴, 샘플 139개, PID 13993 유지.**
+- **안전 조건:**
+  - 승인된 읽기 전용 명령만 실행(`devices -l`, `pidof`, `dumpsys meminfo`, `wm density`, `dumpsys package`).
+  - install·uninstall·pm clear·force-stop·kill·trim-memory·dumpheap·run-as·설정 변경·Profiler·gfxinfo는 미사용.
+  - 기기 쪽 쓰기는 편집 화면 이탈 시 앱의 정상 초안 저장뿐(사용자 허용). 측정용 데이터 생성·수정 0.
+  - 원본 로그는 PC scratchpad에만 있고 커밋하지 않음.
+- **해석 기준:** Bitmap(malloced) 총량, Native Heap Alloc, Graphics. TOTAL PSS는 swap이 돌아오는 영향(SWAP PSS 약 104→52MB)으로 보조값으로만 사용.
+- **핵심 결과:**
+  - 갤러리 Bitmap **72.0MB**(원본 decode 큰 그림 12장 합과 일치). 바로가기 손 5장 약 30MB, 시계 3장 약 18MB.
+  - 편집 화면 Bitmap 13.8MB(갤러리 대비 약 58MB 감소). 갤러리로 돌아올 때마다 큰 PNG들을 다시 decode함(왕복 decode 비용 가능성, 체감 미측정).
+  - 정적 캐시는 갤러리 복귀 후 +3.4MB가 남고, 2바퀴째 추가 증가 없음(누수성 징후 없음).
+- **맞은 추정:**
+  - 갤러리 그림 상주(약 63MB 추정 ≈ 실측 10장분).
+  - 바로가기 손 항상 상주(부채 열기 전후 Bitmap 변화 0).
+  - 편집 화면 약 10MB + 기타.
+  - 정적 캐시 약 3.5MB.
+- **정정된 추정:**
+  - 달력 종이·리본은 달력을 열 때가 아니라 **갤러리에서 이미 상주**한다. 달력을 열 때 Bitmap 0, Graphics 약 +26.6MB, 닫은 뒤에도 약 +19MB 잔존.
+  - 밀도는 3x가 아니라 2.8125x다(표시 px 약 6% 작음, 등급 불변).
+- **미측정 유지:**
+  - 도장 실루엣의 밀도 확대 decode(패널만 열기로는 발생 안 함 → MEM-OPT/REVIEW 유지).
+  - 순간적인 손 연출, release 빌드, GPU 내역(gfxinfo는 후속 판단).
+- **문서:** `IMAGE-ASSET-MAP.md`에 8절(실측)을 추가하고, 0·2·5·6절에 실측 주석과 달력 정정을 반영했다. 이미지·production·test 변경 0. TEST-COVERAGE-MAP 변경 없음.
+- **독립 상태:**
+  - 실기기 관찰(메모리 실측) 완료.
+  - 자동 검증은 문서-only라 `git diff --check`만 함.
+  - 실기기 QA 불필요.
+  - repository HANDOFF 최신화.
+  - **commit·push 미승인·미실행.**
+- **다음 최적화 우선순위(실행 승인 아님):**
+  - 메모리: 바로가기 손 5장(방식 결정 먼저) → 시계 3장 → 달력 리본.
+  - APK: cutout 7장(A).
+  - 달력이 갤러리에 상주하는 이유(drawer 구성 시점)는 구조 문제일 수 있어 별도 조사 대상.
 
 ## 102일차: 편집 상위 기능줄 잡지 오림 삽화 + 하단 라벨·갤러리 월 라벨 바랜 갈색 + 하단 메뉴 바닥 종이 질감
 
