@@ -112,7 +112,8 @@ internal fun visitCountLabel(totalVisitDays: Int?): String =
 private val WeekendSaturday = SealInkNavy
 private val WeekendSunday = SealInkRed
 private val VisitCalendarOrnamentColor = InkSecondary.copy(alpha = 0.29f)
-// 96일차 후속: 하단 양끝 ୨୧ 자리에 붙인 신문 오림 리본. 자산(1448×1086)은 둘레에 투명 여백이 있어
+// 96일차 후속: 하단 양끝 ୨୧ 자리에 붙인 신문 오림 리본. 자산(104일차에 1448×1086 → 192×144로
+// 축소, 비율은 같은 4:3이라 아래 비율 상수는 그대로 맞다)은 둘레에 투명 여백이 있어
 // 리본 자체는 가운데 약 65%×42%다 — 이미지 폭 24dp면 리본은 약 16×8dp로 9sp 기호와 비슷하다.
 // 원본 비율·알파 그대로, 그림자 없음. 값은 실기기 QA로 다듬는 미감 값이다.
 private val VISIT_CALENDAR_BOTTOM_RIBBON_WIDTH = 24.dp

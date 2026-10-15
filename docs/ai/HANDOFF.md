@@ -1,4 +1,48 @@
-# HANDOFF — 103일차: 이미지 자원 전수 감사 + IMAGE-ASSET-MAP.md
+# HANDOFF — 104일차: 이미지 자원 1차 다이어트 + 같은 조건 실기기 메모리 재측정
+
+확인일: 2026-10-15. 수동 표준 모드(104일차 작업지시서 1·2부), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함. 3부(이미지 제작 표준·프롬프트·workflow)는 ChatGPT Work 몫이라 손대지 않음.
+
+- **시작 상태:** `feature/photo-sticker`, HEAD `a8603ca`, local/origin 0/0, tracked clean, `git diff --check` 통과. 보호 untracked 3종(`.codex-config.candidate.toml`, `.kotlin/`, `postcard_paper_fiber_tile.png`)은 미수정·미stage.
+- **한 일:**
+  - 그림 11장의 원본 해상도만 축소했다.
+    - cutout 7장: 1254² → 314²
+    - 시계 몸체: 1695×928 → 720×394
+    - 왼손: 1448×1086 → 480×360
+    - 커피잔 오른손: 1086×1448 → 450×600
+    - 달력 리본: 1448×1086 → 192×144
+  - 비율은 모두 유지했다. 축소는 premultiplied alpha와 HighQualityBicubic으로 했고, 알파 bbox 차이는 1px 미만이며 검은 테두리는 없다.
+  - 코드는 `EditorBottomTabBar.kt`의 `EDITOR_CUTOUT_SAMPLE`을 4 → 1로 바꿨다(이중 축소 방지, 화면 decode 해상도 동일). 나머지는 주석만 고쳤다(`VisitCalendarDrawer.kt` 비율 상수 `1448f/1086f`는 같은 4:3이라 유지).
+  - 제외 자산(quick select 손, 월 라벨 띠, 빠끔 얼굴, 도장 실루엣, 종이 texture)은 건드리지 않았다.
+- **결과(상세는 `IMAGE-ASSET-MAP.md` 9절):**
+  - **APK:** release 59,547,037 → 44,610,113 B(**−14.94MB, −25.1%**). debug 실제 항목 −16.02MB. debug 파일 크기는 증분 패키징 빈 공간 때문에 그대로다.
+  - **갤러리 Bitmap:** 72.0 → **50.9MB(−21.1MB)**. Native Heap Alloc 90.4 → 69.3MB. Graphics 119.2 → 103.7MB.
+  - **편집 Bitmap:** 13.8 → 13.9MB로 사실상 같다(의도대로).
+  - **갤러리 복귀:** 75.4 → 54.3MB. 정적 캐시 +3.4MB는 그대로다.
+  - **달력:** 열 때 Graphics +26.6 → +25.2MB. 닫은 뒤 잔존 +19 → +11.3MB.
+  - **2바퀴:** Bitmap·Native Alloc이 같은 구간에서 같다. 누수성 반복 증가 없음. Graphics는 달력을 연 뒤 GPU 캐시가 남는 모양으로, Before와 같은 패턴이다.
+- **측정 조건:**
+  - SM-S936N 450dpi. 사용자가 Android Studio로 덮어쓰기 설치했다(`firstInstallTime 10-05` 유지).
+  - 3초 간격 meminfo, 샘플 203개, 같은 경로 2바퀴. 측정 구간 PID 11268 유지(측정 시작 전 PID 6333 → 11268 변경 1회, marker 1 이전).
+  - 승인된 읽기 전용 adb 명령만 사용했다. 로그는 scratchpad에만 있다.
+- **검증:**
+  - 로컬 자동검증: `testDebugUnitTest` 96 suite / 902 tests 통과(실패 0), `assembleDebug`·`assembleDebugAndroidTest`·`assembleRelease` 성공, `git diff --check` 통과.
+  - 실사용 기기 instrumentation: 불필요(테스트 변화 없음).
+  - CI: 미실행(push 전).
+  - 실기기 감각 QA: **통과**(사용자, 편집 기능줄 7개·갤러리 시계·달력 리본 모두 이전과 같음).
+- **TEST-COVERAGE-MAP:** 변경 없음(테스트 추가·삭제·의미 변화 없음).
+- **사용자 데이터:** 무관(자산 해상도만 변경, 저장 형식·DB 영향 없음).
+- **독립 상태:**
+  - 구현 완료.
+  - 자동 검증 통과.
+  - 실기기 QA 완료.
+  - repository HANDOFF 최신화.
+  - commit·push: 사용자 승인(104일차 추가 작업지시서)으로 이 변경과 함께 commit·push. hash·CI 결과는 다음 기록에 남긴다.
+- **다음 후보(실행 승인 아님):**
+  - 갤러리 남은 상주 1순위는 바로가기 손 5장(약 30MB). `QUICK_SELECT_HAND_SOURCE_PX`·블록 좌표 결합 때문에 "자산 축소 vs decode 축소" 방식 결정이 먼저다.
+  - 그다음 월 라벨 띠(약 6MB, 두 화면 crop 결합).
+  - 달력 GPU 잔존·drawer 상주 원인 조사.
+
+## 103일차: 이미지 자원 전수 감사 + IMAGE-ASSET-MAP.md
 
 확인일: 2026-10-14. 수동 표준 모드(103일차 작업지시서), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함.
 

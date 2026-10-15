@@ -38,12 +38,13 @@ import androidx.compose.ui.unit.sp
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.SunsetGold
 
-// 102일차: 상위 기능 버튼의 그림은 잡지에서 오려낸 인쇄 삽화(PNG)다. 원본(1254×1254)은
-// 화면에서 20dp 남짓이라 1/4로 줄여 불러오고(장당 약 0.4MB), 투명 여백을 걷어낸 그림 영역만
+// 102일차: 상위 기능 버튼의 그림은 잡지에서 오려낸 인쇄 삽화(PNG)다. 화면에서 20dp 남짓이라
+// 104일차에 자산 자체를 예전 1/4 decode와 같은 314×314로 줄였다(원본 1254×1254). 그래서 더
+// 줄이지 않고 그대로 불러오며(장당 약 0.4MB, 다시 줄이면 이중 축소로 흐려진다), 투명 여백을 걷어낸 그림 영역만
 // 같은 상자([EDITOR_CUTOUT_BOX_WIDTH_DP]×[EDITOR_CUTOUT_BOX_HEIGHT_DP]) 안에 비율대로 맞춘다 —
 // 캔버스가 같아도 그림마다 여백이 달라 그대로 두면 크기가 들쭉날쭉해 보이기 때문이다.
 // 상자 크기는 실기기 QA로 다듬는 미감 값이다.
-private const val EDITOR_CUTOUT_SAMPLE = 4
+private const val EDITOR_CUTOUT_SAMPLE = 1
 private const val EDITOR_CUTOUT_ALPHA_THRESHOLD = 16
 private const val EDITOR_CUTOUT_BOX_WIDTH_DP = 32f
 private const val EDITOR_CUTOUT_BOX_HEIGHT_DP = 24f
