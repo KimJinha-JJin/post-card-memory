@@ -36,11 +36,43 @@
   - 자동 검증 통과.
   - 실기기 QA 완료.
   - repository HANDOFF 최신화.
-  - commit·push: 사용자 승인(104일차 추가 작업지시서)으로 이 변경과 함께 commit·push. hash·CI 결과는 다음 기록에 남긴다.
+  - commit·push 완료: `6576c16`(사용자 승인, 104일차 추가 작업지시서). CI run `38679238827` **success**(JVM tests, assembleDebug, assembleDebugAndroidTest).
 - **다음 후보(실행 승인 아님):**
   - 갤러리 남은 상주 1순위는 바로가기 손 5장(약 30MB). `QUICK_SELECT_HAND_SOURCE_PX`·블록 좌표 결합 때문에 "자산 축소 vs decode 축소" 방식 결정이 먼저다.
   - 그다음 월 라벨 띠(약 6MB, 두 화면 crop 결합).
   - 달력 GPU 잔존·drawer 상주 원인 조사.
+
+### 104일차 추가: quick select 손 5장 최적화 사전 조사 (읽기 전용, 구현 없음)
+
+- **범위:** production·이미지·상수·테스트 변경 0. 이 기록만 문서에 추가했다.
+- **자산:** `drawable-nodpi/quick_select_{camera,letter,river,sheep,checker}_hand.png` 5장.
+  - 모두 1254×1254 RGBA, 5.30MB(1.13~1.37MB).
+  - 투명 영역 71~77%. 그림 bbox는 모두 오른쪽 끝(x=1254)까지 닿는다(손목이 잘린 면).
+  - 다른 화면에서 쓰지 않는다(`GalleryScreen.kt` `handResId()` 1곳).
+- **로딩:**
+  - `GalleryQuickSelectHand`의 `ImageBitmap.imageResource` → 원본 1254² decode(장당 6.0MiB, 5장 약 30MiB).
+  - 손 5장은 부채가 닫혀 있어도 compose되고 실제로 그려진다. 닫힌 묶음(scale 0.8, 반지름 −72dp)이 화면 오른쪽 끝에 손잡이로 삐져나와 보이기 때문이다.
+  - 그래서 닫힘 상태에서도 decode되는 것은 의도된 시각 요구이고, 지연 로딩으로 없앨 수 없다.
+- **좌표 결합:**
+  - 블록 좌표 20개와 `QUICK_SELECT_HAND_SOURCE_PX = 1254f`는 "1254 단위 논리 좌표"로만 쓰인다.
+  - 모든 사용처가 `QUICK_SELECT_DP_PER_SOURCE_PX`(180dp/1254)나 분율(`blockCenter*Fraction`)로 dp·비율로 바뀐다. 해당 사용처는 회전축 `transformOrigin`, `translation`, 금색 테두리 offset/size, 터치 영역 offset/size, `quickSelectTouchHalfHeightDp`다.
+  - Bitmap의 실제 px 크기(`hand.width/height`)를 읽는 곳은 없다. `Image(bitmap, fillMaxSize)`가 180dp 상자에 맞춰 늘이거나 줄인다.
+  - 따라서 **정사각 canvas를 유지하면 PNG px를 줄여도 좌표 상수는 바꿀 필요가 없다.** 바꿀 것은 상수 주석뿐이다.
+- **추천(D안, 실행 승인 아님):**
+  - 5장을 같은 비율의 정사각 720×720으로 축소한다. 좌표 상수와 코드는 그대로 두고, `QUICK_SELECT_HAND_SOURCE_PX`의 의미를 "논리 좌표 단위"로 바꾸는 주석만 고친다.
+  - 예상: Bitmap 약 −20.1MiB(갤러리 50.9 → 약 30.8MB), APK 약 −3.5~4MB(추정).
+  - 표시는 180dp = 450dpi에서 506px이고, 720은 그 1.42배다(4x 기기에서 1.0배).
+- **TEST GAP:**
+  - 블록 좌표가 실제 PNG 그림의 종이 블록과 맞는지 검증하는 테스트가 없다.
+  - 금색 선택 테두리 위치와 렌더링을 검증하는 테스트가 없다.
+  - 닫힌 묶음의 실제 렌더링과 애니메이션 프레임을 검증하는 테스트가 없다.
+  - 기존 `GalleryQuickSelectFanTest`(15개)는 단계 전이, 탭 1회 실행, 부채 geometry, 이웃 터치 영역 비겹침을 논리 좌표로 보호한다. `GalleryViewSelectionStructureTest`는 자산 이름, 접근성 이름, dispatch를 보호한다.
+- **다음 작업 후보(별도 승인 필요):**
+  - 수정 대상: PNG 5장 + `GalleryQuickSelectFan.kt` 주석.
+  - 검증: JVM 전체 + 빌드.
+  - 실기기 QA: 닫힌 손잡이, 펼침, 선택 금색 테두리, 터치, 손 화질.
+  - 같은 방식으로 메모리를 다시 측정한다.
+- **Git:** 이 HANDOFF 추가분은 미커밋(commit 미승인).
 
 ## 103일차: 이미지 자원 전수 감사 + IMAGE-ASSET-MAP.md
 
