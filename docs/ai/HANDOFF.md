@@ -1,4 +1,38 @@
-# HANDOFF — 104일차: 이미지 자원 1차 다이어트 + 같은 조건 실기기 메모리 재측정
+# HANDOFF — 104일차 추가: quick select 손 5장 이미지 다이어트(D안) + 실기기 재측정
+
+확인일: 2026-10-15. 수동 표준 모드(104일차 추가 작업지시서), 담당 Claude Code. 내장 Task 도구는 없어서 진행 안내로 대신했다.
+
+- **시작:** `feature/photo-sticker`, HEAD `6576c16`, 0/0. 사전 조사 HANDOFF를 먼저 `57396c3`로 commit·push했고, CI run `38680045117` success.
+- **한 일:**
+  - `quick_select_{camera,letter,river,sheep,checker}_hand.png`: 1254² → 720², canvas 전체를 비례 축소(trim·위치·색 변경 없음).
+  - `GalleryQuickSelectFan.kt`: 주석만 수정. `QUICK_SELECT_HAND_SOURCE_PX = 1254f`는 논리 좌표 단위로 유지.
+  - 블록 좌표, 터치, 테두리, geometry, 애니메이션 코드는 변경 0.
+- **결과(상세: `IMAGE-ASSET-MAP.md` 9-2절):**
+  - 파일: 6.30MB → 2.10MB.
+  - release APK: 44,610,113 → **40,557,565 B(−4.05MB)**. 103일차부터 누계 −18.99MB.
+  - 갤러리 Bitmap: 72.0 → 50.9 → **30.8MB**(계산 예상과 KiB 단위로 일치).
+  - Native Alloc: 90.4 → 69.3 → **50.5MB**.
+  - 부채 닫힘/펼침 Bitmap 변화 0. 2바퀴 누수성 증가 없음. PID 3260 유지, 샘플 130개.
+- **검증:**
+  - 로컬 자동검증: JVM 96 suite / 902 tests 통과(`GalleryQuickSelectFanTest` 14, `GalleryViewSelectionStructureTest` 11 포함). `assembleDebug`·`assembleDebugAndroidTest`·`assembleRelease` 성공. `git diff --check` 통과.
+  - 실사용 기기 instrumentation: 불필요.
+  - 실기기 감각 QA: **통과**(닫힌 묶음, 펼침, 화질, 터치 5개, 금색 테두리 모두 이전과 같음).
+  - CI: commit 후 확인.
+- **TEST-COVERAGE-MAP:** 변경 없음(테스트 변화 없음). TEST GAP(블록 좌표↔그림 일치, 금색 테두리 렌더, 닫힌 묶음·애니메이션 렌더)은 그대로이며 육안 QA로 대신했다.
+- **사용자 데이터:** 무관.
+- **독립 상태:**
+  - 구현 완료.
+  - 자동 검증 통과.
+  - 실기기 QA 완료.
+  - repository HANDOFF 최신화.
+  - commit·push: 사용자 승인 범위(QA·측정 성공 후)로 진행한다.
+- **남은 이미지 후보(실행 승인 아님):**
+  - 월 라벨 띠 `gallery_date_paper_strip`: 갤러리 원본 decode 약 6MB, 두 화면 crop 좌표 결합.
+  - 도장 실루엣: 밀도 확대 decode, 미측정, exporter 공용.
+  - 앱 아이콘(APK 1.9MB), `editor_label_peek`(crop·sample 결합).
+  - 달력 GPU 잔존 원인 조사.
+
+## 104일차: 이미지 자원 1차 다이어트 + 같은 조건 실기기 메모리 재측정
 
 확인일: 2026-10-15. 수동 표준 모드(104일차 작업지시서 1·2부), 담당 Claude Code. 이 세션에는 내장 Task 도구가 없어 진행 안내로 대신함. 3부(이미지 제작 표준·프롬프트·workflow)는 ChatGPT Work 몫이라 손대지 않음.
 
@@ -66,7 +100,7 @@
   - 블록 좌표가 실제 PNG 그림의 종이 블록과 맞는지 검증하는 테스트가 없다.
   - 금색 선택 테두리 위치와 렌더링을 검증하는 테스트가 없다.
   - 닫힌 묶음의 실제 렌더링과 애니메이션 프레임을 검증하는 테스트가 없다.
-  - 기존 `GalleryQuickSelectFanTest`(15개)는 단계 전이, 탭 1회 실행, 부채 geometry, 이웃 터치 영역 비겹침을 논리 좌표로 보호한다. `GalleryViewSelectionStructureTest`는 자산 이름, 접근성 이름, dispatch를 보호한다.
+  - 기존 `GalleryQuickSelectFanTest`(14개, 104일차 추가 작업 때 실행 결과로 정정)는 단계 전이, 탭 1회 실행, 부채 geometry, 이웃 터치 영역 비겹침을 논리 좌표로 보호한다. `GalleryViewSelectionStructureTest`는 자산 이름, 접근성 이름, dispatch를 보호한다.
 - **다음 작업 후보(별도 승인 필요):**
   - 수정 대상: PNG 5장 + `GalleryQuickSelectFan.kt` 주석.
   - 검증: JVM 전체 + 빌드.

@@ -61,8 +61,9 @@ internal fun GalleryQuickSelectPhase.onSelect(): Pair<GalleryQuickSelectPhase, B
     if (acceptsSelection) GalleryQuickSelectPhase.CLOSING to true else this to false
 
 /**
- * 손 자산과 기존 기능의 1:1 매핑. 블록 좌표는 원본 PNG(1254×1254 px) 안에서
- * 실측한 사각형 종이 블록의 경계다. [slotFromBottom] 0이 맨 아래(엄지에 가장
+ * 손 자산과 기존 기능의 1:1 매핑. 블록 좌표는 손 그림 정사각 canvas를
+ * [QUICK_SELECT_HAND_SOURCE_PX] 단위로 본 논리 좌표에서 잰 사각형 종이 블록의 경계다
+ * (88일차 원본 1254×1254 px에서 실측). [slotFromBottom] 0이 맨 아래(엄지에 가장
  * 가까운 손잡이 쪽)이고, 부채는 그 위로 펼쳐진다.
  */
 internal enum class GalleryQuickSelectItem(
@@ -84,6 +85,11 @@ internal enum class GalleryQuickSelectItem(
 }
 
 internal const val QUICK_SELECT_HAND_COUNT = 5
+/**
+ * 손 자산의 논리 좌표 기준(정사각 한 변). 실제 PNG pixel 크기와 같을 필요는 없다 —
+ * 104일차에 PNG를 720×720으로 줄였다. 블록·터치 영역은 이 좌표를
+ * [QUICK_SELECT_HAND_SIZE_DP] 렌더 영역에 비례 변환해 쓰므로 canvas가 정사각이면 된다.
+ */
 internal const val QUICK_SELECT_HAND_SOURCE_PX = 1254f
 
 /** 손 PNG 한 장(정사각형)의 표시 크기. */

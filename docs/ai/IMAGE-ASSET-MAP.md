@@ -92,11 +92,11 @@
 | home_clock_collage_body | nodpi | 1695×928 RGBA → **720×394**(104일차) | 2.24 / 2.18MB | 갤러리 상단 레트로 시계 몸체 | `GalleryRetroClock.kt` `GalleryRetroClock` | 단일 | `painterResource`(원본 decode) | 큼 | 6.29MB(갤러리 상주, **실측 확인: 시계 3장 약 18MB**, 8절) | APK-OPT, MEM-OPT |
 | home_clock_left_snooze_hand | nodpi | 1448×1086 RGBA → **480×360**(104일차) | 1.72 / 1.67MB | 시계 위 왼손 | 같음 | 단일 | `painterResource` | 큼 | 6.29MB(상주) | APK-OPT, MEM-OPT |
 | home_right_hand_coffee_cup | nodpi | 1086×1448 RGBA → **450×600**(104일차) | 2.36 / 2.29MB | 시계 옆 커피잔 든 오른손(김 애니메이션 아래) | 같음 | 단일 | `painterResource`, `requiredSize` 후 위쪽 108dp만 보이게 clip | 큼 | 6.29MB(상주) | APK-OPT, MEM-OPT |
-| quick_select_camera_hand | nodpi | 1254² RGBA | 1.13 / 1.09MB | 갤러리 바로가기 부채: 카메라 | `GalleryScreen.kt` `handResId()` → `GalleryQuickSelectHand` | 단일 | `ImageBitmap.imageResource` | 중 | 6.29MB(**닫힌 상태에서도 항상 그려져 상주**. 실측: 부채를 열어도 Bitmap 변화 0, 5장 약 30MB, 8절) | MEM-OPT |
-| quick_select_letter_hand | nodpi | 1254² RGBA | 1.37 / 1.33MB | 부채: 미래 우체통 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
-| quick_select_river_hand | nodpi | 1254² RGBA | 1.13 / 1.09MB | 부채: 연못 놀이 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
-| quick_select_sheep_hand | nodpi | 1254² RGBA | 1.34 / 1.30MB | 부채: 양 목장 놀이 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
-| quick_select_checker_hand | nodpi | 1254² RGBA | 1.32 / 1.28MB | 부채: 경주 놀이 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
+| quick_select_camera_hand | nodpi | 1254² → **720²**(104일차 추가) RGBA | 1.13 / 1.09MB | 갤러리 바로가기 부채: 카메라 | `GalleryScreen.kt` `handResId()` → `GalleryQuickSelectHand` | 단일 | `ImageBitmap.imageResource` | 중 | 6.29MB(**닫힌 상태에서도 항상 그려져 상주**. 실측: 부채를 열어도 Bitmap 변화 0, 5장 약 30MB, 8절) | MEM-OPT |
+| quick_select_letter_hand | nodpi | 1254² → **720²**(104일차 추가) RGBA | 1.37 / 1.33MB | 부채: 미래 우체통 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
+| quick_select_river_hand | nodpi | 1254² → **720²**(104일차 추가) RGBA | 1.13 / 1.09MB | 부채: 연못 놀이 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
+| quick_select_sheep_hand | nodpi | 1254² → **720²**(104일차 추가) RGBA | 1.34 / 1.30MB | 부채: 양 목장 놀이 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
+| quick_select_checker_hand | nodpi | 1254² → **720²**(104일차 추가) RGBA | 1.32 / 1.28MB | 부채: 경주 놀이 | 같음 | 단일 | 같음 | 중 | 6.29MB(상주) | MEM-OPT |
 | gallery_pick_hand | nodpi | 1254² RGBA | 1.42 / 1.38MB | 흔들기 → 랜덤 엽서 오버레이에서 엽서 귀퉁이를 집은 손 | `GalleryRandomPostcardOverlay.kt` `GalleryRandomPostcardOverlay` | 단일 | `imageResource` → Canvas `drawImage` | 중 | 6.29MB(오버레이가 떠 있는 동안) | KEEP |
 
 ### 2-2. 방문 달력(갤러리 왼쪽 drawer)
@@ -154,7 +154,7 @@
 | seal_stamp_hand | 1파일(오버레이) ← 2호출(`DetailScreen`, `AppIntroScreen`) | 2 | 2(도장 찍기, 첫 방문 인트로 방문 소인) | 의미가 다른 재사용 | 같은 손, 같은 anchor, 같은 300dp |
 | sticker_tweezer_hand | 1파일 ← 3래퍼(사진·글귀·라벨 스티커) | 1 | 3 | 공용 재사용 | 같은 손 |
 | 도장 실루엣 4장 | 2파일(`SealShapes`, `PostcardImageExporter`) | 편집 여러 곳 + 저장본 | 도장 모양, 저장·공유 | **강한 결합**(화면과 exporter가 같은 자산) | 화면은 Compose `tint`를 쓰고, export는 `PorterDuff SRC_IN`과 잉크 결손 erase mask를 쓴다. 자산을 바꾸면 이미 저장된 엽서를 **다시 내보낼 때** 결과가 바뀐다 |
-| quick_select_* 5장 | `GalleryQuickSelectFan.kt` 블록 좌표 | 1 | 5 | **강한 결합**(원본 px 좌표) | 블록 사각형 좌표가 원본 1254px 기준 숫자(`QUICK_SELECT_HAND_SOURCE_PX = 1254f`)다. 해상도·구도를 바꾸면 블록 테두리(활성 표시)와 터치 영역 좌표를 다시 재야 한다 |
+| quick_select_* 5장 | `GalleryQuickSelectFan.kt` 블록 좌표 | 1 | 5 | **강한 결합**(원본 px 좌표) → **104일차 정정: 논리 좌표 결합** | 블록 사각형 좌표가 원본 1254px 기준 숫자(`QUICK_SELECT_HAND_SOURCE_PX = 1254f`)다. 해상도·구도를 바꾸면 블록 테두리(활성 표시)와 터치 영역 좌표를 다시 재야 한다 → 정정: 1254는 Bitmap px를 읽지 않는 **논리 좌표 단위**다. 모든 사용처가 `180dp/1254` 비례나 분율로 바뀐다. 정사각 canvas와 그림 구도만 지키면 PNG 해상도는 자유롭다(9-2절). **구도(crop·trim·위치)를 바꾸면** 여전히 블록 좌표를 다시 재야 한다 |
 | editor_label_peek | `PaperLabelSubcategoryNav.kt` crop 상수 | 1 | 1 | **강한 결합**(원본 px 좌표) | crop `(376,352)/720×656`과 `inSampleSize 4`가 짝이다 |
 | editor_cutout_* 7장 | `EditorBottomTabBar.kt` | 1 | 7 | 단일 사용, 약한 결합 | 알파 bbox를 자동으로 잘라 32×24dp 상자에 맞춘다(좌표 상수 없음). 단 `EDITOR_CUTOUT_SAMPLE = 4`가 원본 1254px을 전제로 한 값이다 → 104일차: 자산 314²와 짝인 `1`로 변경 |
 | visit_calendar_paper | 1파일, 3곳 | 1 | 2(월 페이지, picker 조각) | 공용(달력 안) | 페이지는 cover-crop, 조각은 seed로 무작위 crop |
@@ -206,7 +206,7 @@
 | home_clock_collage_body | 1695×928 | 168×92dp | 504×276 | 원본 | 3.4배 | 과대 → 104일차 720×394: 1.43배(4x 기기에서도 1배 이상) |
 | home_clock_left_snooze_hand | 1448×1086 | 112×84dp | 336×252 | 원본 | 4.3배 | 과대 → 104일차 480×360: 1.43배 |
 | home_right_hand_coffee_cup | 1086×1448 | 105×140dp(위 108dp만 보임) | 316×421 | 원본 | 3.4배 | 과대 → 104일차 450×600: 1.42배 |
-| quick_select_*(5) | 1254² | 180dp 정사각 | 540 | 원본 | 2.3배 | 과대(5장 상주) |
+| quick_select_*(5) | 1254² | 180dp 정사각 | 540 | 원본 | 2.3배 | 과대(5장 상주) → 104일차 720²: 450dpi 506px의 1.42배 |
 | visit_calendar_newspaper_ribbon | 1448×1086(리본 948×463) | 24×18dp(실제 리본 약 16×8dp) | 72×54 | 원본 | **약 20배** | 크게 과대 → 104일차 192×144: 약 2.7배 |
 | gallery_paper_tile | 1254² | 360dp 타일 | 1080 | 원본 | 1.16배 | 적정 |
 | visit_calendar_paper | 1122×1402 | drawer 폭 304dp 안 월 페이지(cover-crop) | 약 840~900 폭 | 원본 | 약 1.3배 | 적정 |
@@ -248,7 +248,7 @@
 | **A → 완료(104일차, 9절)** | editor_cutout_* 7장 | APK 9.5MB를 32×24dp에 쓴다. 알파 bbox 자동 자르기라 좌표 상수가 없다. 화면은 1곳 | APK 약 −8~9MB(1/4 축소 기준). RAM 변화 없음 | `EDITOR_CUTOUT_SAMPLE`을 새 해상도에 맞춰야 한다(그대로 두면 이중 축소로 흐려짐). 상위 기능줄 7개를 육안 QA |
 | **A → 완료(104일차, 9절)** | home_clock_* 3장 | APK 6.1MB, 3.4~4.3배 과대, **갤러리 첫 화면에 상주**(실측 Bitmap 약 18MB, 8절). 표시 크기가 dp 상수라 원본 px에 묶이지 않는다 | APK 약 −4~5MB, RAM 약 −14MB(표시 px의 약 1.3~1.5배로 축소 시) | 비율 유지 필수(숫자창 위치가 dp로 몸체 비율에 맞춰져 있음). 갤러리 상단 육안 QA(하프톤 결) |
 | **A → 완료(104일차, 9절)** | visit_calendar_newspaper_ribbon | 약 20배 과대. **갤러리에 상주하는 6.3MB**(실측 정정: drawer가 닫혀 있어도 decode됨) | RAM 약 −6MB, APK 약 −0.7MB | 비율 `1448f/1086f` 유지 또는 상수 갱신. 육안 QA는 짧게 |
-| **B** | quick_select_* 5장 | 갤러리에 상주하는 RAM 31.5MB(가장 큼, 실측 Bitmap 약 30MB, 부채를 열어도 변화 0), 2.3배 과대 | RAM 약 −20MB 이상, APK 약 −3~4MB | 블록 좌표가 원본 px(1254) 기준이라 자산을 줄이면 `QUICK_SELECT_HAND_SOURCE_PX`와 블록 20개 숫자를 함께 바꾸거나, 자산은 두고 decode만 줄이는 코드 경로가 필요하다. 부채 펼침·활성 테두리·터치 영역 실기기 QA |
+| **B → 완료(104일차 추가, 9-2절)** | quick_select_* 5장 | 갤러리에 상주하는 RAM 31.5MB(가장 큼, 실측 Bitmap 약 30MB, 부채를 열어도 변화 0), 2.3배 과대 | RAM 약 −20MB 이상, APK 약 −3~4MB | 블록 좌표가 원본 px(1254) 기준이라 자산을 줄이면 `QUICK_SELECT_HAND_SOURCE_PX`와 블록 20개 숫자를 함께 바꾸거나, 자산은 두고 decode만 줄이는 코드 경로가 필요하다. 부채 펼침·활성 테두리·터치 영역 실기기 QA |
 | **B** | gallery_date_paper_strip | 갤러리에서 원본 decode 6.3MB, 약 4.9배 과대 | RAM 약 −6MB(갤러리 decode를 선택줄과 같은 1/4로 할 때) | **두 화면 강한 결합**: 자산 자체를 바꾸면 두 파일의 자르기 좌표와 선택줄 sample을 같이 바꿔야 한다. 메모리만 노리면 갤러리 decode 경로만 바꾸는 코드 변경(오늘 금지 항목). 갤러리 월 라벨 + 하단 선택줄 5탭 QA |
 | **B** | 도장 실루엣 4장 | APK 영향은 없음. `drawable/`(mdpi) 위치 때문에 밀도 확대 decode(3x 기준 장당 약 3~8MB, 계산 추정). 10-14 실측 경로(도장 패널만 열기)에서는 이 decode가 발생하지 않아 **미측정** | RAM 수~20MB대(패널을 열 때) | **화면 + 저장·공유 exporter 공용**: 위치나 decode를 바꾸면 export 결과 해상도가 달라질 수 있다. 실측(기기 밀도, meminfo)부터 하고, 저장본 비교 QA |
 | **B** | postcard_app_icon_hand_envelope | APK 1.9MB, 런처 432px 대비 2.9배 | APK 약 −1.5MB | 런처 아이콘은 시스템 전체에 보인다. 런처 캐시·둥근 마스크 QA |
@@ -418,3 +418,62 @@
   - 편집 → 갤러리 전환 중 샘플 1개에서 Bitmap 66,305 KiB가 잡혔다. 편집 그림과 갤러리 그림이 잠깐 함께 있는 순간이고, 다음 샘플에서 55,567 KiB로 돌아왔다.
   - 갤러리 → 편집 전환 중에도 44,915 KiB 같은 중간값이 잡혔다. 두 경우 모두 일시적이다.
 - 남은 갤러리 상주 큰 그림(제외 자산): 바로가기 손 5장 약 30MB, 종이 타일 약 6MB, 월 라벨 띠 약 6MB, 달력 종이 약 6MB.
+
+## 9-2. 104일차 추가: quick select 손 5장 (D안) 결과 (2026-10-15)
+
+### 바꾼 것
+
+- 손 5장의 1254² canvas 전체를 그대로 **720²**로 비례 축소했다. 방법은 9절과 같다.
+  - trim·crop·위치·색·필터는 바꾸지 않았다.
+  - 알파 bbox 차이는 0.1% 미만이고, 손목 잘린 면은 그대로 오른쪽 끝에 있다.
+- **`QUICK_SELECT_HAND_SOURCE_PX = 1254f`는 그대로 두고, 의미를 "논리 좌표 단위"로 주석에 적었다.**
+  - 블록 좌표 20개, 터치 영역, 회전축, 금색 테두리, 부채 geometry·애니메이션 코드는 변경이 없다.
+  - Bitmap의 실제 px를 읽는 코드가 없어서 그림만 180dp 상자에 맞춰 그려진다.
+
+| 손 | 이전 px | 이후 px | 이전 파일 | 이후 파일 | Bitmap(계산) |
+|---|---|---|---|---|---|
+| camera | 1254² | 720² | 1,129,528 B | 374,099 B | 6,142.6 → 2,025 KiB |
+| letter | 1254² | 720² | 1,374,450 B | 458,394 B | 같음 |
+| river | 1254² | 720² | 1,131,731 B | 371,354 B | 같음 |
+| sheep | 1254² | 720² | 1,342,899 B | 444,818 B | 같음 |
+| checker | 1254² | 720² | 1,317,522 B | 447,014 B | 같음 |
+| **합계** | | | **6,296,130 B** | **2,095,679 B** | 30,713 → 10,125 KiB(−20,588 KiB) |
+
+### 실기기 QA (사용자, 통과)
+
+- 닫힌 손잡이 묶음, 펼침 애니메이션, 5장 화질(종이 블록·손가락·오림 경계·인쇄 디테일), 손 5개 각각 터치·기능 실행, 선택 금색 테두리 위치를 확인했다.
+- 모두 **이전과 같았다.**
+- 이 항목들은 자동 테스트 공백(TEST GAP)이라 육안 QA로 확인했다.
+
+### APK
+
+| | 1차 다이어트 후 | 손 축소 후 | 감소 |
+|---|---|---|---|
+| release unsigned | 44,610,113 B | **40,557,565 B** | **−4,052,548 B(−4.05MB)** |
+| debug 실제 항목 합계 | 53,867,425 B | 49,667,010 B | −4.20MB |
+
+- 103일차부터 합치면 release는 59,547,037 → 40,557,565 B(**−18.99MB, −31.9%**)다.
+
+### 실기기 메모리 (같은 방식, 3번째 측정)
+
+- 조건: SM-S936N, 450dpi, 사용자가 Android Studio로 덮어쓰기 설치(`lastUpdateTime 13:21`, `firstInstallTime 10-05` 유지).
+- 3초 간격 측정, 같은 경로 2바퀴, 샘플 130개. **PID 3260이 처음부터 끝까지 유지됐다.** 승인된 읽기 전용 adb만 썼다.
+
+| 구간 | 103일차 | 104일차 1차 | **손 축소 후** |
+|---|---|---|---|
+| 갤러리 Bitmap | 72.0MB | 50.9MB | **30.8MB(31,516 KiB, 계산 예상과 정확히 일치)** |
+| 갤러리 Native Alloc | 90.4MB | 69.3MB | **50.5MB** |
+| 갤러리 Graphics | 119.2MB | 103.7MB | 83.4MB |
+| 편집 Bitmap | 13.8MB | 13.9MB | 13.9MB |
+| 갤러리 복귀 Bitmap | 75.4MB | 54.3MB | **34.2MB**(정적 캐시 +3,463 KiB 그대로) |
+| 갤러리 복귀 Native Alloc | 97.2MB | 75.8MB | 58.2MB |
+
+- **부채 닫힘 / 펼침:**
+  - 1바퀴: Bitmap 30.8 / 30.8MB(변화 0), Native 50.5 / 50.6MB.
+  - 2바퀴: Bitmap 34.2 / 34.2MB, Native 58.3 / 58.3MB.
+  - "닫힌 상태에서 이미 5장 decode, 펼쳐도 추가 decode 없음" 구조가 그대로다.
+- **2바퀴 반복:** 같은 구간의 Bitmap(34.2MB)과 Native Alloc(약 58.3~59.7MB)이 1·2바퀴에서 같다. **누수성 증가 없음.**
+  - Graphics(GPU 캐시)는 달력을 연 뒤 높게 남는 기존 패턴과 같다. 갤러리 복귀 값은 1바퀴 92.7MB, 2바퀴 112.6MB였다.
+  - 달력 열기 증가폭은 1바퀴 +32.5MB, 2바퀴 +10.4MB로 측정마다 흔들린다. 원인은 계속 미추적이다.
+- 화면 전환 순간 샘플에 24,326~45,703 KiB 같은 중간값이 잡혔지만, 다음 샘플에서 안정값으로 돌아왔다(일시적).
+- 남은 갤러리 상주 큰 그림(약 6MB씩): 종이 타일, 월 라벨 띠, 달력 종이.
