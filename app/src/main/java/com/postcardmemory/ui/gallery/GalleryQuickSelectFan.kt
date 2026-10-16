@@ -63,8 +63,8 @@ internal fun GalleryQuickSelectPhase.onSelect(): Pair<GalleryQuickSelectPhase, B
 /**
  * 손 자산과 기존 기능의 1:1 매핑. 블록 좌표는 손 그림 정사각 canvas를
  * [QUICK_SELECT_HAND_SOURCE_PX] 단위로 본 논리 좌표에서 잰 사각형 종이 블록의 경계다
- * (88일차 원본 1254×1254 px에서 실측). [slotFromBottom] 0이 맨 아래(엄지에 가장
- * 가까운 손잡이 쪽)이고, 부채는 그 위로 펼쳐진다.
+ * (105일차 손바닥 위 사진 카드 자산의 1254×1254 원본에서 네 모서리 평균으로 실측).
+ * [slotFromBottom] 0이 맨 아래(엄지에 가장 가까운 손잡이 쪽)이고, 부채는 그 위로 펼쳐진다.
  */
 internal enum class GalleryQuickSelectItem(
     val slotFromBottom: Int,
@@ -73,11 +73,11 @@ internal enum class GalleryQuickSelectItem(
     val blockRightPx: Float,
     val blockBottomPx: Float
 ) {
-    CAMERA(0, 243f, 405f, 692f, 718f),
-    FUTURE_MAILBOX(1, 113f, 432f, 590f, 750f),
-    POND(2, 243f, 403f, 692f, 713f),
-    SHEEP_RANCH(3, 280f, 377f, 723f, 722f),
-    RACE(4, 162f, 413f, 653f, 725f);
+    CAMERA(0, 189f, 402f, 703f, 759f),
+    FUTURE_MAILBOX(1, 243f, 474f, 763f, 799f),
+    POND(2, 212f, 430f, 733f, 803f),
+    SHEEP_RANCH(3, 240f, 454f, 763f, 810f),
+    RACE(4, 232f, 432f, 752f, 801f);
 
     val blockCenterXFraction: Float get() = (blockLeftPx + blockRightPx) / 2f / QUICK_SELECT_HAND_SOURCE_PX
     val blockCenterYFraction: Float get() = (blockTopPx + blockBottomPx) / 2f / QUICK_SELECT_HAND_SOURCE_PX

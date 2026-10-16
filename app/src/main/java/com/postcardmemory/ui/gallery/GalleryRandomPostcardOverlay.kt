@@ -228,8 +228,8 @@ internal fun randomOverlayLayout(
         )
 
     // 실기기 QA: 가운데 아래를 집으면 어색해서 왼쪽 아래 귀퉁이를 집는다.
-    // 손 몸통은 이미지 안에서 집는 지점보다 왼쪽에 있어, 팔이 화면 왼쪽
-    // 아래에서 비스듬히 들어오는 모양이 된다(일부가 화면 밖으로 나가도 된다).
+    // 손 몸통은 이미지 안에서 집는 지점보다 오른쪽 아래에 있어, 팔이 귀퉁이에서
+    // 화면 아래로 비스듬히 내려가는 모양이 된다(일부가 화면 밖으로 나가도 된다).
     val cardLeft = (widthPx - cardSize) / 2f
     val handAnchorX = cardLeft + RANDOM_OVERLAY_HAND_CORNER_INSET * cardSize
 
@@ -267,9 +267,9 @@ internal fun nextShakeOverlayPostcardId(
 ): Long? = currentOverlayPostcardId ?: pickRandomPostcardId(candidateIds, random)
 
 // gallery_pick_hand.png(1254×1254)에서 검지 끝과 엄지 끝 사이, 엽서 아랫변이
-// 끼워질 지점(840, 280)을 한 변 기준으로 정규화.
-internal const val RANDOM_OVERLAY_HAND_ANCHOR_X = 0.670f
-internal const val RANDOM_OVERLAY_HAND_ANCHOR_Y = 0.223f
+// 끼워질 지점(445, 190)을 한 변 기준으로 정규화(105일차 자산 실측).
+internal const val RANDOM_OVERLAY_HAND_ANCHOR_X = 0.355f
+internal const val RANDOM_OVERLAY_HAND_ANCHOR_Y = 0.152f
 // 집는 지점이 엽서 왼쪽 모서리에서 안쪽으로 들어간 정도(엽서 한 변 기준).
 private const val RANDOM_OVERLAY_HAND_CORNER_INSET = 0.08f
 

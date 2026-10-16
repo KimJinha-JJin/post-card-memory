@@ -1,3 +1,69 @@
+# HANDOFF — 105일차 마지막: 실사 인쇄물 오림 질감 자원 21장 적용 · 실기기 QA 완료
+
+## 마감(현재 상태)
+
+- **실기기 감각 QA: 완료.** 사용자가 5차 스누즈 손까지 실기기 확인 완료("완벽해") 후 MAP 갱신·commit·push 승인.
+- **IMAGE-ASSET-MAP: 갱신 완료**(상단 "105일차 마지막" 절에 21장 현재 크기·정렬·코드 결합 사실). TEST-COVERAGE-MAP 변경 없음.
+- **Git:** 이번 작업 파일(PNG 21, Kotlin 3, IMAGE-ASSET-MAP, 이 HANDOFF)만 명시 stage해 commit·push. HANDOFF의 기존 미커밋 기록(이미지 생성 프리셋 문서 보강, 104일차 3부)은 같은 파일 안에 있어 함께 포함됨. IMAGE-ASSET-STANDARD.md·`.codex-config.candidate.toml`·`.kotlin/`·보호 PNG 3장(fiber, round_head, sheep_ranch_sheep)은 제외. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
+- **실사용 기기 instrumentation:** 미실행(불필요).
+- **다음 후보(승인 아님):** IMAGE-ASSET-STANDARD.md 커밋 여부와 workflow 설치 반영 보류 해소, 미사용 보호 자원 정리 판단.
+
+## 4차(현재 상태) — 시계 몸체 재교체(숫자 윗부분 걸림)
+
+- **사유:** 사용자 실기기 확인에서 3차 시계 창(42.6dp)에 시간 윗부분이 간당간당하게 걸림. 사용자가 창을 키운 몸체를 새로 제작(원본 사본 scratchpad `round4/`).
+- **적용:** 1697×927→**720×394**(377,197 B). 밝은 창 원본 x 104~1595, y 267~730 → **147.6×46dp**(숫자 묶음 약 42dp 대비 위아래 약 2dp 여유). `GalleryRetroClock.kt` 숫자창 START **10.3** / TOP **26.5** / WIDTH **147.6** / HEIGHT **46**dp + 주석. 새 스누즈 버튼 윗면 y≈10%라 스누즈 손(3차 사용자 원본)을 접촉점 (0.960,0.534)로 재정렬, 480×360(96,759 B). PC 합성: 손끝-버튼, 창-숫자 묶음 여유 확인.
+- **검증(4차):** `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, 96 suite / 902 tests 실패 0. 로컬 release APK 41,392,553 B.
+- **실기기 감각 QA:** 시계·편지 손은 사용자 확인 완료. 아래 3차 이하는 역사 기록.
+- **5차 — 스누즈 손 손목 잘림:** 원인은 이미지가 아니라 시계 장면 상자(높이 122dp, `clipToBounds`)의 윗변에서 왼쪽 위로 올라가는 팔이 가로로 잘리는 구도. 3차 사용자 원본을 손끝 (1397,925) 기준 **−15° 회전**해 팔이 화면 왼쪽 끝으로 빠지게 함(접촉점 0.960,0.534 유지), 480×360(97,809 B). 코드 변경 없음. 사용자 선택(1번) 적용. `testDebugUnitTest assembleDebug` 통과(902/0). **스누즈 손 실기기 재확인 대기.**
+
+## 3차(역사) — 실기기 1차 QA 후 3장 재교체
+
+- **사용자 실기기 QA(1차):** 21장 중 아래 3장 외 "나머지는 다 자연스럽다"고 확인. 문제 3장은 사용자가 새로 만들어 교체: 스누즈 손(좌상단 손목 잘림이 보임), 편지 손(흰 테두리 어색), 시계 몸체(창 비율이 좁음). 원본 사본 scratchpad `round3/`.
+- **적용:** 시계 몸체 1697×927→**720×394**(364,772 B). 스누즈 손 1448×1086, 팔이 왼쪽 끝에서 잘린 구도라 ×1.0 이동만으로 손끝 (1397,925)을 접촉점(0.960,0.575)에 → **480×360**(101,175 B). 편지 손 카드 폭 537→×0.968 정규화 → **720²**(362,300 B).
+- **코드:** `GalleryRetroClock.kt` 숫자창 상수를 새 밝은 창 실측(원본 x126~1571, y282~711)으로 START 14.5→**12.5**, TOP 28.6→**28**, WIDTH 141→**143**, HEIGHT 44→**42.6**dp + 관련 주석 2곳. `GalleryQuickSelectFan.kt` FUTURE_MAILBOX 블록 → **243/474/763/799**. PC 합성: 손끝-새 스누즈 버튼, 숫자창-밝은 창 일치, 편지 카드-테두리 일치.
+- **검증(3차):** `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, 96 suite / 902 tests 실패 0, `git diff --check` 통과. 변경 PNG 21장 합 11,673,884→**10,648,490 B(−1,025,394)**. 로컬 release APK 41,398,849 B(로컬 untracked 포함 빌드).
+- **코드 변경 총 3파일:** `GalleryQuickSelectFan.kt`, `GalleryRandomPostcardOverlay.kt`, `GalleryRetroClock.kt`.
+- **실기기 감각 QA: 재교체 3장(시계 숫자·날짜 창 안 정렬, 스누즈 손, 편지 손) 재확인 대기.** 나머지 18장은 사용자 확인 완료. IMAGE-ASSET-MAP 갱신은 재확인 후. 아래 2차·1차는 역사 기록.
+
+## 2차(역사) — STOP 3장 재제작본 적용
+
+- **사용자 재제작 3장 적용:** `home_clock_collage_body` 1695×928→**720×394**(396,436 B), `donggeuli_arms_up` 1254²→**720²**(427,339 B), `gallery_pick_hand` **1254² 그대로**(1,357,720 B, 픽셀 무변경). 재제작본 원본 사본은 scratchpad `round2/`.
+- **시계:** 새 밝은 창 x 8.0~91.9%, y 35.1~76.6% → 약 141×38dp(1차 32dp). 코드 숫자창(14.5,28.6/141×44dp)과 중심 차 약 0.8dp, 상수 미변경. 시·분·날짜 실제 잉크 높이 약 42dp 추정이라 위아래 약 2dp 창 테두리에 걸칠 수 있음 → **실기기 QA 판단 항목**. 새 스누즈 버튼 윗면 y≈14%라 스누즈 손을 다시 정렬(손 canvas 접촉점 0.960,0.575; 480×360, 118,531 B). PC 합성에서 손끝-버튼 접촉 확인.
+- **동글이:** 주먹 중심 x 23.9%/76.2%, y 21% → 사진(0.50C, 아래변 0.20C) 아래 양 모서리를 주먹이 덮음(PC 합성 확인). 코드 미변경.
+- **랜덤 엽서 손:** 아래에서 올라와 검지(위)·엄지(아래)로 집는 자세. 집는 점 (445,190)이라 캔버스 이동 시 팔이 오른쪽에서 잘림 → `GalleryRandomPostcardOverlay.kt` `RANDOM_OVERLAY_HAND_ANCHOR_X/Y` 0.670/0.223 → **0.355/0.152** 및 관련 주석 2곳만 수정. 손이 엽서 왼쪽 아래 귀퉁이를 집고 팔이 화면 아래로 이어짐(384×760dp 가정 합성 확인). 크기 계산식·clamp 미변경.
+- **검증(2차):** `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, 96 suite / 902 tests 실패 0, `git diff --check` 통과. 변경 PNG 21장 합 11,673,884→**10,738,996 B(−934,888)**. 로컬 release APK 41,463,049 B(로컬 untracked round_head·sheep·fiber 포함 빌드라 104일차 40,557,565 B와 같은 조건 비교 아님).
+- **코드 변경 총 2파일:** `GalleryQuickSelectFan.kt`(블록 5줄+주석), `GalleryRandomPostcardOverlay.kt`(앵커 2값+주석).
+- **실기기 감각 QA: 대기.** 아래 1차 기록의 STOP 항목은 이 2차로 해소됨(역사 기록). IMAGE-ASSET-MAP 갱신은 QA 후.
+
+## 1차 기록(역사) — 18/21 적용 · 3장 STOP
+
+확인일: 2026-10-16. 수동 표준 모드(105일차 마지막 작업지시서), 담당 Claude Code. 내장 Task 도구 없음.
+
+- **시작/현재 Git:** `feature/photo-sticker`, HEAD `b77c156`, origin 추적 ref 대비 0/0(fetch 미실행). 시작 시 사용자가 21개 PNG를 res에 같은 이름으로 덮어써 둔 상태였고, HANDOFF의 기존 미커밋 25줄(아래 두 기록)은 손대지 않았어. 사용자 원본 21장은 세션 scratchpad `new_original/`, HEAD 원본은 `old_head/`에 사본(임시 폴더라 영구 백업 아님). commit/push 미승인·미실행.
+- **적용 18장(캔버스 정렬·리사이즈만, 질감/형태 리터칭 없음):** cutout 7장 → 긴 변 314(photo·sticker·stamp 314², background·tape·doodle 314×236, text 314×209; 로더 alpha bbox crop이 맞춤). 커피 손 1086×1448→450×600. 퀵메뉴 5장 1254²→720²(river ×0.958, checker ×0.871로 카드 폭 ≈520 논리px 정규화, 카드 중심 기준). 핀셋 손 이동(+51,−1.5)으로 집게 사이를 기존 ANCHOR(0.297,0.045)에. 테이프 손 이동(+141,−4)으로 손가락 띠 중심을 ANCHOR(0.399,0.259)에. 도장 손 ×1.4(손잡이가 주먹에 들어가는 점 (725,335)→ANCHOR(575.6,540.5), 기존 손 크기와 맞춤). 빠끔이 ×0.678로 그림 bbox를 기존 crop(376,352/720×656) 안 앞발 바닥 y1006에. 스누즈 손 ×1.12로 손끝을 기존 접촉점(손 canvas 0.960,0.515)에, 480×360. 모든 결과 실제 alpha, 고립 점 0~5px, 반투명 가장자리 채도 번짐 지표 0~6.
+- **코드 변경 1곳:** `GalleryQuickSelectFan.kt` `GalleryQuickSelectItem` 블록 좌표 5줄(1254 논리). 새 카드가 기존 좌표와 위치·크기가 달라 활성 테두리·터치·부채 회전 중심을 맞추려면 필요. CAMERA 189/402/703/759, FUTURE_MAILBOX 244/415/769/742, POND 212/430/733/803, SHEEP_RANCH 240/454/763/810, RACE 232/432/752/801. 카드가 2~3.5° 기울고 원근이 있어 축 정렬 테두리와 모서리가 1~2dp 어긋날 수 있음(QA 항목). 다른 상수·Room·저장 변경 없음.
+- **STOP 3장(파일은 사용자 원본 그대로 res에 남김, 미적용·미리사이즈):**
+  - `home_clock_collage_body`(1695×928): 새 밝은 창이 x 9.97~90.4%, y 39.5~74.1% → 화면 약 135×32dp. 코드 숫자창 141×44dp(시·분·날짜)보다 낮아 날짜 줄이 어두운 테두리로 넘침. 캔버스 확대는 폭이 넘쳐 불가. 새 스누즈 버튼 y 14.5~22%라 기존 손끝(9%)과도 약 5dp 뜸. 재개: 창 높이 ≥ 몸체의 약 48%인 새 이미지, 또는 숫자 크기/몸체 크기 코드 변경(제품 판단).
+  - `gallery_pick_hand`: 옆(오른쪽)에서 뻗어 아래로 집는 자세. 현재 연출은 화면 아래에서 올라와 엽서 아랫변 왼쪽 귀퉁이를 집는 구조(앵커 0.670,0.223 + 화면 하단 기준 크기). 그대로 두면 팔이 엽서를 가로질러 덮음. 재개: 아래에서 올라오는 새 이미지, 또는 회전 적용/연출 코드 변경(사용자 판단).
+  - `donggeuli_arms_up`(1254²): 양 주먹 간격이 캔버스 73.5%로 기존 55.6%보다 넓어 사진(0.50C) 아래 모서리에 닿지 않음. 0.85 축소 시안은 더 떨어짐(scratchpad `mark/dong_*.png`). 재개: 주먹 간격 ≈55%인 새 이미지, 또는 사진 크기·위치 코드 변경(제품 판단).
+- **로컬 자동검증: 통과.** Gradle 9.4.1 + Android Studio JBR. 관련 3클래스 선행 통과 후 `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, XML 96 suite / 902 tests, 실패·오류·skip 0. `git diff --check` 통과. PC 합성 확인: 스누즈 손끝-기존 시계 버튼 접촉, 커피 김 시작점-컵 입구, 퀵메뉴 카드-새 블록 사각형, 핀셋·도장·테이프 앵커, 빠끔이 crop.
+- **용량:** 적용 18장 원본 합 HEAD 대비 −811,335 B. STOP 3장(원본 크기 유지)까지 포함한 변경 PNG 21장 합 11,673,884→14,466,011 B. 로컬 release APK 44,646,897 B(104일차 기록 40,557,565 B 대비 증가분은 STOP 3장과 로컬 untracked round_head/sheep 포함 효과, 같은 조건 비교 아님).
+- **실사용 기기 instrumentation: 미실행(불필요). 실기기 감각 QA: 대기.** 조사 시 `adb devices` 연결 기기 없음 → 설치·기기 명령 미실행. **앱 삭제 후 재설치 금지.**
+- **TEST-COVERAGE-MAP: 변경 없음.** 테스트 수·파일·의미 변화 없음(enum 값만 변경, 기존 경계·겹침 테스트가 새 값 통과). IMAGE-ASSET-MAP 사실 갱신은 QA·STOP 결정 후로 보류.
+- **다음 행동:** ① 사용자 실기기 QA(갤러리·퀵메뉴 5종·편집 기능줄·빠끔이·핀셋 3기능·테이프·도장·앱 인트로·스누즈/커피) ② STOP 3장 결정 ③ MAP 갱신 ④ 승인 시 commit/push·CI.
+
+---
+
+# HANDOFF — 2026-10-16 이미지 생성 프리셋 문서 보강
+
+- **범위/완료:** 사용자 제공 생성 테스트 결론으로 `IMAGE-ASSET-STANDARD.md` 2절에 「실사 인쇄물 오림 질감」과 캐릭터·활자 하위 프리셋을 명시했어. 사진 한 장→인쇄→한 조각 오림, 고정 영문 핵심/인쇄/금지 블록, 참조 해석·적용 제외를 추가하고 6·7절의 독립 프롬프트·정확한 배치 조사 규칙을 보강했어. 과거 기술 수치에는 조사 시점을 명시했어.
+- **canonical 연결:** `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/references/image-asset-workflow.md`만 수정. STANDARD의 프리셋 원문을 자산별로 재사용하고 실사/캐릭터/활자/적용 제외를 선택하게 했어. 기존 SKILL 진입 연결은 유지했어.
+- **Git/보존:** 시작 HEAD `b77c156`, `feature/photo-sticker`, 로컬 origin 추적 ref 대비 0/0. 시작 때 PNG 21개와 HANDOFF가 이미 수정돼 있었고 STANDARD도 기존 untracked였어. 기존 PNG·보호/기타 untracked 및 이전 기록을 보존했어. 이번 작업의 앱 코드·이미지 변경은 0이며 commit/push 미승인·미실행이야.
+- **검증:** 프리셋/예외/금지/독립 출력/좌표 조사 문구와 링크·공백 검사, 자원 전체 전후 hash 일치 확인. 공식 skill quick_validate는 `yaml` 모듈 부재로 실행 불가. 생성 품질 재시험·앱 build/test·실기기 명령·QA는 이번 문서 작업에서 실행하지 않았어. TEST-COVERAGE-MAP 변경 없음.
+- **설치 상태:** 이번에는 cache·manifest·version·설치 장부를 변경하지 않았어. 앞선 canonical 설치 반영 보류를 해제하거나 새 세션 로딩을 검증한 작업이 아니야. 설치본에 새 프리셋 경로가 반영됐다고 간주하지 않아.
+
+---
+
 # HANDOFF — 105일차 동글이 쉼터: 구현·자동검증·사용자 실기기 확인 완료
 
 확인일: 2026-10-16. 사용자 제공 `donggeuli_arms_up.png`로 재개. 좁은 중앙 슬롯 방식은 사용하지 않고, 양팔 위에 엽서를 드는 첫 시안으로 수정했어. 수동 표준 모드, 담당 Codex.
@@ -59,6 +125,21 @@
 - **TEST-COVERAGE-MAP: 변경 없음.** 기존 테스트의 수·의미·보호 범위 변화 없음. 신규 장식의 실제 렌더·터치·네 다리 식별은 기존 테스트 보호 밖이야.
 - **실사용 기기 instrumentation: 미실행. GitHub Actions CI: 미실행(push 없음). 실기기 감각 QA: 사용자 확인 대기.** 기기 명령·설치·emulator 사용 없음.
 - **QA 재개:** 현재 작업트리를 사용자가 Android Studio에서 실행한 뒤, 목장 한 마리/네 다리/96dp 존재감/발 접지, 엽서 탭·걷기·점프·길게 눌러 이동·늘이기, 손 메뉴 간섭, 쫑쫑컵 비표시, 빈 상태 배치를 확인해야 해. 빌드 플러그인 해석 문제도 해결된 환경에서 컴파일·기존 JVM 테스트 확인이 필요해. QA 전 commit/push 금지, QA 완료 후에도 별도 Git 승인 필요.
+
+---
+
+# HANDOFF — 104일차 3부: 이미지 제작 표준 v1 + canonical workflow 연결
+
+확인일: 2026-10-15. 수동 표준 모드, 담당 Codex. 이번 작업은 문서·workflow만 변경했고 이미지 생성·교체·리사이즈와 앱 코드 변경은 없었어.
+
+- **시작/종료 기준:** `feature/photo-sticker`, HEAD `e8ab9c9`, 로컬 origin 추적 ref 대비 0/0. 시작 tracked clean. 이번 작업은 commit/push 미승인·미실행이고 원격/CI 재조회는 하지 않았어.
+- **완료:** [IMAGE-ASSET-STANDARD.md](IMAGE-ASSET-STANDARD.md) 신규. 실제 PNG 헤더·소비 코드·대표 이미지 육안 확인을 바탕으로 자산군 10개, 표시 크기 기반 산정, 좌표 결합 예외, 생성 프롬프트와 읽기 전용 명세 조사 템플릿을 정리했어. MAP은 현황, STANDARD는 제작 규칙으로 분리했고 MAP의 과거 기록은 수정하지 않았어.
+- **workflow:** canonical `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/SKILL.md`에 이미지 경로를 추가하고 `references/image-asset-workflow.md`를 만들었어. A=생성 프롬프트, B=명세 조사. 수치·템플릿은 저장소 STANDARD를 읽으며 복제하지 않아. 웹 등 접근 불가 환경은 최신 문서 제공이 필요해.
+- **설치 반영은 보류:** 작업 시작 전부터 source/cache 7개 파일에 차이가 있었어. 현재 cache는 `0.1.0+codex.20260927080957`. 기존 차이는 main SKILL, Claude/Codex 실행 규칙, work-order/handoff 템플릿, write-project-handoff SKILL과 템플릿이야. canonical에는 현행 실기기 정책이 있지만 cache에는 예전 emulator 지침이 남아 있어. 다른 정책까지 섞어 설치하지 않도록 cache·manifest·version·설치 장부는 미변경. **새 이미지 경로가 설치본에 로딩됐다고 간주하지 않아.** 재개 조건은 기존 7개 차이와 이번 이미지 경로를 함께 배포할 범위 확인이야.
+- **검증:** 문서 링크·공백 검사, 기존 workflow 본문 보존 비교, canonical 변경 파일 범위 확인. 공식 skill quick_validate는 Python `yaml` 모듈 부재로 실행 불가였고 의존성은 설치하지 않았어. 링크·frontmatter 필수 항목·description 길이는 별도 검사했어. 실제 새 세션 경로 실행과 이미지 출력 품질은 미검증이야.
+- **불필요/미실행:** 앱 build/test·기기 명령·instrumentation·실기기 QA는 앱 변경 없는 문서 작업이라 불필요. JVM 902와 메모리/QA 값은 아래 기존 실행 기록이며 이번에 재실행하지 않았어. TEST-COVERAGE-MAP 변경 없음.
+- **보존:** `.codex-config.candidate.toml`, `.kotlin/`, `app/src/main/res/drawable-nodpi/postcard_paper_fiber_tile.png` 보호 untracked. production/test/dependency/CI YAML·AGENTS·CLAUDE·DECISIONS·이미지 파일 변경 없음.
+- **REVIEW:** 신규 자산의 최대 density/확대/export 규격, 새 손 역할·접촉점, 런처 mask 안전영역, 도장 decode 실측은 해당 작업에서 조사할 항목이야. 달력 GPU·추가 이미지 최적화는 실행하지 않았어. 다음 후보는 승인으로 읽지 않아.
 
 ---
 

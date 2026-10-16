@@ -277,16 +277,16 @@ private fun GalleryRetroClockFace(timeText: RetroClockTimeText, dateText: String
 // 아래 좌표는 모두 drawable-nodpi 원본의 실측 픽셀을 화면 dp로 환산한 값이라, 이미지를
 // 바꾸면 다시 재야 한다.
 
-// 시계 몸체 이미지(1695×928px)의 화면 크기.
+// 시계 몸체 이미지(105일차 원본 1697×927px)의 화면 크기.
 private val RETRO_CLOCK_BODY_WIDTH = 168.dp
 private val RETRO_CLOCK_BODY_HEIGHT = 92.dp
 
-// 몸체 이미지 안의 밝은 숫자창(원본 x 145~1567px, y 290~730px). 7세그 숫자와 날짜를
+// 몸체 이미지 안의 밝은 숫자창(원본 x 104~1595px, y 267~730px). 7세그 숫자와 날짜를
 // 이 칸 한가운데에 둔다.
-private val RETRO_CLOCK_WINDOW_START = 14.5.dp
-private val RETRO_CLOCK_WINDOW_TOP = 28.6.dp
-private val RETRO_CLOCK_WINDOW_WIDTH = 141.dp
-private val RETRO_CLOCK_WINDOW_HEIGHT = 44.dp
+private val RETRO_CLOCK_WINDOW_START = 10.3.dp
+private val RETRO_CLOCK_WINDOW_TOP = 26.5.dp
+private val RETRO_CLOCK_WINDOW_WIDTH = 147.6.dp
+private val RETRO_CLOCK_WINDOW_HEIGHT = 46.dp
 
 // 교체된 왼손(1448×1086px)의 원본 비율을 유지한다.
 private val RETRO_CLOCK_HAND_WIDTH = 112.dp
@@ -297,8 +297,8 @@ private val RETRO_CLOCK_SCENE_CLOCK_INSET = 16.dp
 
 // 손이 몸체보다 왼쪽·위로 나와 있는 만큼을 시계 묶음 안에 미리 비워 둔다 — Row 밖으로
 // 삐져나가면 Scaffold가 topBar를 본문 위에 그려 아래 목록이나 위 메뉴 버튼을 덮는다.
-// 시계 위치는 유지하고 손만 화면 경계에서 자른다. 검지 끝은 화면 약 (99.5,38.3)dp로
-// 스누즈 버튼(x90~124dp, y39~48dp) 위에 닿는다. 숫자창은 x84.5dp, y58.6dp부터다.
+// 시계 위치는 유지하고 손만 화면 경계에서 자른다. 검지 끝은 화면 약 (99.5,39.9)dp로
+// 스누즈 버튼(x94~137dp, 윗면 y39~44dp) 위에 닿는다. 숫자창은 x80.3dp, y56.5dp부터다.
 private val RETRO_CLOCK_HAND_LEAD = 54.dp
 private val RETRO_CLOCK_HAND_RISE = 30.dp
 
