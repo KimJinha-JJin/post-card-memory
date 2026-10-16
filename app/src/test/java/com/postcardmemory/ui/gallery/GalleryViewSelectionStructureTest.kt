@@ -142,7 +142,7 @@ class GalleryViewSelectionStructureTest {
         assertFalse(sourceText.contains("R.drawable.sticker_tweezer_hand"))
         assertFalse(sourceText.contains("R.drawable.tape_press_hand"))
 
-        listOf("\"카메라\"", "\"미래 우체통\"", "\"엽서의 연못\"", "\"양떼목장\"", "\"엽서 쫑쫑컵\"").forEach { label ->
+        listOf("\"카메라\"", "\"미래 우체통\"", "\"엽서의 연못\"", "\"동글이 쉼터\"", "\"엽서 쫑쫑컵\"").forEach { label ->
             assertTrue("접근성 이름 누락: $label", sourceText.contains(label))
         }
         assertTrue(sourceText.contains("\"바로가기 열기\""))

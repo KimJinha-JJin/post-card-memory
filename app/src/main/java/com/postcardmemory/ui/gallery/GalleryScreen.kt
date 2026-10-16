@@ -1183,7 +1183,7 @@ private fun GalleryQuickSelectItem.label(): String =
         GalleryQuickSelectItem.CAMERA -> "카메라"
         GalleryQuickSelectItem.FUTURE_MAILBOX -> "미래 우체통"
         GalleryQuickSelectItem.POND -> "엽서의 연못"
-        GalleryQuickSelectItem.SHEEP_RANCH -> "양떼목장"
+        GalleryQuickSelectItem.SHEEP_RANCH -> "동글이 쉼터"
         GalleryQuickSelectItem.RACE -> "엽서 쫑쫑컵"
     }
 

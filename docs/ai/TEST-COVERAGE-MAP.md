@@ -184,6 +184,8 @@ JVM 902개는 102일차(2026-10-13) 편집 상위 기능줄 잡지 오림 삽화
 
 ### 기능: 갤러리
 
+- **105일차 명칭 전환:** `GalleryViewSelectionStructureTest`의 접근성 기대 문자열을 `양떼목장` → `동글이 쉼터`로 변경. 해당 파일 @Test 11개 유지, 검사 방식은 소스 문자열 구조 검사 그대로야. 양팔 든 동글이와 엽서 합성은 첫 시안 구현이며, 손끝 정렬·실제 렌더·사진 가독성·변형 결과는 이 구조 테스트가 보호하지 않아. 좁은 중앙 슬롯 방식은 사용하지 않아.
+- **105일차 최종 로컬 실행:** 격리 환경의 저장소 접근 차단을 확인한 뒤 권한 실행으로 `assembleDebug`/`testDebugUnitTest` 성공. 최신 XML 96 suite / 902 tests, failure/error/skip 0. 위 명칭 테스트 11개와 GalleryQuickSelectFanTest 14개 포함. 실제 기기 QA/instrumentation/CI 성공을 의미하지 않아.
 - **보호 수준:** 중간.
 - **현재 보호하는 테스트:** `GallerySearchFilterTest`, `GalleryCalendarCellsTest`, `GalleryMemoryDensityTest`, `GalleryPagerTargetIndexTest`, `GalleryRetroClockTest`, `GalleryShakeDetectorTest`(84일차), `GalleryRandomPostcardOverlayTest`(84일차), `GalleryQuickSelectFanTest`(88일차), 보기 선택·월 grid·퀵 셀렉트 연결 구조 테스트, `GalleryPaperBackgroundStructureTest`(89일차 종이 배경 구조).
 - **실제 production 직접 검증:** 검색 결과·순서 유지, 달력 칸, 월별 엽서 수, 기억밀도 막대 높이 비율(93일차 비례형: 1장마다 증가, 20장 = 꽉 참, 초과는 그대로)·20장 초과 표시 조건·중성펜 획(같은 seed면 같은 획, 막대 사각형에서 1.5dp 이내), 페이지 목표 index, 시계 표시 계산, 흔들림 판정(합성 가속도 sample로 정지·약한 흔들림·한쪽 충격·화면 회전 미발동, 명확한 흔들기 1회 인정, cooldown 중 무시·종료 후 재인정), 균등 랜덤 선택(후보 0/1/범위), overlay 날짜 문구(`capturedAt` 월·일), overlay 중 재흔들기 시 엽서 유지, overlay 배치(엽서가 화면 안·문구 자리·손이 화면 아래까지 닿고 왼쪽 귀퉁이를 집음), 퀵 셀렉트 단계 전이(닫힘→펼치는 중→펼침→닫히는 중, 같은 방향 연타는 재시작 없음, 도중 반대 요청은 방향만 전환, 펼침 완료 전·닫히는 중 탭 무효, 연타해도 기능 실행 1회)와 부채 배치(손 5개·슬롯 중복 없음, 아래→위 순서·가운데 0°·회전 ±20° 이내, 맨 아래 블록 높이, 닫힌 묶음이 오른쪽 끝에 숨고 닫힌 자리만 더 내려앉음, 젖힘은 아래 방향, stagger 짧음, 작은 화면 각도 clamp, 이웃 손 터치 영역 비겹침·높이 46dp 이상, 이웃 블록 간격 64dp 이상).

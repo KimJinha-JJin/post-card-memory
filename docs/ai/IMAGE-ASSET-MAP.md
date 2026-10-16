@@ -4,6 +4,16 @@
 **104일차(2026-10-15) 갱신:** 그림 11장(cutout 7, 시계 3, 달력 리본 1)의 원본 해상도를 줄였다. 103일차 값은 지우지 않고 Before로 남겼으며, 바뀐 행에는 `→ 104일차` 값을 덧붙였다. 결과와 실측 Before/After는 **9절**에 있다. 1절 요약 통계는 103일차 기준이고, 104일차 합계는 9절에 있다.
 이 문서는 "이 그림 파일은 무엇이고, 어디서 어떻게 쓰이며, 바꾸면 무엇이 같이 바뀌는가"를 찾는 지도다. 실제 상태는 항상 코드와 Git이 기준이며, 자산·코드가 바뀌면 해당 행을 다시 실측한다.
 
+## 105일차 수정 — 동글이 쉼터: 양팔 든 동글이 (2026-10-16, 사용자 화면 QA 완료)
+
+- 자원: `drawable-nodpi/donggeuli_arms_up.png`. 사용자 제공 1254² RGBA → **720² RGBA**, 477,088 B. PArgb + HighQualityBicubic 비례 축소, canvas·alpha 유지, crop·tint·재구도 없음. 최종 alpha 0~255, 완전 투명 319,845px, alpha>16 bbox `(134,60)..(599,679)`(끝점 포함).
+- 소비: `SheepRanchCard(characterAppearance = !raceEnabled)` → `DonggeuliCardContent`. 엽서마다 캐릭터 1개, 최신 최대 10장. `StampCardContent`(날짜 숨김, 톱니 사진·편지 배지 유지)를 먼저 그린 뒤 `painterResource`/`Image`로 캐릭터를 앞에 그림. 손끝이 사진 아래 모서리를 덮게 배치, 사용자 실기기 확인 완료.
+- 조작 상자 W=92/84/76dp, H=W+36dp 유지. 캐릭터 정사각 C=0.90W, top=H−14dp−C. 사진 정사각 P=0.50C(41.4/37.8/34.2dp), 가로 중앙, top=캐릭터top+0.20C−P. 날짜는 별도 8sp Text로 상자 하단 중앙(yyyy-MM-dd, 한 줄 말줄임). 예전 좁은 중앙 슬롯은 사용하지 않음.
+- **구도/animation 결합:** PNG의 팔·머리 위치(사진 하단 기준 20%)와 배치 결합. 부모의 기존 이동·회전·원근·점프·늘이기를 캐릭터/사진/날짜가 함께 받음. 직사각 hit 유지, 새 입력/state 없음. 최대 stretch·lift 시 화질은 실제 QA 필요, 현재 자원은 export에 쓰지 않음.
+- 원본 decode RAM 추정: 720²×4=2,073,600 B(약 1.98MiB). 동일 리소스 반복 참조, 실제 bitmap 공유·동시 상주·GPU·APK 변화는 미측정. 이전 합계는 역사 값.
+- 이전 `sheep_ranch_sheep.png`(720×480, 611,857 B)와 `round_head.png`(1254²)는 연결하지 않으며 파일은 사용자 자원으로 보존. `quick_select_sheep_hand.png`는 새 메뉴 전용 자원 미제공이라 기존 메뉴 연결을 유지, 접근성 이름만 동글이 쉼터. 내부 enum/파일명 대규모 rename 없음.
+- 실기기 감각 QA: 사용자가 2026-10-16 확인 완료를 보고하고 commit/push 승인. 개별 시나리오·기기 설정·최대 확대 화질의 별도 측정 기록은 없음. Codex 기기 설치·instrumentation 미실행.
+
 ## 0. 측정 방법과 한계
 
 - **발견:** `.git`·`build/`·`.gradle/`·`.kotlin/`·`.idea/`를 뺀 저장소 전체에서 `png/jpg/jpeg/webp/gif/svg/bmp/avif/heic`를 찾았다. 앱 이미지는 `app/src/main/res/drawable/`(5장)과 `drawable-nodpi/`(26장)에만 있다. `drawable-*dpi` 밀도 폴더, `mipmap-*` PNG, `assets/` 폴더는 **없다**(`mipmap-anydpi-v26`에는 adaptive icon XML 2개만 있다). `test`·`androidTest`에도 이미지가 없다. 앱 밖으로는 `docs/ai/mockups/visit-calendar-2dp.png` 1장이 있으며 APK에 들어가지 않는다.

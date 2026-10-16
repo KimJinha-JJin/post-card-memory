@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -19,8 +20,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,14 +47,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.zIndex
+import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCardContent
+import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
@@ -377,6 +384,7 @@ fun SheepRanchStage(
                 stretchingCardId = stretchingCardId,
                 busyCardId = busyCardId,
                 raceActive = raceActive,
+                characterAppearance = !raceEnabled,
                 zone = movementZoneFor(index, raceEnabled),
                 onPostcardClick = onPostcardClick,
                 modifier = Modifier.size(width = cardWidth, height = cardWidth + 36.dp)
@@ -479,6 +487,7 @@ private fun SheepRanchCard(
     stretchingCardId: MutableState<Long?>,
     busyCardId: MutableState<Long?>,
     raceActive: Boolean,
+    characterAppearance: Boolean,
     zone: RanchMovementZone,
     onPostcardClick: (Long) -> Unit,
     modifier: Modifier = Modifier
@@ -929,7 +938,8 @@ private fun SheepRanchCard(
                 cameraDistance = 32f * density.density
                 scaleX = finalScaleX
                 scaleY = finalScaleY
-                shadowElevation = if (isGrabbed) 12f else 3f
+                // 캐릭터 외곽에는 사각형 elevation 대신 기존 바닥 그림자만 사용한다.
+                shadowElevation = if (characterAppearance) 0f else if (isGrabbed) 12f else 3f
                 shape = RoundedCornerShape(RanchCardCorner)
                 clip = false
                 alpha = if (raceActive) 0f else 1f
@@ -1182,15 +1192,60 @@ private fun SheepRanchCard(
                     }
                 }
             )
-            .background(PaperSurface, RoundedCornerShape(RanchCardCorner))
-            .border(1.dp, PaperDivider, RoundedCornerShape(RanchCardCorner))
-            .padding(7.dp),
+            .then(
+                if (characterAppearance) Modifier else Modifier
+                    .background(PaperSurface, RoundedCornerShape(RanchCardCorner))
+                    .border(1.dp, PaperDivider, RoundedCornerShape(RanchCardCorner))
+                    .padding(7.dp)
+            ),
         contentAlignment = Alignment.Center
     ) {
+        if (characterAppearance) {
+            DonggeuliCardContent(postcard)
+        } else {
+            StampCardContent(
+                postcard = postcard,
+                isSelected = false,
+                dateTextSizeSp = 10
+            )
+        }
+    }
+}
+
+/** 외형만 담당하며, 부모 카드의 이동·입력·늘이기를 그대로 따른다. */
+@Composable
+private fun DonggeuliCardContent(postcard: Postcard) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val characterSize = maxWidth * 0.90f
+        val characterTop = maxHeight - 14.dp - characterSize
+        val photoWidth = characterSize * 0.50f
+        // 엽서를 먼저 그린다. 앞에 그리는 손끝이 아래 양 모서리를 덮는다.
         StampCardContent(
             postcard = postcard,
             isSelected = false,
-            dateTextSizeSp = 10
+            dateLabelOverride = "",
+            modifier = Modifier
+                .offset(
+                    x = (maxWidth - photoWidth) / 2,
+                    y = characterTop + characterSize * 0.20f - photoWidth
+                )
+                .width(photoWidth)
+        )
+        Image(
+            painter = painterResource(R.drawable.donggeuli_arms_up),
+            contentDescription = null,
+            modifier = Modifier
+                .offset(x = (maxWidth - characterSize) / 2, y = characterTop)
+                .size(characterSize)
+        )
+        Text(
+            text = PostcardDateFormat.formatIso(postcard.capturedAt),
+            color = GraphiteAccent,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 }

@@ -1,3 +1,66 @@
+# HANDOFF — 105일차 동글이 쉼터: 구현·자동검증·사용자 실기기 확인 완료
+
+확인일: 2026-10-16. 사용자 제공 `donggeuli_arms_up.png`로 재개. 좁은 중앙 슬롯 방식은 사용하지 않고, 양팔 위에 엽서를 드는 첫 시안으로 수정했어. 수동 표준 모드, 담당 Codex.
+
+- **구현 기준 Git:** `feature/photo-sticker`, HEAD `e8ab9c9`, origin 추적 ref 대비 0/0. 기존 문서·보호 untracked는 보존. 2026-10-16 사용자가 실기기 확인 완료 후 commit/push와 HANDOFF 갱신을 명시 승인해서 Git 마감을 진행해. 104일차 3부 HANDOFF 미커밋 기록과 IMAGE-ASSET-STANDARD.md는 이번 커밋에서 제외해.
+- **구현 완료:** 기존 직사각 상자 W=92/84/76dp, H=W+36dp 유지. `characterAppearance = !raceEnabled` → `DonggeuliCardContent`. 캐릭터 C=0.90W, top=H−14dp−C. 사진 P=0.50C(41.4/37.8/34.2dp), 가로 중앙, top=캐릭터top+0.20C−P. 톱니 사진/편지 배지를 먼저 그리고 캐릭터 PNG를 앞에 겹쳐 손끝이 사진 하단 양 모서리를 덮게 배치. 사용자 실기기 확인 완료. 날짜는 하단 별도 8sp yyyy-MM-dd Text, 한 줄 말줄임.
+- **이미지:** `drawable-nodpi/donggeuli_arms_up.png` 1254² RGBA → 720² RGBA, 477,088 B. PArgb + HighQualityBicubic, 비율/canvas 유지, crop/tint 없음. 최종 alpha 0~255, 투명 319,845px, alpha>16 bbox `(134,60)..(599,679)`. 재구도/새 이미지 생성 없음. 기존 sheep/round_head PNG는 미사용 연결 상태로 파일 보존.
+- **기능 보존:** 기존 motion/바닥 그림자/gesture 원문 비교 PASS. 배회·점프·들기·떨림·늘이기·복귀·탭 callback·직사각 hit·z-order·ranchFloorY·하단 예약·최신10장·미래 우체통 제외·DB/저장/레이스 로직 미변경. 캐릭터/사진/날짜가 부모 transform을 함께 받음. 쫑쫑컵은 기존 카드 외형/10sp 날짜/7dp padding/elevation 분기 유지.
+- **이름/메뉴:** 이전 차수에서 사용자 노출 명칭/접근성/문자열 테스트는 동글이 쉼터로 변경 완료. 내부 enum/파일명 유지. quick select는 새 전용 손 자원이 없어 기존 sheep hand 유지, 매핑은 GalleryScreen.kt의 handResId(). 이번에 메뉴 자원 생성/덮어쓰기 없음.
+- **빌드 실패 원인 확인 및 해소:** 격리 Gradle은 `CodexSandboxOffline/.gradle` 사용, Google 저장소 요청에 `java.net.SocketException: Permission denied: getsockopt`. 그 결과 settings foojay plugin 해석에서 실패했어. 설정/dependency 변경 없이 승인된 권한 실행으로 사용자 환경에서 빌드·테스트 재실행, 성공. 이전 실패 기록은 당시 격리 실행 결과로 남기며 프로젝트 코드 오류로 보지 않아.
+- **로컬 자동검증: 통과.** 설치 Gradle 9.4.1 + Android Studio JBR, `:app:assembleDebug :app:testDebugUnitTest` BUILD SUCCESSFUL(exit 0, 3m9s). 최신 XML 96 suite / 902 tests, 실패/오류/skip 0. GalleryViewSelectionStructureTest 11, GalleryQuickSelectFanTest 14 포함. APK `app/build/outputs/apk/debug/app-debug.apk`(2026-10-16 17:50 생성). git diff --check 통과. build/dependency 수정 없음.
+- **TEST-COVERAGE-MAP: 갱신 완료.** 앞선 명칭 기대값 변경과 현재 합성 렌더 QA 공백 및 최신 실행 결과 반영. 테스트 수/파일/의미 추가 변경 없음. 실제 손끝 접촉·사진/배지/날짜 가독성·늘이기 인상은 자동 보호 밖.
+- **실사용 기기 instrumentation: 미실행. 실기기 감각 QA: 사용자 확인 완료(2026-10-16).** 사용자가 "좋아 실기기 확인 완료했어 커밋, 푸시 진행하고 인수인계서 갱신해줘"라고 확인·승인했어. Codex 설치·기기 명령·emulator 사용 없음. 로컬 compiler/session 산출물 수동 편집/삭제/stage 없음.
+- **Git/CI 마감:** 사용자 승인 범위의 구현·자원·문서만 커밋·푸시하고 해당 HEAD의 Android CI를 확인할 예정. CI는 JVM 테스트/debug APK/instrumentation APK 컴파일이며 실제 instrumentation 실행이 아니야.
+- **남은 후속 후보(구현 승인 아님):** quick select 양 그림을 새 동글이 손 자원으로 교체. 신규 이미지 제공 후 기존 부채 논리 좌표/블록/터치 구도를 조사해야 해. 104일차 문서/workflow 설치 반영 보류는 별도 범위로 유지해.
+
+---
+
+# [대체된 시안 기록] HANDOFF — 105일차 동글이 쉼터 전환: 명칭만 반영, 외형 STOP
+
+확인일: 2026-10-16. 사용자 지시로 양 콘셉트 폐기. 구현 목표는 엽서를 먼저 그리고 중앙 투명 슬롯이 있는 동글이 PNG를 앞에 겹치는 방식이야.
+
+- **시작/종료 Git:** `feature/photo-sticker`, `e8ab9c9`, origin 추적 ref 대비 0/0(fetch 없음). 기존 Stage/HANDOFF/MAP 수정과 보호·이미지·문서 untracked 보존. 이번 변경은 GalleryScreen의 사용자 노출 label, 문자열 테스트, TEST-COVERAGE-MAP 및 이 HANDOFF 기록이야. commit/push 없음.
+- **부분 구현:** `GalleryScreen.kt`의 SHEEP_RANCH label을 `동글이 쉼터`로 바꿨어. contentDescription은 item.label()을 사용해 같이 변경돼. 내부 enum·route·callback은 그대로. 문자열 테스트도 새 이름으로 변경(@Test 11 유지), 지도 갱신.
+- **외형 STOP:** 작업 시작 때 없던 `drawable-nodpi/round_head.png`가 작업 중 제공됨. 직접 열어 1254×1254 RGBA, 1,479,053 B와 중앙 투명 슬롯 확인(alpha(620,800)=0, (620,990)=0; 좌우 경계는 불투명). 파일 미편집·미축소. 기존 폭 76/84/92dp에서 지정 슬롯 231/1254의 폭은 약 14.0/15.5/16.9dp(inset 전)이고, 날짜/사진 가독성이 지나치게 작아질 위험이 커. 사용자가 명시한 슬롯 크기 STOP 조건에 따라 임의 확대·movement/gesture 변경·이미지 생성 없이 멈춤. 슬롯 규격 판단 후 재개해야 해.
+- **현재 실제 화면 주의:** 이름만 동글이 쉼터이고 이전 미커밋 양 몸체 시안은 Stage에 아직 남아 있어. 동글이 구현 완료가 아니야. 이번에 이전 외형을 임의로 다른 모습으로 대체하지 않았어. 정적 배경 양은 앞선 작업에서 이미 제거됨.
+- **quick select:** 새 이미지 미제공이므로 기존 `quick_select_sheep_hand.png` 유지. 교체 지점은 GalleryScreen.kt의 `GalleryQuickSelectItem.SHEEP_RANCH -> R.drawable.quick_select_sheep_hand`(handResId 매핑). 새 자원도 부채의 논리 블록/터치 좌표·구도를 보존해야 하며 슬롯 캐릭터 PNG와 별개야.
+- **검증:** git diff --check 통과. assembleDebug + GalleryViewSelectionStructureTest 실행 시도는 기존 settings 8행 foojay-resolver-convention:0.10.0 해석 실패로 compile/test 본문 미도달. 실제 화면 QA·instrumentation·CI 미실행. 새 성공 테스트 수를 주장하지 않아.
+- **재개:** 자원은 `app/src/main/res/drawable-nodpi/round_head.png`로 제공 완료. 기존 객체 크기를 유지하면서 사진을 읽을 수 있는 넓은 슬롯 자원으로 조정할지, 또는 작은 슬롯의 한계를 수용하고 현재 자원으로 시안을 진행할지 사용자 판단 필요. 쫑쫑컵·DB·movement·gesture 수정 없음.
+
+---
+
+# [대체된 시안 기록] HANDOFF — 105일차 수정: 움직이는 카드 → 양 외형 (화면 QA 미완료)
+
+확인일: 2026-10-16. 사용자 수정 작업지시서로 정적 배경 양 방향을 폐기하고, 움직이는 객체 외형을 수정했어. 수동 표준 모드, 담당 Codex.
+
+- **시작/종료 Git:** `feature/photo-sticker`, HEAD `e8ab9c9`, origin 추적 ref 대비 0/0(fetch 미실행). 시작부터 Stage/HANDOFF/MAP 수정, 승인 양 PNG 및 기존 보호·문서·설정 untracked가 있었어. 이번 작업은 이전 Stage 시안과 105일차 자원 기록만 수정했고 104일차 기존 차이는 보존했어. stage·commit·push 없음.
+- **구현:** Stage의 정적 양 블록 삭제. `SheepRanchCard`에 시각 분기 `sheepAppearance = !raceEnabled`, 목장만 `RanchSheepContent` 사용. 이동/gesture/state 로직 복제 없음. 쫑쫑컵 카드의 표면·border·7dp padding·10sp 날짜·elevation은 기존 분기에 유지.
+- **외형:** 기존 W=92/84/76dp, H=W+36dp 직사각 조작 영역 유지. 양은 하단 중앙 W×2W/3, 사진은 폭 0.56W(51.52/47.04/42.56dp), x=0.12W, y=H−2W/3−0.56W×0.65. `StampCardContent`로 톱니 사진·8sp 날짜·편지 배지 유지. 목장만 사각 표면/border/padding/elevation을 제거하고 기존 타원 바닥 그림자는 그대로야.
+- **이미지:** `sheep_ranch_sheep.png` 720×480 RGBA, 611,857 B 그대로 재사용, 이번에 재편집/재축소 없음. 자원 지도는 새 소비 구조로 최신화.
+- **기능 보존:** 카드 크기·ranchFloorY·배회·점프·낙하·들기·떨림·늘이기·복귀·tap callback·입력 우선순위·카드 z-order·최신 10장·미래 우체통 제외·DB/저장·레이스 로직 유지. 사진과 몸체가 부모의 기존 scale/rotation을 함께 받으므로 늘이기 때 함께 변형돼. 머리/다리 왜곡의 실제 인상은 미검증, 문제가 있으면 gesture 재설계 없이 보고해야 해.
+- **로컬 자동검증:** `git diff --check` 통과. 설치된 Gradle 9.4.1/JBR로 `:app:assembleDebug :app:testDebugUnitTest` 실행 시도했지만 settings 8행 foojay-resolver-convention:0.10.0 해석 실패(exit 1), compile/test 본문 미도달. 기존 XML 성공 기록 재사용 없음, build/dependency 변경 없음. motion·gesture 코드 원문 비교로 보존 확인.
+- **TEST-COVERAGE-MAP: 변경 없음.** 테스트 수/의미/기존 보호 범위 변화 없음. 새로운 몸체/사진 합성·왜곡·실제 touch/render는 기존 자동 보호 밖.
+- **실사용 기기 instrumentation: 미실행. CI: 미실행(push 없음). 실기기 감각 QA: 대기.** 설치·기기 명령·emulator 사용 없음. 실제 앱 화면을 확인했다고 주장하지 않아.
+- **다음 필수 확인:** 사용자 Android Studio 실행/화면 확인. 1/여러/최대 10마리, 서로 다른 사진·겹침, 걷기/점프/들기/떨림/늘이기/복귀/탭 상세 이동, 쫑쫑컵 외형 유지. 큰 글꼴에서 8sp 날짜 말줄임·작은 사진과 배지 가독성도 미검증. QA 전 Git 반영 금지. 컴파일/테스트는 플러그인 해석이 되는 환경에서 다시 확인해야 해.
+
+---
+
+# [대체된 시안 기록] HANDOFF — 105일차 보너스: 목장 첫 정적 양
+
+확인일: 2026-10-16. 수동 표준 모드, 담당 Codex. 사용자가 제공·승인한 PNG 한 장을 목장에만 추가했어. 기존 104일차 기록과 시작 시 미커밋 변경은 아래에 그대로 보존했어.
+
+- **Git 시작/종료:** `feature/photo-sticker`, HEAD `e8ab9c9`, origin 추적 ref 대비 0/0(fetch 미실행). 시작부터 `HANDOFF.md` tracked 수정, `.claude/settings.local.json`, `.codex-config.candidate.toml`, `.kotlin/errors/` 로그 3개, 보호 `postcard_paper_fiber_tile.png`, `IMAGE-ASSET-STANDARD.md`, 사용자 제공 `sheep_ranch_sheep.png` untracked. stage·commit·push 없음.
+- **구현 완료:** `SheepRanchStage.kt`에 `if (!raceEnabled)` 정적 `Image` 1개. 풀밭 뒤/카드 그림자 앞, 입력·별도 state·animation 없음. 폭 `min(96dp, 무대폭×0.28, 무대높이×0.30)`, 높이 폭×2/3, x=무대폭×0.08. 발굽 alpha 끝 462/480을 반영해 일반 상태는 풀밭 시작선(높이 58%), 빈 상태는 중앙 안내문 아래 풀밭 안쪽(높이 80%)에 접지. 쫑쫑컵에서는 이미지 호출·로딩 없음.
+- **이미지:** 사용자 제공 1536×1024 → 720×480 RGBA, 611,857 B. PArgb + HighQualityBicubic 축소, 비율·전체 canvas 유지. 최종 alpha 0~255, alpha>16 bbox `(27,20)..(704,461)`. 소스 이미지 육안 확인 완료, 작은 앱 표시의 식별성은 미검증. IMAGE-ASSET-MAP에 자원·anchor·메모리 추정·미검증 기록 추가. STANDARD 자체는 미변경.
+- **보존:** 카드 크기·ranchFloorY·이동 범위·하단 92dp·z-order·제스처·animation·최신 10장·미래 우체통 조건·DB/DAO/repository/ViewModel·레이스 로직 변경 없음. 사용자 데이터 저장/변환 없음.
+- **로컬 자동검증: 실행 불가(Gradle 환경).** Wrapper 실행 파일 부재 확인 후 설치된 Gradle 9.4.1 + Android Studio JBR로 `:app:assembleDebug :app:testDebugUnitTest` 오프라인/일반 실행. 둘 다 settings 8행 `org.gradle.toolchains.foojay-resolver-convention:0.10.0` plugin 해석 실패로 compile/test 본문 미도달. 설정·dependency는 바꾸지 않았고 기존 테스트 XML은 이번 성공 근거로 사용하지 않았어. 이미지 audit용 Add-Type C# helper는 Temp DLL 권한 오류로 실패했지만, PowerShell/System.Drawing 읽기 검사로 alpha·bbox를 확인했어. `git diff --check` 통과.
+- **TEST-COVERAGE-MAP: 변경 없음.** 기존 테스트의 수·의미·보호 범위 변화 없음. 신규 장식의 실제 렌더·터치·네 다리 식별은 기존 테스트 보호 밖이야.
+- **실사용 기기 instrumentation: 미실행. GitHub Actions CI: 미실행(push 없음). 실기기 감각 QA: 사용자 확인 대기.** 기기 명령·설치·emulator 사용 없음.
+- **QA 재개:** 현재 작업트리를 사용자가 Android Studio에서 실행한 뒤, 목장 한 마리/네 다리/96dp 존재감/발 접지, 엽서 탭·걷기·점프·길게 눌러 이동·늘이기, 손 메뉴 간섭, 쫑쫑컵 비표시, 빈 상태 배치를 확인해야 해. 빌드 플러그인 해석 문제도 해결된 환경에서 컴파일·기존 JVM 테스트 확인이 필요해. QA 전 commit/push 금지, QA 완료 후에도 별도 Git 승인 필요.
+
+---
+
 # HANDOFF — 104일차 추가: quick select 손 5장 이미지 다이어트(D안) + 실기기 재측정
 
 확인일: 2026-10-15. 수동 표준 모드(104일차 추가 작업지시서), 담당 Claude Code. 내장 Task 도구는 없어서 진행 안내로 대신했다.
