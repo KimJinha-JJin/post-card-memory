@@ -1,3 +1,18 @@
+# HANDOFF — 105일차 최종 마감: 이미지 2장 다이어트 + IMAGE-ASSET-STANDARD 저장소 반영
+
+확인일: 2026-10-16. 수동 표준 모드, 담당 Claude Code. 시작 `feature/photo-sticker` HEAD `e952184`, origin 0/0, tracked clean.
+
+- **다이어트(2장만, 캔버스 전체 정비례 축소·crop/이동/코드 변경 없음):** `donggeuli_arms_up` 720²→**480²**, 427,339→**190,972 B**(decode 추정 2.07→0.92MB, 최대 10장 동시). `tape_press_hand` 1254²→**1024²**, 1,724,028→**1,125,904 B**(decode 추정 6.29→4.19MB). 2장 합 −834,491 B. 정규화 bbox·손가락 중심 비율 일치(오차 ≤0.002), alpha 유지, 고립 점 증가 없음, halo 없음(edge 확대 확인). editor_label_peek 등 나머지는 유지.
+- **APK:** 로컬 release 41,392,553(22:59, 다이어트 전) → **40,599,253 B**(−793,300). 두 빌드 모두 보호 untracked PNG 3장(4,859,098 B, Stored)을 포함한 같은 조건. clean 기준 추정 ≈35.74MB(측정 아님). 104일차 값과 직접 비교 불가.
+- **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, 96 suite / 902 tests 실패·오류·skip 0. TEST-COVERAGE-MAP 변경 없음(테스트 수·의미 불변).
+- **IMAGE-ASSET-STANDARD.md: 저장소 정식 추가.** 2절 프리셋(실사·캐릭터·활자, 공통 금지, 고정 블록), 6절 자산당 독립 프롬프트, 7절 좌표 의존 조사가 오늘 운영 기준과 충돌 없음을 확인. 크기 값은 104일차 기록이라는 기존 고지에 MAP 105일차 절 링크 1문장만 추가.
+- **IMAGE-ASSET-MAP:** 105일차 절의 두 행·합계(21장 현재 9,822,008 B) 갱신.
+- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s R3KYB00HAYY install -r` debug APK 설치 Success(firstInstallTime 2026-10-05 유지 = 재설치·데이터 삭제 없음). 사용자가 동글이 쉼터·테이프 누르기 확인 완료 후 commit/push 승인.
+- **Git:** 이번 범위(PNG 2장, IMAGE-ASSET-STANDARD.md 신규, IMAGE-ASSET-MAP, 이 HANDOFF)만 명시 stage. 보호 untracked(`.codex-config.candidate.toml`, `.kotlin/`, fiber·round_head·sheep PNG) 제외. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
+- **105일차 이미지 작업: 종료.** 남은 후보(승인 아님): 미사용 `ic_launcher_foreground.png`·보호 PNG 3장 정리 판단, editor_label_peek 627² 다이어트(코드 상수 변경 필요), workflow 설치본 반영 보류.
+
+---
+
 # HANDOFF — 105일차 마지막: 실사 인쇄물 오림 질감 자원 21장 적용 · 실기기 QA 완료
 
 ## 마감(현재 상태)
