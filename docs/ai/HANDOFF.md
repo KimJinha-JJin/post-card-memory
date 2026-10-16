@@ -2,7 +2,7 @@
 
 확인일: 2026-10-16. 사용자 제공 `donggeuli_arms_up.png`로 재개. 좁은 중앙 슬롯 방식은 사용하지 않고, 양팔 위에 엽서를 드는 첫 시안으로 수정했어. 수동 표준 모드, 담당 Codex.
 
-- **구현 기준 Git:** `feature/photo-sticker`, HEAD `e8ab9c9`, origin 추적 ref 대비 0/0. 기존 문서·보호 untracked는 보존. 2026-10-16 사용자가 실기기 확인 완료 후 commit/push와 HANDOFF 갱신을 명시 승인해서 Git 마감을 진행해. 104일차 3부 HANDOFF 미커밋 기록과 IMAGE-ASSET-STANDARD.md는 이번 커밋에서 제외해.
+- **구현/Git:** 시작 `feature/photo-sticker`, `e8ab9c9`, origin 추적 ref 대비 0/0. 사용자 실기기 확인 및 Git 승인 후 **`db2278a`**로 구현 7개 파일 commit·push 완료. 104일차 3부 HANDOFF 미커밋 기록, IMAGE-ASSET-STANDARD.md, 설정·보호 및 이전 시안 PNG는 제외·보존했어. 문서 마감 commit은 Git log로 확인해.
 - **구현 완료:** 기존 직사각 상자 W=92/84/76dp, H=W+36dp 유지. `characterAppearance = !raceEnabled` → `DonggeuliCardContent`. 캐릭터 C=0.90W, top=H−14dp−C. 사진 P=0.50C(41.4/37.8/34.2dp), 가로 중앙, top=캐릭터top+0.20C−P. 톱니 사진/편지 배지를 먼저 그리고 캐릭터 PNG를 앞에 겹쳐 손끝이 사진 하단 양 모서리를 덮게 배치. 사용자 실기기 확인 완료. 날짜는 하단 별도 8sp yyyy-MM-dd Text, 한 줄 말줄임.
 - **이미지:** `drawable-nodpi/donggeuli_arms_up.png` 1254² RGBA → 720² RGBA, 477,088 B. PArgb + HighQualityBicubic, 비율/canvas 유지, crop/tint 없음. 최종 alpha 0~255, 투명 319,845px, alpha>16 bbox `(134,60)..(599,679)`. 재구도/새 이미지 생성 없음. 기존 sheep/round_head PNG는 미사용 연결 상태로 파일 보존.
 - **기능 보존:** 기존 motion/바닥 그림자/gesture 원문 비교 PASS. 배회·점프·들기·떨림·늘이기·복귀·탭 callback·직사각 hit·z-order·ranchFloorY·하단 예약·최신10장·미래 우체통 제외·DB/저장/레이스 로직 미변경. 캐릭터/사진/날짜가 부모 transform을 함께 받음. 쫑쫑컵은 기존 카드 외형/10sp 날짜/7dp padding/elevation 분기 유지.
@@ -11,7 +11,8 @@
 - **로컬 자동검증: 통과.** 설치 Gradle 9.4.1 + Android Studio JBR, `:app:assembleDebug :app:testDebugUnitTest` BUILD SUCCESSFUL(exit 0, 3m9s). 최신 XML 96 suite / 902 tests, 실패/오류/skip 0. GalleryViewSelectionStructureTest 11, GalleryQuickSelectFanTest 14 포함. APK `app/build/outputs/apk/debug/app-debug.apk`(2026-10-16 17:50 생성). git diff --check 통과. build/dependency 수정 없음.
 - **TEST-COVERAGE-MAP: 갱신 완료.** 앞선 명칭 기대값 변경과 현재 합성 렌더 QA 공백 및 최신 실행 결과 반영. 테스트 수/파일/의미 추가 변경 없음. 실제 손끝 접촉·사진/배지/날짜 가독성·늘이기 인상은 자동 보호 밖.
 - **실사용 기기 instrumentation: 미실행. 실기기 감각 QA: 사용자 확인 완료(2026-10-16).** 사용자가 "좋아 실기기 확인 완료했어 커밋, 푸시 진행하고 인수인계서 갱신해줘"라고 확인·승인했어. Codex 설치·기기 명령·emulator 사용 없음. 로컬 compiler/session 산출물 수동 편집/삭제/stage 없음.
-- **Git/CI 마감:** 사용자 승인 범위의 구현·자원·문서만 커밋·푸시하고 해당 HEAD의 Android CI를 확인할 예정. CI는 JVM 테스트/debug APK/instrumentation APK 컴파일이며 실제 instrumentation 실행이 아니야.
+- **GitHub Actions CI: 실행·통과.** `db2278a`의 [Android CI run 38877394320](https://github.com/KimJinha-JJin/post-card-memory/actions/runs/38877394320) success, build-and-test 4m36s. JVM 테스트/debug APK/instrumentation APK 컴파일 모두 성공. 실제 instrumentation 실행은 아니야. 이 결과만 기록하는 별도 문서 마감 commit/push 뒤의 CI 상태는 완료보고에서 구분하며, 문서-only 성공 기록 때문에 추가 문서 커밋을 반복하지 않아.
+- **남는 작업트리:** 104일차 3부 HANDOFF 15줄은 기존 미커밋 기록 그대로 보존. IMAGE-ASSET-STANDARD.md, .codex-config.candidate.toml, .kotlin/errors 로그, postcard_paper_fiber_tile.png, round_head.png, sheep_ranch_sheep.png 및 .claude 로컬 설정은 이번 Git 마감에 포함하지 않음. .claude 설정은 사용자 global ignore와 격리 환경 차이에 따라 status 표시가 다를 수 있으나 파일은 존재 확인. 새 작업 시작 시 실제 상태 재확인.
 - **남은 후속 후보(구현 승인 아님):** quick select 양 그림을 새 동글이 손 자원으로 교체. 신규 이미지 제공 후 기존 부채 논리 좌표/블록/터치 구도를 조사해야 해. 104일차 문서/workflow 설치 반영 보류는 별도 범위로 유지해.
 
 ---
