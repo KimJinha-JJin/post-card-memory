@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -40,17 +41,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
@@ -58,7 +63,6 @@ import androidx.compose.ui.zIndex
 import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCardContent
-import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
@@ -70,6 +74,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
@@ -78,6 +83,8 @@ import kotlin.time.Duration.Companion.milliseconds
 private val RanchSage = Color(0xFFDDE8D5)
 private val RanchGrass = Color(0xFF8BA37C)
 private val RanchShadow = Color(0xFF40382F)
+private val ShelterFiber = Color(0xFF8A7A63)
+private val ShelterInkGreen = Color(0xFF6E8463)
 private val RanchStagePadding = 18.dp
 private val RanchBottomReserved = 92.dp
 private val RanchCardCorner = 12.dp
@@ -327,9 +334,15 @@ fun SheepRanchStage(
             modifier = Modifier.matchParentSize()
         )
 
-        RanchBackground(
-            modifier = Modifier.matchParentSize()
-        )
+        if (raceEnabled) {
+            RanchBackground(
+                modifier = Modifier.matchParentSize()
+            )
+        } else {
+            ShelterPaperBackground(
+                modifier = Modifier.matchParentSize()
+            )
+        }
 
         if (raceEnabled) {
             SheepRanchRaceVenue(
@@ -470,6 +483,157 @@ private fun RanchBackground(
             )
         }
     }
+}
+
+/**
+ * 동글이 쉼터 전용 바닥. 생활 종이 섬유·바랜 인쇄 망점·옅은 얼룩·중성펜 풀을 낮은 대비로 그린다.
+ * 고정 시드라 크기가 같으면 매번 같은 모양이며, 크기가 바뀔 때만 다시 계산한다.
+ */
+@Composable
+private fun ShelterPaperBackground(
+    modifier: Modifier = Modifier
+) {
+    Spacer(
+        modifier = modifier.drawWithCache {
+            val rng = Random(106)
+            val dp = 1.dp.toPx()
+            val w = size.width
+            val h = size.height
+            val floorBase = h * 0.58f
+            val phaseA = rng.nextFloat() * 2f * PI.toFloat()
+            val phaseB = rng.nextFloat() * 2f * PI.toFloat()
+            fun boundaryY(x: Float): Float {
+                val t = x / w.coerceAtLeast(1f) * 2f * PI.toFloat()
+                return floorBase + sin(t * 1.3f + phaseA) * 5f * dp + sin(t * 3.7f + phaseB) * 2.2f * dp
+            }
+
+            // 풀밭 경계: 일정하지 않은 손 오림 선
+            val edgeStep = 6f * dp
+            val edgePoints = buildList {
+                var x = 0f
+                while (x < w + edgeStep) {
+                    val px = x.coerceAtMost(w)
+                    add(Offset(px, boundaryY(px) + (rng.nextFloat() - 0.5f) * 1.2f * dp))
+                    x += edgeStep
+                }
+            }
+            val floorPath = Path().apply {
+                moveTo(edgePoints.first().x, edgePoints.first().y)
+                edgePoints.drop(1).forEach { lineTo(it.x, it.y) }
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            // 경계선은 굵기와 끊김이 조금씩 다른 펜 획 몇 개로 나눈다.
+            val edgeStrokes = buildList {
+                var i = 0
+                while (i < edgePoints.size - 1) {
+                    val length = 4 + rng.nextInt(9)
+                    val end = (i + length).coerceAtMost(edgePoints.size - 1)
+                    val path = Path().apply {
+                        moveTo(edgePoints[i].x, edgePoints[i].y)
+                        for (j in i + 1..end) lineTo(edgePoints[j].x, edgePoints[j].y)
+                    }
+                    add(Triple(path, (1.0f + rng.nextFloat() * 0.7f) * dp, 0.24f + rng.nextFloat() * 0.12f))
+                    i = end + if (rng.nextInt(3) == 0) 1 else 0
+                }
+            }
+
+            // 종이 섬유: 화면 전체의 아주 짧고 옅은 곡선
+            val fiberPath = Path().apply {
+                repeat(150) {
+                    val sx = rng.nextFloat() * w
+                    val sy = rng.nextFloat() * h
+                    val len = (3f + rng.nextFloat() * 6f) * dp
+                    val angle = (rng.nextFloat() - 0.5f) * 0.9f
+                    val ex = sx + cos(angle) * len
+                    val ey = sy + sin(angle) * len
+                    moveTo(sx, sy)
+                    quadraticTo(
+                        (sx + ex) / 2f + (rng.nextFloat() - 0.5f) * 2f * dp,
+                        (sy + ey) / 2f + (rng.nextFloat() - 0.5f) * 2f * dp,
+                        ex,
+                        ey
+                    )
+                }
+            }
+
+            // 바랜 인쇄 망점: 바닥에만, 아래로 갈수록 조금 더 촘촘하다.
+            val dotStep = 5.5f * dp
+            val halftone = buildList {
+                var row = 0
+                var y = floorBase - 8f * dp
+                while (y < h) {
+                    var x = if (row % 2 == 0) 0f else dotStep / 2f
+                    while (x < w) {
+                        val px = x + (rng.nextFloat() - 0.5f) * 0.8f * dp
+                        val py = y + (rng.nextFloat() - 0.5f) * 0.8f * dp
+                        val edge = boundaryY(px)
+                        if (py > edge + 3f * dp) {
+                            val depth = ((py - edge) / (h - edge).coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            if (rng.nextFloat() < 0.28f + depth * 0.32f) add(Offset(px, py))
+                        }
+                        x += dotStep
+                    }
+                    y += dotStep
+                    row++
+                }
+            }
+
+            // 연두·회녹색의 미세한 얼룩
+            val smudges = List(7) {
+                val sw = (40f + rng.nextFloat() * 70f) * dp
+                val sh = (14f + rng.nextFloat() * 22f) * dp
+                val cx = rng.nextFloat() * w
+                val cy = floorBase + 10f * dp + rng.nextFloat() * (h - floorBase - 20f * dp).coerceAtLeast(1f)
+                Triple(Offset(cx - sw / 2f, cy - sh / 2f), Size(sw, sh), 0.035f + rng.nextFloat() * 0.03f)
+            }
+
+            // 중성펜 풀: 2~3가닥 작은 포기, 길이·굵기·기울기가 제각각
+            val tufts = buildList {
+                repeat(22) {
+                    val bx = rng.nextFloat() * w
+                    val top = boundaryY(bx) + 14f * dp
+                    val by = top + rng.nextFloat() * (h - top - 10f * dp).coerceAtLeast(1f)
+                    val blades = 2 + rng.nextInt(2)
+                    val alpha = 0.24f + rng.nextFloat() * 0.14f
+                    repeat(blades) { b ->
+                        val lean = (b - (blades - 1) / 2f) * 0.42f + (rng.nextFloat() - 0.5f) * 0.3f
+                        val len = (4f + rng.nextFloat() * 5f) * dp
+                        val sx = bx + (b - 1) * 1.4f * dp
+                        val ex = sx + sin(lean) * len
+                        val ey = by - cos(lean) * len
+                        val path = Path().apply {
+                            moveTo(sx, by)
+                            quadraticTo(sx + sin(lean) * len * 0.2f, by - len * 0.6f, ex, ey)
+                        }
+                        add(Triple(path, (0.9f + rng.nextFloat() * 0.5f) * dp, alpha))
+                    }
+                }
+            }
+
+            onDrawBehind {
+                drawPath(path = fiberPath, color = ShelterFiber.copy(alpha = 0.06f), style = Stroke(width = 0.6f * dp, cap = StrokeCap.Round))
+                drawPath(path = floorPath, color = RanchSage.copy(alpha = 0.5f))
+                smudges.forEach { (topLeft, ovalSize, alpha) ->
+                    drawOval(color = ShelterInkGreen.copy(alpha = alpha), topLeft = topLeft, size = ovalSize)
+                }
+                drawPoints(
+                    points = halftone,
+                    pointMode = PointMode.Points,
+                    color = ShelterInkGreen.copy(alpha = 0.09f),
+                    strokeWidth = 1.1f * dp,
+                    cap = StrokeCap.Round
+                )
+                edgeStrokes.forEach { (path, width, alpha) ->
+                    drawPath(path = path, color = ShelterInkGreen.copy(alpha = alpha), style = Stroke(width = width, cap = StrokeCap.Round))
+                }
+                tufts.forEach { (path, width, alpha) ->
+                    drawPath(path = path, color = ShelterInkGreen.copy(alpha = alpha), style = Stroke(width = width, cap = StrokeCap.Round))
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -881,7 +1045,8 @@ private fun SheepRanchCard(
     val shadowWidthScale = shadowScale * lerp(1f, 1.14f, depthProgress) * stretchShadowX
     val shadowHeightScale = shadowScale * lerp(1f, 0.72f, depthProgress) * stretchShadowY
 
-    Box(
+    // 동글이 쉼터의 종이 오림 캐릭터는 바닥 그림자 없이 그린다. 쫑쫑컵 카드만 그림자를 유지한다.
+    if (!characterAppearance) Box(
         modifier = Modifier
             .zIndex(if (isGrabbed || isDropping || isStretching) 4f else 1f + index / 100f)
             .offsetInStage(
@@ -1237,15 +1402,6 @@ private fun DonggeuliCardContent(postcard: Postcard) {
             modifier = Modifier
                 .offset(x = (maxWidth - characterSize) / 2, y = characterTop)
                 .size(characterSize)
-        )
-        Text(
-            text = PostcardDateFormat.formatIso(postcard.capturedAt),
-            color = GraphiteAccent,
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 }

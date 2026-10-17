@@ -1,3 +1,20 @@
+# HANDOFF — 106일차: 동글이 쉼터 외형 폴리싱(날짜·그림자 제거, 종이 질감 바닥)
+
+확인일: 2026-10-17. 수동 표준 모드(106일차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 `feature/photo-sticker` HEAD `ae46b32`, origin 0/0(fetch 후), tracked clean, `git diff --check` 통과. 보호 untracked(`.codex-config.candidate.toml`, `.kotlin/`, fiber·round_head·sheep PNG) 무변경.
+
+- **변경 파일: `SheepRanchStage.kt` 1개.** 공용 `StampCardContent`·`SheepRanchRace*`·`SheepRanchCloudLayer`·테스트 무변경.
+  - **날짜 제거:** 쉼터 전용 private `DonggeuliCardContent`의 하단 날짜 `Text`만 삭제(엽서 레이어는 기존 `dateLabelOverride = ""` 유지). 다른 화면 날짜 영향 없음.
+  - **그림자 제거:** 카드 바닥 타원 그림자 Box를 `!characterAppearance`(= 쫑쫑컵 모드)일 때만 그림. 쫑쫑컵 그림자·카드 elevation 계산 그대로.
+  - **바닥 질감:** `raceEnabled`면 기존 `RanchBackground` 그대로, 쉼터면 새 `ShelterPaperBackground`(Canvas `drawWithCache`, 고정 시드 106): 화면 전체 옅은 종이 섬유, 물결형 불규칙 풀밭 경계 + 굵기·끊김 다른 펜 획, 바닥에 바랜 인쇄 망점(아래로 갈수록 촘촘), 연두·회녹 옅은 얼룩 7개, 2~3가닥 중성펜 풀 22포기. 새 이미지 자원 없음.
+  - 이동·점프·낙하·들기·떨림·늘이기·복귀·탭 이동 로직 무변경.
+- **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug` 성공, XML 96 suite / 902 tests 실패·오류·skip 0. TEST-COVERAGE-MAP 변경 없음(테스트 수·의미 불변, 해당 파일 참조 테스트 없음).
+- **실사용 기기 instrumentation:** 불필요(미실행).
+- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s R3KYB00HAYY install -r` debug APK 설치 Success(firstInstallTime 2026-10-05 유지 = 재설치·데이터 삭제 없음). 사용자가 날짜·그림자·바닥 질감·놀이 동작·쫑쫑컵 확인 완료 후 commit/push 승인.
+- **Git:** 이번 범위(`SheepRanchStage.kt`, 이 HANDOFF)만 명시 stage해 commit·push. 보호 untracked 제외. release build는 이번 변경이 Kotlin UI 1파일이라 생략. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
+- **후속(승인 아님, 107일차 이후 후보):** SheepRanch 리브랜딩/rename, Quick Select 양 이미지 의미 교체, 보호 PNG 정리 판단, 사용자 제안 「착지 햅틱 + 작은 파문」(사용자가 놓아 떨어질 때만·쉼터 한정·정적 형태 먼저 승인 권장, 미착수).
+
+---
+
 # HANDOFF — 105일차 최종 마감: 이미지 2장 다이어트 + IMAGE-ASSET-STANDARD 저장소 반영
 
 확인일: 2026-10-16. 수동 표준 모드, 담당 Claude Code. 시작 `feature/photo-sticker` HEAD `e952184`, origin 0/0, tracked clean.
