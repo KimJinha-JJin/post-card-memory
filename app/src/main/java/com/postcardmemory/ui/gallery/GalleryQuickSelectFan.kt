@@ -76,7 +76,7 @@ internal enum class GalleryQuickSelectItem(
     CAMERA(0, 189f, 402f, 703f, 759f),
     FUTURE_MAILBOX(1, 243f, 474f, 763f, 799f),
     POND(2, 212f, 430f, 733f, 803f),
-    SHEEP_RANCH(3, 240f, 454f, 763f, 810f),
+    DONGGEULI_SHELTER(3, 240f, 454f, 763f, 810f),
     RACE(4, 232f, 432f, 752f, 801f);
 
     val blockCenterXFraction: Float get() = (blockLeftPx + blockRightPx) / 2f / QUICK_SELECT_HAND_SOURCE_PX

@@ -1,7 +1,7 @@
 package com.postcardmemory.ui.gallery
 
-/** 〈엽서 양떼목장 — 쫑쫑컵〉 레이스 이벤트의 진행 단계. */
-enum class SheepRanchRacePhase {
+/** 〈엽서 쫑쫑컵〉 레이스 이벤트의 진행 단계. */
+enum class PostcardRacePhase {
     IDLE,
     GATHERING,
     COUNTDOWN,
@@ -11,7 +11,7 @@ enum class SheepRanchRacePhase {
 }
 
 /** 레이스가 시작되는 순간의 카드 위치·회전 스냅샷 — 레이스 종료 후 이 자리로 되돌아간다. */
-data class SheepRanchCardSnapshot(
+data class PostcardRaceCardSnapshot(
     val postcardId: Long,
     val x: Float,
     val y: Float,
@@ -23,11 +23,11 @@ data class SheepRanchCardSnapshot(
  * `sessionId`는 레이스가 새로 시작될 때마다 증가해 애니메이션 재시작 키로 쓰인다.
  * `winnerId`는 레이스 시작 시 한 번만 무작위로 뽑혀 진행 중에는 값이 바뀌지 않는다.
  */
-data class SheepRanchRaceState(
-    val phase: SheepRanchRacePhase = SheepRanchRacePhase.IDLE,
+data class PostcardRaceState(
+    val phase: PostcardRacePhase = PostcardRacePhase.IDLE,
     val racerIds: List<Long> = emptyList(),
     val spectatorIds: List<Long> = emptyList(),
     val winnerId: Long? = null,
     val sessionId: Int = 0,
-    val snapshots: Map<Long, SheepRanchCardSnapshot> = emptyMap()
+    val snapshots: Map<Long, PostcardRaceCardSnapshot> = emptyMap()
 )

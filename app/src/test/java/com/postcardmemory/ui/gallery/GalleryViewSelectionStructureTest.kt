@@ -118,7 +118,7 @@ class GalleryViewSelectionStructureTest {
         assertTrue(hands.contains("GalleryQuickSelectItem.POND -> currentOnPlayModeSelected(GalleryPlayMode.POND)"))
         assertTrue(
             hands.contains(
-                "GalleryQuickSelectItem.SHEEP_RANCH -> currentOnPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)"
+                "GalleryQuickSelectItem.DONGGEULI_SHELTER -> currentOnPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)"
             )
         )
         assertTrue(hands.contains("GalleryQuickSelectItem.RACE -> currentOnPlayModeSelected(GalleryPlayMode.RACE)"))
@@ -135,7 +135,7 @@ class GalleryViewSelectionStructureTest {
             "R.drawable.quick_select_camera_hand",
             "R.drawable.quick_select_letter_hand",
             "R.drawable.quick_select_river_hand",
-            "R.drawable.quick_select_sheep_hand",
+            "R.drawable.quick_select_shelter_hand",
             "R.drawable.quick_select_checker_hand"
         ).forEach { res -> assertTrue("손 자산 누락: $res", sourceText.contains(res)) }
         assertFalse(sourceText.contains("R.drawable.seal_stamp_hand"))

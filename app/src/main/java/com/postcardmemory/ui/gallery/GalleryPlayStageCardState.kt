@@ -2,7 +2,7 @@ package com.postcardmemory.ui.gallery
 
 import kotlin.math.abs
 
-data class SheepRanchCardSpec(
+data class PlayStageCardSpec(
     val seed: Int,
     val startBias: Float,
     val startJitter: Float,
@@ -16,17 +16,17 @@ data class SheepRanchCardSpec(
     val direction: Int
 )
 
-fun createSheepRanchCardSpec(
+fun createPlayStageCardSpec(
     postcardId: Long,
     index: Int,
     count: Int
-): SheepRanchCardSpec {
+): PlayStageCardSpec {
     val seed = abs((postcardId * 1103515245L + index * 12345L).hashCode())
     val countSafe = count.coerceAtLeast(1)
     val bandCenter = (index + 0.5f) / countSafe
     val jitter = (((seed / 7) % 21) - 10) / 100f
 
-    return SheepRanchCardSpec(
+    return PlayStageCardSpec(
         seed = seed,
         startBias = (bandCenter + jitter).coerceIn(0.08f, 0.92f),
         startJitter = (((seed / 11) % 100) / 100f),

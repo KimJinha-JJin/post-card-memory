@@ -1,3 +1,23 @@
+# HANDOFF — 107일차 추가: 레거시 명칭(SheepRanch → 놀이 무대·동글이 쉼터·쫑쫑컵) 정합성 정리
+
+확인일: 2026-10-18. 수동 표준 모드(107일차 추가 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `f8ab77f`(이미지 작업 commit, push·CI success 확인), origin 0/0, tracked clean.
+
+- **사실관계:** 옛 `SheepRanchStage`는 동글이 쉼터(`raceEnabled=false`)와 엽서 쫑쫑컵(`raceEnabled=true`)의 **공용 무대**였다. 그래서 전부 "쉼터"로 바꾸지 않고 공용=`GalleryPlayStage*`, 쫑쫑컵 전용=`PostcardRace*`/`RaceGrass*`, 쉼터 전용=`Shelter*`/`DONGGEULI_SHELTER`로 나눴다.
+- **파일 rename(git mv, 7):** `SheepRanchStage.kt`→`GalleryPlayStage.kt`, `SheepRanchCardState.kt`→`GalleryPlayStageCardState.kt`, `SheepRanchCloudLayer.kt`→`GalleryPlayStageCloudLayer.kt`, `SheepRanchRace{State,Venue,Overlay}.kt`→`PostcardRace{State,Venue,Overlay}.kt`, `quick_select_sheep_hand.png`→`quick_select_shelter_hand.png`(픽셀 무변경).
+- **식별자:** `SheepRanchStage/Card`→`GalleryPlayStage/GalleryPlayStageCard`, `SheepRanchCardSpec`·`createSheepRanchCardSpec`→`PlayStageCardSpec`·`createPlayStageCardSpec`, `SheepRanchCloudLayer`→`PlayStageCloudLayer`, `SheepRanchRace{Phase,State,Venue,Overlay}`→`PostcardRace…`, `SheepRanchCardSnapshot`→`PostcardRaceCardSnapshot`, `RanchMovementZone/FULL_RANCH/ranchFloorY`→`StageMovementZone/FULL_STAGE/stageFloorY`, `RanchBackground/RanchGrass`(쫑쫑컵 전용)→`RaceGrassBackground/RaceGrass`, `RanchSage/RanchShadow/RanchStagePadding/RanchBottomReserved/RanchCardCorner/RANCH_*`→`StageFloorSage/StageCardShadow/StagePadding/StageBottomReserved/StageCardCorner/STAGE_*`, `isSheepRanchModeOn`→`isShelterModeOn`, `ranchPostcards`→`stagePostcards`, `GalleryQuickSelectItem.SHEEP_RANCH`→`DONGGEULI_SHELTER`, 애니메이션 label `ranchCardScale`→`stageCardScale`. 로직·값·순서 변경 0(diff 검토).
+- **호환성 유지(C):** `GalleryPlayMode.SHEEP_RANCH` — `PlayModeSaver`가 `it.name`을 rememberSaveable에 저장하고 `valueOf`(예외 처리 없음)로 복원하므로 이름 유지 + 이유 주석. Room·DataStore·JSON·내비게이션에는 관련 식별자 없음. `PostcardRaceState`는 화면 한정(비저장).
+- **주석:** 현재 동작 설명의 "양떼목장" 9곳을 동글이 쉼터/〈엽서 쫑쫑컵〉/무대 기본 바닥으로 갱신, `GalleryPlayStage` KDoc(공용 무대) 추가. 날짜가 붙은 역사 주석 `GalleryScreen.kt` "63일차 … 연못/양떼목장/쫑쫑컵"은 유지(D). "양 모서리"(=양쪽)·"양을 보여준다"(=분량)는 레거시 아님.
+- **테스트:** `GalleryViewSelectionStructureTest` 기대 문자열 2곳만 새 식별자로. 96 suite / 902 tests 유지. 무대 파일을 직접 검사하는 JVM 테스트는 전후 모두 없음.
+- **문서:** README(퀵셀렉트 메뉴명), DECISIONS(현 이름 병기), TEST-COVERAGE-MAP(107 식별자 정리 + 수동 확인 목록 명칭), IMAGE-ASSET-MAP 현재 절(파일·enum·컴포저블 이름). archive·과거 HANDOFF·LETTER는 역사 기록이라 무변경.
+- **미사용 코드:** 새로 발견 없음(rename 대상 파일 import·호출 수 확인). 별도 정리 없음.
+- **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug assembleDebugAndroidTest` BUILD SUCCESSFUL, 96 suite / 902 tests 실패·오류·skip 0, `git diff --check` 통과.
+- **실기기:** 순수 이름 변경(리소스 픽셀·로직 동일)이라 실기기 QA 불필요로 판단. 설치·instrumentation 미실행.
+- **작업 중 사고(복구 완료):** diff 확인용 `git add -N .`이 보호 untracked 5종을 intent-to-add로 index에 올림 → 즉시 `git rm --cached`로 해제. 디스크 파일 무변경(크기 확인), 다시 untracked.
+- **Git:** 사용자 승인으로 이번 16개 파일만 명시 경로로 stage해 commit·push. 보호 untracked 제외. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음). `GalleryPlayMode.SHEEP_RANCH` 변경·상태 복원 매핑은 별도 작업으로 보류.
+- **후속 후보(승인 아님):** `GalleryPlayMode.SHEEP_RANCH`를 바꾸려면 `PlayModeSaver` 복원에 옛 이름 매핑/`runCatching` 추가가 먼저 필요. 108일차 쫑쫑컵 작업은 새 이름(`PostcardRace*`, `GalleryPlayStage`) 기준.
+
+---
+
 # HANDOFF — 107일차: 이미지 자산 재감사 · 실기기 메모리 기준선 · 월 라벨 띠 축소
 
 확인일: 2026-10-18. 수동 표준 모드(107일차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 `feature/photo-sticker` HEAD `a3bf24d`, origin 0/0(fetch 후), tracked clean, `git diff --check` 통과. 보호 untracked(`.codex-config.candidate.toml`, `.kotlin/`, fiber·round_head·sheep PNG) 무변경.

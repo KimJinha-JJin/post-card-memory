@@ -97,7 +97,7 @@ private val cloudSpecs = listOf(
 )
 
 @Composable
-fun SheepRanchCloudLayer(
+fun PlayStageCloudLayer(
     modifier: Modifier = Modifier
 ) {
     var nowMillis by remember {

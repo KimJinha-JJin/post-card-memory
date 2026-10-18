@@ -192,19 +192,19 @@ private fun buildSpectatorJitter(seed: Int, count: Int, cardHeightPx: Float): Li
 }
 
 /**
- * 〈엽서 양떼목장 — 쫑쫑컵〉 레이스 오버레이.
+ * 〈엽서 쫑쫑컵〉 레이스 오버레이.
  *
  * 출전자·관중 카드와 결승 연출을 그리는 동적 렌더러다. 상시 트랙·연석·신호등처럼
- * IDLE 상태에도 떠 있는 배경 소품은 [SheepRanchRaceVenue]가 맡고, 이 오버레이는
- * [SheepRanchRaceVenue]와 같은 [computeRaceTrackGeometry] 좌표를 공유해 정렬이
- * 어긋나지 않게 한다. 실제 단계 전환과 타이밍은 [SheepRanchStage]의 단일 코루틴이
+ * IDLE 상태에도 떠 있는 배경 소품은 [PostcardRaceVenue]가 맡고, 이 오버레이는
+ * [PostcardRaceVenue]와 같은 [computeRaceTrackGeometry] 좌표를 공유해 정렬이
+ * 어긋나지 않게 한다. 실제 단계 전환과 타이밍은 [GalleryPlayStage]의 단일 코루틴이
  * 관리하고, 이 컴포저블은 그 상태(raceState, raceProgress, racePhaseProgress)를
- * 읽어 매 프레임 위치만 계산한다. 기존 SheepRanchCard의 낙하·stretch 상태는 전혀
+ * 읽어 매 프레임 위치만 계산한다. 기존 GalleryPlayStageCard의 낙하·stretch 상태는 전혀
  * 건드리지 않는다.
  */
 @Composable
-fun SheepRanchRaceOverlay(
-    raceState: SheepRanchRaceState,
+fun PostcardRaceOverlay(
+    raceState: PostcardRaceState,
     raceProgress: Float,
     racePhaseProgress: Float,
     racers: List<Postcard>,
@@ -237,8 +237,8 @@ fun SheepRanchRaceOverlay(
 
     fun laneCenterY(laneIndex: Int): Float = geometry.laneCenterY(laneIndex)
 
-    val waveActive = raceState.phase == SheepRanchRacePhase.RACING ||
-        raceState.phase == SheepRanchRacePhase.FINISHING
+    val waveActive = raceState.phase == PostcardRacePhase.RACING ||
+        raceState.phase == PostcardRacePhase.FINISHING
     var waveClockMillis by remember { mutableLongStateOf(0L) }
     LaunchedEffect(waveActive) {
         if (!waveActive) return@LaunchedEffect
@@ -267,13 +267,13 @@ fun SheepRanchRaceOverlay(
             )
             val slotLeftX = slotCenter.x - spectatorCardWidthPx / 2f
             val (x, y) = when (raceState.phase) {
-                SheepRanchRacePhase.GATHERING ->
+                PostcardRacePhase.GATHERING ->
                     lerp(startX, slotLeftX, racePhaseProgress) to
                         lerp(startY, slotCenter.y, racePhaseProgress)
-                SheepRanchRacePhase.RETURNING ->
+                PostcardRacePhase.RETURNING ->
                     lerp(slotLeftX, startX, racePhaseProgress) to
                         lerp(slotCenter.y, startY, racePhaseProgress)
-                SheepRanchRacePhase.IDLE -> startX to startY
+                PostcardRacePhase.IDLE -> startX to startY
                 else -> slotLeftX to slotCenter.y
             }
             val rotation = snapshot?.rotationDegrees ?: 0f
@@ -320,36 +320,36 @@ fun SheepRanchRaceOverlay(
             val isWinner = raceState.winnerId == postcard.id
 
             val (x, y) = when (raceState.phase) {
-                SheepRanchRacePhase.GATHERING ->
+                PostcardRacePhase.GATHERING ->
                     lerp(startX, gridX, racePhaseProgress) to
                         lerp(startY, gridY, racePhaseProgress)
-                SheepRanchRacePhase.COUNTDOWN -> gridX to gridY
-                SheepRanchRacePhase.RACING -> {
+                PostcardRacePhase.COUNTDOWN -> gridX to gridY
+                PostcardRacePhase.RACING -> {
                     val progress = laneProgress(laneIndex, isWinner, raceProgress)
                     (lerp(startLineX, finishLineX, progress) - cardWidthPx * 0.5f) to gridY
                 }
-                SheepRanchRacePhase.FINISHING -> {
+                PostcardRacePhase.FINISHING -> {
                     val progress = laneProgress(laneIndex, isWinner, 1f)
                     (lerp(startLineX, finishLineX, progress) - cardWidthPx * 0.5f) to gridY
                 }
-                SheepRanchRacePhase.RETURNING -> {
+                PostcardRacePhase.RETURNING -> {
                     val finishProgress = laneProgress(laneIndex, isWinner, 1f)
                     val finishX = lerp(startLineX, finishLineX, finishProgress) - cardWidthPx * 0.5f
                     lerp(finishX, startX, racePhaseProgress) to
                         lerp(gridY, startY, racePhaseProgress)
                 }
-                SheepRanchRacePhase.IDLE -> startX to startY
+                PostcardRacePhase.IDLE -> startX to startY
             }
 
             val launchScale by animateFloatAsState(
-                targetValue = if (raceState.phase == SheepRanchRacePhase.COUNTDOWN) 0.93f else 1f,
+                targetValue = if (raceState.phase == PostcardRacePhase.COUNTDOWN) 0.93f else 1f,
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
                 label = "raceCarLaunchScale"
             )
 
             val winnerJumpOffset = remember(postcard.id) { Animatable(0f) }
             LaunchedEffect(raceState.phase, raceState.sessionId) {
-                if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) {
+                if (isWinner && raceState.phase == PostcardRacePhase.FINISHING) {
                     val hop = with(density) { WINNER_JUMP_BASE_DP.dp.toPx() }
                     repeat(WINNER_JUMP_STAGES) { stage ->
                         val height = hop * (1f - stage * 0.28f)
@@ -370,7 +370,7 @@ fun SheepRanchRaceOverlay(
             val confettiSpecs = remember(postcard.id) { buildConfetti(postcard.id) }
             val confettiProgress = remember(postcard.id) { Animatable(0f) }
             LaunchedEffect(raceState.phase, raceState.sessionId) {
-                if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) {
+                if (isWinner && raceState.phase == PostcardRacePhase.FINISHING) {
                     confettiProgress.snapTo(0f)
                     confettiProgress.animateTo(
                         1f,
@@ -381,7 +381,7 @@ fun SheepRanchRaceOverlay(
                 }
             }
             val crownScale by animateFloatAsState(
-                targetValue = if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) {
+                targetValue = if (isWinner && raceState.phase == PostcardRacePhase.FINISHING) {
                     1f
                 } else {
                     0f
@@ -391,22 +391,22 @@ fun SheepRanchRaceOverlay(
             )
 
             val bobPx = when {
-                raceState.phase == SheepRanchRacePhase.RACING ->
+                raceState.phase == PostcardRacePhase.RACING ->
                     with(density) { (sin(raceProgress * 46f + laneIndex * 2f) * 1.4f).dp.toPx() }
-                raceState.phase == SheepRanchRacePhase.FINISHING && isWinner ->
+                raceState.phase == PostcardRacePhase.FINISHING && isWinner ->
                     winnerJumpOffset.value
                 else -> 0f
             }
             val tiltDegrees = when (raceState.phase) {
-                SheepRanchRacePhase.RACING -> -1.6f
-                SheepRanchRacePhase.FINISHING -> 1f
+                PostcardRacePhase.RACING -> -1.6f
+                PostcardRacePhase.FINISHING -> 1f
                 else -> 0f
             }
 
             Box(
                 modifier = Modifier
                     .width(cardWidthDp)
-                    .zIndex(if (isWinner && raceState.phase == SheepRanchRacePhase.FINISHING) 3f else 2f)
+                    .zIndex(if (isWinner && raceState.phase == PostcardRacePhase.FINISHING) 3f else 2f)
                     .graphicsLayer {
                         translationX = x.roundToInt().toFloat()
                         translationY = y.roundToInt().toFloat()
@@ -445,7 +445,7 @@ fun SheepRanchRaceOverlay(
             }
         }
 
-        if (raceState.phase == SheepRanchRacePhase.FINISHING) {
+        if (raceState.phase == PostcardRacePhase.FINISHING) {
             Box(
                 modifier = Modifier
                     .zIndex(3f)

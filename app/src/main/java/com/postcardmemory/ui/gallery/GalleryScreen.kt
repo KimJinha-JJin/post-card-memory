@@ -367,7 +367,7 @@ fun GalleryScreen(
         mutableStateOf(GalleryPlayMode.NONE)
     }
     val isPondModeOn = playMode == GalleryPlayMode.POND
-    val isSheepRanchModeOn = playMode == GalleryPlayMode.SHEEP_RANCH
+    val isShelterModeOn = playMode == GalleryPlayMode.SHEEP_RANCH
     val isRaceModeOn = playMode == GalleryPlayMode.RACE
 
     val shakeTrigger = rememberShakeTrigger(enabled = isPondModeOn)
@@ -462,7 +462,7 @@ fun GalleryScreen(
         }
     }
 
-    // 84일차: 흔들어서 한 장. 연못 모드는 흔들기를 파문에 쓰고 양떼목장·쫑쫑컵은
+    // 84일차: 흔들어서 한 장. 연못 모드는 흔들기를 파문에 쓰고 동글이 쉼터·쫑쫑컵은
     // 전체 화면 놀이라, 일반 갤러리(playMode NONE)에서만 켠다. 선택·삭제 확인·
     // 방문 달력이 열려 있거나 이미 뽑은 엽서 overlay가 떠 있을 때는 끈다.
     // 후보는 지금 화면에 보이는 목록(검색어 적용)과 같다 — 검색이 비어 있으면
@@ -824,8 +824,8 @@ fun GalleryScreen(
         }
     ) { paddingValues ->
 
-        if (isSheepRanchModeOn || isRaceModeOn) {
-            val ranchPostcards = remember(postcards) {
+        if (isShelterModeOn || isRaceModeOn) {
+            val stagePostcards = remember(postcards) {
                 postcards
                     .sortedWith(
                         compareByDescending<Postcard> {
@@ -837,8 +837,8 @@ fun GalleryScreen(
                     .take(10)
             }
 
-            SheepRanchStage(
-                postcards = ranchPostcards,
+            GalleryPlayStage(
+                postcards = stagePostcards,
                 paddingValues = paddingValues,
                 onPostcardClick = ::handleItemClick,
                 raceEnabled = isRaceModeOn
@@ -1173,7 +1173,7 @@ private fun GalleryQuickSelectItem.handResId(): Int =
         GalleryQuickSelectItem.CAMERA -> R.drawable.quick_select_camera_hand
         GalleryQuickSelectItem.FUTURE_MAILBOX -> R.drawable.quick_select_letter_hand
         GalleryQuickSelectItem.POND -> R.drawable.quick_select_river_hand
-        GalleryQuickSelectItem.SHEEP_RANCH -> R.drawable.quick_select_sheep_hand
+        GalleryQuickSelectItem.DONGGEULI_SHELTER -> R.drawable.quick_select_shelter_hand
         GalleryQuickSelectItem.RACE -> R.drawable.quick_select_checker_hand
     }
 
@@ -1183,14 +1183,14 @@ private fun GalleryQuickSelectItem.label(): String =
         GalleryQuickSelectItem.CAMERA -> "카메라"
         GalleryQuickSelectItem.FUTURE_MAILBOX -> "미래 우체통"
         GalleryQuickSelectItem.POND -> "엽서의 연못"
-        GalleryQuickSelectItem.SHEEP_RANCH -> "동글이 쉼터"
+        GalleryQuickSelectItem.DONGGEULI_SHELTER -> "동글이 쉼터"
         GalleryQuickSelectItem.RACE -> "엽서 쫑쫑컵"
     }
 
 private fun GalleryQuickSelectItem.playMode(): GalleryPlayMode? =
     when (this) {
         GalleryQuickSelectItem.POND -> GalleryPlayMode.POND
-        GalleryQuickSelectItem.SHEEP_RANCH -> GalleryPlayMode.SHEEP_RANCH
+        GalleryQuickSelectItem.DONGGEULI_SHELTER -> GalleryPlayMode.SHEEP_RANCH
         GalleryQuickSelectItem.RACE -> GalleryPlayMode.RACE
         GalleryQuickSelectItem.CAMERA, GalleryQuickSelectItem.FUTURE_MAILBOX -> null
     }
@@ -1221,7 +1221,7 @@ private fun GalleryQuickSelectHands(
             GalleryQuickSelectItem.CAMERA -> currentOnNavigateToCamera()
             GalleryQuickSelectItem.FUTURE_MAILBOX -> currentOnNavigateToFutureMailbox()
             GalleryQuickSelectItem.POND -> currentOnPlayModeSelected(GalleryPlayMode.POND)
-            GalleryQuickSelectItem.SHEEP_RANCH -> currentOnPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)
+            GalleryQuickSelectItem.DONGGEULI_SHELTER -> currentOnPlayModeSelected(GalleryPlayMode.SHEEP_RANCH)
             GalleryQuickSelectItem.RACE -> currentOnPlayModeSelected(GalleryPlayMode.RACE)
         }
     }

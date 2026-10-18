@@ -80,28 +80,28 @@ import kotlin.math.sin
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 
-private val RanchSage = Color(0xFFDDE8D5)
-private val RanchGrass = Color(0xFF8BA37C)
-private val RanchShadow = Color(0xFF40382F)
+private val StageFloorSage = Color(0xFFDDE8D5)
+private val RaceGrass = Color(0xFF8BA37C)
+private val StageCardShadow = Color(0xFF40382F)
 private val ShelterFiber = Color(0xFF8A7A63)
 private val ShelterInkGreen = Color(0xFF6E8463)
-private val RanchStagePadding = 18.dp
-private val RanchBottomReserved = 92.dp
-private val RanchCardCorner = 12.dp
-private const val RANCH_MAX_LIFT_FRACTION = 0.62f
-private const val RANCH_DRAG_SCALE = 1.04f
-private const val RANCH_MAX_DEPTH_SCALE = 0.86f
-private const val RANCH_MAX_ROTATION_X = 6f
-private const val RANCH_MAX_ROTATION_Y = 3f
-private const val RANCH_SHADOW_MIN_SCALE = 0.42f
-private const val RANCH_SHADOW_MIN_ALPHA = 0.055f
-private const val RANCH_SHADOW_PARALLAX = 0.88f
-private const val RANCH_TAP_PRESS_SCALE = 0.97f
-private const val RANCH_TAP_BOUNCE_SCALE = 1.035f
-private const val RANCH_MAX_STRETCH_X = 1.4f
-private const val RANCH_MAX_STRETCH_Y = 1.32f
-private const val RANCH_STRETCH_RESISTANCE = 1.55f
-private const val RANCH_STRETCH_CENTER_FOLLOW = 0.28f
+private val StagePadding = 18.dp
+private val StageBottomReserved = 92.dp
+private val StageCardCorner = 12.dp
+private const val STAGE_MAX_LIFT_FRACTION = 0.62f
+private const val STAGE_DRAG_SCALE = 1.04f
+private const val STAGE_MAX_DEPTH_SCALE = 0.86f
+private const val STAGE_MAX_ROTATION_X = 6f
+private const val STAGE_MAX_ROTATION_Y = 3f
+private const val STAGE_SHADOW_MIN_SCALE = 0.42f
+private const val STAGE_SHADOW_MIN_ALPHA = 0.055f
+private const val STAGE_SHADOW_PARALLAX = 0.88f
+private const val STAGE_TAP_PRESS_SCALE = 0.97f
+private const val STAGE_TAP_BOUNCE_SCALE = 1.035f
+private const val STAGE_MAX_STRETCH_X = 1.4f
+private const val STAGE_MAX_STRETCH_Y = 1.32f
+private const val STAGE_STRETCH_RESISTANCE = 1.55f
+private const val STAGE_STRETCH_CENTER_FOLLOW = 0.28f
 private const val RACE_MIN_POSTCARDS = 3
 private const val RACE_MAX_RACERS = 3
 private const val RACE_GATHER_MILLIS = 850
@@ -115,54 +115,54 @@ private const val RACE_ZONE_BOTTOM_EXTRA_FRACTION = 0.05f
 
 /**
  * 쫑쫑컵 모드의 IDLE 상태에서 카드가 평소 돌아다니는 구역.
- * 양떼목장(raceEnabled = false)에서는 항상 [FULL_RANCH]로, 기존 자유 배회와 동일하다.
+ * 동글이 쉼터(raceEnabled = false)에서는 항상 [FULL_STAGE]로, 무대 전체를 자유롭게 배회한다.
  */
-private enum class RanchMovementZone {
-    FULL_RANCH,
+private enum class StageMovementZone {
+    FULL_STAGE,
     RACE_PADDOCK,
     RACE_SPECTATOR
 }
 
-private fun movementZoneFor(index: Int, raceEnabled: Boolean): RanchMovementZone {
-    if (!raceEnabled) return RanchMovementZone.FULL_RANCH
+private fun movementZoneFor(index: Int, raceEnabled: Boolean): StageMovementZone {
+    if (!raceEnabled) return StageMovementZone.FULL_STAGE
     return if (index < RACE_MAX_RACERS) {
-        RanchMovementZone.RACE_PADDOCK
+        StageMovementZone.RACE_PADDOCK
     } else {
-        RanchMovementZone.RACE_SPECTATOR
+        StageMovementZone.RACE_SPECTATOR
     }
 }
 
 /** 구역별 좌우 배회 범위 — 패독은 출발선 쪽 절반으로, 관중은 기존 폭 그대로 쓴다. */
 private fun zoneBoundsX(
-    zone: RanchMovementZone,
+    zone: StageMovementZone,
     stagePaddingPx: Float,
     maxX: Float
 ): Pair<Float, Float> {
     return when (zone) {
-        RanchMovementZone.FULL_RANCH -> stagePaddingPx to maxX
-        RanchMovementZone.RACE_PADDOCK -> stagePaddingPx to lerp(stagePaddingPx, maxX, 0.5f)
-        RanchMovementZone.RACE_SPECTATOR -> stagePaddingPx to maxX
+        StageMovementZone.FULL_STAGE -> stagePaddingPx to maxX
+        StageMovementZone.RACE_PADDOCK -> stagePaddingPx to lerp(stagePaddingPx, maxX, 0.5f)
+        StageMovementZone.RACE_SPECTATOR -> stagePaddingPx to maxX
     }
 }
 
-private fun ranchFloorY(
-    spec: SheepRanchCardSpec,
+private fun stageFloorY(
+    spec: PlayStageCardSpec,
     stageHeightPx: Float,
     cardHeightPx: Float,
     bottomReservedPx: Float,
     stagePaddingPx: Float,
-    zone: RanchMovementZone
+    zone: StageMovementZone
 ): Float {
-    // 양떼목장(FULL_RANCH)은 잔디 시작선(0.60)을 그대로 쓴다. 쫑쫑컵 구역만
+    // 동글이 쉼터(FULL_STAGE)는 바닥 시작선(0.60)을 그대로 쓴다. 쫑쫑컵 구역만
     // RACE_ZONE_TOP_FRACTION까지 끌어올려 화면 대부분을 쓰게 한다 — RaceGroundExtension이
     // 그 위 배경을 이어 그려준다.
     val topFraction = when (zone) {
-        RanchMovementZone.FULL_RANCH -> 0.60f
-        RanchMovementZone.RACE_PADDOCK, RanchMovementZone.RACE_SPECTATOR -> RACE_ZONE_TOP_FRACTION
+        StageMovementZone.FULL_STAGE -> 0.60f
+        StageMovementZone.RACE_PADDOCK, StageMovementZone.RACE_SPECTATOR -> RACE_ZONE_TOP_FRACTION
     }
     val fullMin = (stageHeightPx * topFraction).coerceAtLeast(stagePaddingPx)
     // 쫑쫑컵 구역은 트랙과 마찬가지로 화면 맨 아래에 바짝 붙지 않도록 여유를 더 둔다.
-    val raceBottomExtra = if (zone == RanchMovementZone.FULL_RANCH) {
+    val raceBottomExtra = if (zone == StageMovementZone.FULL_STAGE) {
         0f
     } else {
         stageHeightPx * RACE_ZONE_BOTTOM_EXTRA_FRACTION
@@ -171,17 +171,22 @@ private fun ranchFloorY(
         .coerceAtLeast(fullMin)
     val bandMid = lerp(fullMin, fullMax, 0.5f)
     val (bandMin, bandMax) = when (zone) {
-        RanchMovementZone.FULL_RANCH -> fullMin to fullMax
+        StageMovementZone.FULL_STAGE -> fullMin to fullMax
         // 패독: 세로 공간을 절반씩 나눈 아래쪽 절반(트랙·그리드 쪽).
-        RanchMovementZone.RACE_PADDOCK -> bandMid to fullMax
+        StageMovementZone.RACE_PADDOCK -> bandMid to fullMax
         // 관중: 세로 공간의 위쪽 절반(펜스 쪽) — 패독과 겹치지 않게 명확히 나눈다.
-        RanchMovementZone.RACE_SPECTATOR -> fullMin to bandMid
+        StageMovementZone.RACE_SPECTATOR -> fullMin to bandMid
     }
     return lerp(bandMin, bandMax, spec.startJitter)
 }
 
+/**
+ * 최신 엽서 최대 10장이 돌아다니는 놀이 무대. 동글이 쉼터([GalleryPlayMode.SHEEP_RANCH])와
+ * 엽서 쫑쫑컵([GalleryPlayMode.RACE], [raceEnabled] = true)이 함께 쓴다. 쉼터는 종이 바닥과
+ * 동글이 캐릭터 카드, 쫑쫑컵은 잔디 바닥·경기장과 엽서 카드로 그린다.
+ */
 @Composable
-fun SheepRanchStage(
+fun GalleryPlayStage(
     postcards: List<Postcard>,
     paddingValues: PaddingValues,
     onPostcardClick: (Long) -> Unit,
@@ -198,12 +203,12 @@ fun SheepRanchStage(
         mutableStateOf<Long?>(null)
     }
 
-    var raceState by remember { mutableStateOf(SheepRanchRaceState()) }
+    var raceState by remember { mutableStateOf(PostcardRaceState()) }
     val raceProgress = remember { Animatable(0f) }
     val racePhaseProgress = remember { Animatable(0f) }
     var raceCountdownStep by remember { mutableIntStateOf(0) }
     var showNotEnoughHint by remember { mutableStateOf(false) }
-    val raceActive = raceState.phase != SheepRanchRacePhase.IDLE
+    val raceActive = raceState.phase != PostcardRacePhase.IDLE
 
     LaunchedEffect(showNotEnoughHint) {
         if (showNotEnoughHint) {
@@ -213,7 +218,7 @@ fun SheepRanchStage(
     }
 
     LaunchedEffect(raceState.sessionId) {
-        if (raceState.phase != SheepRanchRacePhase.GATHERING) {
+        if (raceState.phase != PostcardRacePhase.GATHERING) {
             return@LaunchedEffect
         }
         try {
@@ -223,7 +228,7 @@ fun SheepRanchStage(
                 tween(durationMillis = RACE_GATHER_MILLIS, easing = FastOutSlowInEasing)
             )
 
-            raceState = raceState.copy(phase = SheepRanchRacePhase.COUNTDOWN)
+            raceState = raceState.copy(phase = PostcardRacePhase.COUNTDOWN)
             raceCountdownStep = 0
             delay(RACE_COUNTDOWN_STEP_MILLIS.milliseconds)
             raceCountdownStep = 1
@@ -231,24 +236,24 @@ fun SheepRanchStage(
             raceCountdownStep = 2
             delay(RACE_COUNTDOWN_GO_MILLIS.milliseconds)
 
-            raceState = raceState.copy(phase = SheepRanchRacePhase.RACING)
+            raceState = raceState.copy(phase = PostcardRacePhase.RACING)
             raceProgress.snapTo(0f)
             raceProgress.animateTo(
                 1f,
                 tween(durationMillis = RACE_DURATION_MILLIS, easing = LinearEasing)
             )
 
-            raceState = raceState.copy(phase = SheepRanchRacePhase.FINISHING)
+            raceState = raceState.copy(phase = PostcardRacePhase.FINISHING)
             delay(RACE_FINISH_HOLD_MILLIS.milliseconds)
 
-            raceState = raceState.copy(phase = SheepRanchRacePhase.RETURNING)
+            raceState = raceState.copy(phase = PostcardRacePhase.RETURNING)
             racePhaseProgress.snapTo(0f)
             racePhaseProgress.animateTo(
                 1f,
                 tween(durationMillis = RACE_RETURN_MILLIS, easing = FastOutSlowInEasing)
             )
         } finally {
-            raceState = SheepRanchRaceState(sessionId = raceState.sessionId)
+            raceState = PostcardRaceState(sessionId = raceState.sessionId)
             raceCountdownStep = 0
         }
     }
@@ -269,18 +274,18 @@ fun SheepRanchStage(
         }
         val cardWidthPx = with(density) { cardWidth.toPx() }
         val cardHeightPx = with(density) { (cardWidth + 36.dp).toPx() }
-        val stagePaddingPx = with(density) { RanchStagePadding.toPx() }
-        val bottomReservedPx = with(density) { RanchBottomReserved.toPx() }
+        val stagePaddingPx = with(density) { StagePadding.toPx() }
+        val bottomReservedPx = with(density) { StageBottomReserved.toPx() }
         val stageMaxX = (stageWidthPx - cardWidthPx - stagePaddingPx).coerceAtLeast(stagePaddingPx)
 
         fun isPointOverAnyCard(point: Offset): Boolean {
             val marginPx = with(density) { 14.dp.toPx() }
             postcards.forEachIndexed { index, pc ->
-                val spec = createSheepRanchCardSpec(pc.id, index, postcards.size)
+                val spec = createPlayStageCardSpec(pc.id, index, postcards.size)
                 val zone = movementZoneFor(index, raceEnabled)
                 val (zoneMinX, zoneMaxX) = zoneBoundsX(zone, stagePaddingPx, stageMaxX)
                 val left = positions[pc.id] ?: lerp(zoneMinX, zoneMaxX, spec.startBias)
-                val top = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
+                val top = stageFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
                 val rect = Rect(
                     left - marginPx,
                     top - marginPx,
@@ -294,7 +299,7 @@ fun SheepRanchStage(
 
         fun attemptStartRace(tapOffset: Offset) {
             if (!raceEnabled) return
-            if (raceState.phase != SheepRanchRacePhase.IDLE) return
+            if (raceState.phase != PostcardRacePhase.IDLE) return
             if (postcards.size < RACE_MIN_POSTCARDS) {
                 showNotEnoughHint = true
                 return
@@ -309,19 +314,19 @@ fun SheepRanchStage(
             val spectators = shuffled.drop(RACE_MAX_RACERS)
             val snapshots = buildMap {
                 postcards.forEachIndexed { index, pc ->
-                    val spec = createSheepRanchCardSpec(pc.id, index, postcards.size)
+                    val spec = createPlayStageCardSpec(pc.id, index, postcards.size)
                     val zone = movementZoneFor(index, raceEnabled)
                     val (zoneMinX, zoneMaxX) = zoneBoundsX(zone, stagePaddingPx, stageMaxX)
                     val x = positions[pc.id] ?: lerp(zoneMinX, zoneMaxX, spec.startBias)
-                    val y = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
-                    put(pc.id, SheepRanchCardSnapshot(pc.id, x, y, spec.baseRotation))
+                    val y = stageFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
+                    put(pc.id, PostcardRaceCardSnapshot(pc.id, x, y, spec.baseRotation))
                 }
             }
             val nextSessionId = raceState.sessionId + 1
             val racerIds = racers.map { it.id }
 
-            raceState = SheepRanchRaceState(
-                phase = SheepRanchRacePhase.GATHERING,
+            raceState = PostcardRaceState(
+                phase = PostcardRacePhase.GATHERING,
                 racerIds = racerIds,
                 spectatorIds = spectators.map { it.id },
                 winnerId = racerIds[Random.nextInt(racerIds.size)],
@@ -330,12 +335,12 @@ fun SheepRanchStage(
             )
         }
 
-        SheepRanchCloudLayer(
+        PlayStageCloudLayer(
             modifier = Modifier.matchParentSize()
         )
 
         if (raceEnabled) {
-            RanchBackground(
+            RaceGrassBackground(
                 modifier = Modifier.matchParentSize()
             )
         } else {
@@ -345,7 +350,7 @@ fun SheepRanchStage(
         }
 
         if (raceEnabled) {
-            SheepRanchRaceVenue(
+            PostcardRaceVenue(
                 raceState = raceState,
                 racePhaseProgress = racePhaseProgress.value,
                 raceProgress = raceProgress.value,
@@ -383,7 +388,7 @@ fun SheepRanchStage(
         }
 
         postcards.forEachIndexed { index, postcard ->
-            SheepRanchCard(
+            GalleryPlayStageCard(
                 postcard = postcard,
                 index = index,
                 count = postcards.size,
@@ -412,7 +417,7 @@ fun SheepRanchStage(
                 raceState.spectatorIds.mapNotNull { id -> postcards.find { it.id == id } }
             }
 
-            SheepRanchRaceOverlay(
+            PostcardRaceOverlay(
                 raceState = raceState,
                 raceProgress = raceProgress.value,
                 racePhaseProgress = racePhaseProgress.value,
@@ -452,18 +457,18 @@ fun SheepRanchStage(
 }
 
 @Composable
-private fun RanchBackground(
+private fun RaceGrassBackground(
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier) {
         val floorTop = size.height * 0.58f
         drawRect(
-            color = RanchSage.copy(alpha = 0.58f),
+            color = StageFloorSage.copy(alpha = 0.58f),
             topLeft = Offset(0f, floorTop),
             size = Size(size.width, size.height - floorTop)
         )
         drawLine(
-            color = RanchGrass.copy(alpha = 0.42f),
+            color = RaceGrass.copy(alpha = 0.42f),
             start = Offset(0f, floorTop),
             end = Offset(size.width, floorTop),
             strokeWidth = 2.dp.toPx()
@@ -476,7 +481,7 @@ private fun RanchBackground(
                     (size.height - floorTop - 26.dp.toPx()).coerceAtLeast(1f)
             val blade = 4.dp.toPx() + (seed % 4).dp.toPx()
             drawLine(
-                color = RanchGrass.copy(alpha = 0.34f),
+                color = RaceGrass.copy(alpha = 0.34f),
                 start = Offset(x, y),
                 end = Offset(x + (if (seed % 2 == 0) 2.dp.toPx() else -2.dp.toPx()), y - blade),
                 strokeWidth = 1.2.dp.toPx()
@@ -614,7 +619,7 @@ private fun ShelterPaperBackground(
 
             onDrawBehind {
                 drawPath(path = fiberPath, color = ShelterFiber.copy(alpha = 0.06f), style = Stroke(width = 0.6f * dp, cap = StrokeCap.Round))
-                drawPath(path = floorPath, color = RanchSage.copy(alpha = 0.5f))
+                drawPath(path = floorPath, color = StageFloorSage.copy(alpha = 0.5f))
                 smudges.forEach { (topLeft, ovalSize, alpha) ->
                     drawOval(color = ShelterInkGreen.copy(alpha = alpha), topLeft = topLeft, size = ovalSize)
                 }
@@ -637,7 +642,7 @@ private fun ShelterPaperBackground(
 }
 
 @Composable
-private fun SheepRanchCard(
+private fun GalleryPlayStageCard(
     postcard: Postcard,
     index: Int,
     count: Int,
@@ -652,13 +657,13 @@ private fun SheepRanchCard(
     busyCardId: MutableState<Long?>,
     raceActive: Boolean,
     characterAppearance: Boolean,
-    zone: RanchMovementZone,
+    zone: StageMovementZone,
     onPostcardClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
     val spec = remember(postcard.id, index, count) {
-        createSheepRanchCardSpec(postcard.id, index, count)
+        createPlayStageCardSpec(postcard.id, index, count)
     }
     val x = remember(postcard.id) { Animatable(0f) }
     val y = remember(postcard.id) { Animatable(0f) }
@@ -687,22 +692,22 @@ private fun SheepRanchCard(
 
     val maxX = (stageWidthPx - cardWidthPx - stagePaddingPx).coerceAtLeast(stagePaddingPx)
     val (wanderMinX, wanderMaxX) = zoneBoundsX(zone, stagePaddingPx, maxX)
-    val maxLiftHeight = (stageHeightPx * RANCH_MAX_LIFT_FRACTION)
+    val maxLiftHeight = (stageHeightPx * STAGE_MAX_LIFT_FRACTION)
         .coerceAtLeast(cardHeightPx)
-    val floorY = ranchFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
+    val floorY = stageFloorY(spec, stageHeightPx, cardHeightPx, bottomReservedPx, stagePaddingPx, zone)
     val liftHeight = (floorY - y.value + jump.value).coerceAtLeast(0f)
     val depthProgress = (liftHeight / maxLiftHeight).coerceIn(0f, 1f)
     val latestDepthProgress = rememberUpdatedState(depthProgress)
-    val depthScale = lerp(1f, RANCH_MAX_DEPTH_SCALE, depthProgress)
-    val shadowScale = lerp(1f, RANCH_SHADOW_MIN_SCALE, depthProgress)
-    val shadowAlpha = lerp(0.22f, RANCH_SHADOW_MIN_ALPHA, depthProgress)
+    val depthScale = lerp(1f, STAGE_MAX_DEPTH_SCALE, depthProgress)
+    val shadowScale = lerp(1f, STAGE_SHADOW_MIN_SCALE, depthProgress)
+    val shadowAlpha = lerp(0.22f, STAGE_SHADOW_MIN_ALPHA, depthProgress)
     val cardScale by animateFloatAsState(
-        targetValue = if (isGrabbed) RANCH_DRAG_SCALE else 1f,
+        targetValue = if (isGrabbed) STAGE_DRAG_SCALE else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
-        label = "ranchCardScale"
+        label = "stageCardScale"
     )
 
     LaunchedEffect(stageWidthPx, stageHeightPx, cardWidthPx, postcard.id, zone) {
@@ -1036,7 +1041,7 @@ private fun SheepRanchCard(
                 landingScaleY.value *
                 depthOvershootScale.value *
                 stretchScaleY
-    val shadowParallaxX = lerp(x.value, x.value * RANCH_SHADOW_PARALLAX, depthProgress)
+    val shadowParallaxX = lerp(x.value, x.value * STAGE_SHADOW_PARALLAX, depthProgress)
     val stretchShadowX = lerp(1f, 1.22f, ((stretchScaleX - 1f) / 0.4f).coerceIn(0f, 1f))
     val stretchShadowY = lerp(1f, 0.94f, ((stretchScaleY - 1f) / 0.32f).coerceIn(0f, 1f))
     val shadowAlphaWithStretch =
@@ -1066,7 +1071,7 @@ private fun SheepRanchCard(
             )
         ) {
             drawOval(
-                color = RanchShadow,
+                color = StageCardShadow,
                 size = size
             )
         }
@@ -1091,12 +1096,12 @@ private fun SheepRanchCard(
                 translationX += stretchOffsetX
                 translationY += stretchOffsetY
                 rotationX = if (isGrabbed || isDropping) {
-                    -RANCH_MAX_ROTATION_X * depthProgress
+                    -STAGE_MAX_ROTATION_X * depthProgress
                 } else {
                     0f
                 }
                 rotationY = if (isGrabbed || isDropping) {
-                    dragTiltY + direction * RANCH_MAX_ROTATION_Y * depthProgress * 0.35f
+                    dragTiltY + direction * STAGE_MAX_ROTATION_Y * depthProgress * 0.35f
                 } else {
                     0f
                 }
@@ -1105,7 +1110,7 @@ private fun SheepRanchCard(
                 scaleY = finalScaleY
                 // 캐릭터 외곽에는 사각형 elevation 대신 기존 바닥 그림자만 사용한다.
                 shadowElevation = if (characterAppearance) 0f else if (isGrabbed) 12f else 3f
-                shape = RoundedCornerShape(RanchCardCorner)
+                shape = RoundedCornerShape(StageCardCorner)
                 clip = false
                 alpha = if (raceActive) 0f else 1f
             }
@@ -1210,18 +1215,18 @@ private fun SheepRanchCard(
                                                     (cardHeightPx * 0.45f))
                                                 .coerceAtLeast(0f)
                                         val resistedX =
-                                            1f - exp(-pullX * RANCH_STRETCH_RESISTANCE)
+                                            1f - exp(-pullX * STAGE_STRETCH_RESISTANCE)
                                         val resistedY =
-                                            1f - exp(-pullY * RANCH_STRETCH_RESISTANCE)
+                                            1f - exp(-pullY * STAGE_STRETCH_RESISTANCE)
                                         val targetStretchX =
                                             (1f + resistedX * 0.4f - resistedY * 0.045f)
-                                                .coerceIn(0.96f, RANCH_MAX_STRETCH_X)
+                                                .coerceIn(0.96f, STAGE_MAX_STRETCH_X)
                                         val targetStretchY =
                                             (1f + resistedY * 0.32f - resistedX * 0.055f)
-                                                .coerceIn(0.94f, RANCH_MAX_STRETCH_Y)
+                                                .coerceIn(0.94f, STAGE_MAX_STRETCH_Y)
                                         val midpointDelta =
                                             (currentMidpoint - startMidpoint) *
-                                                    RANCH_STRETCH_CENTER_FOLLOW
+                                                    STAGE_STRETCH_CENTER_FOLLOW
                                         val targetOffsetX =
                                             midpointDelta.x.coerceIn(
                                                 stagePaddingPx - x.value,
@@ -1270,7 +1275,7 @@ private fun SheepRanchCard(
                                     suppressTap = false
                                     gestureScope.launch {
                                         tapScale.animateTo(
-                                            RANCH_TAP_PRESS_SCALE,
+                                            STAGE_TAP_PRESS_SCALE,
                                             tween(durationMillis = 45)
                                         )
                                     }
@@ -1284,7 +1289,7 @@ private fun SheepRanchCard(
                                     ) {
                                         gestureScope.launch {
                                             tapScale.animateTo(
-                                                RANCH_TAP_BOUNCE_SCALE,
+                                                STAGE_TAP_BOUNCE_SCALE,
                                                 tween(durationMillis = 50)
                                             )
                                             onPostcardClick(postcard.id)
@@ -1324,8 +1329,8 @@ private fun SheepRanchCard(
                                     dragLean = (dragAmount.x / 18f).coerceIn(-2f, 2f)
                                     dragTiltY = (dragTiltY * 0.7f +
                                             (dragAmount.x / 22f).coerceIn(
-                                                -RANCH_MAX_ROTATION_Y,
-                                                RANCH_MAX_ROTATION_Y
+                                                -STAGE_MAX_ROTATION_Y,
+                                                STAGE_MAX_ROTATION_Y
                                             ) * 0.3f)
                                     launch {
                                         x.snapTo(nextX)
@@ -1359,8 +1364,8 @@ private fun SheepRanchCard(
             )
             .then(
                 if (characterAppearance) Modifier else Modifier
-                    .background(PaperSurface, RoundedCornerShape(RanchCardCorner))
-                    .border(1.dp, PaperDivider, RoundedCornerShape(RanchCardCorner))
+                    .background(PaperSurface, RoundedCornerShape(StageCardCorner))
+                    .border(1.dp, PaperDivider, RoundedCornerShape(StageCardCorner))
                     .padding(7.dp)
             ),
         contentAlignment = Alignment.Center

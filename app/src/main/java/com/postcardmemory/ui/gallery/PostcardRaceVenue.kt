@@ -42,9 +42,9 @@ internal const val RACE_TRACK_BOTTOM_MARGIN_DP = 30f
 
 /**
  * 쫑쫑컵 모드에서 카드(패독·관중)가 돌아다닐 수 있는 세로 영역의 윗선.
- * 양떼목장의 잔디 시작선(58~60%)보다 훨씬 위로 끌어올려서, 화면 하단에만
+ * 무대 기본 바닥 시작선(58~60%)보다 훨씬 위로 끌어올려서, 화면 하단에만
  * 몰려 보이지 않고 화면 대부분을 쓰는 작은 축제 공간처럼 보이게 한다.
- * [SheepRanchStage]의 구역별 배회 범위 계산도 이 값을 그대로 쓴다.
+ * [GalleryPlayStage]의 구역별 배회 범위 계산도 이 값을 그대로 쓴다.
  */
 internal const val RACE_ZONE_TOP_FRACTION = 0.20f
 
@@ -96,9 +96,9 @@ internal fun computeRaceTrackGeometry(
 }
 
 /**
- * 양떼목장 잔디(58% 지점부터 시작)보다 훨씬 위쪽[RACE_ZONE_TOP_FRACTION]부터 이어지는
- * 쫑쫑컵 전용 바닥. 기존 [RanchBackground]는 건드리지 않고 그 위에 자연스럽게 이어붙는
- * 별도 레이어라서, 양떼목장 화면에는 전혀 영향이 없다. 위쪽은 옅게 시작해 잔디와
+ * 무대 기본 잔디(58% 지점부터 시작)보다 훨씬 위쪽[RACE_ZONE_TOP_FRACTION]부터 이어지는
+ * 쫑쫑컵 전용 바닥. 기존 [RaceGrassBackground]는 건드리지 않고 그 위에 자연스럽게 이어붙는
+ * 별도 레이어라서, 동글이 쉼터 화면에는 전혀 영향이 없다. 위쪽은 옅게 시작해 잔디와
  * 만나는 지점에서 자연스럽게 진해지도록 그라데이션을 준다.
  */
 @Composable
@@ -350,11 +350,11 @@ internal fun RaceTrafficLight(
 /**
  * 쫑쫑컵 모드에 들어온 순간부터 항상 떠 있는 작은 경기장 배경.
  * 레이스가 시작되지 않았어도(IDLE) 옅게 표시되고, 진행 단계에 따라 선명해진다.
- * 양떼목장(raceEnabled = false)에서는 아예 호출되지 않는다.
+ * 동글이 쉼터(raceEnabled = false)에서는 아예 호출되지 않는다.
  */
 @Composable
-fun SheepRanchRaceVenue(
-    raceState: SheepRanchRaceState,
+fun PostcardRaceVenue(
+    raceState: PostcardRaceState,
     racePhaseProgress: Float,
     raceProgress: Float,
     countdownStep: Int,
@@ -374,16 +374,16 @@ fun SheepRanchRaceVenue(
     }
 
     val trackIntensity = when (raceState.phase) {
-        SheepRanchRacePhase.IDLE -> 0.35f
-        SheepRanchRacePhase.GATHERING -> lerp(0.35f, 1f, racePhaseProgress)
-        SheepRanchRacePhase.COUNTDOWN,
-        SheepRanchRacePhase.RACING,
-        SheepRanchRacePhase.FINISHING -> 1f
-        SheepRanchRacePhase.RETURNING -> lerp(1f, 0.35f, racePhaseProgress)
+        PostcardRacePhase.IDLE -> 0.35f
+        PostcardRacePhase.GATHERING -> lerp(0.35f, 1f, racePhaseProgress)
+        PostcardRacePhase.COUNTDOWN,
+        PostcardRacePhase.RACING,
+        PostcardRacePhase.FINISHING -> 1f
+        PostcardRacePhase.RETURNING -> lerp(1f, 0.35f, racePhaseProgress)
     }
-    val dashScroll = if (raceState.phase == SheepRanchRacePhase.RACING) raceProgress else -1f
-    val lightCountdownStep = if (raceState.phase == SheepRanchRacePhase.COUNTDOWN) countdownStep else -1
-    val lightAlpha = if (raceState.phase == SheepRanchRacePhase.IDLE) 0.5f else 1f
+    val dashScroll = if (raceState.phase == PostcardRacePhase.RACING) raceProgress else -1f
+    val lightCountdownStep = if (raceState.phase == PostcardRacePhase.COUNTDOWN) countdownStep else -1
+    val lightAlpha = if (raceState.phase == PostcardRacePhase.IDLE) 0.5f else 1f
 
     Box(modifier = modifier) {
         RaceGroundExtension(
@@ -417,7 +417,7 @@ fun SheepRanchRaceVenue(
         )
         RaceBanner(
             wobbleTrigger = raceState.sessionId,
-            thumpTrigger = raceState.phase == SheepRanchRacePhase.FINISHING,
+            thumpTrigger = raceState.phase == PostcardRacePhase.FINISHING,
             modifier = Modifier.graphicsLayer {
                 translationX = geometry.trackRight - 78.dp.toPx()
                 translationY = geometry.trackTop - 44.dp.toPx()

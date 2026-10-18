@@ -60,7 +60,7 @@
 | editor_cutout_background·tape·doodle | 314×236 / 90,051·69,021·37,316 | 〃 | 〃 |
 | editor_cutout_text | 314×209 / 41,428 | 〃 | 〃 |
 | editor_label_peek | 1254² / 836,646 | 하단 세부 선택줄 빠끔이 | ×0.678로 그림을 기존 src crop (376,352)/720×656 안, 앞발 바닥 y1006에 맞춤. sample 4·crop 상수 유지 |
-| quick_select_camera/letter/river/sheep/checker_hand | 720² / 393,675·362,300·407,805·400,446·336,896 | 갤러리 바로가기 부채 | 손바닥 위 사진 카드 구도. 카드 폭 ≈520 논리px로 정규화. 블록 좌표(1254 논리)는 `GalleryQuickSelectFan.kt` enum: CAMERA 189/402/703/759, FUTURE_MAILBOX 243/474/763/799, POND 212/430/733/803, SHEEP_RANCH(동글이 쉼터, 새집 사진) 240/454/763/810, RACE 232/432/752/801 |
+| quick_select_camera/letter/river/shelter/checker_hand (shelter는 107일차에 sheep에서 이름만 변경) | 720² / 393,675·362,300·407,805·400,446·336,896 | 갤러리 바로가기 부채 | 손바닥 위 사진 카드 구도. 카드 폭 ≈520 논리px로 정규화. 블록 좌표(1254 논리)는 `GalleryQuickSelectFan.kt` enum: CAMERA 189/402/703/759, FUTURE_MAILBOX 243/474/763/799, POND 212/430/733/803, DONGGEULI_SHELTER(동글이 쉼터, 새집 사진, 107일차 전 이름 SHEEP_RANCH) 240/454/763/810, RACE 232/432/752/801 |
 | sticker_tweezer_hand | 1254² / 1,249,581 | 사진·글귀·라벨 핀셋 연출 | 이동만. 집게 사이를 기존 ANCHOR (0.297,0.045)에 |
 | tape_press_hand | **1024² / 1,125,904** (최종 다이어트, 이전 1254² / 1,724,028) | 테이프 누르기 | 이동만. 손가락 띠 중심을 기존 ANCHOR (0.399,0.259)에. 다이어트는 캔버스 전체 정비례 축소, 정규화 중심 (0.4003,0.2616)→(0.4004,0.2607). 최대 표시 ≈819px(260dp×1.12) 대비 1.25x |
 | seal_stamp_hand | 1254² / 1,905,647 | 도장 연출 + 앱 인트로 | ×1.4. 손잡이가 주먹에 들어가는 점을 기존 ANCHOR (0.459,0.431)에 |
@@ -78,7 +78,7 @@
 ## 105일차 수정 — 동글이 쉼터: 양팔 든 동글이 (2026-10-16, 사용자 화면 QA 완료)
 
 - 자원: `drawable-nodpi/donggeuli_arms_up.png`. 사용자 제공 1254² RGBA → **720² RGBA**, 477,088 B. PArgb + HighQualityBicubic 비례 축소, canvas·alpha 유지, crop·tint·재구도 없음. 최종 alpha 0~255, 완전 투명 319,845px, alpha>16 bbox `(134,60)..(599,679)`(끝점 포함).
-- 소비: `SheepRanchCard(characterAppearance = !raceEnabled)` → `DonggeuliCardContent`. 엽서마다 캐릭터 1개, 최신 최대 10장. `StampCardContent`(날짜 숨김, 톱니 사진·편지 배지 유지)를 먼저 그린 뒤 `painterResource`/`Image`로 캐릭터를 앞에 그림. 손끝이 사진 아래 모서리를 덮게 배치, 사용자 실기기 확인 완료.
+- 소비: `GalleryPlayStageCard(characterAppearance = !raceEnabled)`(107일차 전 이름 `SheepRanchCard`) → `DonggeuliCardContent`. 엽서마다 캐릭터 1개, 최신 최대 10장. `StampCardContent`(날짜 숨김, 톱니 사진·편지 배지 유지)를 먼저 그린 뒤 `painterResource`/`Image`로 캐릭터를 앞에 그림. 손끝이 사진 아래 모서리를 덮게 배치, 사용자 실기기 확인 완료.
 - 조작 상자 W=92/84/76dp, H=W+36dp 유지. 캐릭터 정사각 C=0.90W, top=H−14dp−C. 사진 정사각 P=0.50C(41.4/37.8/34.2dp), 가로 중앙, top=캐릭터top+0.20C−P. 날짜는 별도 8sp Text로 상자 하단 중앙(yyyy-MM-dd, 한 줄 말줄임). 예전 좁은 중앙 슬롯은 사용하지 않음.
 - **구도/animation 결합:** PNG의 팔·머리 위치(사진 하단 기준 20%)와 배치 결합. 부모의 기존 이동·회전·원근·점프·늘이기를 캐릭터/사진/날짜가 함께 받음. 직사각 hit 유지, 새 입력/state 없음. 최대 stretch·lift 시 화질은 실제 QA 필요, 현재 자원은 export에 쓰지 않음.
 - 원본 decode RAM 추정: 720²×4=2,073,600 B(약 1.98MiB). 동일 리소스 반복 참조, 실제 bitmap 공유·동시 상주·GPU·APK 변화는 미측정. 이전 합계는 역사 값.
