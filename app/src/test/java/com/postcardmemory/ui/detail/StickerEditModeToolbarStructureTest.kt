@@ -1,5 +1,6 @@
 package com.postcardmemory.ui.detail
 
+import com.postcardmemory.testsupport.extractBalancedCall
 import com.postcardmemory.testsupport.readStructureTestSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,26 +52,6 @@ class StickerEditModeToolbarStructureTest {
                 "app/src/main/java/com/postcardmemory/ui/detail/PhotoStickerDetailScreen.kt"
             )
         )
-    }
-
-    /** 호출 시작 위치(식별자 첫 글자)부터 여는 괄호와 짝이 맞는 닫는 괄호까지 잘라낸다. */
-    private fun extractBalancedCall(source: String, callStart: Int): String {
-        val openParenIndex = source.indexOf('(', callStart)
-        check(openParenIndex >= 0) { "여는 괄호를 찾지 못함: index=$callStart" }
-
-        var depth = 0
-        var i = openParenIndex
-        while (i < source.length) {
-            when (source[i]) {
-                '(' -> depth++
-                ')' -> {
-                    depth--
-                    if (depth == 0) return source.substring(callStart, i + 1)
-                }
-            }
-            i++
-        }
-        error("괄호 짝이 맞지 않음: index=$callStart")
     }
 
     @Test

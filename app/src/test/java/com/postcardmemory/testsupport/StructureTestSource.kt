@@ -4,7 +4,7 @@ import java.io.File
 
 /**
  * 화면 구조에 대한 요구사항 상당수를 production 소스 텍스트를 직접 읽어 고정하는
- * "구조 테스트"로 지킨다. 그 테스트들이 모두 똑같이 필요로 하는 파일 읽기만 여기 모아 둔다.
+ * "구조 테스트"로 지킨다. 그 테스트들이 공통으로 필요로 하는 파일 읽기와 괄호 짝 추출만 여기 모아 둔다.
  *
  * **왜 행동 테스트가 아니라 구조 테스트인가** (78일차 호적 조사에서 실제 상태를 다시 확인함):
  * Compose UI 테스트 라이브러리(`androidx.compose.ui:ui-test-junit4`)는 이미 프로젝트에
@@ -36,4 +36,27 @@ fun readStructureTestSource(candidates: List<String>): String {
                 "candidates=$candidates"
         )
     return file.readText()
+}
+
+/**
+ * 호출 시작 위치(식별자 첫 글자)부터 여는 괄호와 짝이 맞는 닫는 괄호까지 잘라낸다.
+ * 여러 구조 테스트가 같은 구현을 각자 복사해 두던 것을 107일차에 여기로 모았다.
+ */
+fun extractBalancedCall(source: String, callStart: Int): String {
+    val openParenIndex = source.indexOf('(', callStart)
+    check(openParenIndex >= 0) { "여는 괄호를 찾지 못함: index=$callStart" }
+
+    var depth = 0
+    var i = openParenIndex
+    while (i < source.length) {
+        when (source[i]) {
+            '(' -> depth++
+            ')' -> {
+                depth--
+                if (depth == 0) return source.substring(callStart, i + 1)
+            }
+        }
+        i++
+    }
+    error("괄호 짝이 맞지 않음: index=$callStart")
 }

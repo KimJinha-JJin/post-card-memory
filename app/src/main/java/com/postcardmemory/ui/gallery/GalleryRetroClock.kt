@@ -332,7 +332,7 @@ private fun GalleryCoffeeSteam(modifier: Modifier = Modifier) {
             val bottom = 23.dp.toPx() - progress * 8.dp.toPx()
             val path = Path().apply {
                 moveTo(x, bottom)
-                quadraticBezierTo(
+                quadraticTo(
                     x + sway, bottom - 5.dp.toPx(),
                     x + sway * 0.5f, bottom - 11.dp.toPx()
                 )

@@ -1,4 +1,4 @@
-> **문서 상태:** 앱 소개와 검증 설명은 2026-10-03(92일차) 코드·운영 규칙 기준으로 갱신했어. 작업 규칙·현재 상태·승인 범위의 기준은 이 README가 아니라 [AGENTS.md](AGENTS.md), [현재 HANDOFF](docs/ai/HANDOFF.md), [유효한 결정](docs/ai/DECISIONS.md)이야.
+> **문서 상태:** 앱 소개·구조·검증 설명은 2026-10-18(107일차) 코드·운영 규칙 기준으로 갱신했어. 작업 규칙·현재 상태·승인 범위의 기준은 이 README가 아니라 [AGENTS.md](AGENTS.md), [현재 HANDOFF](docs/ai/HANDOFF.md), [유효한 결정](docs/ai/DECISIONS.md)이야.
 
 <div align="center">
 
@@ -61,10 +61,17 @@
 - **월별 갤러리** — 판지 종이 위 3열 그리드로 달마다 묶어 봅니다(최신순/오래된순).
 - **기억 밀도 보기** — 1월~12월에 엽서가 얼마나 쌓였는지 한눈에 봅니다.
 - **흔들어서 한 장** — 기기를 흔들면 엽서 한 장을 무작위로 꺼내 보여줍니다.
-- **퀵셀렉트** — 신문 오림 손 다섯 장이 부채처럼 펼쳐지며 카메라·미래 우체통과 놀이 갤러리 세 가지(엽서의 연못·동글이 쉼터·엽서 쫑쫑컵)를 바로 엽니다.
+- **퀵셀렉트** — 신문 오림 손 다섯 장이 부채처럼 펼쳐지며 카메라·미래 우체통과 놀이 갤러리 세 가지를 바로 엽니다.
+
+### 🎠 놀이 갤러리 (퀵셀렉트에서 진입)
+- **엽서의 연못** — 갤러리 엽서들이 물 위에 뜬 것처럼 흔들리고, 기기를 흔들면 반응합니다. 엽서를 새총처럼 당겼다 놓으면 날아가 주변 엽서를 밀어내고 파문이 남습니다.
+- **동글이 쉼터** — 최신 엽서 최대 10장을 동글이 캐릭터가 들고 종이 바닥 위를 돌아다닙니다. 탭하면 엽서를 열고, 길게 눌러 끌 수 있어요.
+- **엽서 쫑쫑컵** — 같은 무대가 잔디 경기장으로 바뀌고, 엽서 3장이 출전해 레이스를 벌입니다(엽서가 3장 미만이면 안내만 나옴). 나머지는 관중석에서 구경합니다.
+- 세 모드 모두 화면 안에서만 노는 기능이라 위치·레이스 결과는 저장하지 않고, 엽서 데이터도 바꾸지 않습니다.
 
 ### 📅 방문 기록 · 미래 우체통
 - **방문 기록과 방문 달력** — 하루 처음 앱을 연 날을 기록하고, 벽걸이 달력처럼 넘겨 봅니다.
+  시작 화면에는 방문 소인이 찍히고, 그날 처음 연 실행에서는 도장 손이 들어와 직접 찍어 줍니다.
 - **미래 우체통** — 지정한 날짜가 되기 전까지 봉인되는 엽서를 보냅니다.
 
 ---
@@ -102,7 +109,7 @@ app/src/main/java/com/postcardmemory/
 ├── di/          ← Hilt 모듈
 ├── ui/
 │   ├── camera/      ← 촬영
-│   ├── gallery/     ← 월별/기억 밀도 갤러리, 퀵셀렉트, 흔들기, 방문 달력, 놀이 갤러리
+│   ├── gallery/     ← 월별/기억 밀도 갤러리, 퀵셀렉트, 흔들기, 방문 달력, 놀이 갤러리(아래 표)
 │   ├── detail/      ← 엽서 앞뒷면 편집과 꾸미기 요소
 │   ├── futuremail/  ← 미래 우체통
 │   ├── intro/       ← 시작 화면(방문 소인)
@@ -112,13 +119,25 @@ app/src/main/java/com/postcardmemory/
 └── MainActivity.kt
 ```
 
+**놀이 갤러리 코드 구조** (`ui/gallery/`)
+
+| 이름 | 역할 |
+|------|------|
+| `GalleryPlayMode` | 갤러리 놀이 상태(`NONE` / `POND` / `SHEEP_RANCH` / `RACE`) |
+| `PondController`, `PondRippleOverlay` | 엽서의 연못 — 발사 충격 전달과 파문. 카드의 부유·새총 물리는 `ui/components/StampCard.kt` |
+| `GalleryPlayStage*` | 동글이 쉼터와 쫑쫑컵이 **함께 쓰는 무대**(카드 이동·점프·늘이기·구름). `raceEnabled`로 두 모드를 가른다 |
+| `PostcardRace*`, `PixelPostcardRaceCar` | 쫑쫑컵 전용 — 레이스 단계·경기장·레이스 연출 |
+| `Shelter*` (`GalleryPlayStage.kt` 안의 private 요소) | 동글이 쉼터 전용 종이 바닥·색 |
+
+- `GalleryPlayMode.SHEEP_RANCH`는 동글이 쉼터의 예전("양떼목장") 이름입니다. 갤러리가 이 이름 문자열을 화면 복원 상태에 저장하고 `valueOf`로 되읽기 때문에, 화면 이름과 달라도 일부러 바꾸지 않는 **호환성 식별자**입니다(`GalleryPlayModeTest`가 고정).
+
 ---
 
 ## ✦ 검증
 
 | 구분 | 내용 |
 |------|------|
-| JVM 단위 테스트 | `testDebugUnitTest` — 저장·초안·직렬화·삭제·좌표 계산 등. 일부는 소스 구조를 고정하는 구조 테스트 |
+| JVM 단위 테스트 | `testDebugUnitTest` — 911건(107일차 기준). 저장·초안·직렬화·삭제·좌표 계산·놀이 무대 구역 계산 등. 일부는 소스 구조를 고정하는 구조 테스트 |
 | 계측(instrumentation) 테스트 | `app/src/androidTest` 20건 — Room migration 1→19 연결, 삭제 순서, 렌더링, 사진 스티커 직렬화 등. 실제 앱 저장공간에서 돌기 때문에 SAFE 7 / CONDITIONAL 6 / FORBIDDEN 7 등급으로 관리하며, 실사용 기기에서는 **SAFE 7건만 사용자 승인 후 클래스 단위로** 실행할 수 있음 |
 | GitHub Actions CI | push마다 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest` 실행. 마지막 단계는 계측 테스트 APK를 **컴파일만** 하며 실행하지 않음 |
 | 실기기 | 로컬 기본 검증 환경. 실제 엽서가 있는 기기라 읽기·관찰 위주 확인과 사람이 직접 하는 감각 QA가 중심 |
@@ -143,7 +162,10 @@ cd post-card-memory
 ```
 
 Android Studio에서 프로젝트를 열고 Gradle Sync 후 실행하세요.
-(이 저장소에는 Gradle Wrapper가 포함되어 있지 않아 `./gradlew` 커맨드라인 빌드는 지원되지 않습니다.)
+(이 저장소에는 Gradle Wrapper가 포함되어 있지 않아 `./gradlew` 커맨드라인 빌드는 지원되지 않습니다.
+커맨드라인에서는 따로 설치한 Gradle 9.4.1과 JDK 17로 `gradle testDebugUnitTest assembleDebug`를 실행할 수 있고, CI도 같은 버전을 씁니다.)
+
+**주의:** 실제 엽서가 들어 있는 기기에서는 `connectedAndroidTest` 같은 `connected*` task를 실행하지 마세요. 실행 후 앱이 제거되면서 엽서 데이터가 지워질 수 있습니다. 업데이트 설치는 데이터를 보존하는 `adb install -r`을 씁니다.
 
 ---
 
@@ -155,6 +177,18 @@ Android Studio에서 프로젝트를 열고 Gradle Sync 후 실행하세요.
 | `VIBRATE` | 꾸미기 인터랙션 햅틱 |
 
 사진과 엽서 데이터는 앱 내부 저장소에만 저장됩니다.
+
+---
+
+## ✦ 더 읽을 문서
+
+| 문서 | 내용 |
+|------|------|
+| [AGENTS.md](AGENTS.md) | 작업 규칙과 사용자 데이터·실기기 안전선 |
+| [docs/ai/HANDOFF.md](docs/ai/HANDOFF.md) | 현재 상태·미검증·남은 위험과 다음 출발점 |
+| [docs/ai/DECISIONS.md](docs/ai/DECISIONS.md) | 계속 유효한 제품·구조 결정 |
+| [docs/ai/TEST-COVERAGE-MAP.md](docs/ai/TEST-COVERAGE-MAP.md) | 테스트 수·보호 범위·계측 테스트 등급 |
+| [docs/ai/IMAGE-ASSET-STANDARD.md](docs/ai/IMAGE-ASSET-STANDARD.md), [IMAGE-ASSET-MAP.md](docs/ai/IMAGE-ASSET-MAP.md) | 이미지 자산 규격과 화면별 사용처·메모리 측정 |
 
 ---
 

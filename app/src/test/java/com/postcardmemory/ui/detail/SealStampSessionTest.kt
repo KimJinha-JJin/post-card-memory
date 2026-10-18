@@ -102,7 +102,7 @@ class SealStampSessionTest {
         assertEquals(-135f, seal.rotationDegrees, 0.0001f)
         val side = 100f * expectedScale
         assertEquals(200f - side / 2f, seal.offset!!.x, 0.001f)
-        assertEquals(150f - side / 2f, seal.offset!!.y, 0.001f)
+        assertEquals(150f - side / 2f, seal.offset.y, 0.001f)
     }
 
     @Test

@@ -1,3 +1,20 @@
+# HANDOFF — 107일차 3차: README 현행화 · 코드 클린 감사 · 놀이 무대 테스트 보강
+
+확인일: 2026-10-18. 수동 표준 모드(107일차 3차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `26a6fbb`(명칭 정리 commit, CI run `39114320761` success), origin 0/0, tracked clean, 보호 untracked 5종 유지. 시작 기준선 JVM 96 suite / 902 tests.
+
+- **README:** 버전·SDK·schema 19·권한 2종·계측 20건은 실제와 일치 확인. 보강 — 문서 상태일 107일차, 놀이 갤러리 절(연못·쉼터·쫑쫑컵 동작과 비저장), 인트로 방문 소인·첫 방문 도장 손, 놀이 갤러리 코드 구조 표(`GalleryPlayStage*` 공용 / `PostcardRace*` 쫑쫑컵 / `Shelter*`는 `GalleryPlayStage.kt` 안 private 요소 / `SHEEP_RANCH` 호환 식별자), JVM 911건, 커맨드라인 빌드(Gradle 9.4.1·JDK 17, CI 동일), 실기기 `connected*` 금지 주의, 더 읽을 문서 표.
+- **감사 방법:** `--rerun-tasks` 전체 컴파일 경고(28건) + 스크립트(미사용 import, 파일 안 1회만 등장하는 private 선언, production에서 선언뿐인 선언, private 함수 미사용 매개변수, 같은 이름 private 함수, 같은 값 색 상수, TODO/로그/주석 처리 코드/@Suppress) → 후보마다 실제 호출·문자열 템플릿·KDoc 링크·구조 테스트 문자열 참조를 직접 확인.
+- **수정(A/B, 동작 변경 0):** 미사용 import 3(`DetailScreen` clickable, `GalleryScreen` LazyColumn — 주석에만 등장, `PostcardRaceVenue` getValue — `by` 없음), `GalleryRetroClock` deprecated `quadraticBezierTo`→`quadraticTo`(같은 API의 새 이름), 테스트의 중복 `!!` 2곳(`SealStampSessionTest`, `VisitRecordTest` — 스마트 캐스트 후), 구조 테스트 4개에 똑같이 복사된 `extractBalancedCall`(해시 동일 확인)을 `testsupport/StructureTestSource.kt`로 통합.
+- **유지(D)/보류(C):** `AppIntroScreen`의 `SEAL_POSTMARK_DATE_TEXT_RATIO` import(KDoc 링크용, D) · `PondController.sequence`(구독 전달용, 주석으로 문서화, D) · `presetLabelTapeStyles`/`tapePalette`/`isOpening`/`isFullSuccess`/`OrphanFileDiagnostics`(테스트·진단 전용 공개 API, 기존 의도 문서화, D) · `Postcard.envelope*`(Room 컬럼, D) · 같은 값 색 상수 4쌍(역할이 다른 이름, D) · 기능 함수 `functionBody` 3벌(각 파일 `sourceText`에 묶여 서로 다름, D) · `ProvisionalFileTest`의 `thrown?.` 경고(`Nothing` 추론에 기댄 경고라 유지, D) · Room `Migration` 매개변수 이름 경고 17건(migration 코드라 별도 범위, C) · `LocalLifecycleOwner` 이동(lifecycle-runtime-compose 의존성 확인 필요, C) · `rememberTransformableState` centroid 버전·`Icons.AutoMirrored`·Compose test v2 rule(동작/RTL/디스패처가 바뀔 수 있음, C) · EXIF 회전 helper 3벌(`ImageUtils`/`PostcardImageExporter`/`PostcardRenderSpec`)과 `getFileExtension` 2벌(저장·내보내기 경로, JVM 검증 불가, C).
+- **테스트 보강(+9):** `GalleryPlayStageZoneTest` 7건 + `GalleryPlayModeTest` 2건(보호 범위는 TEST-COVERAGE-MAP 갤러리 절). 이를 위해 `GalleryPlayStage.kt`의 `StageMovementZone`·`movementZoneFor`·`zoneBoundsX`·`stageFloorY`·`RACE_MAX_RACERS`만 private→internal(계산 무변경). 쉼터 분기 임시 변형으로 테스트 실패 확인 후 백업본으로 원복(diff로 확인).
+- **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug assembleDebugAndroidTest` BUILD SUCCESSFUL, 98 suite / 911 tests 실패·오류·skip 0, `git diff --check` 통과. release build는 import·이름·가시성만 바뀌어 미실행.
+- **실기기:** import 제거·같은 API 새 이름·가시성 변경·테스트/문서뿐이라 QA 불필요로 판단. 설치·instrumentation 미실행. 사용자 데이터·저장 형식 영향 없음.
+- **남은 위험:** `createPlayStageCardSpec`의 `abs(hashCode())`는 해시가 `Int.MIN_VALUE`인 극단값에서 음수 seed가 될 수 있음(확률 2^-32, 동작 변경이라 미수정·기록만). 위 C 항목들은 별도 승인 작업 후보.
+- **Git:** 사용자 승인으로 이번 17개 파일만 명시 경로로 stage해 commit·push. 보호 untracked 제외. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
+- **다음 출발점:** 108일차 쫑쫑컵·연못 폴리싱은 `GalleryPlayStageZoneTest`·`GalleryPlayModeTest`를 기준선으로 삼는다(구역 분기를 바꾸면 테스트와 함께 의도적으로 갱신). `GalleryPlayMode.SHEEP_RANCH`와 위 C 항목·`Int.MIN_VALUE` 극단값은 보류 유지.
+
+---
+
 # HANDOFF — 107일차 추가: 레거시 명칭(SheepRanch → 놀이 무대·동글이 쉼터·쫑쫑컵) 정합성 정리
 
 확인일: 2026-10-18. 수동 표준 모드(107일차 추가 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `f8ab77f`(이미지 작업 commit, push·CI success 확인), origin 0/0, tracked clean.

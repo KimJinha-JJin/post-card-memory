@@ -103,7 +103,7 @@ private const val STAGE_MAX_STRETCH_Y = 1.32f
 private const val STAGE_STRETCH_RESISTANCE = 1.55f
 private const val STAGE_STRETCH_CENTER_FOLLOW = 0.28f
 private const val RACE_MIN_POSTCARDS = 3
-private const val RACE_MAX_RACERS = 3
+internal const val RACE_MAX_RACERS = 3
 private const val RACE_GATHER_MILLIS = 850
 private const val RACE_COUNTDOWN_STEP_MILLIS = 500
 private const val RACE_COUNTDOWN_GO_MILLIS = 350
@@ -116,14 +116,15 @@ private const val RACE_ZONE_BOTTOM_EXTRA_FRACTION = 0.05f
 /**
  * 쫑쫑컵 모드의 IDLE 상태에서 카드가 평소 돌아다니는 구역.
  * 동글이 쉼터(raceEnabled = false)에서는 항상 [FULL_STAGE]로, 무대 전체를 자유롭게 배회한다.
+ * 구역 계산 함수들은 쉼터/쫑쫑컵 분기를 GalleryPlayStageZoneTest가 직접 호출해 고정하도록 internal이다.
  */
-private enum class StageMovementZone {
+internal enum class StageMovementZone {
     FULL_STAGE,
     RACE_PADDOCK,
     RACE_SPECTATOR
 }
 
-private fun movementZoneFor(index: Int, raceEnabled: Boolean): StageMovementZone {
+internal fun movementZoneFor(index: Int, raceEnabled: Boolean): StageMovementZone {
     if (!raceEnabled) return StageMovementZone.FULL_STAGE
     return if (index < RACE_MAX_RACERS) {
         StageMovementZone.RACE_PADDOCK
@@ -133,7 +134,7 @@ private fun movementZoneFor(index: Int, raceEnabled: Boolean): StageMovementZone
 }
 
 /** 구역별 좌우 배회 범위 — 패독은 출발선 쪽 절반으로, 관중은 기존 폭 그대로 쓴다. */
-private fun zoneBoundsX(
+internal fun zoneBoundsX(
     zone: StageMovementZone,
     stagePaddingPx: Float,
     maxX: Float
@@ -145,7 +146,7 @@ private fun zoneBoundsX(
     }
 }
 
-private fun stageFloorY(
+internal fun stageFloorY(
     spec: PlayStageCardSpec,
     stageHeightPx: Float,
     cardHeightPx: Float,

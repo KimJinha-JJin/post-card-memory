@@ -81,7 +81,7 @@ class VisitRecordTest {
         repeat(7) { offset -> record = recordVisit(record, firstDay + offset) }
 
         assertEquals(7, record!!.totalVisitDays)
-        assertEquals(7, record!!.currentStreakDays)
+        assertEquals(7, record.currentStreakDays)
     }
 
     // ---- 4. 하루 이상 건너뜀 ----
