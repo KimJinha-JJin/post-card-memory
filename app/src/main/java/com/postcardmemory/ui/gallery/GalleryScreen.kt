@@ -2250,9 +2250,12 @@ internal fun filterPostcardsForSearch(
     }
 }
 
-/** gallery_date_paper_strip.png 안에서 투명 여백을 뺀 실제 종이 영역(px). 자산을 바꾸면 다시 잰다. */
-private val GALLERY_DATE_STRIP_SRC_OFFSET = IntOffset(89, 172)
-private val GALLERY_DATE_STRIP_SRC_SIZE = IntSize(2011, 379)
+/**
+ * gallery_date_paper_strip.png 안에서 투명 여백을 뺀 실제 종이 영역(px, alpha > 16). 자산을 바꾸면 다시 잰다.
+ * 107일차: 자산 2172×724 → 1086×362(라벨 표시 폭 대비 약 4.5배 과대, 갤러리 원본 decode 6MiB 상주)에 맞춰 새 자산에서 다시 잼.
+ */
+private val GALLERY_DATE_STRIP_SRC_OFFSET = IntOffset(44, 86)
+private val GALLERY_DATE_STRIP_SRC_SIZE = IntSize(1006, 189)
 
 /** 종이 띠를 짧은 날짜에 맞춰 너무 찌그러뜨리지 않게 하는 최소 폭. */
 private val GALLERY_DATE_STRIP_MIN_WIDTH = 136.dp

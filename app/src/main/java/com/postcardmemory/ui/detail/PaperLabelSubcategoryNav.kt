@@ -52,11 +52,12 @@ import kotlin.math.roundToInt
 private const val PAPER_LABEL_HEIGHT_DP = 25f
 private const val PAPER_LABEL_INSET_X_DP = 6f
 
-// 원본(2172×724)은 작은 라벨에 비해 커서 1/4로 줄여 불러온다(약 0.4MB). 종이 영역 좌표는
-// 갤러리 월 라벨이 쓰는 원본 기준 값(89,172 / 2011×379)을 같은 비율로 줄인 것이다.
-private const val PAPER_LABEL_STRIP_SAMPLE = 4
-private val PAPER_LABEL_STRIP_SRC_OFFSET = IntOffset(89 / PAPER_LABEL_STRIP_SAMPLE, 172 / PAPER_LABEL_STRIP_SAMPLE)
-private val PAPER_LABEL_STRIP_SRC_SIZE = IntSize(2011 / PAPER_LABEL_STRIP_SAMPLE, 379 / PAPER_LABEL_STRIP_SAMPLE)
+// 자산(1086×362, 107일차에 2172×724에서 절반으로 줄임)은 작은 라벨에 비해 커서 1/2로 줄여
+// 불러온다(543×181, 약 0.4MB — 줄이기 전 1/4 decode와 같은 크기). 종이 영역 좌표는 갤러리
+// 월 라벨이 쓰는 자산 기준 값(44,86 / 1006×189)을 같은 비율로 줄인 것이다.
+private const val PAPER_LABEL_STRIP_SAMPLE = 2
+private val PAPER_LABEL_STRIP_SRC_OFFSET = IntOffset(44 / PAPER_LABEL_STRIP_SAMPLE, 86 / PAPER_LABEL_STRIP_SAMPLE)
+private val PAPER_LABEL_STRIP_SRC_SIZE = IntSize(1006 / PAPER_LABEL_STRIP_SAMPLE, 189 / PAPER_LABEL_STRIP_SAMPLE)
 
 /**
  * 미선택 라벨: 민트 테이프 그림의 밝기만 남겨 연한 회색으로 곱한다 — 종이 결·찢긴

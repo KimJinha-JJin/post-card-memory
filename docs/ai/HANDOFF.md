@@ -1,3 +1,21 @@
+# HANDOFF — 107일차: 이미지 자산 재감사 · 실기기 메모리 기준선 · 월 라벨 띠 축소
+
+확인일: 2026-10-18. 수동 표준 모드(107일차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 `feature/photo-sticker` HEAD `a3bf24d`, origin 0/0(fetch 후), tracked clean, `git diff --check` 통과. 보호 untracked(`.codex-config.candidate.toml`, `.kotlin/`, fiber·round_head·sheep PNG) 무변경.
+
+- **상세 수치:** `IMAGE-ASSET-MAP.md` 맨 위 "107일차" 절.
+- **1부 재감사(34장):** 표시 대비 과대이면서 갤러리 상주인 자산은 `gallery_date_paper_strip` 1장뿐. 나머지는 적정(A) 또는 APK-only(B: 앱 아이콘, 도장·핀셋 손 — 사용자가 이번 제외) 또는 결합 보류(D: editor_label_peek, 도장 실루엣). C2PA `caBX` 메타데이터는 aapt가 이미 제거해 APK 이득 0.
+- **2부 기준선(실기기, 106일차 빌드):** 갤러리 Bitmap 31,516 KiB(104일차 값 유지), 편집 13,771, 갤러리 복귀 34,563, 동글이 쉼터 35,463 KiB(+0.9MB = 동글이 한 장 공유). PID 유지, 2바퀴 누수성 증가 없음.
+- **3부 변경(사용자 승인 ①만):** `gallery_date_paper_strip.png` 2172×724 → **1086×362**(1,208,965 → 300,671 B). `GalleryScreen.kt` crop 상수를 새 자산 실측값 (44,86)/1006×189로, `PaperLabelSubcategoryNav.kt` sample 4→2 + 같은 기준 crop(편집 decode 543×181 동일). 다른 코드·테스트 무변경.
+- **4부 재측정:** 갤러리·복귀·쉼터 Bitmap 모두 **−4,607 KiB(−4.50MB)**, 계산 예상과 정확히 일치. 편집 Bitmap 무변화. release APK 40,599,253 → **39,730,981 B(−868,272)**.
+  - 한계: Graphics·TOTAL PSS는 After가 오히려 조금 높게 나왔으나(갤러리 시작 PSS 249.5→258.0, Graphics 86.5→93.1MB) GPU 캐시 변동이 커서 개선/악화 판단에 쓰지 않음. 샘플 수 Before 180 / After 142(After 체류가 약간 짧음). APK Before는 10-16 빌드(같은 HEAD 재빌드 아님, APK 안 띠 항목 차이 −868,271 B와 1B 차이).
+- **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, 96 suite / 902 tests 실패·오류·skip 0, `git diff --check` 통과. TEST-COVERAGE-MAP 변경 없음(테스트 수·의미 불변, 상수 고정 테스트 없음).
+- **실사용 기기 instrumentation:** 불필요(미실행).
+- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s R3KYB00HAYY install -r` debug Success(firstInstallTime 2026-10-05 유지). 사용자가 갤러리 월 라벨·편집 선택줄 라벨 "전이랑 똑같다" 확인.
+- **Git:** 사용자 승인으로 이번 범위(PNG 1, Kotlin 2, IMAGE-ASSET-MAP, 이 HANDOFF)만 명시 stage해 commit·push. 보호 untracked 제외. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
+- **후속(승인 아님):** 앱 아이콘 432² 축소(APK만), 도장·핀셋 손 소폭 축소(APK만), editor_label_peek 627² + crop 상수, 달력 GPU 잔존 원인. 108일차 예정: 쫑쫑컵·연못 폴리싱(107과 분리).
+
+---
+
 # HANDOFF — 106일차: 동글이 쉼터 외형 폴리싱(날짜·그림자 제거, 종이 질감 바닥)
 
 확인일: 2026-10-17. 수동 표준 모드(106일차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 `feature/photo-sticker` HEAD `ae46b32`, origin 0/0(fetch 후), tracked clean, `git diff --check` 통과. 보호 untracked(`.codex-config.candidate.toml`, `.kotlin/`, fiber·round_head·sheep PNG) 무변경.
