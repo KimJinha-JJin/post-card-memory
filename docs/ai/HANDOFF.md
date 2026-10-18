@@ -1,3 +1,23 @@
+# HANDOFF — 107일차 5차: 방문 달력 메모리 반복 실측 · 잔여 기술부채 감사
+
+확인일: 2026-10-18. 수동 표준 모드(107일차 5차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `cd75ef4`(4차 commit, CI run `39118609812` success), origin 0/0, tracked clean, `git diff --check` 통과, 보호 untracked 5종 유지. 기준선 JVM 100 suite / 920 tests.
+
+- **달력 Graphics — A(정상 캐시) 판정, 근거는 5회 반복 중 누적 증가 없음:** SM-S936N, 설치된 4차 QA debug 빌드, 읽기 전용 `dumpsys meminfo` 3초 간격. 전체 기록 194개, 그중 marker 구간 135개, 구간 중앙값 계산에 111개(각 marker 뒤 6초 제외). 전 기록 PID 18272 유지. 열기·닫기 5회 동안 Bitmap은 194개 기록 모두 63개 / 33,332 KiB로 불변, Native Alloc 82.5~83.5MB. Graphics는 열기 113~119MB / 닫기 99~114MB에서 회차가 늘어도 커지지 않았고, 홈으로 나가면 40.5MB, 복귀 시 83.9MB(시작 83.0). GPU 쪽에서 무엇이 왜 유지되는지는 확인하지 않았다(관찰 결과만, 1세션 5회 범위). 상세 표는 `IMAGE-ASSET-MAP.md` 맨 위 "107일차 5차" 절.
+- **닫힌 달력의 종이 decode — 원인 확인, 수정 안 함:** Material3 `ModalNavigationDrawer`가 닫힌 상태에서도 `drawerContent`를 구성해 `MonthlyVisitCalendar`의 `visit_calendar_paper`(1122×1402, 약 6.0MB)가 갤러리 진입 때 decode된다. 다른 화면 재사용 없음. "첫 열기까지 미루기"는 한 번도 안 연 프로세스에서만 약 6MB 이득이고, 첫 열기 프레임에 decode·첫 구성이 몰려 drawer가 끊길 위험이 있어(작업지시서의 깜빡임·지연 금지 조건) 적용하지 않았다. Graphics 잔존과도 무관.
+- **코드·테스트 변경 0.** 자동 검증·빌드는 문서만 바뀌어 미실행(필요 없음). TEST-COVERAGE-MAP 변경 없음(테스트 수·범위 변화 없음). 설치·instrumentation·`connected*` 미실행. 사용자 데이터 무변경.
+- **잔여 기술부채 감사(조사만):**
+  - Room Migration 경고 17건: `PostcardDatabase.kt`의 `migrate` override 18개 중 17개가 매개변수 이름을 `database`로 써서 상위 `Migration.migrate(db)`와 이름이 다르다는 경고(마지막 하나는 이미 `db`). 호출은 Room 내부와 `PostcardFullMigrationChainTest`의 위치 인자뿐이라 동작 영향 0. 고치려면 이름만 `db`로 바꾸면 되지만 migration 파일이라 별도 승인 작업(SQL 무변경 diff 확인 + 구조 검증).
+  - `LocalLifecycleOwner`(deprecated, `CameraScreen:89`·`DetailScreen:2359`·`GalleryScreen:276`): 새 위치는 `androidx.lifecycle.compose`라 lifecycle-runtime-compose 의존성 확인이 먼저. 동작 문제 없음.
+  - `rememberTransformableState`(`CameraScreen:510`): centroid 인자 버전으로 바꾸면 핀치 확대 중심이 바뀔 수 있어 실기기 QA 필요. 동작 문제 없음.
+  - AutoMirrored(`CameraScreen:346, 609` 뒤로가기 화살표): 한국어(LTR)에서는 같은 모양, RTL에서만 다르다. 우선순위 낮음.
+  - Compose test v2(`PostcardBackRenderingTest`의 `createComposeRule`): v2는 dispatcher가 바뀌어 동기화가 달라질 수 있고, 이 테스트를 실기기에서 돌릴 수 없어 지금 바꾸면 검증 불가.
+  - `GalleryPlayMode.SHEEP_RANCH`: Room·DataStore가 아니라 `PlayModeSaver`(rememberSaveable, 프로세스 재시작 복원용)만 이름을 저장. `GalleryPlayModeTest`가 이름 목록을 고정. 유지.
+  - SAFE `ExifOrientationInstrumentedTest`: 메모리 안 3×2 Bitmap만 쓰는 테스트(파일·DB 접근 없음). 실행하려면 AGENTS.md 5절 절차(serial 확인 → 사용자 승인 → `am instrument -e class com.postcardmemory.ExifOrientationInstrumentedTest`)와 test APK 설치 승인이 필요. 실행 0회.
+  - `AGENTS.md` 5절 "현재 20건 분류"는 실제 21건. 사용자 요청 전 미수정.
+- **Git:** 이번 변경은 `docs/ai/IMAGE-ASSET-MAP.md`·`docs/ai/HANDOFF.md` 2개. 사용자 승인으로 이 2개만 명시 경로로 stage해 commit·push한다. 이 HANDOFF는 그 commit 안에 들어가므로 commit SHA·CI 결과는 완료보고에서 확인한다(성공 기록용 docs-only commit 없음).
+
+---
+
 # HANDOFF — 107일차 4차: 잔여 기술부채 — seed 극단값 · EXIF/확장자 중복 · 달력 Graphics 조사
 
 확인일: 2026-10-18. 수동 표준 모드(107일차 4차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `8c7a208`(3차 commit, CI run `39117114788` success), origin 0/0, tracked clean, 보호 untracked 5종 유지. 시작 기준선 JVM 98 suite / 911 tests.
