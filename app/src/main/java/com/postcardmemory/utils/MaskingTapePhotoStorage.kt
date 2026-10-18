@@ -48,7 +48,9 @@ object MaskingTapePhotoStorage {
                 photosDirectory,
                 "masking_tape_" +
                         UUID.randomUUID() +
-                        getFileExtension(context, sourceUri)
+                        imageFileExtensionForMimeType(
+                            context.contentResolver.getType(sourceUri)
+                        )
             )
 
         try {
@@ -99,30 +101,6 @@ object MaskingTapePhotoStorage {
             }
 
             throw exception
-        }
-    }
-
-    private fun getFileExtension(
-        context: Context,
-        uri: Uri
-    ): String {
-        return when (
-            context.contentResolver
-                .getType(uri)
-                ?.lowercase()
-        ) {
-            "image/png" ->
-                ".png"
-
-            "image/webp" ->
-                ".webp"
-
-            "image/heic",
-            "image/heif" ->
-                ".heic"
-
-            else ->
-                ".jpg"
         }
     }
 

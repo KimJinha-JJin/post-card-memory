@@ -1,3 +1,21 @@
+# HANDOFF — 107일차 4차: 잔여 기술부채 — seed 극단값 · EXIF/확장자 중복 · 달력 Graphics 조사
+
+확인일: 2026-10-18. 수동 표준 모드(107일차 4차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `8c7a208`(3차 commit, CI run `39117114788` success), origin 0/0, tracked clean, 보호 untracked 5종 유지. 시작 기준선 JVM 98 suite / 911 tests.
+
+- **해결 — seed 극단값:** `createPlayStageCardSpec`의 `abs(Int)`는 해시가 `Int.MIN_VALUE`일 때 음수를 남겨 `jumpEvery = 0`(걷기 루프 `walkCount % spec.jumpEvery` → ArithmeticException, 무대 화면 크래시)·`walkMillis = -48`·`pauseMillis` 음수가 됐다. 재현 입력: 엽서 id 108,841,867·index 9(자리별 최소 id ≈ 1억~38억이라 실사용 id로는 도달 불가). 수정: `playStageSeed(hash) = abs(hash.toLong())`, `PlayStageCardSpec.seed`를 Int→Long(저장 안 되는 화면 한정 값, 쓰는 곳은 걷기 위상 `currentTimeMillis() + seed` 하나). 그 밖의 모든 해시는 seed·파생값이 예전과 같다(테스트로 고정). `Int.MAX_VALUE` 해시는 id·index 조합으로 만들 수 없어 seed 함수에 직접 넣어 검사.
+- **해결 — EXIF 회전 3벌:** `ImageUtils`(촬영 사진 자르기)·`PostcardImageExporter`(스티커 내보내기)·`PostcardRenderSpec`(API 28 미만 사진 렌더링)의 방향값→행렬 표는 같았고, 차이는 원본 recycle뿐(`ImageUtils`만 안 함). 새 `utils/ExifOrientation.kt`의 `exifOrientationTransform`(순수 표)·`rotateBitmapForExifOrientation`(행렬 적용, recycle 안 함)로 모으고, recycle은 호출부에 그대로 남겼다(내보내기·렌더링은 private wrapper가 기존처럼 recycle). 회전 없는 좌우 반전은 단위 행렬 `postScale(-1,1)`로 예전 `setScale(-1,1)`과 같은 행렬. `ImageUtils`의 가로세로 뒤바뀜 판정도 같은 표의 `swapsWidthAndHeight`로 바꿨다(같은 4종).
+- **해결 — getFileExtension 2벌:** `MaskingTapePhotoStorage`·`PhotoStickerImageStorage`의 함수가 바이트 단위로 같았다(MIME 타입 기반, 파일 이름 무관). 순수 `imageFileExtensionForMimeType(mimeType)`(`utils/ImageFileExtension.kt`)로 모으고 호출부는 `contentResolver.getType(uri)`를 넘긴다. 확장자로 복원·정리하는 다른 경로 없음 확인. 기존 파일·이름 규칙 무변경.
+- **유지/잠정 — 달력 Graphics:** 실기기 미연결이라 실측 없음. 정적 조사로는 닫혀 있어도 구성되는 달력 종이 Bitmap의 GPU 텍스처 + 월 넘김 오프스크린 레이어·drawer 그림자가 Skia 캐시에 남는 것으로 설명되어 **A(정상 캐시) 잠정**. 기존 측정이 2바퀴뿐이라 무제한 증가 없음은 미확정(IMAGE-ASSET-MAP 10절에 확정 측정 방법 기록). 코드 변경 없음.
+- **테스트(+9 JVM, +1 instrumentation):** `GalleryPlayStageZoneTest` +3, `ExifOrientationTest` 3, `ImageFileExtensionTest` 3, `ExifOrientationInstrumentedTest` 1(SAFE — 메모리 안 Bitmap만, 실기기 실행 0회). seed 수정은 옛 계산으로 되돌린 변형에서 2건 실패 확인 후 원복.
+- **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug assembleDebugAndroidTest` BUILD SUCCESSFUL, 100 suite / 920 tests 실패·오류·skip 0, `git diff --check` 통과. release build 미실행(로직 동등 리팩터링).
+- **실기기 QA: 완료(사용자 확인).** SM-S936N에 사용자 승인으로 `adb install -r`(debug, `firstInstallTime 2026-10-05 14:19:35` 유지 → 데이터 보존, `lastUpdateTime 19:13:20`). 세로·가로 촬영 후 편집 화면 방향, 갤러리 사진으로 사진 스티커·사진 테이프 추가, 스티커가 있는 엽서 이미지 내보내기 — 셋 다 정상. SAFE `ExifOrientationInstrumentedTest`는 미실행(실행 0회). 무대 seed 수정은 실사용 id에서 값이 같아 QA 불필요.
+- **문서 불일치(미수정):** `AGENTS.md` 5절 "현재 20건 분류"는 이제 21건이다. AGENTS.md는 사용자 요청 시에만 고치므로 보고만 한다.
+- **보류 유지:** Room Migration 매개변수 경고 17건, `LocalLifecycleOwner`, `rememberTransformableState`, AutoMirrored, Compose test v2, `GalleryPlayMode.SHEEP_RANCH`, 달력 종이가 drawer 닫힌 동안 decode되는 구조.
+- **테스트 실행 구분:** SAFE `ExifOrientationInstrumentedTest` 실기기 실행 0회(이번 승인 범위 밖), `connected*` 미실행. CI의 `assembleDebugAndroidTest`는 instrumentation **컴파일**일 뿐 실행이 아니다.
+- **Git:** 사용자 승인으로 이 16개 파일(수정 11·신규 5 — 완료보고의 "17개·신규 6"은 셈 착오)만 명시 경로로 stage해 commit·push한다. 이 HANDOFF는 그 commit 안에 들어가므로 commit SHA·push·CI 결과는 여기 적지 않고 완료보고에서 확인한다(성공 기록용 docs-only commit 없음).
+
+---
+
 # HANDOFF — 107일차 3차: README 현행화 · 코드 클린 감사 · 놀이 무대 테스트 보강
 
 확인일: 2026-10-18. 수동 표준 모드(107일차 3차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `26a6fbb`(명칭 정리 commit, CI run `39114320761` success), origin 0/0, tracked clean, 보호 untracked 5종 유지. 시작 기준선 JVM 96 suite / 902 tests.

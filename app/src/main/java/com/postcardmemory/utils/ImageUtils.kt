@@ -3,7 +3,6 @@ package com.postcardmemory.utils
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
@@ -58,10 +57,7 @@ object ImageUtils {
         )
 
         val widthAndHeightSwapped =
-            orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
-                    orientation == ExifInterface.ORIENTATION_ROTATE_270 ||
-                    orientation == ExifInterface.ORIENTATION_TRANSPOSE ||
-                    orientation == ExifInterface.ORIENTATION_TRANSVERSE
+            exifOrientationTransform(orientation)?.swapsWidthAndHeight == true
 
         return if (widthAndHeightSwapped) {
             OrientedImageSize(
@@ -111,7 +107,8 @@ object ImageUtils {
             "사진을 불러올 수 없습니다."
         )
 
-        val rotatedBitmap = rotateBitmapUsingExif(
+        // 원본은 여기서 recycle하지 않는다(예전 동작 그대로).
+        val rotatedBitmap = rotateBitmapForExifOrientation(
             bitmap = originalBitmap,
             orientation = orientation
         )
@@ -275,87 +272,5 @@ object ImageUtils {
             outputFile.delete()
             throw failure
         }
-    }
-
-    /**
-     * 사진의 EXIF 방향 정보에 맞게
-     * 비트맵을 실제 방향으로 회전하거나 반전한다.
-     */
-    private fun rotateBitmapUsingExif(
-        bitmap: Bitmap,
-        orientation: Int
-    ): Bitmap {
-        val matrix = Matrix()
-
-        when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
-                matrix.setScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_180 -> {
-                matrix.setRotate(
-                    180f
-                )
-            }
-
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
-                matrix.setRotate(
-                    180f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_TRANSPOSE -> {
-                matrix.setRotate(
-                    90f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_90 -> {
-                matrix.setRotate(
-                    90f
-                )
-            }
-
-            ExifInterface.ORIENTATION_TRANSVERSE -> {
-                matrix.setRotate(
-                    270f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_270 -> {
-                matrix.setRotate(
-                    270f
-                )
-            }
-
-            else -> {
-                return bitmap
-            }
-        }
-
-        return Bitmap.createBitmap(
-            bitmap,
-            0,
-            0,
-            bitmap.width,
-            bitmap.height,
-            matrix,
-            true
-        )
     }
 }

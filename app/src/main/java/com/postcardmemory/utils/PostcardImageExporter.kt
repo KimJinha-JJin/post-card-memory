@@ -1840,84 +1840,13 @@ object PostcardImageExporter {
         }
     }
 
+    /** EXIF 방향대로 세운 비트맵을 돌려주고, 새 비트맵이 만들어졌으면 디코딩한 원본은 recycle한다. */
     private fun rotateBitmapUsingExif(
         bitmap: Bitmap,
         orientation: Int
     ): Bitmap {
-        val matrix =
-            Matrix()
-
-        when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
-                matrix.setScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_180 -> {
-                matrix.setRotate(
-                    180f
-                )
-            }
-
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
-                matrix.setRotate(
-                    180f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_TRANSPOSE -> {
-                matrix.setRotate(
-                    90f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_90 -> {
-                matrix.setRotate(
-                    90f
-                )
-            }
-
-            ExifInterface.ORIENTATION_TRANSVERSE -> {
-                matrix.setRotate(
-                    270f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_270 -> {
-                matrix.setRotate(
-                    270f
-                )
-            }
-
-            else -> {
-                return bitmap
-            }
-        }
-
         val rotatedBitmap =
-            Bitmap.createBitmap(
-                bitmap,
-                0,
-                0,
-                bitmap.width,
-                bitmap.height,
-                matrix,
-                true
-            )
+            rotateBitmapForExifOrientation(bitmap, orientation)
 
         if (rotatedBitmap != bitmap) {
             bitmap.recycle()

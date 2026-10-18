@@ -137,8 +137,8 @@ app/src/main/java/com/postcardmemory/
 
 | 구분 | 내용 |
 |------|------|
-| JVM 단위 테스트 | `testDebugUnitTest` — 911건(107일차 기준). 저장·초안·직렬화·삭제·좌표 계산·놀이 무대 구역 계산 등. 일부는 소스 구조를 고정하는 구조 테스트 |
-| 계측(instrumentation) 테스트 | `app/src/androidTest` 20건 — Room migration 1→19 연결, 삭제 순서, 렌더링, 사진 스티커 직렬화 등. 실제 앱 저장공간에서 돌기 때문에 SAFE 7 / CONDITIONAL 6 / FORBIDDEN 7 등급으로 관리하며, 실사용 기기에서는 **SAFE 7건만 사용자 승인 후 클래스 단위로** 실행할 수 있음 |
+| JVM 단위 테스트 | `testDebugUnitTest` — 920건(107일차 기준). 저장·초안·직렬화·삭제·좌표 계산·놀이 무대 구역 계산 등. 일부는 소스 구조를 고정하는 구조 테스트 |
+| 계측(instrumentation) 테스트 | `app/src/androidTest` 21건 — Room migration 1→19 연결, 삭제 순서, 렌더링, 사진 스티커 직렬화, EXIF 회전 등. 실제 앱 저장공간에서 돌기 때문에 SAFE 8 / CONDITIONAL 6 / FORBIDDEN 7 등급으로 관리하며, 실사용 기기에서는 **SAFE 8건만 사용자 승인 후 클래스 단위로** 실행할 수 있음 |
 | GitHub Actions CI | push마다 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest` 실행. 마지막 단계는 계측 테스트 APK를 **컴파일만** 하며 실행하지 않음 |
 | 실기기 | 로컬 기본 검증 환경. 실제 엽서가 있는 기기라 읽기·관찰 위주 확인과 사람이 직접 하는 감각 QA가 중심 |
 
