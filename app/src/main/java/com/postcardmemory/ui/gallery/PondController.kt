@@ -6,6 +6,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import com.postcardmemory.data.Postcard
+
+/** 연못에 한 번에 띄우는 엽서 수. */
+internal const val POND_MAX_POSTCARDS = 10
+
+/**
+ * 연못에 띄울 엽서를 고른다 — 갤러리의 검색어·정렬 순서와 무관하게, 엽서 자체의
+ * 날짜(capturedAt) 최신순으로 전체에서 최대 [POND_MAX_POSTCARDS]장. 날짜가 같으면
+ * id가 큰(나중에 만든) 쪽을 먼저 둬 순서가 매번 같게 한다.
+ */
+internal fun pondPostcardsFor(postcards: List<Postcard>): List<Postcard> =
+    postcards
+        .sortedWith(
+            compareByDescending<Postcard> { it.capturedAt }
+                .thenByDescending { it.id }
+        )
+        .take(POND_MAX_POSTCARDS)
 
 /** 엽서의 연못 모드에서 발사된 엽서가 지나가거나 부딪힌 자리에 남는 파문 한 개. */
 data class PondRipple(

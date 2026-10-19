@@ -110,9 +110,75 @@ class GalleryMonthlyGridStructureTest {
             itemBody.contains("if (isPondModeOn)")
         )
         assertTrue(
-            "날짜 표기는 월 헤더와 중복되지 않게 두 분기 모두 day-only override를 넘겨야 함",
+            "평상시 날짜 표기는 월 헤더와 중복되지 않게 day-only override를 넘겨야 함",
             itemBody.contains("dateLabelOverride = dayLabel")
         )
+        // 108일차: 연못은 월 헤더가 없어 "일"만으론 의미가 없으므로 날짜 줄을 빼야 한다.
+        assertTrue(
+            "연못 분기는 빈 문자열로 날짜 줄을 그리지 않아야 함",
+            itemBody.contains("dateLabelOverride = \"\"")
+        )
+    }
+
+    @Test
+    fun pondMode_showsLatestPondPostcardsWithoutMonthHeaders() {
+        // 108일차: 연못은 월별 묶음 대신 pondPostcardsFor로 고른 최신 10장을 넘겨받고,
+        // 월 헤더(월·장수)는 만들지 않는다. 연못을 끄면 같은 페이지가 월별 묶음으로 돌아온다.
+        assertTrue(
+            "pager는 연못 목록을 pondPostcardsFor(전체 엽서)로 골라야 함",
+            sourceText.contains("pondPostcardsFor(postcards)")
+        )
+        assertTrue(
+            "연못일 때만 연못 목록, 아니면 검색·정렬된 월별 목록을 넘겨야 함",
+            sourceText.contains("postcards = if (isPondModeOn) pondPostcards else displayedPostcards")
+        )
+        assertTrue(
+            "연못일 때는 월 섹션(헤더)을 만들지 않아야 함",
+            monthlyGridPageBody.contains("if (isPondModeOn) emptyList() else monthSectionsFor(postcards)")
+        )
+        assertTrue(
+            "연못은 별도 스크롤 state를 써서 월별 보기의 스크롤 위치를 건드리지 않아야 함",
+            monthlyGridPageBody.contains("state = if (isPondModeOn) pondGridState else gridState")
+        )
+    }
+
+    @Test
+    fun pondLeaf_isDecodedOncePerPageAndDrawnInsideTheCardLayer() {
+        // 108일차: 연잎은 카드 10장이 공유하는 한 장 — 페이지에서 연못이 켜진 동안만 한 번 불러온다.
+        assertTrue(
+            monthlyGridPageBody.contains(
+                "val pondLeaf = if (isPondModeOn) ImageBitmap.imageResource(R.drawable.pond_lily_pad) else null"
+            )
+        )
+        assertTrue(monthlyGridPageBody.contains("pondLeaf = pondLeaf"))
+
+        // 연잎은 StampCard의 graphicsLayer 뒤(안쪽)·터치 처리 앞에서 그려야 우표와 한 몸으로
+        // 움직이고 기존 터치 영역도 그대로다.
+        val stampCard = listOf(
+            "src/main/java/com/postcardmemory/ui/components/StampCard.kt",
+            "app/src/main/java/com/postcardmemory/ui/components/StampCard.kt"
+        ).map { File(it) }.first { it.exists() }.readText()
+        val layer = stampCard.indexOf(".graphicsLayer {")
+        val leaf = stampCard.indexOf("drawImage(\n                                image = pondLeaf")
+        val pointer = stampCard.indexOf("Modifier.pointerInput(postcard.id, pondController)")
+        assertTrue("graphicsLayer를 찾지 못함", layer >= 0)
+        assertTrue("연잎 drawImage를 찾지 못함", leaf >= 0)
+        assertTrue("연잎은 graphicsLayer 안쪽에서 그려야 함", leaf > layer)
+        assertTrue("연잎은 터치 처리 앞(바깥 받침 자리)에서 그려야 함", pointer > leaf)
+    }
+
+    @Test
+    fun enteringPond_closesSearch() {
+        // 108일차: 연못은 검색과 무관한 최신 엽서를 띄우므로, 연못을 켜면 검색을 닫는다.
+        val start = sourceText.indexOf("onPlayModeSelected = { selectedMode ->")
+        assertTrue("onPlayModeSelected 콜백을 찾지 못함", start >= 0)
+        val end = sourceText.indexOf("modifier = Modifier.navigationBarsPadding()", start)
+        assertTrue("onPlayModeSelected 콜백 끝을 찾지 못함", end > start)
+        val body = sourceText.substring(start, end)
+
+        assertTrue(body.contains("if (playMode == GalleryPlayMode.POND)"))
+        assertTrue(body.contains("isSearchActive = false"))
+        assertTrue(body.contains("searchQuery = \"\""))
     }
 
     @Test

@@ -38,9 +38,12 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -65,6 +68,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
@@ -95,6 +99,11 @@ private val POND_NEIGHBOR_MAX_PUSH = 14.dp
 private const val POND_CAPTURE_SCALE = 1.03f
 private const val POND_ROTATION_FROM_VELOCITY = 0.006f
 
+// 연잎(칸 폭 −8dp 정사각) 가장자리에서 우표까지의 여백. 칸 폭 약 115dp(384dp 화면) 기준
+// 우표가 연잎 지름의 약 59%(≈63dp)가 되어 우표 둘레로 잎이 넉넉히 보인다
+// (108일차 실기기 QA: 74%에선 우표가 잎을 거의 가렸다).
+private val POND_LEAF_STAMP_INSET = 22.dp
+
 /**
  * 셔플(흔들기) 트리거가 바뀔 때마다 카드가 잠시 흩어졌다 원래 자리로 돌아오는
  * 애니메이션을 재생한다. shakeTrigger가 0(초기값)일 때는 재생하지 않는다.
@@ -115,6 +124,10 @@ fun StampCard(
     // 않도록 day-only 표기를 넘길 수 있게 함(GalleryMonthlyGridItem 참고).
     // null이면(기본값) 기존과 동일하게 전체 날짜를 보여준다.
     dateLabelOverride: String? = null,
+    // 108일차: 연못에서 둥근 종이 받침 대신 깔 연잎. 같은 graphicsLayer 안에서
+    // 그리므로 부유·흩어짐·새총·밀림을 우표와 한 몸으로 따라간다. null이면
+    // 기존 종이 받침 그대로.
+    pondLeaf: ImageBitmap? = null,
     onLongClick: () -> Unit = {}
 ) {
     val seed = remember(postcard.id) { abs(postcard.id.hashCode()) }
@@ -122,6 +135,9 @@ fun StampCard(
     val rotation = remember(seed) {
         (seed % 70 - 35) / 10f
     }
+
+    // 연잎 한 장을 카드마다 다른 각도로 돌려 써서 같은 그림이 반복돼 보이지 않게 한다.
+    val leafRotation = remember(seed) { (seed % 360).toFloat() }
 
     // 평상시 아주 미세하게 둥둥 떠 있는 효과 — 연못 모드 ON일 때만, 카드마다
     // 위상·주기를 살짝 달리해 기계적으로 동시에 움직이는 느낌을 피한다.
@@ -424,7 +440,7 @@ fun StampCard(
                 scaleX = scale
                 scaleY = scale
                 shadowElevation = if (isPondActive) 10f else 0f
-                shape = RoundedCornerShape(12.dp)
+                shape = if (pondLeaf != null) CircleShape else RoundedCornerShape(12.dp)
                 clip = false
             }
             .onGloballyPositioned { coordinates ->
@@ -437,9 +453,23 @@ fun StampCard(
                 }
             }
             .padding(4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(PaperSurface)
-            .border(1.dp, PaperDivider, RoundedCornerShape(12.dp))
+            .then(
+                if (pondLeaf != null) {
+                    Modifier.drawBehind {
+                        rotate(leafRotation) {
+                            drawImage(
+                                image = pondLeaf,
+                                dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                            )
+                        }
+                    }
+                } else {
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PaperSurface)
+                        .border(1.dp, PaperDivider, RoundedCornerShape(12.dp))
+                }
+            )
             .then(
                 if (isPondModeOn) {
                     Modifier.pointerInput(postcard.id, pondController) {
@@ -524,7 +554,7 @@ fun StampCard(
                     )
                 }
             )
-            .padding(8.dp),
+            .padding(if (pondLeaf != null) POND_LEAF_STAMP_INSET else 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         StampCardContent(

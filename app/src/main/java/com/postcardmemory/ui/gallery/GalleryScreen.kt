@@ -904,6 +904,11 @@ fun GalleryScreen(
                 }
             }
 
+            // 연못은 월별 묶음 대신 전체 엽서 중 최신 10장만 띄운다(검색·정렬 무관).
+            val pondPostcards = remember(postcards) {
+                pondPostcardsFor(postcards)
+            }
+
             val orderedActiveFormats = remember(activePageFormats) {
                 orderedGalleryPageFormats(activePageFormats)
             }
@@ -980,7 +985,7 @@ fun GalleryScreen(
 
                         GalleryPageFormat.MONTHLY, null ->
                             GalleryMonthlyGridPage(
-                                postcards = displayedPostcards,
+                                postcards = if (isPondModeOn) pondPostcards else displayedPostcards,
                                 selectedIds = selectedIds,
                                 shakeTrigger = shakeTrigger,
                                 isPondModeOn = isPondModeOn,
@@ -1049,6 +1054,12 @@ fun GalleryScreen(
                     GalleryPlayMode.NONE
                 } else {
                     selectedMode
+                }
+                // 연못은 검색과 무관한 최신 엽서를 띄우므로, 남아 있던 검색어가
+                // 연못 화면과 어긋나 보이지 않게 검색을 닫는다.
+                if (playMode == GalleryPlayMode.POND) {
+                    isSearchActive = false
+                    searchQuery = ""
                 }
             },
             // 손은 화면 오른쪽 끝 밖에서 들어오므로 가장자리 여백을 두지 않는다.
@@ -1883,7 +1894,10 @@ private val monthlyGridDayLabelFormatter: DateTimeFormatter =
  * 줘서 스크롤 컨테이너를 하나로 유지한다.
  *
  * 연못 물리 오버레이(탭/드래그 파문, [PondRippleOverlay])도 이 grid 위에
- * 그린다. 검색 결과가 없을 때의 안내([SearchEmptyState])도 이 페이지가
+ * 그린다. 108일차: 연못 모드에서는 호출부가 [pondPostcardsFor]로 고른 최신
+ * 10장을 넘기고, 이 페이지는 월 헤더(월·장수) 없이 그 엽서만 3열로 띄운다.
+ * 스크롤 위치는 연못 전용 state에 따로 둬, 연못을 꺼도 월별 보기의 위치가
+ * 그대로 돌아온다. 검색 결과가 없을 때의 안내([SearchEmptyState])도 이 페이지가
  * 맡는다("엽서가 하나도 없음" 판정은 호출부인 pager 레벨이 먼저 처리한다).
  */
 @Composable
@@ -1907,9 +1921,11 @@ private fun GalleryMonthlyGridPage(
         return
     }
 
-    val monthSections = remember(postcards) {
-        monthSectionsFor(postcards)
+    val monthSections = remember(postcards, isPondModeOn) {
+        if (isPondModeOn) emptyList() else monthSectionsFor(postcards)
     }
+
+    val pondGridState = rememberLazyGridState()
 
     var originInWindow by remember { mutableStateOf(Offset.Zero) }
 
@@ -2005,8 +2021,11 @@ private fun GalleryMonthlyGridPage(
         // 월 라벨 종이 띠는 목록 item마다 decode하지 않게 페이지에서 한 번만 불러온다.
         val dateStrip = ImageBitmap.imageResource(R.drawable.gallery_date_paper_strip)
 
+        // 108일차: 연잎도 카드마다 decode하지 않게 페이지에서 한 번만, 연못이 켜진 동안만 불러온다.
+        val pondLeaf = if (isPondModeOn) ImageBitmap.imageResource(R.drawable.pond_lily_pad) else null
+
         LazyVerticalGrid(
-            state = gridState,
+            state = if (isPondModeOn) pondGridState else gridState,
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(
                 start = 12.dp,
@@ -2018,6 +2037,28 @@ private fun GalleryMonthlyGridPage(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxSize()
         ) {
+            if (isPondModeOn) {
+                lazyGridItems(
+                    items = postcards,
+                    key = { postcard -> postcard.id }
+                ) { postcard ->
+                    GalleryMonthlyGridItem(
+                        postcard = postcard,
+                        isSelected = postcard.id in selectedIds,
+                        shakeTrigger = shakeTrigger,
+                        isPondModeOn = true,
+                        pondController = pondController,
+                        pondLeaf = pondLeaf,
+                        onClick = {
+                            onItemClick(postcard.id)
+                        },
+                        onLongClick = {
+                            onItemLongClick(postcard.id)
+                        }
+                    )
+                }
+            }
+
             monthSections.forEach { section ->
                 item(
                     key = "month_${section.yearMonth}",
@@ -2069,7 +2110,8 @@ private fun GalleryMonthlyGridItem(
     isPondModeOn: Boolean,
     pondController: PondController,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    pondLeaf: ImageBitmap? = null
 ) {
     val dayLabel = remember(postcard.capturedAt) {
         Instant.ofEpochMilli(postcard.capturedAt)
@@ -2084,7 +2126,9 @@ private fun GalleryMonthlyGridItem(
             shakeTrigger = shakeTrigger,
             isPondModeOn = true,
             pondController = pondController,
-            dateLabelOverride = dayLabel,
+            // 108일차: 연못은 월 헤더가 없어 "일"만으론 의미가 없으므로 날짜 줄을 그리지 않는다.
+            dateLabelOverride = "",
+            pondLeaf = pondLeaf,
             onClick = onClick,
             onLongClick = onLongClick
         )

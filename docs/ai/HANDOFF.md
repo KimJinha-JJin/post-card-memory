@@ -1,3 +1,23 @@
+# HANDOFF — 108일차: 엽서의 연못 — 연잎 위 우표 · 최신 10장
+
+확인일: 2026-10-19. 수동 표준 모드(108일차 작업지시서 + 추가 승인 "연못 표시 구조 변경"), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `a5bb5b8`(CI run `39120669199` success), origin 0/0, tracked clean, 보호 untracked 5종 유지. 시작 기준선 JVM 100 XML / 920 tests.
+
+- **제1부 감사 사실(코드 기준):** 연못은 별도 화면이 아니라 월별 grid(`GalleryMonthlyGridPage`) 위에 켜지는 모드다. 물 그림은 없고(바닥은 갤러리 종이 타일) 청록 파문(`PondRippleOverlay`)과 ±3dp 부유만 있다. 우표는 grid 칸에 고정되고 부유·흔들기 흩어짐·새총·이웃 밀림 뒤 항상 칸으로 복귀한다. 모든 움직임은 `StampCard`의 `graphicsLayer` 하나에서 이동·회전·확대되며, 좌표는 윈도우 px, 경계는 페이지 Box 전체 + 회전 무시 축 정렬 반폭이다. `StampCard` 호출부는 `GalleryMonthlyGridItem` 연못 분기 하나뿐이고, 연못은 `GalleryPlayStage`(쉼터·쫑쫑컵 공용 무대)를 쓰지 않는다. 물리 상태는 전부 `remember`(비저장), `playMode`만 rememberSaveable.
+- **바뀐 것(사용자 승인 범위):**
+  - 연못을 켜면 월 헤더·장수를 숨기고, 검색·정렬과 무관하게 전체 엽서 중 `capturedAt` 최신 10장(같은 날짜는 id 큰 쪽 먼저)만 3열로 띄운다 — `PondController.kt`의 `pondPostcardsFor`/`POND_MAX_POSTCARDS`. 연못은 별도 `pondGridState`를 써서 끄면 월별 보기 스크롤 위치가 그대로 돌아온다.
+  - 연못 우표의 날짜 줄 제거(월 헤더가 없어 "일"만으론 의미 없음, 사용자 선택).
+  - 연못을 켤 때 검색창을 닫고 검색어를 비운다(사용자 선택).
+  - 둥근 종이 받침을 연잎(`pond_lily_pad`)으로 대체. `StampCard`의 기존 `graphicsLayer` 안 `drawBehind`에서 그려 우표와 한 몸으로 움직인다(움직임·경계·터치 계산 무변경). 카드마다 `seed % 360`도 회전, 활성 그림자는 원형, 우표 여백 22dp(우표 ≈63dp ≈ 연잎 지름 59% — 첫 14dp/74%는 QA에서 "우표가 너무 커서 연잎이 잘 안 보여"로 조정).
+  - 연못이 꺼진 일반 월별 보기·쉼터·쫑쫑컵 코드는 바뀌지 않았다. Room·저장 데이터 무변경.
+- **자산:** `pond_lily_pad.png` 사용자 제공 원본 그대로(1254² RGBA, 2.59MB, decode 추정 6.29MB — 연못 켜진 동안만). 제안 규격 448²보다 크고 가장자리 일부에 노란 반투명 띠가 있다(IMAGE-ASSET-MAP 108일차 절). 사용자가 QA에서 현 상태로 확정 — 축소·halo 정리는 후보일 뿐 승인 아님.
+- **로컬 자동검증: 통과.** 최종 상태에서 `testDebugUnitTest` 101 XML / 926 tests 실패·오류·skip 0(+6: `PondPostcardSelectionTest` 3, `GalleryMonthlyGridStructureTest` 구조 3), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 한 번 `processDebugResources`에서 `R.jar` 삭제 잠금(Android Studio 동시 사용 추정, 환경 실패)이 났고 1회 재시도로 성공. instrumentation 실행 0회, `connected*` 미실행. TEST-COVERAGE-MAP 갱신.
+- **실기기 QA: 완료(사용자 확인).** SM-S936N(serial R3KYB00HAYY, 1080×2340, 450dpi)에 사용자 승인으로 `adb install -r` 2회(debug, `firstInstallTime 2026-10-05 14:19:35` 유지 → 데이터 보존, 마지막 `lastUpdateTime 2026-10-19 13:44:46`). 확인: 최신 10장·월 헤더 없음, 연잎/우표 비율(22dp 여백으로 확정), 새총·벽 반사·복귀·흔들기·이웃 밀림에서 연잎과 우표 한 몸, 탭→상세→뒤로, 검색 열고 연못 켜면 검색 닫힘, 켜고 끄기 반복 시 월별 보기 정상. 메모리(meminfo) 실측 안 함.
+- **남은 위험·후보(승인 아님):** 연잎 448² 축소·노란 halo 정리(MEM-OPT), 연못을 켠 채 기억밀도 페이지로 넘겨도 POND 상태·흔들기 센서가 켜져 있음, 연못 전용 BackHandler 없음, 쉼터와 연못의 "최신 10장" 선정 규칙이 두 곳에 따로 있음(쉼터 코드는 범위 밖이라 미변경).
+- **Git:** 이번 변경은 production 3(`StampCard.kt`, `GalleryScreen.kt`, `PondController.kt`)·test 2(`GalleryMonthlyGridStructureTest.kt` 수정, `PondPostcardSelectionTest.kt` 신규)·자산 1(`pond_lily_pad.png` 신규)·문서 3(HANDOFF, IMAGE-ASSET-MAP, TEST-COVERAGE-MAP). commit·push는 사용자 마감 승인 대기. 승인 시 이 파일만 명시 경로로 stage하고, 이 HANDOFF는 그 commit 안에 들어가므로 commit SHA·CI 결과는 완료보고에서 확인한다.
+- **다음 출발점:** 109일차 쫑쫑컵 폴리싱 — `GalleryPlayStage`, `PostcardRace*`, `GalleryPlayStageZoneTest` 기준. 오늘 시작하지 않았다.
+
+---
+
 # HANDOFF — 107일차 5차: 방문 달력 메모리 반복 실측 · 잔여 기술부채 감사
 
 확인일: 2026-10-18. 수동 표준 모드(107일차 5차 작업지시서), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `cd75ef4`(4차 commit, CI run `39118609812` success), origin 0/0, tracked clean, `git diff --check` 통과, 보호 untracked 5종 유지. 기준선 JVM 100 suite / 920 tests.
