@@ -1,3 +1,17 @@
+# HANDOFF — 108일차 추가 2: 연못 전용 화면 보호(1차 완료) · 하프톤 수면(2·3차 승인 대기)
+
+확인일: 2026-10-19. 수동 표준 모드("연못 전용 화면 보호 및 하프톤 수면 인터랙션 폴리싱" 작업지시서, 단계별 승인 게이트), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `234712d`(CI run `39203045468` success), origin 0/0, 보호 untracked 5종 유지.
+
+- **1차 원인:** 갤러리 `HorizontalPager`(MONTHLY·DENSITY)가 연못 여부와 무관하게 스와이프를 허용했고, 연못은 월별 페이지 안에서만 그려져 넘기면 기억 밀도 그래프가 보였다. 그래프 페이지에서 퀵셀렉트로 연못을 켜면 연못이 안 보이는 페이지에 머물렀다.
+- **1차 변경(`GalleryScreen.kt`):** `userScrollEnabled = !isPondModeOn`, 연못이 켜지면 MONTHLY로 `animateScrollToPage`, 연못 중 페이지 점만 숨김(28dp 예약 여백 유지 → grid 위치 불변). 기억 밀도 데이터·계산, 쉼터·쫑쫑컵(pager 밖 분기) 무변경. pager 기본값상 그래프 페이지는 보일 때만 구성된다.
+- **1차 검증:** JVM 103 XML / 931 tests 통과(+3 `GalleryPondPageLockStructureTest`, 잠금·이동 제거 변형에서 2건 실패 확인 후 해시 일치 원복), `assembleDebug`·`assembleDebugAndroidTest`·`git diff --check` 통과. 실기기 QA 완료(사용자 확인): SM-S936N `adb install -r`(`firstInstallTime 2026-10-05 14:19:35` 유지, `lastUpdateTime 2026-10-19 14:20:11`) — 연못 중 스와이프 차단, 그래프 페이지에서 연못 켜면 월별로 이동, 끄면 스와이프·점·스크롤 복원, 세 놀이 전환 정상.
+- **2·3차 조사(읽기 전용, 미구현):** 수면 자리는 `GalleryMonthlyGridPage` Box의 `PondRippleOverlay`(grid 뒤 Canvas)와 같은 층. `PondController.addRipple`이 이미 빈 곳 탭(34dp)·드래그 자취(22dp)·발사(38dp)·비행 경로(26dp)·벽 반사(34dp, 실제 충돌 지점) 이벤트를 윈도우 px로 받는다(빈 곳 터치는 Initial 패스 비소비). 이웃 밀림은 이벤트 없음. 흔들기는 `TYPE_ACCELEROMETER`를 연못 켜질 때만 `DisposableEffect`로 등록·해제. 화면 방향 고정 없음(기울기는 display rotation 변환 필요). 제안 — Canvas 도트 격자 6dp(약 8천 점, 미리 할당 FloatArray + `drawPoints`, 크기 3단계), 저채도 하늘색, 900ms FastOutSlowIn 차오름, 끌 때 즉시 사라짐, 기울기는 `TYPE_GRAVITY`+평활, 터치·충돌은 기존 `addRipple` 재사용 + 수면용 감쇠 목록. 이미지 자산 0.
+- **사용자 결정:** 1차를 따로 commit·push, 2차는 제안 방향(정적 형태 먼저 실기기 확인), 3차에서 기존 청록 동심원은 수면 반응으로 대체.
+- **Git:** 사용자 승인으로 1차 변경 4개(`GalleryScreen.kt`, `GalleryPondPageLockStructureTest.kt` 신규, 이 HANDOFF, TEST-COVERAGE-MAP)만 명시 경로로 stage해 commit·push한다. 이 HANDOFF는 그 commit 안에 들어가므로 SHA·CI 결과는 완료보고에서 확인한다.
+- **다음:** 2차 정적 수면(도트·색·윗선) 구현 → 실기기 디자인 확인 → 차오름·출렁임. 3차(기울기·터치·충돌)는 2차 확정 후 별도 승인.
+
+---
+
 # HANDOFF — 108일차 추가: 놀이 모드 공통 상단 장면 퇴장 애니메이션
 
 확인일: 2026-10-19. 수동 표준 모드(108일차 추가 작업 승인 — 108일차 범위 예외, 연못·쉼터·쫑쫑컵 공통), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `1970097`(연잎 작업 commit, CI run `39201899749` success — 전 step 성공), origin 0/0, 보호 untracked 5종 유지.

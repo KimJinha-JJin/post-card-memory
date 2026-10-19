@@ -983,6 +983,17 @@ fun GalleryScreen(
                 }
             }
 
+            // 108일차: 기억 밀도 페이지를 보던 중 퀵셀렉트로 연못을 켜면 연못이 보이지 않는
+            // 페이지에 머물게 되므로, 연못이 켜지는 순간 월별 페이지로 옮긴다. 이동한 뒤
+            // currentPageFormat은 위 currentPage effect가 MONTHLY로 맞춘다.
+            LaunchedEffect(isPondModeOn) {
+                if (!isPondModeOn) return@LaunchedEffect
+                val monthlyIndex = orderedActiveFormats.indexOf(GalleryPageFormat.MONTHLY)
+                if (monthlyIndex >= 0 && pagerState.currentPage != monthlyIndex) {
+                    pagerState.animateScrollToPage(monthlyIndex)
+                }
+            }
+
             val showPageIndicator = orderedActiveFormats.size > 1
 
             val pageContentPaddingValues = if (showPageIndicator) {
@@ -1004,8 +1015,11 @@ fun GalleryScreen(
                         .padding(top = paddingValues.calculateTopPadding())
                 )
 
+                // 108일차: 연못은 월별 페이지 안에서만 그려지므로, 켜져 있는 동안은 좌우
+                // 스와이프로 기억 밀도 페이지에 넘어가지 못하게 잠근다(끄면 그대로 복원).
                 HorizontalPager(
                     state = pagerState,
+                    userScrollEnabled = !isPondModeOn,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     when (orderedActiveFormats.getOrNull(page)) {
@@ -1031,7 +1045,9 @@ fun GalleryScreen(
                     }
                 }
 
-                if (showPageIndicator) {
+                // 연못 중에는 넘길 페이지가 없으니 점만 감춘다. 자리(상단 여백)는 그대로 둬
+                // 연못을 켜고 끌 때 grid가 위아래로 튀지 않게 한다.
+                if (showPageIndicator && !isPondModeOn) {
                     GalleryPageIndicator(
                         pageCount = orderedActiveFormats.size,
                         currentPage = pagerState.currentPage,
