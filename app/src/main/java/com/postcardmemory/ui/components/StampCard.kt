@@ -28,13 +28,14 @@ import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.postcardmemory.data.Postcard
+import com.postcardmemory.ui.gallery.PondContactTuning
 import com.postcardmemory.ui.gallery.PondController
+import com.postcardmemory.ui.gallery.PondLeafBody
 import com.postcardmemory.ui.gallery.pondWaterTiltAngleDegrees
 import com.postcardmemory.ui.gallery.pondWaterTiltRiseDp
 import com.postcardmemory.ui.theme.BrutalCoral
@@ -97,9 +100,18 @@ private val POND_PATH_RIPPLE_MIN_DISTANCE = 30.dp
 private val POND_PATH_RIPPLE_RADIUS = 26.dp
 private val POND_BOUNDARY_RIPPLE_RADIUS = 34.dp
 private val POND_LAUNCH_RIPPLE_RADIUS = 38.dp
-private val POND_NEIGHBOR_INFLUENCE_RADIUS = 130.dp
-private val POND_NEIGHBOR_MAX_PUSH = 14.dp
+// 108일차 연잎 접촉 충돌(예전 발사 지점 130dp 근접 밀림을 대체): 충돌 원 반경은 칸 폭의 0.45배
+// (연잎 그림 지름 ≈ 칸 −8dp), 이보다 약한 충격은 상대에게 넘기지 않고, 전달 속도는 최대 발사
+// 속도의 0.85배로 묶는다. 충돌 물살 반경은 세기에 따라 24~48dp.
+private const val POND_LEAF_CONTACT_RADIUS_RATIO = 0.45f
+private const val POND_MIN_TRANSFER_SPEED_DP_PER_S = 150f
+private const val POND_MAX_TRANSFER_RATIO = 0.85f
+private val POND_CONTACT_RIPPLE_MIN = 24.dp
+private val POND_CONTACT_RIPPLE_MAX = 48.dp
 private const val POND_CAPTURE_SCALE = 1.03f
+private const val POND_ACTIVE_SHADOW_ELEVATION = 6f
+private val PondActiveSpotShadow = Color.Black.copy(alpha = 0.4f)
+private val PondActiveAmbientShadow = Color.Black.copy(alpha = 0.2f)
 private const val POND_ROTATION_FROM_VELOCITY = 0.006f
 
 // 연잎(칸 폭 −8dp 정사각) 가장자리에서 우표까지의 여백. 칸 폭 약 115dp(384dp 화면) 기준
@@ -306,6 +318,7 @@ fun StampCard(
     var isCaptured by remember { mutableStateOf(false) }
     var isLaunched by remember { mutableStateOf(false) }
     var launchJob by remember { mutableStateOf<Job?>(null) }
+    var hitFlightToken by remember { mutableIntStateOf(0) }
     var restCenterInWindow by remember { mutableStateOf(Offset.Zero) }
     var cardSizePx by remember { mutableStateOf(IntSize.Zero) }
 
@@ -318,8 +331,29 @@ fun StampCard(
     val pathRipplePx = with(density) { POND_PATH_RIPPLE_RADIUS.toPx() }
     val boundaryRipplePx = with(density) { POND_BOUNDARY_RIPPLE_RADIUS.toPx() }
     val launchRipplePx = with(density) { POND_LAUNCH_RIPPLE_RADIUS.toPx() }
-    val neighborInfluenceRadiusPx = with(density) { POND_NEIGHBOR_INFLUENCE_RADIUS.toPx() }
-    val neighborMaxPushPx = with(density) { POND_NEIGHBOR_MAX_PUSH.toPx() }
+    val contactTuning = remember(density) {
+        with(density) {
+            PondContactTuning(
+                minTransferSpeedPx = POND_MIN_TRANSFER_SPEED_DP_PER_S.dp.toPx(),
+                maxTransferSpeedPx = POND_MAX_LAUNCH_SPEED_DP_PER_S.dp.toPx() * POND_MAX_TRANSFER_RATIO,
+                minRipplePx = POND_CONTACT_RIPPLE_MIN.toPx(),
+                maxRipplePx = POND_CONTACT_RIPPLE_MAX.toPx()
+            )
+        }
+    }
+
+    // 108일차: 다른 연잎이 이 연잎의 실제 위치를 알 수 있게 공유하는 원형 몸체. 연못이 켜진
+    // 동안만 등록되고, 위치는 아래 "수면을 타는 연잎" 프레임 루프가 매 프레임 갱신한다.
+    val leafBody = remember(postcard.id) { PondLeafBody(postcard.id) }
+    DisposableEffect(pondController, isPondModeOn, leafBody) {
+        if (pondController == null || !isPondModeOn) return@DisposableEffect onDispose { }
+        pondController.registerLeaf(leafBody)
+        onDispose {
+            pondController.unregisterLeaf(leafBody)
+            leafBody.isFlying = false
+            leafBody.isHeld = false
+        }
+    }
 
     val pondReturnSpring = spring<Float>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -334,86 +368,120 @@ fun StampCard(
         }
     }
 
-    suspend fun runPondFlight(initialVelocity: Offset) {
+    // 공유 몸체를 화면에 실제로 보이는 중심(새총 오프셋 + 흔들기 흩어짐 + 기울기 이동)과 연잎
+    // 원 반경으로 맞춘다. 아직 위치를 재지 못했으면 반경 0(충돌 대상에서 빠짐).
+    fun syncLeafBody(offsetX: Float, offsetY: Float) {
+        if (restCenterInWindow == Offset.Zero || cardSizePx == IntSize.Zero) {
+            leafBody.radius = 0f
+            return
+        }
+        leafBody.centerX = restCenterInWindow.x + offsetX + scatterOffsetX.value + tiltDrift
+        leafBody.centerY = restCenterInWindow.y + offsetY + scatterOffsetY.value + tiltRise
+        leafBody.radius = minOf(cardSizePx.width, cardSizePx.height) * POND_LEAF_CONTACT_RADIUS_RATIO
+    }
+
+    // [generation]: 사용자가 직접 쏜 비행 0, 그 연잎에 맞아 날아가는 비행 1, … (연쇄 단계).
+    suspend fun runPondFlight(initialVelocity: Offset, generation: Int = 0) {
         var velocity = initialVelocity
         var bounces = 0
         var lastRippleCenter = restCenterInWindow
         val startNanos = withFrameNanos { it }
         var lastFrameNanos = startNanos
+        pondController?.takePendingVelocity(postcard.id)
+        leafBody.isFlying = true
 
-        while (true) {
-            val frameNanos = withFrameNanos { it }
-            val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
-            lastFrameNanos = frameNanos
+        try {
+            while (true) {
+                val frameNanos = withFrameNanos { it }
+                val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                lastFrameNanos = frameNanos
 
-            var newX = pondOffsetX.value + velocity.x * dt
-            var newY = pondOffsetY.value + velocity.y * dt
+                var newX = pondOffsetX.value + velocity.x * dt
+                var newY = pondOffsetY.value + velocity.y * dt
 
-            val bounds = pondController?.gridBoundsInWindow
-            if (bounds != null && bounds != Rect.Zero && cardSizePx != IntSize.Zero) {
-                val halfW = cardSizePx.width / 2f
-                val halfH = cardSizePx.height / 2f
-                val centerX = restCenterInWindow.x + newX
-                val centerY = restCenterInWindow.y + newY
+                val bounds = pondController?.gridBoundsInWindow
+                if (bounds != null && bounds != Rect.Zero && cardSizePx != IntSize.Zero) {
+                    val halfW = cardSizePx.width / 2f
+                    val halfH = cardSizePx.height / 2f
+                    val centerX = restCenterInWindow.x + newX
+                    val centerY = restCenterInWindow.y + newY
 
-                if (centerX - halfW < bounds.left && velocity.x < 0f) {
-                    velocity = Offset(-velocity.x * POND_BOUNCE_DAMPING, velocity.y)
-                    newX = (bounds.left + halfW) - restCenterInWindow.x
-                    bounces++
-                    pondController.addRipple(
-                        Offset(bounds.left + halfW, centerY),
-                        boundaryRipplePx
-                    )
-                } else if (centerX + halfW > bounds.right && velocity.x > 0f) {
-                    velocity = Offset(-velocity.x * POND_BOUNCE_DAMPING, velocity.y)
-                    newX = (bounds.right - halfW) - restCenterInWindow.x
-                    bounces++
-                    pondController.addRipple(
-                        Offset(bounds.right - halfW, centerY),
-                        boundaryRipplePx
-                    )
+                    if (centerX - halfW < bounds.left && velocity.x < 0f) {
+                        velocity = Offset(-velocity.x * POND_BOUNCE_DAMPING, velocity.y)
+                        newX = (bounds.left + halfW) - restCenterInWindow.x
+                        bounces++
+                        pondController.addRipple(
+                            Offset(bounds.left + halfW, centerY),
+                            boundaryRipplePx
+                        )
+                    } else if (centerX + halfW > bounds.right && velocity.x > 0f) {
+                        velocity = Offset(-velocity.x * POND_BOUNCE_DAMPING, velocity.y)
+                        newX = (bounds.right - halfW) - restCenterInWindow.x
+                        bounces++
+                        pondController.addRipple(
+                            Offset(bounds.right - halfW, centerY),
+                            boundaryRipplePx
+                        )
+                    }
+
+                    if (centerY - halfH < bounds.top && velocity.y < 0f) {
+                        velocity = Offset(velocity.x, -velocity.y * POND_BOUNCE_DAMPING)
+                        newY = (bounds.top + halfH) - restCenterInWindow.y
+                        bounces++
+                        pondController.addRipple(
+                            Offset(centerX, bounds.top + halfH),
+                            boundaryRipplePx
+                        )
+                    } else if (centerY + halfH > bounds.bottom && velocity.y > 0f) {
+                        velocity = Offset(velocity.x, -velocity.y * POND_BOUNCE_DAMPING)
+                        newY = (bounds.bottom - halfH) - restCenterInWindow.y
+                        bounces++
+                        pondController.addRipple(
+                            Offset(centerX, bounds.bottom - halfH),
+                            boundaryRipplePx
+                        )
+                    }
                 }
 
-                if (centerY - halfH < bounds.top && velocity.y < 0f) {
-                    velocity = Offset(velocity.x, -velocity.y * POND_BOUNCE_DAMPING)
-                    newY = (bounds.top + halfH) - restCenterInWindow.y
-                    bounces++
-                    pondController.addRipple(
-                        Offset(centerX, bounds.top + halfH),
-                        boundaryRipplePx
-                    )
-                } else if (centerY + halfH > bounds.bottom && velocity.y > 0f) {
-                    velocity = Offset(velocity.x, -velocity.y * POND_BOUNCE_DAMPING)
-                    newY = (bounds.bottom - halfH) - restCenterInWindow.y
-                    bounces++
-                    pondController.addRipple(
-                        Offset(centerX, bounds.bottom - halfH),
-                        boundaryRipplePx
-                    )
+                pondOffsetX.snapTo(newX)
+                pondOffsetY.snapTo(newY)
+                pondExtraRotation.snapTo(
+                    (pondExtraRotation.value + velocity.x * dt * POND_ROTATION_FROM_VELOCITY)
+                        .coerceIn(-25f, 25f)
+                )
+
+                val currentCenter = Offset(restCenterInWindow.x + newX, restCenterInWindow.y + newY)
+                if ((currentCenter - lastRippleCenter).getDistance() > pathRippleMinDistancePx) {
+                    pondController?.addRipple(currentCenter, pathRipplePx, 500L)
+                    lastRippleCenter = currentCenter
+                }
+
+                // 108일차: 화면에 보이는 위치(기울기 이동 포함)로 몸체를 갱신하고, 실제로 닿은 연잎에만
+                // 충격을 나눈다. 날아가는 중에 다른 연잎에게 맞아 쌓인 속도도 여기서 더한다.
+                if (pondController != null) {
+                    syncLeafBody(newX, newY)
+                    velocity = pondController.resolveContacts(
+                        sourceId = postcard.id,
+                        centerX = leafBody.centerX,
+                        centerY = leafBody.centerY,
+                        velocity = velocity,
+                        generation = generation,
+                        nowMillis = System.currentTimeMillis(),
+                        tuning = contactTuning
+                    ) + pondController.takePendingVelocity(postcard.id)
+                }
+
+                val elapsedMs = (frameNanos - startNanos) / 1_000_000L
+                if (
+                    velocity.getDistance() < minSpeedPx ||
+                    bounces > POND_MAX_BOUNCES ||
+                    elapsedMs > POND_MAX_FLIGHT_MS
+                ) {
+                    break
                 }
             }
-
-            pondOffsetX.snapTo(newX)
-            pondOffsetY.snapTo(newY)
-            pondExtraRotation.snapTo(
-                (pondExtraRotation.value + velocity.x * dt * POND_ROTATION_FROM_VELOCITY)
-                    .coerceIn(-25f, 25f)
-            )
-
-            val currentCenter = Offset(restCenterInWindow.x + newX, restCenterInWindow.y + newY)
-            if ((currentCenter - lastRippleCenter).getDistance() > pathRippleMinDistancePx) {
-                pondController?.addRipple(currentCenter, pathRipplePx, 500L)
-                lastRippleCenter = currentCenter
-            }
-
-            val elapsedMs = (frameNanos - startNanos) / 1_000_000L
-            if (
-                velocity.getDistance() < minSpeedPx ||
-                bounces > POND_MAX_BOUNCES ||
-                elapsedMs > POND_MAX_FLIGHT_MS
-            ) {
-                break
-            }
+        } finally {
+            leafBody.isFlying = false
         }
 
         springPondBackToOrigin()
@@ -432,47 +500,25 @@ fun StampCard(
         }
     }
 
-    LaunchedEffect(postcard.id, pondController) {
-        if (pondController == null) return@LaunchedEffect
+    // 108일차: 다른 연잎에 실제로 맞으면(PondController.resolveContacts → hits) 받은 속도로
+    // 기존 새총 비행을 그대로 시작한다 — 벽 반사·물살·복귀가 같이 따라오고, 그 비행도 다른
+    // 연잎과 부딪히면 다음 단계로 충격을 넘긴다. 붙잡힌 연잎에는 hits가 오지 않는다.
+    LaunchedEffect(postcard.id, pondController, isPondModeOn) {
+        if (pondController == null || !isPondModeOn) return@LaunchedEffect
 
-        snapshotFlow { pondController.lastImpulse }.collect { impulse ->
-            if (impulse == null || impulse.sourceId == postcard.id) {
-                return@collect
-            }
-
-            val myCenter = restCenterInWindow
-            if (myCenter == Offset.Zero) {
-                return@collect
-            }
-
-            val delta = myCenter - impulse.center
-            val distance = delta.getDistance()
-
-            if (distance in 0.01f..neighborInfluenceRadiusPx) {
-                val strength = 1f - (distance / neighborInfluenceRadiusPx)
-                val direction = delta / distance
-                val push = direction * (neighborMaxPushPx * strength)
-
-                coroutineScope {
-                    launch {
-                        pondOffsetX.animateTo(
-                            push.x,
-                            spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        )
-                        pondOffsetX.animateTo(0f, pondReturnSpring)
-                    }
-                    launch {
-                        pondOffsetY.animateTo(
-                            push.y,
-                            spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        )
-                        pondOffsetY.animateTo(0f, pondReturnSpring)
+        coroutineScope {
+            val hitScope = this
+            pondController.hits.collect { hit ->
+                if (hit.targetId != postcard.id || isCaptured) return@collect
+                launchJob?.cancel()
+                isLaunched = true
+                // 취소된 이전 비행의 finally가 늦게 돌아도 새 비행의 상태를 끄지 않게 번호로 구분한다.
+                val token = ++hitFlightToken
+                launchJob = hitScope.launch {
+                    try {
+                        runPondFlight(hit.velocity, hit.generation)
+                    } finally {
+                        if (hitFlightToken == token) isLaunched = false
                     }
                 }
             }
@@ -511,6 +557,10 @@ fun StampCard(
                 tiltDrift = driftSpring.position
                 tiltRise = riseSpring.position
                 tiltLean = angleSpring.position
+
+                // 접촉 충돌용 공유 몸체 — 날아가는 동안은 비행 루프가 직접 갱신한다.
+                leafBody.isHeld = isCaptured
+                if (!leafBody.isFlying) syncLeafBody(pondOffsetX.value, pondOffsetY.value)
             }
         }
     }
@@ -527,7 +577,11 @@ fun StampCard(
                 val scale = if (isPondActive) POND_CAPTURE_SCALE else 1f
                 scaleX = scale
                 scaleY = scale
-                shadowElevation = if (isPondActive) 10f else 0f
+                // 108일차 실기기 QA "꾹 눌렀을 때 그림자가 너무 진해": 높이 10→6, 그림자색을 옅은
+                // 반투명으로(직접 40%·주변 20%). API 28 미만은 색 지정이 무시되고 높이만 낮아진다.
+                shadowElevation = if (isPondActive) POND_ACTIVE_SHADOW_ELEVATION else 0f
+                spotShadowColor = PondActiveSpotShadow
+                ambientShadowColor = PondActiveAmbientShadow
                 shape = if (pondLeaf != null) CircleShape else RoundedCornerShape(12.dp)
                 clip = false
             }
@@ -621,11 +675,9 @@ fun StampCard(
                                                 launchRipplePx,
                                                 600L
                                             )
-                                            pondController?.notifyLaunch(
-                                                postcard.id,
-                                                restCenterInWindow
-                                            )
-
+                                            // 108일차: 발사 지점 근접 밀림은 없앴다 — 실제로 닿은
+                                            // 연잎만 비행 중 접촉 판정으로 반응한다.
+                                            hitFlightToken++
                                             launchJob = gestureScope.launch {
                                                 runPondFlight(velocity)
                                                 isLaunched = false
