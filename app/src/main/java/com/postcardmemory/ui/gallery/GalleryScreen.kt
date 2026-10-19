@@ -1941,7 +1941,7 @@ private val monthlyGridDayLabelFormatter: DateTimeFormatter =
  * `item(span = { GridItemSpan(maxLineSpan) })`으로 헤더에만 전체 폭을
  * 줘서 스크롤 컨테이너를 하나로 유지한다.
  *
- * 연못 물리 오버레이(탭/드래그 파문, [PondRippleOverlay])도 이 grid 위에
+ * 연못 수면([PondWaterSurface] — 탭/드래그·발사·충돌 물살)도 이 grid 뒤에
  * 그린다. 108일차: 연못 모드에서는 호출부가 [pondPostcardsFor]로 고른 최신
  * 10장을 넘기고, 이 페이지는 월 헤더(월·장수) 없이 그 엽서만 3열로 띄운다.
  * 스크롤 위치는 연못 전용 state에 따로 둬, 연못을 꺼도 월별 보기의 위치가
@@ -2059,9 +2059,13 @@ private fun GalleryMonthlyGridPage(
             )
     ) {
         if (isPondModeOn) {
-            PondRippleOverlay(
+            // 108일차: 하늘색 하프톤 수면. 상단 여백보다 36dp 아래까지 물이 차오른다 — 기울였을 때
+            // 높아지는 쪽 물이 상단 바 뒤로 숨지 않게 위쪽 여유를 둔다. 파문 이벤트(탭·자취·
+            // 발사·비행·벽 충돌) 자리마다 도트 면이 출렁인다.
+            PondWaterSurface(
                 controller = pondController,
                 originInWindow = originInWindow,
+                surfaceTop = paddingValues.calculateTopPadding() + 36.dp,
                 modifier = Modifier.fillMaxSize()
             )
         }

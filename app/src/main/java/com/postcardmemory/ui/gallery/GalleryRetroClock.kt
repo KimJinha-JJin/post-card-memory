@@ -358,7 +358,7 @@ private fun GalleryCoffeeSteam(modifier: Modifier = Modifier) {
  * [Path]다 — 프로젝트에 7세그 폰트/자산이 없고, 새 폰트 리소스도 추가하지 않는다.
  *
  * 시간 상태는 이 composable 안에서만 `remember`+`LaunchedEffect`로 매초(정확히는 다음 초
- * 경계까지 delay) 갱신한다 — 연못 파문([PondRippleOverlay])과 같은 "로컬 상태·로컬 루프"
+ * 경계까지 delay) 갱신한다 — 연못 수면([PondWaterSurface])과 같은 "로컬 상태·로컬 루프"
  * 패턴이라 갤러리 화면 전체가 매초 다시 그려지지 않는다. `LaunchedEffect`는 Activity의
  * lifecycle-aware recomposer 위에서 돌아 백그라운드 진입 시 자동으로 멈추므로 별도 lifecycle
  * 처리를 추가하지 않았다.

@@ -182,7 +182,7 @@ class GalleryMonthlyGridStructureTest {
     }
 
     @Test
-    fun monthlyGridPage_reusesPondRippleOverlayMigratedFromThreeColumnPage() {
+    fun monthlyGridPage_hostsPondWaterSurfaceAndSearchEmptyState() {
         val start = sourceText.indexOf("private fun GalleryMonthlyGridPage(")
         assertTrue("GalleryMonthlyGridPage 선언을 찾지 못함", start >= 0)
 
@@ -191,9 +191,10 @@ class GalleryMonthlyGridStructureTest {
 
         val body = sourceText.substring(start, end)
 
-        // 연못 물리 오버레이(탭/드래그 파문)와 검색 결과 없음 안내는 월별
-        // 보기가 맡는다.
-        assertTrue(body.contains("PondRippleOverlay("))
+        // 연못 수면(탭/드래그·발사·충돌 물살 — 108일차에 청록 동심원 오버레이를 대체)과
+        // 검색 결과 없음 안내는 월별 보기가 맡는다.
+        assertTrue(body.contains("PondWaterSurface("))
+        assertFalse("청록 동심원 오버레이는 수면 반응으로 대체됐음", body.contains("PondRippleOverlay("))
         assertTrue(body.contains("pondController.gridBoundsInWindow"))
         assertTrue(
             "검색 결과 없음 안내는 3단 보기가 맡던 역할을 이어받아야 함",

@@ -1,3 +1,17 @@
+# HANDOFF — 108일차 추가 2 (2·3차): 연못 하프톤 수면 · 물살 · 기울기 · 수면을 타는 연잎
+
+확인일: 2026-10-19. 시작 HEAD `26e8b74`(1차 commit, CI run `39204296715` success), origin 0/0, 보호 untracked 5종 유지. 사용자 승인: 2차 디자인 방향, 동심원은 수면 반응으로 대체. 정적 1단계를 실기기에 올렸을 때 사용자가 "배경 하프톤이 아니라 그래픽 애니메이션"을 원한다고 바로잡아, 차오름·출렁임·물살·기울기·연잎 반응을 한 흐름으로 구현하고 실기기 QA로 값을 맞췄다.
+
+- **앱 변화:** 연못을 켜면 하늘색(`#8DB4C6` α0.55) 6dp 엇갈림 하프톤 물이 화면 바닥에서 900ms FastOutSlowIn으로 출렁이며 차오르고(수면은 상단 여백 +36dp), 2dp 푸른 윗선(`#5C8FA8` α0.9)이 수면 높이를 보여 준다. 다 차면 윗선 두 물결이 서로 반대로 흐르고 도트 면이 잔잔히 흐른다. 빈 곳 탭·자취·발사·비행·벽 충돌(`PondController.addRipple` 기존 이벤트 그대로)마다 도트 면이 원형 물살로 밀렸다 당겨지며 진해졌다 잦아든다(이벤트 수명 ×2). 청록 동심원(`PondRippleOverlay.kt`)은 삭제. 휴대폰을 기울이면 낮아진 쪽 물이 올라가고 도트가 쏠리며 멈추면 출렁이다 가라앉는다. 연잎은 자기 x 위치의 수면을 타고 오르내리고, 수면 기울기의 절반만큼 기울며, 낮아진 쪽으로 미끄러진다(카드마다 탄성·감쇠·거리 다른 스프링 → 제각각).
+- **QA로 정한 값:** 물살 띠 18→24dp·감쇠 0.6→0.8s·세기 반경×0.15→0.35·진해짐 0.6→1.0("물살을 더 크게"). 기울기 감도 ×1.5(±0.6 묶음, 약 23°에서 최대), 윗선 높이 차 200dp·도트 쏠림 40dp·출렁임 1.6(최대 2.5)("더 크게" 3회 → "딱 적당"). 푸른 윗선 추가·수면 +4→+36dp("수면 높이가 눈에 안 들어온다" — 높아지는 쪽 물이 불투명 상단 바 뒤로 숨던 문제). 도트 판정을 쏠린 실제 x 윗선으로, 격자를 화면 맨 위·좌우 쏠림 여유까지 확장("하프톤이 선을 못 따라간다" → "딱 맞아"). 연잎: 같은 값 평행 이동("달걀판처럼 일렬") → 수면을 타는 높이·각도 + 카드별 스프링("자연스러워").
+- **구조:** 새 `ui/gallery/PondWaterSurface.kt` — 순수 `PondWaterField`(기준 격자·인쇄 얼룩 1회 생성, 프레임마다 미리 할당한 FloatArray 3개에 크기별 좌표 채움, 객체 생성 없음) + `PondWaterSurface`(차오름 Animatable, `withFrameNanos` 루프에서 기울기 스프링·`waterTilt`·파문 정리, draw 단계만 매 프레임 무효화 — recomposition 없음, 네이티브 `drawPoints` 3번 + 재사용 Path 1개). 기울기 센서는 `rememberPondTiltInput`(TYPE_GRAVITY, 없으면 가속도계; 화면 RESUMED에서만 등록, ON_PAUSE·연못 끄기 때 해제 — 메인 갤러리 흔들기와 같은 규칙, 연못 흔들기 리스너와 별개). `PondController`에 `waterTilt`(reset에서 0)·`pruneRipples(now, lifeScale)`. `StampCard`는 위치 측정(onGloballyPositioned) **안쪽** 별도 graphicsLayer에 기울기 이동만 더해 새총·반사·복귀 계산의 기준 위치와 기존 물리 상수는 그대로. `GalleryScreen`은 오버레이 자리를 수면으로 교체. 이미지 자산 0, Room·데이터 무변경.
+- **로컬 자동검증: 통과.** 최종 `testDebugUnitTest` 104 XML / 948 tests 실패·오류·skip 0(+17 `PondWaterSurfaceTest`), `assembleDebug`·`assembleDebugAndroidTest`·`git diff --check` 통과. 회귀 검출 변형(물살 끄기, 기울기 부호 뒤집기, 도트 판정·격자 되돌리기)에서 각각 실제 실패 확인 후 해시 일치 원복. 기울기 부호 변형 중 윗선 쪽 치환은 줄바꿈 때문에 적용되지 않았고 센서 변환 쪽만 검출 확인. instrumentation 실행 0회.
+- **실기기 QA: 완료(사용자 확인).** SM-S936N에 사용자 승인으로 `adb install -r` 여러 차례(조정마다 같은 기기·방식 재설치, `firstInstallTime 2026-10-05 14:19:35` 유지, 마지막 `lastUpdateTime 2026-10-19 15:04:39`). 차오름·출렁임, 물살 크기, 새총·반사·흔들기 유지, 연못 켰다 끈 뒤 갤러리 정상, 버벅임 없음(체감), 기울기 크기·윗선, 도트-윗선 일치, 연잎이 수면을 타는 움직임 — 전부 정상.
+- **미검증·위험:** 프레임 시간·메모리(meminfo)·배터리는 측정 안 함(체감 QA만). 연못 중 매 프레임 루프(수면 1 + 연잎 10)가 계속 돈다. 기울기 이동은 위치 측정 안쪽이라 새총 벽 반사 판정은 기울어 이동한 만큼(최대 약 30dp·연잎 높이 최대 약 80dp) 실제 그림과 어긋날 수 있다(QA에서 문제로 보이지 않음). 화면 회전 상태 기울기는 코드 변환만 하고 가로 화면 QA는 안 함.
+- **Git:** 사용자 승인으로 아래 파일만 명시 경로로 stage해 commit·push한다(SHA·CI는 완료보고에서 확인). 이번 변경 — production `PondWaterSurface.kt`(신규)·`PondController.kt`·`StampCard.kt`·`GalleryScreen.kt`·`GalleryRetroClock.kt`(KDoc 링크만)·`PondRippleOverlay.kt`(삭제, `git rm`으로 index에 반영됨), test `PondWaterSurfaceTest.kt`(신규)·`GalleryMonthlyGridStructureTest.kt`, 문서 README·TEST-COVERAGE-MAP·이 HANDOFF.
+
+---
+
 # HANDOFF — 108일차 추가 2: 연못 전용 화면 보호(1차 완료) · 하프톤 수면(2·3차 승인 대기)
 
 확인일: 2026-10-19. 수동 표준 모드("연못 전용 화면 보호 및 하프톤 수면 인터랙션 폴리싱" 작업지시서, 단계별 승인 게이트), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `234712d`(CI run `39203045468` success), origin 0/0, 보호 untracked 5종 유지.

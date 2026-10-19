@@ -1,6 +1,7 @@
 package com.postcardmemory.ui.gallery
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -65,6 +66,12 @@ class PondController {
     var lastImpulse by mutableStateOf<PondImpulse?>(null)
         private set
 
+    /**
+     * 수면이 매 프레임 넘겨주는 평활된 휴대폰 좌우 기울기(+ = 오른쪽이 내려감, ±[POND_TILT_MAX]).
+     * 연잎(StampCard)이 draw 단계에서 읽어 낮아진 쪽으로 미끄러진다.
+     */
+    var waterTilt by mutableFloatStateOf(0f)
+
     private var rippleIdSeq = 0L
     private var impulseSeq = 0L
 
@@ -83,9 +90,10 @@ class PondController {
         )
     }
 
-    fun pruneRipples(nowMillis: Long) {
-        if (ripples.isEmpty()) return
-        ripples.removeAll { nowMillis - it.bornAtMillis > it.lifespanMillis }
+    /** 수명([PondRipple.lifespanMillis] × [lifeScale])이 지난 파문을 지운다. 지울 게 없으면 목록을 건드리지 않는다. */
+    fun pruneRipples(nowMillis: Long, lifeScale: Float = 1f) {
+        if (ripples.none { nowMillis - it.bornAtMillis > it.lifespanMillis * lifeScale }) return
+        ripples.removeAll { nowMillis - it.bornAtMillis > it.lifespanMillis * lifeScale }
     }
 
     fun notifyLaunch(sourceId: Long, centerInWindow: Offset) {
@@ -96,5 +104,6 @@ class PondController {
     fun reset() {
         ripples.clear()
         lastImpulse = null
+        waterTilt = 0f
     }
 }

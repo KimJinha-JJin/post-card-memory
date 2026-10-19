@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +58,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.gallery.PondController
+import com.postcardmemory.ui.gallery.pondWaterTiltAngleDegrees
+import com.postcardmemory.ui.gallery.pondWaterTiltRiseDp
 import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
@@ -104,6 +107,39 @@ private const val POND_ROTATION_FROM_VELOCITY = 0.006f
 // (108일차 실기기 QA: 74%에선 우표가 잎을 거의 가렸다).
 private val POND_LEAF_STAMP_INSET = 22.dp
 
+// 기울기 1(실제 최대 0.6)일 때 연잎이 옆으로 미끄러지는 기준 거리 — 최대 0.6에서 약 20dp(×0.5~1.5).
+private val POND_TILT_DRIFT = 34.dp
+// 연잎이 수면 기울기 각도를 따라 기우는 비율(우표가 읽히도록 절반만).
+private const val POND_LEAF_SLOPE_FOLLOW = 0.5f
+
+/**
+ * 연잎 한 장이 기울기 목표를 따라가는 스프링. [stiffness](1/s²)와 [dampingRatio]가 카드마다
+ * 달라 같은 기울기에도 출발·출렁임·멈춤이 제각각이다. 프레임이 길게 끊겨도 한 번에 튀지 않게
+ * 한 칸 시간을 0.05초로 묶는다.
+ */
+internal class PondLeafTiltSpring(
+    private val stiffness: Float,
+    dampingRatio: Float
+) {
+    private val damping = 2f * dampingRatio * kotlin.math.sqrt(stiffness)
+
+    var position = 0f
+        private set
+    var velocity = 0f
+        private set
+
+    fun step(target: Float, dtSec: Float) {
+        val dt = dtSec.coerceIn(0f, 0.05f)
+        velocity += ((target - position) * stiffness - velocity * damping) * dt
+        position += velocity * dt
+    }
+
+    fun reset() {
+        position = 0f
+        velocity = 0f
+    }
+}
+
 /**
  * 셔플(흔들기) 트리거가 바뀔 때마다 카드가 잠시 흩어졌다 원래 자리로 돌아오는
  * 애니메이션을 재생한다. shakeTrigger가 0(초기값)일 때는 재생하지 않는다.
@@ -138,6 +174,22 @@ fun StampCard(
 
     // 연잎 한 장을 카드마다 다른 각도로 돌려 써서 같은 그림이 반복돼 보이지 않게 한다.
     val leafRotation = remember(seed) { (seed % 360).toFloat() }
+
+    // 108일차: 휴대폰을 기울이면 연잎이 수면을 탄다 — 자기 x 위치의 물 높이만큼 오르내리고
+    // (pondWaterTiltRiseDp, 수면 윗선·도트와 같은 식), 수면 기울기의 절반만큼 같이 기울며, 낮아진
+    // 쪽으로 살짝 미끄러진다. 카드마다 탄성·출렁임·미끄러짐(0.5~1.5배)이 다른 스프링을 따로 둬
+    // 출발과 멈춤이 제각각이 되게 한다.
+    val tiltDriftFactor = remember(seed) { 0.5f + (seed % 101) / 100f }
+    val tiltStiffness = remember(seed) { 6f + (seed % 13) }
+    val tiltDampingRatio = remember(seed) { 0.35f + (seed / 13 % 7) * 0.05f }
+    val driftSpring = remember(seed) { PondLeafTiltSpring(tiltStiffness, tiltDampingRatio) }
+    val riseSpring = remember(seed) { PondLeafTiltSpring(tiltStiffness, tiltDampingRatio) }
+    val angleSpring = remember(seed) { PondLeafTiltSpring(tiltStiffness, tiltDampingRatio) }
+    val tiltDriftPx = with(LocalDensity.current) { POND_TILT_DRIFT.toPx() }
+    val densityScale = LocalDensity.current.density
+    var tiltDrift by remember { mutableFloatStateOf(0f) }
+    var tiltRise by remember { mutableFloatStateOf(0f) }
+    var tiltLean by remember { mutableFloatStateOf(0f) }
 
     // 평상시 아주 미세하게 둥둥 떠 있는 효과 — 연못 모드 ON일 때만, 카드마다
     // 위상·주기를 살짝 달리해 기계적으로 동시에 움직이는 느낌을 피한다.
@@ -427,6 +479,42 @@ fun StampCard(
         }
     }
 
+    // 수면을 타는 연잎(위 tilt* 스프링): 매 프레임 수면 기울기를 읽어 카드별 스프링을 한 칸씩 움직인다.
+    LaunchedEffect(pondController, isPondModeOn) {
+        driftSpring.reset()
+        riseSpring.reset()
+        angleSpring.reset()
+        tiltDrift = 0f
+        tiltRise = 0f
+        tiltLean = 0f
+        if (pondController == null || !isPondModeOn) return@LaunchedEffect
+
+        var last = withFrameNanos { it }
+        while (true) {
+            withFrameNanos { now ->
+                val dt = (now - last) / 1_000_000_000f
+                last = now
+                val tilt = pondController.waterTilt
+                val bounds = pondController.gridBoundsInWindow
+                // 이 연잎이 놓인 가로 위치(-1 왼쪽 끝 … 1 오른쪽 끝).
+                val u = if (bounds.width > 0f && restCenterInWindow != Offset.Zero) {
+                    ((restCenterInWindow.x - bounds.left) / bounds.width * 2f - 1f).coerceIn(-1f, 1f)
+                } else {
+                    0f
+                }
+                driftSpring.step(tilt * tiltDriftPx * tiltDriftFactor, dt)
+                riseSpring.step(-pondWaterTiltRiseDp(tilt, u) * densityScale, dt)
+                angleSpring.step(
+                    pondWaterTiltAngleDegrees(tilt, bounds.width / densityScale) * POND_LEAF_SLOPE_FOLLOW,
+                    dt
+                )
+                tiltDrift = driftSpring.position
+                tiltRise = riseSpring.position
+                tiltLean = angleSpring.position
+            }
+        }
+    }
+
     val isPondActive = isCaptured || isLaunched
 
     Column(
@@ -451,6 +539,13 @@ fun StampCard(
                         topLeft + Offset(size.width / 2f, size.height / 2f)
                     cardSizePx = size
                 }
+            }
+            // 108일차: 휴대폰을 기울이면 연잎이 낮아진 쪽으로 미끄러진다. 위치 측정(위
+            // onGloballyPositioned) 안쪽의 별도 레이어라 새총·반사 계산의 기준 위치는 그대로다.
+            .graphicsLayer {
+                translationX = tiltDrift
+                translationY = tiltRise
+                rotationZ = tiltLean
             }
             .padding(4.dp)
             .then(
