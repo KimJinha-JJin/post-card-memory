@@ -1,3 +1,16 @@
+# HANDOFF — 108일차 추가: 놀이 모드 공통 상단 장면 퇴장 애니메이션
+
+확인일: 2026-10-19. 수동 표준 모드(108일차 추가 작업 승인 — 108일차 범위 예외, 연못·쉼터·쫑쫑컵 공통), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `1970097`(연잎 작업 commit, CI run `39201899749` success — 전 step 성공), origin 0/0, 보호 untracked 5종 유지.
+
+- **조사 사실:** 상단 장면은 갤러리 `Scaffold` topBar 기본 분기의 제목 줄 아래 `GalleryRetroClock` 한 곳이고, 시계 몸체·7세그 숫자·스누즈 손·커피 손·김이 그 함수 안의 한 덩어리다(약 134dp, 클릭 없음). 퀵셀렉트 조작용 손(`GalleryQuickSelectHands`)은 별도 레이어라 무관. 세 놀이 공통 상태는 `playMode` 하나이고, 놀이끼리 전환은 NONE을 거치지 않는다. `GalleryPlayStage`는 무대 높이(`stageHeightPx`)가 바뀌면 카드 위치를 시작 자리로 다시 잡는다(`LaunchedEffect` 키).
+- **바뀐 것:** `GalleryScreen.kt`에서 `GalleryRetroClock`를 `AnimatedVisibility(visible = playMode == GalleryPlayMode.NONE)`로 감쌌다. 퇴장 = 위로 slide + 높이 shrink, 복귀 = 같은 길 slide + expand, `GALLERY_TOP_SCENE_ANIM_MS = 450`·`FastOutSlowInEasing`(`galleryTopSceneTween()`). 시계 위아래 6dp 여백도 함께 접히고 제목 줄·그 아래 구분선은 그대로. 시계 내부·퀵셀렉트·놀이 진입/종료·엽서·Room 무변경. 놀이 화면은 접힌 높이만큼 커진다.
+- **로컬 자동검증: 통과.** `testDebugUnitTest` 102 XML / 928 tests 실패·오류·skip 0(+2 `GalleryTopSceneStructureTest`), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 첫 실행에서 새 테스트 1건이 실패 — `extractBalancedCall`이 괄호 인자까지만 잘라 trailing lambda를 못 본 테스트 fixture 문제(production 아님)로 분류해 테스트만 고쳤다. 조건을 `!isPondModeOn`으로 바꾼 변형에서 실제 실패 확인 후 백업으로 원복(해시 일치). instrumentation 실행 0회.
+- **실기기 QA: 완료(사용자 확인).** SM-S936N에 사용자 승인으로 `adb install -r`(debug, `firstInstallTime 2026-10-05 14:19:35` 유지, `lastUpdateTime 2026-10-19 14:04:35`). 세 놀이 각각 켜고 끌 때 시계·양손이 함께 물러났다 복귀, 구분선·여백 어색함 없음, 놀이끼리 전환 시 복귀 없음, 복귀 첫 순간 끊김 없음, 쉼터·쫑쫑컵 진입 때 카드 떨림·튐·반복 초기화 없음, 월별 스크롤 위치 유지 — 전부 정상.
+- **남은 위험:** 무대 높이 변화 중 카드 재초기화는 구조상 일어나지만(진입 순간 시작 자리라 QA에서 보이지 않음) 코드로 막지는 않았다. 시계가 숨겨지면 초 루프·김·이미지가 composition에서 빠지고 복귀 때 다시 불러온다(QA 끊김 없음, 메모리 실측 안 함).
+- **Git:** 이번 변경은 `GalleryScreen.kt`·`GalleryTopSceneStructureTest.kt`(신규)·`TEST-COVERAGE-MAP.md`·이 HANDOFF 4개. 연잎 작업과 분리된 별도 commit. commit·push는 사용자 마감 승인 대기.
+
+---
+
 # HANDOFF — 108일차: 엽서의 연못 — 연잎 위 우표 · 최신 10장
 
 확인일: 2026-10-19. 수동 표준 모드(108일차 작업지시서 + 추가 승인 "연못 표시 구조 변경"), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `a5bb5b8`(CI run `39120669199` success), origin 0/0, tracked clean, 보호 untracked 5종 유지. 시작 기준선 JVM 100 XML / 920 tests.

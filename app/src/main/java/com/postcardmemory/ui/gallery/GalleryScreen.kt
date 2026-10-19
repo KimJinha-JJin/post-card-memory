@@ -17,8 +17,12 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -195,6 +199,12 @@ private val EMPTY_TAP_MAX_MOVE = 18.dp
 private const val EMPTY_TAP_MAX_HOLD_MS = 300L
 private val EMPTY_TRAIL_MIN_DISTANCE = 26.dp
 private val EMPTY_TRAIL_RIPPLE_RADIUS = 22.dp
+
+// 놀이를 켜고 끌 때 상단 시계·양손 장면이 물러나고 돌아오는 시간(108일차).
+private const val GALLERY_TOP_SCENE_ANIM_MS = 450
+
+private fun <T> galleryTopSceneTween() =
+    tween<T>(durationMillis = GALLERY_TOP_SCENE_ANIM_MS, easing = FastOutSlowInEasing)
 private val EMPTY_TAP_RIPPLE_RADIUS = 34.dp
 
 /**
@@ -811,11 +821,33 @@ fun GalleryScreen(
                     // 작은 레트로 탁상시계 + 커피잔. 검색·정렬 아이콘이 있는 타이틀 Row와
                     // 겹치지 않게 그 아래 별도 줄에 둔다. 아래 fillMaxWidth는 시계가 놓이는
                     // 자리의 폭이다. 양손은 화면 끝에서 잘리고, 시계의 왼쪽 여백은 내부에서 유지한다.
-                    GalleryRetroClock(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp, bottom = 6.dp)
-                    )
+                    //
+                    // 108일차: 세 놀이(연못·쉼터·쫑쫑컵) 중 하나라도 켜지면 시계·양손 장면이
+                    // 한 덩어리로 위로 물러나며 높이까지 접혀, 놀이 화면이 그만큼 넓어진다.
+                    // 조건이 playMode 하나라 놀이끼리 바로 바꿀 때는 다시 내려오지 않는다.
+                    AnimatedVisibility(
+                        visible = playMode == GalleryPlayMode.NONE,
+                        enter = slideInVertically(
+                            animationSpec = galleryTopSceneTween(),
+                            initialOffsetY = { fullHeight -> -fullHeight }
+                        ) + expandVertically(
+                            animationSpec = galleryTopSceneTween(),
+                            expandFrom = Alignment.Top
+                        ),
+                        exit = slideOutVertically(
+                            animationSpec = galleryTopSceneTween(),
+                            targetOffsetY = { fullHeight -> -fullHeight }
+                        ) + shrinkVertically(
+                            animationSpec = galleryTopSceneTween(),
+                            shrinkTowards = Alignment.Top
+                        )
+                    ) {
+                        GalleryRetroClock(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp, bottom = 6.dp)
+                        )
+                    }
 
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
