@@ -1,34 +1,32 @@
 package com.postcardmemory.ui.gallery
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
-import com.postcardmemory.ui.theme.GraphiteAccent
-import com.postcardmemory.ui.theme.PaperDivider
-import com.postcardmemory.ui.theme.PaperSurface
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
 
 internal const val RACE_TRACK_HEIGHT_FRACTION = 0.42f
 internal const val RACE_TRACK_SIDE_INSET_FRACTION = 0.09f
@@ -52,10 +50,22 @@ private val RaceTrackLane = Color(0xFFEFE6D2)
 private val RaceTrackCheckerDark = Color(0xFF8A7A63)
 private val RaceLightHousing = Color(0xFF4A4038)
 private val RaceLightDim = Color(0xFF8A8074)
+private val RaceStartLightRed = Color(0xFFB8564A)
+private const val RACE_START_LIGHT_ROWS = 3
 private val RaceCurbCream = Color(0xFFF3E8D4)
 private val RaceCurbBurgundy = Color(0xFF8C4A3E)
 private val RaceFenceColor = Color(0xFF7C7266)
 private val RaceGroundSage = Color(0xFFDDE8D5)
+
+/** 관중석을 오려낸 바랜 신문지 색과, 그 위에 찍힌 낡은 먹 잉크 색. */
+private val RaceNewsprintPaper = Color(0xFFEEE7D7)
+private val RaceNewsprintInk = Color(0xFF4F463D)
+
+/** 관중석 단의 벤치 판자와 단 앞면(바랜 인쇄 색). 차양은 연석과 같은 크림·버건디를 쓴다. */
+private val RaceStandPlank = Color(0xFFA88D6C)
+private val RaceStandRiser = Color(0xFFE4D9C3)
+private const val RACE_STAND_ROWS = 2
+private const val RACE_STAND_PAPER_SEED = 23
 
 /** 쫑쫑컵 트랙의 좌표 — Venue(상시 표시)와 Overlay(레이스 진행)가 반드시 같은 값을 공유한다. */
 internal data class RaceTrackGeometry(
@@ -245,103 +255,284 @@ private fun RaceCurbAndFence(
     }
 }
 
-/** 출발선 옆 1·2·3 그리드 번호 — 레이스 시작 위치와 같은 [RaceTrackGeometry]를 사용한다. */
+/**
+ * 관중 엽서가 앉는 자리 뒤의 작은 관중석. 관중 배치와 같은 [raceSpectatorRowTop]으로
+ * 두 층 벤치를 그려서, 레이스 중 관중 사진이 각 층 벤치에 걸터앉아 보인다. 잡지에서
+ * 오려낸 신문지 한 장([raceNewsprintClipping]) 위에 줄무늬 차양, 벤치 판자, 망점이 찍힌
+ * 단 앞면만 그린다. 트랙처럼 평상시엔 옅게 있다가 레이스 때 선명해진다.
+ */
 @Composable
-private fun RaceStartGrid(
+private fun RaceGrandstand(
     geometry: RaceTrackGeometry,
-    intensity: Float,
-    modifier: Modifier = Modifier
+    cardWidthPx: Float,
+    cardHeightPx: Float,
+    intensity: Float
 ) {
-    Box(modifier = modifier) {
-        for (lane in 0 until 3) {
-            Text(
-                text = (lane + 1).toString(),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = GraphiteAccent.copy(alpha = 0.5f + 0.5f * intensity),
-                modifier = Modifier.graphicsLayer {
-                    translationX = geometry.startLineX - 26.dp.toPx()
-                    translationY = geometry.laneCenterY(lane) - 8.dp.toPx()
-                }
-            )
+    with(LocalDensity.current) {
+        val inset = RaceSpectatorPhotoInset.toPx()
+        val photo = cardWidthPx * RACE_SPECTATOR_CARD_SCALE - inset * 2f
+        val awningHeight = 9.dp.toPx()
+        val left = geometry.trackLeft - 6.dp.toPx()
+        val right = geometry.trackRight + 6.dp.toPx()
+        // 트랙 위 연석(5dp)과 펜스(10dp) 바로 위에서 끝난다.
+        val bottom = geometry.trackTop - 15.dp.toPx()
+        val top = raceSpectatorRowTop(RACE_STAND_ROWS - 1, geometry.trackTop, cardHeightPx) +
+            inset - awningHeight - 6.dp.toPx()
+        if (bottom <= top || right <= left) return
+        // 각 층 벤치 윗면: 그 줄 관중 사진 아랫변보다 조금 위 — 사진이 벤치에 걸터앉은 모습.
+        val benchTops = List(RACE_STAND_ROWS) { row ->
+            raceSpectatorRowTop(row, geometry.trackTop, cardHeightPx) + inset + photo - 6.dp.toPx() - top
         }
-    }
-}
 
-/** "쫑쫑컵" 팻말 — 세션이 새로 시작될 때 살짝 흔들리고, 결승 순간 한 번 통 튄다. */
-@Composable
-private fun RaceBanner(
-    wobbleTrigger: Int,
-    thumpTrigger: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val rotation = remember { Animatable(0f) }
-    LaunchedEffect(wobbleTrigger) {
-        if (wobbleTrigger > 0) {
-            rotation.snapTo(-7f)
-            rotation.animateTo(
-                0f,
-                spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-            )
-        }
-    }
-    val thump = remember { Animatable(1f) }
-    LaunchedEffect(thumpTrigger) {
-        if (thumpTrigger) {
-            thump.snapTo(0.9f)
-            thump.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-        }
-    }
-
-    Box(
-        modifier = modifier.graphicsLayer {
-            rotationZ = rotation.value
-            scaleX = thump.value
-            scaleY = thump.value
-        }
-    ) {
-        Box(
+        Spacer(
             modifier = Modifier
-                .background(PaperSurface, RoundedCornerShape(8.dp))
-                .border(1.dp, PaperDivider, RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 5.dp)
-        ) {
-            Text(
-                text = "쫑쫑컵",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = GraphiteAccent
-            )
-        }
+                .graphicsLayer {
+                    translationX = left
+                    translationY = top
+                    alpha = intensity
+                }
+                .size(width = (right - left).toDp(), height = (bottom - top).toDp())
+                .raceNewsprintClipping(RACE_STAND_PAPER_SEED)
+                .drawWithCache {
+                    val dp = density
+                    val w = size.width
+                    val h = size.height
+                    val plankHeight = 3.5f * dp
+                    val rng = Random(RACE_STAND_PAPER_SEED)
+
+                    val dotStep = 3f * dp
+                    val riserDots = buildList {
+                        benchTops.forEachIndexed { row, benchTop ->
+                            val riserTop = benchTop + plankHeight
+                            val riserBottom = if (row == 0) h else benchTops[row - 1]
+                            var y = riserTop + dotStep / 2f
+                            var line = 0
+                            while (y < riserBottom) {
+                                var x = if (line % 2 == 0) dotStep / 2f else dotStep
+                                while (x < w) {
+                                    val depth = ((y - riserTop) / (riserBottom - riserTop)).coerceIn(0f, 1f)
+                                    if (rng.nextFloat() < 0.15f + depth * 0.4f) add(Offset(x, y))
+                                    x += dotStep
+                                }
+                                y += dotStep
+                                line++
+                            }
+                        }
+                    }
+
+                    onDrawBehind {
+                        // 차양: 크림·버건디 줄무늬 띠와 아래로 늘어진 둥근 술.
+                        val stripe = 8f * dp
+                        val bandHeight = awningHeight - 3f * dp
+                        var x = 0f
+                        var i = 0
+                        while (x < w) {
+                            val color = (if (i % 2 == 0) RaceCurbCream else RaceCurbBurgundy).copy(alpha = 0.8f)
+                            val stripeWidth = minOf(stripe, w - x)
+                            drawRect(color = color, topLeft = Offset(x, 0f), size = Size(stripeWidth, bandHeight))
+                            drawCircle(
+                                color = color,
+                                radius = stripeWidth / 2f,
+                                center = Offset(x + stripeWidth / 2f, bandHeight)
+                            )
+                            x += stripe
+                            i++
+                        }
+
+                        // 양 끝 기둥.
+                        listOf(2f * dp, w - 2f * dp).forEach { postX ->
+                            drawLine(
+                                color = RaceFenceColor.copy(alpha = 0.55f),
+                                start = Offset(postX, bandHeight),
+                                end = Offset(postX, h),
+                                strokeWidth = 2f * dp
+                            )
+                        }
+
+                        benchTops.forEachIndexed { row, benchTop ->
+                            val riserTop = benchTop + plankHeight
+                            val riserBottom = if (row == 0) h else benchTops[row - 1]
+                            if (riserBottom > riserTop) {
+                                drawRect(
+                                    color = RaceStandRiser.copy(alpha = 0.85f),
+                                    topLeft = Offset(4f * dp, riserTop),
+                                    size = Size(w - 8f * dp, riserBottom - riserTop)
+                                )
+                            }
+                            drawRect(
+                                color = RaceStandPlank.copy(alpha = 0.9f),
+                                topLeft = Offset(4f * dp, benchTop),
+                                size = Size(w - 8f * dp, plankHeight)
+                            )
+                            // 판자 아래 그늘 한 줄 — 벤치가 단 앞면보다 튀어나와 보이게.
+                            drawLine(
+                                color = RaceNewsprintInk.copy(alpha = 0.22f),
+                                start = Offset(4f * dp, riserTop + 0.5f * dp),
+                                end = Offset(w - 4f * dp, riserTop + 0.5f * dp),
+                                strokeWidth = 1f * dp
+                            )
+                        }
+                        drawPoints(
+                            points = riserDots,
+                            pointMode = PointMode.Points,
+                            color = RaceNewsprintInk.copy(alpha = 0.1f),
+                            strokeWidth = 1f * dp,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+        )
     }
 }
 
-/** 출발선 옆 픽셀 신호등 — 평상시엔 꺼진 채 자리만 지키다가 COUNTDOWN에만 점등한다. */
+/**
+ * 잡지에서 가위로 오려낸 종이 한 장 바탕. 모서리와 가장자리가 자로 잰 듯하지 않게
+ * 미세하게 흔들리고, 바랜 신문지 색 위에 아주 옅은 망점(한쪽 구석으로 갈수록 조금
+ * 진해짐)과 종이 결만 얹는다. 같은 [seed]면 늘 같은 모양이라 프레임마다 떨리지 않는다.
+ */
+private fun Modifier.raceNewsprintClipping(seed: Int): Modifier = drawWithCache {
+    val dp = density
+    val w = size.width
+    val h = size.height
+    val rng = Random(seed)
+    fun wobble(amount: Float) = (rng.nextFloat() - 0.5f) * amount * dp
+
+    val corners = listOf(
+        Offset(wobble(1.2f), wobble(1.2f)),
+        Offset(w + wobble(1.2f), wobble(1.2f)),
+        Offset(w + wobble(1.2f), h + wobble(1.2f)),
+        Offset(wobble(1.2f), h + wobble(1.2f))
+    )
+    val outline = Path().apply {
+        moveTo(corners[0].x, corners[0].y)
+        for (side in 0 until 4) {
+            val from = corners[side]
+            val to = corners[(side + 1) % 4]
+            val length = (to - from).getDistance().coerceAtLeast(1f)
+            val normalX = -(to.y - from.y) / length
+            val normalY = (to.x - from.x) / length
+            val segments = (length / (7f * dp)).toInt().coerceAtLeast(1)
+            for (s in 1 until segments) {
+                val t = s / segments.toFloat()
+                val cut = wobble(0.9f)
+                lineTo(
+                    lerp(from.x, to.x, t) + normalX * cut,
+                    lerp(from.y, to.y, t) + normalY * cut
+                )
+            }
+            lineTo(to.x, to.y)
+        }
+        close()
+    }
+
+    val dotStep = 3.4f * dp
+    val halftone = buildList {
+        var row = 0
+        var y = dotStep / 2f
+        while (y < h) {
+            var x = if (row % 2 == 0) dotStep / 2f else dotStep
+            while (x < w) {
+                val corner = ((x / w + y / h) / 2f).coerceIn(0f, 1f)
+                if (rng.nextFloat() < 0.12f + corner * corner * 0.5f) add(Offset(x, y))
+                x += dotStep
+            }
+            y += dotStep
+            row++
+        }
+    }
+
+    val fibers = Path().apply {
+        repeat(((w * h) / (90f * dp * dp)).toInt().coerceIn(4, 40)) {
+            val sx = rng.nextFloat() * w
+            val sy = rng.nextFloat() * h
+            val len = (2f + rng.nextFloat() * 4f) * dp
+            val angle = (rng.nextFloat() - 0.5f) * 0.8f
+            moveTo(sx, sy)
+            lineTo(sx + cos(angle) * len, sy + sin(angle) * len)
+        }
+    }
+
+    onDrawBehind {
+        // 바닥에서 종이 한 장 두께만큼만 떠 보이게 하는 아주 옅은 자국.
+        translate(top = 0.9f * dp) {
+            drawPath(path = outline, color = RaceNewsprintInk.copy(alpha = 0.07f))
+        }
+        drawPath(path = outline, color = RaceNewsprintPaper)
+        clipPath(outline) {
+            drawPoints(
+                points = halftone,
+                pointMode = PointMode.Points,
+                color = RaceNewsprintInk.copy(alpha = 0.09f),
+                strokeWidth = 1f * dp,
+                cap = StrokeCap.Round
+            )
+            drawPath(
+                path = fibers,
+                color = RaceNewsprintInk.copy(alpha = 0.05f),
+                style = Stroke(width = 0.5f * dp, cap = StrokeCap.Round)
+            )
+        }
+        // 오린 단면의 얇은 종이 결 — 테두리 선이 아니라 가장자리가 살짝 어두운 정도.
+        drawPath(
+            path = outline,
+            color = RaceNewsprintInk.copy(alpha = 0.16f),
+            style = Stroke(width = 0.6f * dp)
+        )
+    }
+}
+
+/**
+ * F1 출발 신호등처럼 무대 상단에 매달린 5칸 × 3줄 신호등. 평상시엔 꺼진 채 자리만 지키고,
+ * COUNTDOWN 동안 [litColumns]만큼 왼쪽부터 한 칸(세로 한 줄)씩 빨간 등이 켜진다.
+ * 다섯 칸이 다 켜진 뒤 RACING이 되면 한꺼번에 꺼지며 출발한다.
+ */
 @Composable
-internal fun RaceTrafficLight(
-    countdownStep: Int,
+private fun RaceStartLightGantry(
+    litColumns: Int,
     modifier: Modifier = Modifier
 ) {
     Canvas(
-        modifier = modifier.size(width = 18.dp, height = 48.dp)
+        modifier = modifier.size(width = 85.dp, height = 46.dp)
     ) {
-        val lightColors = listOf(
-            Color(0xFFB8564A),
-            Color(0xFFD9A441),
-            Color(0xFF7E9C7A)
-        )
-        drawRoundRect(
-            color = RaceLightHousing,
-            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-        )
-        val slotHeight = size.height / 3f
-        lightColors.forEachIndexed { index, color ->
-            val isLit = index == countdownStep
-            drawCircle(
-                color = if (isLit) color else RaceLightDim.copy(alpha = 0.5f),
-                radius = slotHeight * 0.32f,
-                center = Offset(size.width / 2f, slotHeight * (index + 0.5f))
+        val podWidth = 13.dp.toPx()
+        val podGap = 5.dp.toPx()
+        val beamHeight = 4.dp.toPx()
+        val podTop = beamHeight + 2.dp.toPx()
+        val podHeight = size.height - podTop
+        val rowHeight = podHeight / RACE_START_LIGHT_ROWS
+        val lampRadius = minOf(podWidth, rowHeight) * 0.34f
+
+        // 무대 위쪽으로 이어지는 두 가닥 매달림 줄과 가로 들보.
+        listOf(size.width * 0.15f, size.width * 0.85f).forEach { wireX ->
+            drawLine(
+                color = RaceFenceColor.copy(alpha = 0.6f),
+                start = Offset(wireX, 0f),
+                end = Offset(wireX, -size.height),
+                strokeWidth = 1.2.dp.toPx()
             )
+        }
+        drawRect(
+            color = RaceLightHousing,
+            topLeft = Offset(-3.dp.toPx(), 0f),
+            size = Size(size.width + 6.dp.toPx(), beamHeight)
+        )
+
+        for (column in 0 until RACE_START_LIGHT_COLUMNS) {
+            val podLeft = column * (podWidth + podGap)
+            drawRoundRect(
+                color = RaceLightHousing,
+                topLeft = Offset(podLeft, podTop),
+                size = Size(podWidth, podHeight),
+                cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+            )
+            val isLit = column < litColumns
+            for (row in 0 until RACE_START_LIGHT_ROWS) {
+                drawCircle(
+                    color = if (isLit) RaceStartLightRed else RaceLightDim.copy(alpha = 0.5f),
+                    radius = lampRadius,
+                    center = Offset(podLeft + podWidth / 2f, podTop + rowHeight * (row + 0.5f))
+                )
+            }
         }
     }
 }
@@ -360,6 +551,7 @@ fun PostcardRaceVenue(
     stageWidthPx: Float,
     stageHeightPx: Float,
     cardWidthPx: Float,
+    cardHeightPx: Float,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -381,14 +573,26 @@ fun PostcardRaceVenue(
         PostcardRacePhase.RETURNING -> lerp(1f, 0.35f, racePhaseProgress)
     }
     val dashScroll = if (raceState.phase == PostcardRacePhase.RACING) raceProgress else -1f
-    val lightCountdownStep = if (raceState.phase == PostcardRacePhase.COUNTDOWN) countdownStep else -1
-    val lightAlpha = if (raceState.phase == PostcardRacePhase.IDLE) 0.5f else 1f
+    val litStartColumns = if (raceState.phase == PostcardRacePhase.COUNTDOWN) countdownStep else 0
+    // 결승·복귀 동안엔 같은 자리에 우승자 전광판이 걸리므로 숨었다가, 전광판이 꺼질 무렵 돌아온다.
+    val lightAlpha = when (raceState.phase) {
+        PostcardRacePhase.IDLE -> 0.5f
+        PostcardRacePhase.FINISHING -> 0f
+        PostcardRacePhase.RETURNING -> lerp(0f, 0.5f, ((racePhaseProgress - 0.7f) / 0.3f).coerceIn(0f, 1f))
+        else -> 1f
+    }
 
     Box(modifier = modifier) {
         RaceGroundExtension(
             stageWidthPx = stageWidthPx,
             stageHeightPx = stageHeightPx,
             modifier = Modifier.matchParentSize()
+        )
+        RaceGrandstand(
+            geometry = geometry,
+            cardWidthPx = cardWidthPx,
+            cardHeightPx = cardHeightPx,
+            intensity = trackIntensity
         )
         RaceTrackCanvas(
             geometry = geometry,
@@ -401,26 +605,14 @@ fun PostcardRaceVenue(
             intensity = trackIntensity,
             modifier = Modifier.matchParentSize()
         )
-        RaceStartGrid(
-            geometry = geometry,
-            intensity = trackIntensity,
-            modifier = Modifier.matchParentSize()
-        )
-        RaceTrafficLight(
-            countdownStep = lightCountdownStep,
-            modifier = Modifier.graphicsLayer {
-                translationX = geometry.startLineX - 20.dp.toPx()
-                translationY = geometry.trackTop - 46.dp.toPx()
-                alpha = lightAlpha
-            }
-        )
-        RaceBanner(
-            wobbleTrigger = raceState.sessionId,
-            thumpTrigger = raceState.phase == PostcardRacePhase.FINISHING,
-            modifier = Modifier.graphicsLayer {
-                translationX = geometry.trackRight - 78.dp.toPx()
-                translationY = geometry.trackTop - 44.dp.toPx()
-            }
+        RaceStartLightGantry(
+            litColumns = litStartColumns,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .graphicsLayer {
+                    translationY = stageHeightPx * RACE_RESULT_TOP_FRACTION
+                    alpha = lightAlpha
+                }
         )
     }
 }

@@ -8,14 +8,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,10 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -39,18 +39,12 @@ import androidx.compose.ui.util.lerp
 import androidx.compose.ui.zIndex
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCardContent
-import com.postcardmemory.ui.theme.GraphiteAccent
-import com.postcardmemory.ui.theme.PaperDivider
-import com.postcardmemory.ui.theme.PaperSurface
-import com.postcardmemory.ui.theme.SunsetGold
 import kotlinx.coroutines.isActive
 import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
-
-private val CrownGold = Color(0xFFE8B94A)
 
 /** 레이스카 차체 색 풀 — 차선이 아니라 엽서 id로 골라서, 카드마다 자기만의 색을 갖는다. */
 private val RaceCarColors = listOf(
@@ -89,12 +83,40 @@ private const val AUDIENCE_ROW_SIZE = 4
 private const val WAVE_CYCLE_MILLIS = 1500f
 private const val WAVE_SPECTATOR_DELAY_MILLIS = 190f
 private const val WAVE_BOUNCE_DP = 6f
-private const val WINNER_JUMP_STAGES = 3
-private const val WINNER_JUMP_RISE_MILLIS = 130
-private const val WINNER_JUMP_FALL_MILLIS = 150
-private const val WINNER_JUMP_BASE_DP = 11f
 private const val CONFETTI_COUNT = 18
 private const val CONFETTI_DURATION_MILLIS = 850
+
+/** 레이스 중 레이스카에 탄 엽서(차 포함)는 대기 우표보다 이만큼 작게 달린다. */
+private const val RACE_RACER_SCALE = 0.75f
+
+/**
+ * 출전 엽서+레이스카 한 덩어리가 차선 한가운데에 오도록 그림만 위로 올리는 양.
+ * 차선 좌표·주행 경로는 그대로이고, 모이기·복귀 보간도 이 높이를 기준으로 한다.
+ */
+private const val RACE_RACER_LIFT_DP = 24f
+
+/**
+ * 우승자 전광판의 세로 위치 — 경기장·관중석보다 훨씬 위, 무대 상단 쪽에 걸린다.
+ * 출발 신호등도 같은 자리에 걸리고, 전광판이 내려오는 동안에는 숨는다.
+ */
+internal const val RACE_RESULT_TOP_FRACTION = 0.08f
+
+/** 전광판: 바랜 먹색 판, 크림색 글씨, 둘레를 따라 차례로 켜지는 전구. */
+private val ScoreboardPanel = Color(0xFF3B342E)
+private val ScoreboardText = Color(0xFFF3E8D4)
+private val ScoreboardBulbOn = Color(0xFFE8C66A)
+private val ScoreboardBulbOff = Color(0xFF6B5D4A)
+private val ScoreboardWire = Color(0xFF7C7266)
+private const val SCOREBOARD_CHASE_STEP_MILLIS = 120L
+private const val SCOREBOARD_DROP_MILLIS = 260
+
+/** 관중 엽서는 출전 카드보다 조금 작게, 사진만 보인다. 관중석 그림도 같은 값을 쓴다. */
+internal const val RACE_SPECTATOR_CARD_SCALE = 0.88f
+internal val RaceSpectatorPhotoInset = 5.dp
+
+/** 관중 [row]번째 줄 엽서 윗변의 기준 높이(흔들림 전). 관중석 그림과 관중 배치가 함께 쓴다. */
+internal fun raceSpectatorRowTop(row: Int, trackTop: Float, cardHeightPx: Float): Float =
+    trackTop - cardHeightPx * 0.75f - row * cardHeightPx * 0.6f
 
 /** 컨페티 한 조각의 고정된 낙하 궤적 — 레이스 시작 시 한 번만 뽑히고 프레임마다 재생성되지 않는다. */
 private data class ConfettiSpec(
@@ -173,8 +195,7 @@ private fun spectatorSlot(
     }
     val fraction = (col + 0.5f) / colsInRow.coerceAtLeast(1)
     val x = lerp(trackLeft, trackRight, fraction) + jitter.x
-    val rowSpacing = cardHeightPx * 0.6f
-    val y = (trackTop - cardHeightPx * 0.75f - row * rowSpacing + jitter.y).coerceAtLeast(8f)
+    val y = (raceSpectatorRowTop(row, trackTop, cardHeightPx) + jitter.y).coerceAtLeast(8f)
     return Offset(x, y)
 }
 
@@ -218,8 +239,29 @@ fun PostcardRaceOverlay(
     val density = LocalDensity.current
     val cardWidthDp = with(density) { cardWidthPx.toDp() }
     val cardHeightDp = with(density) { cardHeightPx.toDp() }
-    val spectatorCardWidthPx = cardWidthPx * 0.88f
-    val spectatorCardWidthDp = cardWidthDp * 0.88f
+    val spectatorCardWidthPx = cardWidthPx * RACE_SPECTATOR_CARD_SCALE
+    val spectatorCardWidthDp = cardWidthDp * RACE_SPECTATOR_CARD_SCALE
+    val photoTopDp = raceCardPhotoTop(cardWidthDp, cardHeightDp)
+    val photoInsetPx = with(density) { RaceCardPhotoInset.toPx() }
+    val idlePhotoPx = cardWidthPx - photoInsetPx * 2f
+    // 관중 사진(정사각 상자 안 여백 5dp)은 대기 우표의 바닥 중심에서, 대기 우표 크기로 출발한다.
+    val spectatorInsetPx = with(density) { RaceSpectatorPhotoInset.toPx() }
+    val spectatorPhotoPx = spectatorCardWidthPx - spectatorInsetPx * 2f
+    val spectatorStartShiftX = cardWidthPx / 2f - spectatorCardWidthPx / 2f
+    val spectatorStartShiftY = (cardHeightPx - photoInsetPx) - (spectatorCardWidthPx - spectatorInsetPx)
+    val spectatorPivotY = (spectatorCardWidthPx - spectatorInsetPx) / spectatorCardWidthPx
+    // 출전 엽서는 사진 중심을 축으로 줄어들어, 크기가 바뀌어도 차선 위 자리가 그대로다.
+    val racerPivotY = (cardHeightPx - photoInsetPx - idlePhotoPx / 2f) / cardHeightPx
+
+    /** 모이는 동안 대기 우표 크기([idleScale])에서 레이스 크기(1)로 바뀌고, 복귀하며 되돌아간다. */
+    fun entryScale(idleScale: Float, raceScale: Float): Float = when (raceState.phase) {
+        PostcardRacePhase.GATHERING -> lerp(idleScale, raceScale, racePhaseProgress)
+        PostcardRacePhase.RETURNING -> lerp(raceScale, idleScale, racePhaseProgress)
+        PostcardRacePhase.IDLE -> idleScale
+        else -> raceScale
+    }
+    val spectatorScale = entryScale(idleScale = idlePhotoPx / spectatorPhotoPx, raceScale = 1f)
+    val racerScale = entryScale(idleScale = 1f, raceScale = RACE_RACER_SCALE)
 
     val geometry = remember(stageWidthPx, stageHeightPx, cardWidthPx) {
         computeRaceTrackGeometry(
@@ -254,8 +296,8 @@ fun PostcardRaceOverlay(
     Box(modifier = modifier) {
         spectators.forEachIndexed { index, postcard ->
             val snapshot = raceState.snapshots[postcard.id]
-            val startX = snapshot?.x ?: 0f
-            val startY = snapshot?.y ?: 0f
+            val startX = snapshot?.let { it.x + spectatorStartShiftX } ?: 0f
+            val startY = snapshot?.let { it.y + spectatorStartShiftY } ?: 0f
             val slotCenter = spectatorSlot(
                 index,
                 spectators.size,
@@ -293,21 +335,19 @@ fun PostcardRaceOverlay(
                         translationX = x.roundToInt().toFloat()
                         translationY = (y + waveBobPx).roundToInt().toFloat()
                         rotationZ = rotation
+                        transformOrigin = TransformOrigin(0.5f, spectatorPivotY)
+                        scaleX = spectatorScale
+                        scaleY = spectatorScale
                     }
             ) {
-                Box(
+                StampCardContent(
+                    postcard = postcard,
+                    isSelected = false,
+                    dateLabelOverride = "",
                     modifier = Modifier
                         .width(spectatorCardWidthDp)
-                        .background(PaperSurface, RoundedCornerShape(10.dp))
-                        .border(1.dp, PaperDivider, RoundedCornerShape(10.dp))
-                        .padding(5.dp)
-                ) {
-                    StampCardContent(
-                        postcard = postcard,
-                        isSelected = false,
-                        dateTextSizeSp = 9
-                    )
-                }
+                        .padding(RaceSpectatorPhotoInset)
+                )
             }
         }
 
@@ -316,7 +356,8 @@ fun PostcardRaceOverlay(
             val startX = snapshot?.x ?: 0f
             val startY = snapshot?.y ?: 0f
             val gridX = startLineX - cardWidthPx * 0.5f
-            val gridY = laneCenterY(laneIndex) - cardHeightPx * 0.5f
+            val gridY = laneCenterY(laneIndex) - cardHeightPx * 0.5f -
+                with(density) { RACE_RACER_LIFT_DP.dp.toPx() }
             val isWinner = raceState.winnerId == postcard.id
 
             val (x, y) = when (raceState.phase) {
@@ -347,26 +388,6 @@ fun PostcardRaceOverlay(
                 label = "raceCarLaunchScale"
             )
 
-            val winnerJumpOffset = remember(postcard.id) { Animatable(0f) }
-            LaunchedEffect(raceState.phase, raceState.sessionId) {
-                if (isWinner && raceState.phase == PostcardRacePhase.FINISHING) {
-                    val hop = with(density) { WINNER_JUMP_BASE_DP.dp.toPx() }
-                    repeat(WINNER_JUMP_STAGES) { stage ->
-                        val height = hop * (1f - stage * 0.28f)
-                        winnerJumpOffset.animateTo(
-                            -height,
-                            tween(durationMillis = WINNER_JUMP_RISE_MILLIS, easing = FastOutSlowInEasing)
-                        )
-                        winnerJumpOffset.animateTo(
-                            0f,
-                            tween(durationMillis = WINNER_JUMP_FALL_MILLIS, easing = FastOutSlowInEasing)
-                        )
-                    }
-                } else {
-                    winnerJumpOffset.snapTo(0f)
-                }
-            }
-
             val confettiSpecs = remember(postcard.id) { buildConfetti(postcard.id) }
             val confettiProgress = remember(postcard.id) { Animatable(0f) }
             LaunchedEffect(raceState.phase, raceState.sessionId) {
@@ -380,21 +401,9 @@ fun PostcardRaceOverlay(
                     confettiProgress.snapTo(0f)
                 }
             }
-            val crownScale by animateFloatAsState(
-                targetValue = if (isWinner && raceState.phase == PostcardRacePhase.FINISHING) {
-                    1f
-                } else {
-                    0f
-                },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                label = "raceCrownScale"
-            )
-
             val bobPx = when {
                 raceState.phase == PostcardRacePhase.RACING ->
                     with(density) { (sin(raceProgress * 46f + laneIndex * 2f) * 1.4f).dp.toPx() }
-                raceState.phase == PostcardRacePhase.FINISHING && isWinner ->
-                    winnerJumpOffset.value
                 else -> 0f
             }
             val tiltDegrees = when (raceState.phase) {
@@ -410,12 +419,16 @@ fun PostcardRaceOverlay(
                     .graphicsLayer {
                         translationX = x.roundToInt().toFloat()
                         translationY = y.roundToInt().toFloat()
+                        transformOrigin = TransformOrigin(0.5f, racerPivotY)
+                        scaleX = racerScale
+                        scaleY = racerScale
                     }
             ) {
                 PixelPostcardRaceCar(
                     postcard = postcard,
                     bodyColor = raceCarColorFor(postcard.id),
                     cardWidth = cardWidthDp,
+                    cardHeight = cardHeightDp,
                     tiltDegrees = tiltDegrees,
                     bobOffsetPx = bobPx,
                     launchScale = launchScale
@@ -427,77 +440,126 @@ fun PostcardRaceOverlay(
                         progress = confettiProgress.value,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .offset(y = -cardHeightDp * 0.5f)
+                            .offset(y = photoTopDp - cardHeightDp * 0.5f)
                             .size(width = cardWidthDp * 2.4f, height = cardHeightDp * 1.7f)
-                    )
-                }
-                if (isWinner && crownScale > 0.01f) {
-                    PixelCrown(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .offset(y = -cardHeightDp * 0.4f)
-                            .graphicsLayer {
-                                scaleX = crownScale
-                                scaleY = crownScale
-                            }
                     )
                 }
             }
         }
 
-        if (raceState.phase == PostcardRacePhase.FINISHING) {
-            Box(
+        val winner = racers.find { it.id == raceState.winnerId }
+        val scoreboardVisible = raceState.phase == PostcardRacePhase.FINISHING ||
+            raceState.phase == PostcardRacePhase.RETURNING
+        if (winner != null && scoreboardVisible) {
+            // 결승 순간 위에서 내려와 복귀하는 동안 걸려 있다가, 복귀 끝 무렵 꺼진다.
+            // 가로 위치는 무대 상단 가운데 정렬에 맡겨서 글꼴 크기가 바뀌어도 가운데에 온다.
+            val fadeOut = if (raceState.phase == PostcardRacePhase.RETURNING) {
+                (1f - (racePhaseProgress - 0.7f) / 0.3f).coerceIn(0f, 1f)
+            } else {
+                1f
+            }
+            RaceWinnerScoreboard(
+                winner = winner,
+                sessionId = raceState.sessionId,
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .zIndex(3f)
                     .graphicsLayer {
-                        translationX = (stageWidthPx / 2f) - 90.dp.toPx()
-                        translationY = trackTop - 78.dp.toPx()
+                        translationY = stageHeightPx * RACE_RESULT_TOP_FRACTION
+                        alpha = fadeOut
                     }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .background(PaperSurface, RoundedCornerShape(14.dp))
-                        .border(1.dp, PaperDivider, RoundedCornerShape(14.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "오늘의 쫑쫑 우승!",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GraphiteAccent
-                    )
-                }
-            }
+            )
         }
     }
 }
 
-/** 우승 엽서 위에 잠깐 뜨는 작은 픽셀 왕관 — 스프링 스케일로 통통 튀며 나타난다. */
+/**
+ * 무대 상단에 매달린 "오늘의 우승자" 전광판. 우승 엽서 사진을 가운데 띄우고, 판 둘레의
+ * 전구가 차례로 켜졌다 꺼지며 돈다. 처음 나타날 때 위에서 툭 내려온다. 왕관·점프 대신
+ * 이 전광판 하나로 우승을 알린다.
+ */
 @Composable
-private fun PixelCrown(
+private fun RaceWinnerScoreboard(
+    winner: Postcard,
+    sessionId: Int,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier.size(width = 22.dp, height = 14.dp)) {
-        val blockPx = size.width / 5f
-        val spikeHeight = size.height * 0.34f
-        val bandHeight = size.height - spikeHeight
-        listOf(0, 2, 4).forEach { col ->
-            drawRect(
-                color = CrownGold,
-                topLeft = Offset(col * blockPx, 0f),
-                size = Size(blockPx, spikeHeight)
+    val drop = remember(sessionId) { Animatable(0f) }
+    LaunchedEffect(sessionId) {
+        drop.animateTo(1f, tween(durationMillis = SCOREBOARD_DROP_MILLIS, easing = FastOutSlowInEasing))
+    }
+    var chaseStep by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(sessionId) {
+        val start = withFrameMillis { it }
+        while (isActive) {
+            withFrameMillis { chaseStep = (it - start) / SCOREBOARD_CHASE_STEP_MILLIS }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                translationY = -(1f - drop.value) * 40.dp.toPx()
+            }
+            .drawBehind {
+                val dp = density
+                // 무대 위쪽으로 이어지는 두 가닥 매달림 줄.
+                listOf(size.width * 0.18f, size.width * 0.82f).forEach { wireX ->
+                    drawLine(
+                        color = ScoreboardWire.copy(alpha = 0.6f),
+                        start = Offset(wireX, 0f),
+                        end = Offset(wireX, -size.height),
+                        strokeWidth = 1.2f * dp
+                    )
+                }
+                drawRect(color = ScoreboardPanel)
+                val bulbStep = 7f * dp
+                val bulbRadius = 1.6f * dp
+                val edge = 4f * dp
+                val w = size.width
+                val h = size.height
+                val bulbs = buildList {
+                    var x = edge
+                    while (x <= w - edge) {
+                        add(Offset(x, edge))
+                        add(Offset(w - x, h - edge))
+                        x += bulbStep
+                    }
+                    var y = edge + bulbStep
+                    while (y <= h - edge - bulbStep) {
+                        add(Offset(w - edge, y))
+                        add(Offset(edge, h - y))
+                        y += bulbStep
+                    }
+                }
+                bulbs.forEachIndexed { index, center ->
+                    val lit = (index / 2 + chaseStep) % 3 == 0L
+                    drawCircle(
+                        color = if (lit) ScoreboardBulbOn else ScoreboardBulbOff.copy(alpha = 0.8f),
+                        radius = bulbRadius,
+                        center = center
+                    )
+                }
+            }
+            .padding(horizontal = 16.dp, vertical = 11.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "오늘의 우승자",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.sp,
+                color = ScoreboardText
+            )
+            StampCardContent(
+                postcard = winner,
+                isSelected = false,
+                dateLabelOverride = "",
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .width(60.dp)
             )
         }
-        drawRect(
-            color = CrownGold,
-            topLeft = Offset(0f, spikeHeight),
-            size = Size(size.width, bandHeight * 0.55f)
-        )
-        drawRect(
-            color = SunsetGold,
-            topLeft = Offset(0f, spikeHeight + bandHeight * 0.55f),
-            size = Size(size.width, bandHeight * 0.45f)
-        )
     }
 }
 

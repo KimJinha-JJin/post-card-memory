@@ -82,7 +82,6 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private val StageFloorSage = Color(0xFFDDE8D5)
 private val RaceGrass = Color(0xFF8BA37C)
-private val StageCardShadow = Color(0xFF40382F)
 private val ShelterFiber = Color(0xFF8A7A63)
 private val ShelterInkGreen = Color(0xFF6E8463)
 private val StagePadding = 18.dp
@@ -93,9 +92,6 @@ private const val STAGE_DRAG_SCALE = 1.04f
 private const val STAGE_MAX_DEPTH_SCALE = 0.86f
 private const val STAGE_MAX_ROTATION_X = 6f
 private const val STAGE_MAX_ROTATION_Y = 3f
-private const val STAGE_SHADOW_MIN_SCALE = 0.42f
-private const val STAGE_SHADOW_MIN_ALPHA = 0.055f
-private const val STAGE_SHADOW_PARALLAX = 0.88f
 private const val STAGE_TAP_PRESS_SCALE = 0.97f
 private const val STAGE_TAP_BOUNCE_SCALE = 1.035f
 private const val STAGE_MAX_STRETCH_X = 1.4f
@@ -105,8 +101,14 @@ private const val STAGE_STRETCH_CENTER_FOLLOW = 0.28f
 private const val RACE_MIN_POSTCARDS = 3
 internal const val RACE_MAX_RACERS = 3
 private const val RACE_GATHER_MILLIS = 850
-private const val RACE_COUNTDOWN_STEP_MILLIS = 500
-private const val RACE_COUNTDOWN_GO_MILLIS = 350
+
+/**
+ * F1 출발 신호처럼 빨간 등이 왼쪽부터 한 칸씩 켜지는 간격과, 다섯 칸이 다 켜진 뒤
+ * 한꺼번에 꺼지기(= 출발)까지 버티는 시간.
+ */
+internal const val RACE_START_LIGHT_COLUMNS = 5
+private const val RACE_START_LIGHT_INTERVAL_MILLIS = 1000
+private const val RACE_LIGHTS_OUT_HOLD_MILLIS = 800
 private const val RACE_DURATION_MILLIS = 4200
 private const val RACE_FINISH_HOLD_MILLIS = 900
 private const val RACE_RETURN_MILLIS = 800
@@ -229,13 +231,15 @@ fun GalleryPlayStage(
                 tween(durationMillis = RACE_GATHER_MILLIS, easing = FastOutSlowInEasing)
             )
 
+            // raceCountdownStep = 지금 켜져 있는 신호등 칸 수. 다섯 칸이 다 켜지고 잠시 뒤
+            // RACING으로 넘어가는 순간 모든 등이 꺼지며 출발한다.
             raceState = raceState.copy(phase = PostcardRacePhase.COUNTDOWN)
             raceCountdownStep = 0
-            delay(RACE_COUNTDOWN_STEP_MILLIS.milliseconds)
-            raceCountdownStep = 1
-            delay(RACE_COUNTDOWN_STEP_MILLIS.milliseconds)
-            raceCountdownStep = 2
-            delay(RACE_COUNTDOWN_GO_MILLIS.milliseconds)
+            for (litColumns in 1..RACE_START_LIGHT_COLUMNS) {
+                raceCountdownStep = litColumns
+                delay(RACE_START_LIGHT_INTERVAL_MILLIS.milliseconds)
+            }
+            delay(RACE_LIGHTS_OUT_HOLD_MILLIS.milliseconds)
 
             raceState = raceState.copy(phase = PostcardRacePhase.RACING)
             raceProgress.snapTo(0f)
@@ -359,6 +363,7 @@ fun GalleryPlayStage(
                 stageWidthPx = stageWidthPx,
                 stageHeightPx = stageHeightPx,
                 cardWidthPx = cardWidthPx,
+                cardHeightPx = cardHeightPx,
                 modifier = Modifier.matchParentSize()
             )
         }
@@ -700,8 +705,6 @@ private fun GalleryPlayStageCard(
     val depthProgress = (liftHeight / maxLiftHeight).coerceIn(0f, 1f)
     val latestDepthProgress = rememberUpdatedState(depthProgress)
     val depthScale = lerp(1f, STAGE_MAX_DEPTH_SCALE, depthProgress)
-    val shadowScale = lerp(1f, STAGE_SHADOW_MIN_SCALE, depthProgress)
-    val shadowAlpha = lerp(0.22f, STAGE_SHADOW_MIN_ALPHA, depthProgress)
     val cardScale by animateFloatAsState(
         targetValue = if (isGrabbed) STAGE_DRAG_SCALE else 1f,
         animationSpec = spring(
@@ -1042,42 +1045,8 @@ private fun GalleryPlayStageCard(
                 landingScaleY.value *
                 depthOvershootScale.value *
                 stretchScaleY
-    val shadowParallaxX = lerp(x.value, x.value * STAGE_SHADOW_PARALLAX, depthProgress)
-    val stretchShadowX = lerp(1f, 1.22f, ((stretchScaleX - 1f) / 0.4f).coerceIn(0f, 1f))
-    val stretchShadowY = lerp(1f, 0.94f, ((stretchScaleY - 1f) / 0.32f).coerceIn(0f, 1f))
-    val shadowAlphaWithStretch =
-        (shadowAlpha - ((stretchScaleY - 1f).coerceAtLeast(0f) * 0.06f))
-            .coerceAtLeast(0.045f)
-    val shadowWidthScale = shadowScale * lerp(1f, 1.14f, depthProgress) * stretchShadowX
-    val shadowHeightScale = shadowScale * lerp(1f, 0.72f, depthProgress) * stretchShadowY
 
-    // 동글이 쉼터의 종이 오림 캐릭터는 바닥 그림자 없이 그린다. 쫑쫑컵 카드만 그림자를 유지한다.
-    if (!characterAppearance) Box(
-        modifier = Modifier
-            .zIndex(if (isGrabbed || isDropping || isStretching) 4f else 1f + index / 100f)
-            .offsetInStage(
-                shadowParallaxX,
-                floorY + cardHeightPx - with(density) { 11.dp.toPx() }
-            )
-            .graphicsLayer {
-                scaleX = shadowWidthScale * (1f + landingSquash.value * 0.18f)
-                scaleY = shadowHeightScale * (1f - landingSquash.value * 0.08f)
-                alpha = if (raceActive) 0f else shadowAlphaWithStretch
-            }
-    ) {
-        Canvas(
-            modifier = Modifier.size(
-                width = with(density) { (cardWidthPx * 0.82f).toDp() },
-                height = 14.dp
-            )
-        ) {
-            drawOval(
-                color = StageCardShadow,
-                size = size
-            )
-        }
-    }
-
+    // 쉼터 캐릭터와 쫑쫑컵 우표 모두 바닥 그림자 없이 그린다.
     Box(
         modifier = modifier
             .zIndex(if (isGrabbed || isDropping || isStretching) 5f else 2f + index / 100f)
@@ -1110,7 +1079,8 @@ private fun GalleryPlayStageCard(
                 scaleX = finalScaleX
                 scaleY = finalScaleY
                 // 캐릭터 외곽에는 사각형 elevation 대신 기존 바닥 그림자만 사용한다.
-                shadowElevation = if (characterAppearance) 0f else if (isGrabbed) 12f else 3f
+                // 쫑쫑컵 카드도 둥근 상자 없이 사진만 보이므로 상자 모양 elevation을 쓰지 않는다.
+                shadowElevation = 0f
                 shape = RoundedCornerShape(StageCardCorner)
                 clip = false
                 alpha = if (raceActive) 0f else 1f
@@ -1364,12 +1334,11 @@ private fun GalleryPlayStageCard(
                 }
             )
             .then(
-                if (characterAppearance) Modifier else Modifier
-                    .background(PaperSurface, RoundedCornerShape(StageCardCorner))
-                    .border(1.dp, PaperDivider, RoundedCornerShape(StageCardCorner))
-                    .padding(7.dp)
+                // 쫑쫑컵: 둥근 카드 상자 없이 사진만, 카드 바닥 쪽에 아래 정렬한다.
+                // 레이스카 오버레이도 같은 여백·정렬([RaceCardPhotoInset])에서 출발한다.
+                if (characterAppearance) Modifier else Modifier.padding(RaceCardPhotoInset)
             ),
-        contentAlignment = Alignment.Center
+        contentAlignment = if (characterAppearance) Alignment.Center else Alignment.BottomCenter
     ) {
         if (characterAppearance) {
             DonggeuliCardContent(postcard)
@@ -1377,7 +1346,7 @@ private fun GalleryPlayStageCard(
             StampCardContent(
                 postcard = postcard,
                 isSelected = false,
-                dateTextSizeSp = 10
+                dateLabelOverride = ""
             )
         }
     }
