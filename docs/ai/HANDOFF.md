@@ -1,3 +1,16 @@
+# HANDOFF — 109일차 추가: 레이스 중 쉼터 전환 정리 · 우승 차 결승 처짐 수정
+
+확인일: 2026-10-20. 수동 표준 모드(사용자 직접 요청), 담당 Claude Code. 시작 HEAD `15ada3c`(CI `39398834177` success), origin 0/0, 보호 untracked 6종 유지.
+
+- **쉼터 전환(`GalleryPlayStage.kt`):** 레이스 진행 코루틴 key에 `raceEnabled`를 추가했고, `!raceEnabled`이면 바로 끝낸다. 레이스 도중 동글이 쉼터로 바꾸면 코루틴이 취소되고, 기존 `finally`가 레이스를 IDLE로 되돌린다. 그래서 오버레이가 사라지고 쉼터 카드가 바로 보인다. 쫑쫑컵으로 돌아오면 대기 상태에서 다시 시작한다. 바로 아래 109일차 섹션의 "쉼터 전환" 위험은 이걸로 해소됐다.
+- **결승 처짐(`PostcardRaceOverlay.kt`):** 우승 컨페티(높이 = 카드 높이×1.7)가 출전 카드 Box의 높이를 키웠다. 그래서 축소 기준점(`racerPivotY`, Box 높이 비율)이 내려가 75%로 줄어든 우승 차가 FINISHING에 약 11dp 아래로 처졌다. 109일차 축소 도입으로 생긴 회귀다. 수정: 출전 Box 크기를 카드 상자(`cardWidth × cardHeight`)로 고정하고, 컨페티는 `wrapContentHeight(unbounded)`로 넘쳐 그리게 했다. 컨페티의 위치와 폭은 이전과 같다.
+- **로컬 자동검증: 통과.** `compileDebugKotlin`, `GalleryPlayStageZoneTest` 10건·`GalleryPlayModeTest` 2건 실패 0, `assembleDebug`, `git diff --check`. 전환 순서를 재현하는 자동 테스트는 없다(Compose UI JVM 테스트 인프라 없음). 테스트 변화가 없어 TEST-COVERAGE-MAP은 그대로다. instrumentation 실행 0회.
+- **실기기:** SM-S936N에 사용자 승인으로 `adb install -r`(`firstInstallTime 2026-10-05 14:19:35` 유지). 사용자가 확인한 뒤 마감을 승인했다. 원래 증상(전환 후 오버레이 잔존)은 수정 전에 재현해 보지 않았다.
+- **남은 후보(승인 아님):** 전광판을 다음 레이스까지 유지할지 미결정. 대기 우표의 터치 영역은 카드 상자 크기 그대로다.
+- **Git:** 위 2개 코드 파일과 이 섹션만 commit·push한다. Codex의 선행 미커밋 변경(`AGENTS.md`, HANDOFF의 "공통 검증·CI 종료 경계 정비" 섹션)은 working tree에 그대로 둔다.
+
+---
+
 # HANDOFF — 109일차: 쫑쫑컵 시각 폴리싱 (레이스카·관중석·F1 신호등·우승자 전광판)
 
 확인일: 2026-10-20. 수동 표준 모드(109일차 후속 작업지시서 A+B+E 승인 → 실기기 확인 중 사용자 직접 요청으로 범위 조정), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `2fa5239`, origin 0/0, 보호 untracked 6종(`.claude/settings.local.json` 포함) 유지.

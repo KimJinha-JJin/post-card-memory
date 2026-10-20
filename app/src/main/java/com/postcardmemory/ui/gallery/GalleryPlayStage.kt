@@ -220,8 +220,11 @@ fun GalleryPlayStage(
         }
     }
 
-    LaunchedEffect(raceState.sessionId) {
-        if (raceState.phase != PostcardRacePhase.GATHERING) {
+    // 쉼터와 쫑쫑컵은 이 무대를 그대로 공유하므로, 레이스 도중 쉼터로 바뀌면(raceEnabled가
+    // false가 되면) 진행 코루틴을 취소한다. 아래 finally가 레이스를 IDLE로 되돌려 오버레이가
+    // 사라지고 쉼터 카드가 다시 보인다.
+    LaunchedEffect(raceState.sessionId, raceEnabled) {
+        if (!raceEnabled || raceState.phase != PostcardRacePhase.GATHERING) {
             return@LaunchedEffect
         }
         try {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -413,8 +414,10 @@ fun PostcardRaceOverlay(
             }
 
             Box(
+                // 높이를 카드 상자로 고정한다. 우승 컨페티가 상자 크기를 키우면 축소 기준점
+                // (racerPivotY는 상자 높이 비율)이 내려가 우승 차가 결승 순간 아래로 처졌다.
                 modifier = Modifier
-                    .width(cardWidthDp)
+                    .size(width = cardWidthDp, height = cardHeightDp)
                     .zIndex(if (isWinner && raceState.phase == PostcardRacePhase.FINISHING) 3f else 2f)
                     .graphicsLayer {
                         translationX = x.roundToInt().toFloat()
@@ -441,6 +444,7 @@ fun PostcardRaceOverlay(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .offset(y = photoTopDp - cardHeightDp * 0.5f)
+                            .wrapContentHeight(align = Alignment.Top, unbounded = true)
                             .size(width = cardWidthDp * 2.4f, height = cardHeightDp * 1.7f)
                     )
                 }
