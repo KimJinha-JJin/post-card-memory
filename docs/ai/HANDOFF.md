@@ -36,6 +36,21 @@
 
 ---
 
+# HANDOFF — 공통 검증·CI 종료 경계 정비
+
+확인일: 2026-10-20. 수동 표준 모드, 담당 Codex. 이번 범위는 운영 문서 정비이며 109일차 쫑쫑컵 구현은 제외했다.
+
+- 시작 Git: `feature/photo-sticker`, HEAD `2fa5239a4a8175ccac1b9dd89b684d65fb56504d`, origin 추적 ref 대비 0/0. tracked clean, staged 없음에서 시작했다.
+- 변경: `AGENTS.md` 8절에 실제 영향별 검증·기존 결과 재사용·CI 성공 종료/실패 재검증 경계를 명시했다. 6절 STOP 보고와 9절 명시적 stage 금지를 보강했다. 기존 안전·QA·Git 승인 및 과거 기록은 유지했다.
+- canonical: `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/`의 SKILL, 공통 마감 규칙, 작업지시서, Claude/Codex 어댑터에 같은 기준 참조를 연결했다. 공통 강제 규칙의 기준은 기존 결정대로 AGENTS.md이며 새 규칙 파일은 만들지 않았다.
+- CI 조사: 현행 `android-ci.yml`은 경로 제한 없는 push/pull_request에서 JVM·debug APK·instrumentation APK 컴파일을 실행한다. 현재 브랜치 protection API는 `Branch not protected`, 저장소 rulesets 조회는 빈 목록을 반환했다. CI 설정은 변경하지 않았다. 후속 후보는 문서-only 판별과 무거운 job 조건 분리이며, 적용 시 보호/required checks와 push·PR 중복 실행 조건을 다시 확인해야 한다.
+- 검증 범위: 문서 검색·diff·참조 및 시나리오 A–F 정적 점검. 앱 코드·test·dependency·CI YAML 변경 없음. JVM·APK·instrumentation·실기기 QA·CI 새 실행은 일반 운영 문서 변경에 불필요해 수행하지 않는다. 과거 테스트 성공을 이번 실행 결과로 쓰지 않는다.
+- 설치 상태: canonical 개정과 설치 캐시 반영은 별개다. 현재 세션의 `0.1.0+codex.20260927080957` 캐시에는 이전 emulator 지침 등 기존 차이가 남아 있다. 이번에는 cache·manifest/version·설치 설정을 변경하지 않았으며, 설치본 반영/새 세션 로딩은 미검증이다. 현재 작업은 최신 저장소 AGENTS.md를 따른다.
+- Git 마감: commit/push 미승인·미실행. 최종 diff 검토 뒤 사용자의 명시적 마감 승인 필요. 완료보고 기록만을 이유로 추가 commit을 만들지 않는다.
+- 보호 untracked: `.codex-config.candidate.toml`, `.kotlin/`, `app/src/main/res/drawable-nodpi/postcard_paper_fiber_tile.png`, `round_head.png`, `sheep_ranch_sheep.png`(뒤 두 파일도 같은 drawable-nodpi 경로). 수정·삭제·stage하지 않는다.
+
+아래는 기존 작업 기록 원문이며 이번 문서 변경의 검증 결과나 새 실행 승인으로 해석하지 않는다.
+
 # HANDOFF — 108일차 추가 3: 연잎 간 접촉 충돌 · 연쇄 반응 · 수면 연동
 
 확인일: 2026-10-19. 수동 표준 모드("연잎 간 접촉 충돌 및 연쇄 반응 폴리싱" 작업지시서), 담당 Claude Code. 사용자 승인으로 먼저 하프톤 수면 작업을 `88a87ad`로 commit·push(CI run `39208530998` success)한 뒤 시작. 시작 origin 0/0, 보호 untracked 5종 유지.
