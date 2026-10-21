@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
@@ -89,6 +90,8 @@ import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.ui.theme.SealInkNavy
 import com.postcardmemory.ui.theme.SealInkRed
+import com.postcardmemory.utils.StashedPhotoSticker
+import com.postcardmemory.utils.StickerStashStorage
 import com.postcardmemory.utils.VisitHistoryStorage
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -439,6 +442,16 @@ private const val HIERARCHY_TRANSITION_DURATION_MS = 170
  * 대칭적으로 처리한다(과한 zoom 금지 지시에 맞춰 최소 후보만 선택).
  */
 private fun AnimatedContentTransitionScope<VisitCalendarNavLevel>.visitCalendarHierarchyTransition(): ContentTransform {
+    val spec = tween<Float>(HIERARCHY_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing)
+    val enter = fadeIn(spec) + scaleIn(spec, initialScale = 0.97f)
+    val exit = fadeOut(spec) + scaleOut(spec, targetScale = 0.97f)
+    return (enter togetherWith exit).using(
+        SizeTransform(sizeAnimationSpec = { _, _ -> tween(HIERARCHY_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing) })
+    )
+}
+
+/** 110일차: 달력 ↔ 스티커 통 장면 전환. 달력 단계 전환과 같은 짧은 fade + 작은 scale을 쓴다. */
+private fun AnimatedContentTransitionScope<Boolean>.visitDrawerSceneTransition(): ContentTransform {
     val spec = tween<Float>(HIERARCHY_TRANSITION_DURATION_MS, easing = FastOutSlowInEasing)
     val enter = fadeIn(spec) + scaleIn(spec, initialScale = 0.97f)
     val exit = fadeOut(spec) + scaleOut(spec, targetScale = 0.97f)
@@ -934,18 +947,37 @@ internal fun VisitCalendarDrawer(
     content: @Composable () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var navLevel by rememberSaveable(stateSaver = VisitCalendarNavLevelSaver) {
         mutableStateOf(VisitCalendarNavLevel.CALENDAR)
     }
+    // 110일차: 사이드바 장면. 달력의 navLevel(월·연도 고르기)과 섞지 않는 별도 상태다.
+    var showStickerStash by rememberSaveable { mutableStateOf(false) }
+    var stashedStickers by remember { mutableStateOf(emptyList<StashedPhotoSticker>()) }
+    val reducedMotion = rememberSystemReducedMotion()
+    val drawerScrollState = rememberScrollState()
+    // 보관함을 보는 동안 달력이 빠져도 보던 월(rememberSaveable)은 그대로 남긴다.
+    val sceneStateHolder = rememberSaveableStateHolder()
 
     // drawer를 다시 열 때는 항상 CALENDAR로 연다 — YEAR_PICKER 등에 머문 채로 사용자를 놀라게
     // 하지 않는다. displayedMonth(표시 중이던 월)는 기존 동작을 그대로 유지하므로 건드리지 않는다.
+    // 110일차: 보관함 장면도 같은 규칙으로 달력부터 열고, 열 때마다 통 목록을 새로 읽는다.
     LaunchedEffect(drawerState.isOpen) {
-        if (drawerState.isOpen) navLevel = VisitCalendarNavLevel.CALENDAR
+        if (drawerState.isOpen) {
+            navLevel = VisitCalendarNavLevel.CALENDAR
+            showStickerStash = false
+            stashedStickers = withContext(Dispatchers.IO) { StickerStashStorage.list(context.filesDir) }
+        }
+    }
+
+    LaunchedEffect(showStickerStash) {
+        drawerScrollState.scrollTo(0)
     }
 
     BackHandler(enabled = drawerState.isOpen) {
-        if (navLevel == VisitCalendarNavLevel.CALENDAR) {
+        if (showStickerStash) {
+            showStickerStash = false
+        } else if (navLevel == VisitCalendarNavLevel.CALENDAR) {
             scope.launch { drawerState.close() }
         } else {
             navLevel = visitCalendarNavLevelOnBack(navLevel)
@@ -963,7 +995,7 @@ internal fun VisitCalendarDrawer(
                 drawerTonalElevation = 0.dp
             ) {
                 Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp)
+                    modifier = Modifier.verticalScroll(drawerScrollState).padding(24.dp)
                 ) {
                     IconButton(
                         onClick = { scope.launch { drawerState.close() } },
@@ -971,12 +1003,45 @@ internal fun VisitCalendarDrawer(
                     ) {
                         Icon(Icons.Default.Close, "방문 달력 닫기", tint = InkSecondary, modifier = Modifier.size(20.dp))
                     }
-                    MonthlyVisitCalendar(
-                        visitedEpochDays = visitedEpochDays,
-                        totalVisitDays = totalVisitDays,
-                        navLevel = navLevel,
-                        onNavLevelChange = { navLevel = it }
-                    )
+                    AnimatedContent(
+                        targetState = showStickerStash,
+                        transitionSpec = { visitDrawerSceneTransition() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = "visitDrawerScene"
+                    ) { stash ->
+                        sceneStateHolder.SaveableStateProvider(key = stash) {
+                            if (!stash) {
+                                Column(Modifier.fillMaxWidth()) {
+                                    MonthlyVisitCalendar(
+                                        visitedEpochDays = visitedEpochDays,
+                                        totalVisitDays = totalVisitDays,
+                                        navLevel = navLevel,
+                                        onNavLevelChange = { navLevel = it }
+                                    )
+                                    // 달력은 줄이지 않고, 파우치는 그 아래에 붙는다(작은 화면은 기존 스크롤).
+                                    StickerStashPouch(
+                                        stickers = stashedStickers,
+                                        animate = drawerState.isOpen && !reducedMotion,
+                                        onOpen = { showStickerStash = true },
+                                        modifier = Modifier.padding(top = 18.dp)
+                                    )
+                                }
+                            } else {
+                                StickerStashPage(
+                                    stickers = stashedStickers,
+                                    onBackToCalendar = { showStickerStash = false },
+                                    onRemove = { sticker ->
+                                        scope.launch {
+                                            stashedStickers = withContext(Dispatchers.IO) {
+                                                StickerStashStorage.remove(context.filesDir, sticker.id)
+                                                StickerStashStorage.list(context.filesDir)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },

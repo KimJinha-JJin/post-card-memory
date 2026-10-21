@@ -77,7 +77,8 @@ fun PhotoStickerPickerPanel(
     onPlaceSticker: () -> Unit = {},
     onCancelPlaceAim: () -> Unit = {},
     placeAimBackgroundState: PhotoStickerAimBackgroundState? = null,
-    onTogglePlaceAimBackground: () -> Unit = {}
+    onTogglePlaceAimBackground: () -> Unit = {},
+    onStashSticker: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -391,6 +392,17 @@ fun PhotoStickerPickerPanel(
                 )
 
                 EditorActionDivider()
+
+                // 110일차: 엽서의 스티커는 그대로 두고 통 전용 복사본만 만든다.
+                if (onStashSticker != null) {
+                    EditorTextAction(
+                        text = "통에 넣기",
+                        onClick = { onStashSticker(selectedSticker.id) },
+                        enabled = enabled
+                    )
+
+                    EditorActionDivider()
+                }
 
                 EditorTextAction(
                     text = "삭제",

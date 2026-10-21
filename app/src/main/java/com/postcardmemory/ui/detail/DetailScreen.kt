@@ -93,6 +93,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -208,6 +209,7 @@ import com.postcardmemory.utils.DoodleTool
 import com.postcardmemory.utils.PostcardImageExporter
 import com.postcardmemory.utils.PostcardRenderSpec
 import com.postcardmemory.utils.SealInkWearRenderer
+import com.postcardmemory.utils.StashedPhotoSticker
 import com.postcardmemory.utils.renderWidth
 import com.postcardmemory.utils.sanitizedDoodlePoint
 
@@ -1859,6 +1861,18 @@ fun DetailScreen(
             .forEach { viewModel.loadStickerCutoutSilhouette(it.displayedUri) }
     }
 
+    // 110일차: 스티커 통 칸을 열 때마다 통 목록을 새로 읽는다(갤러리에서 뺀 조각 반영).
+    val stashedPhotoStickers by viewModel.stashedPhotoStickers.collectAsState()
+
+    LaunchedEffect(customizationPagerState.currentPage, stickerSubTabIndex) {
+        if (
+            customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX &&
+            stickerSubTabIndex == STICKER_STASH_SUB_TAB_INDEX
+        ) {
+            viewModel.loadStashedPhotoStickers()
+        }
+    }
+
     // 사용자가 붙인 사진 스티커를 끌거나 키우거나 돌릴 때의 경계. 기본 모양은 칸 전체,
     // 누끼는 보이는 부분만 엽서 안(표본점을 아직 모르면 느슨한 규칙).
     fun clampPlacedStickerOffset(
@@ -1942,6 +1956,59 @@ fun DetailScreen(
                 baseStickerSidePx = baseStickerPx
             )
             .forEach(::discardPhotoStickerAimOriginal)
+    }
+
+    // 110일차: 스티커 통에서 꺼낸 조각의 오림·뒤집기. 핀셋이 닿아 그 조준의 스티커가
+    // 생길 때만 입힌다(일반 사진 조준은 id가 달라 영향 없음).
+    var pendingStashedStickerShape by remember {
+        mutableStateOf<StashedStickerShape?>(null)
+    }
+
+    // 스티커 통 조각(이미 이 엽서 몫으로 복사됨)으로 조준을 시작한다. 누끼가 있으면 다시
+    // 배경제거를 돌리지 않고 그대로 쓴다. 조준할 수 없는 상태면 일반 사진처럼 바로 붙인다.
+    fun startStashedPhotoStickerAim(
+        originalUri: Uri,
+        cutoutUri: Uri?,
+        cutoutSilhouette: List<Offset>?,
+        stashed: StashedPhotoSticker
+    ) {
+        val isBackgroundRemoved = stashed.isBackgroundRemoved && cutoutUri != null
+        val canAim =
+            postcardPreviewSize != IntSize.Zero &&
+                    customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX &&
+                    stickerSubTabIndex == 0 &&
+                    !isFocusPreviewMode &&
+                    !isBackFace
+        if (!canAim) {
+            viewModel.addPlacedPhotoSticker(
+                PhotoStickerItem(
+                    originalUri = originalUri,
+                    displayedUri = cutoutUri?.takeIf { isBackgroundRemoved } ?: originalUri,
+                    removedBgUri = cutoutUri,
+                    isBackgroundRemoved = isBackgroundRemoved,
+                    edgeStyle = stashed.edgeStyle,
+                    edgeSeed = stashed.edgeSeed,
+                    flipHorizontal = stashed.flipHorizontal,
+                    flipVertical = stashed.flipVertical
+                )
+            )
+            return
+        }
+        viewModel.setSelectedStickerId(null)
+        photoStickerAimBackgroundError = null
+        photoStickerPlaceSession
+            .startAiming(
+                source = originalUri,
+                postcardSize = postcardPreviewSize,
+                baseStickerSidePx = baseStickerPx,
+                removedBgSource = cutoutUri,
+                isBackgroundRemoved = isBackgroundRemoved,
+                cutoutSilhouette = cutoutSilhouette
+            )
+            .forEach(::discardPhotoStickerAimOriginal)
+        pendingStashedStickerShape =
+            (photoStickerPlaceSession.phase as? PhotoStickerPlacePhase.Aiming)
+                ?.let { aim -> stashed.shapeFor(aim.stickerId) }
     }
 
     // 사진 스티커 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 조준을 접는다(스티커 생성 없음).
@@ -2338,6 +2405,18 @@ fun DetailScreen(
     LaunchedEffect(Unit) {
         viewModel.textScaleSaveErrors.collect { message ->
             detailSnackbarHostState.showSnackbar(message)
+        }
+    }
+
+    // 110일차 QA: 스티커 통 알림이 위쪽에서 엽서를 가린다는 피드백으로, 이 알림만
+    // 하단 편집 메뉴 바로 위에 띄운다(다른 편집 알림의 위쪽 자리는 그대로).
+    val stickerStashSnackbarHostState =
+        remember { SnackbarHostState() }
+    var editorDockHeightPx by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        viewModel.stickerStashMessages.collect { message ->
+            stickerStashSnackbarHostState.showSnackbar(message)
         }
     }
 
@@ -5313,6 +5392,9 @@ fun DetailScreen(
                                     onTogglePlaceAimBackground = {
                                         togglePhotoStickerAimBackground()
                                     },
+                                    onStashSticker = { id ->
+                                        viewModel.stashPhotoSticker(id)
+                                    },
                                     onDeleteSticker = { id ->
                                         val sticker = photoStickers.find { it.id == id }
                                         val removedBgUriToDelete = sticker?.removedBgUri
@@ -5497,6 +5579,29 @@ fun DetailScreen(
                                     canUndoTextSticker = canUndoTextSticker,
                                     canRedoTextSticker = canRedoTextSticker,
                                     enabled = controlsEnabled && !textStickerPlaceSession.isPlacing,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                } else if (stickerSubTabIndex == STICKER_STASH_SUB_TAB_INDEX) {
+                                // 110일차: 통의 조각을 고르면 사진 칸으로 넘어가 기존 핀셋 조준을 쓴다.
+                                StickerStashPickerPanel(
+                                    stashedStickers = stashedPhotoStickers,
+                                    enabled = controlsEnabled && !photoStickerPlaceSession.isPlacing,
+                                    onPick = { stashed ->
+                                        backgroundRemovalError = null
+                                        viewModel.resetStickerBackgroundRemovalState()
+                                        stickerSubTabIndex = 0
+                                        viewModel.importStashedPhotoSticker(
+                                            postcardId = postcardId,
+                                            stashed = stashed
+                                        ) { originalUri, cutoutUri, cutoutSilhouette ->
+                                            startStashedPhotoStickerAim(
+                                                originalUri = originalUri,
+                                                cutoutUri = cutoutUri,
+                                                cutoutSilhouette = cutoutSilhouette,
+                                                stashed = stashed
+                                            )
+                                        }
+                                    },
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 } else {
@@ -6812,6 +6917,7 @@ fun DetailScreen(
                     .fillMaxWidth()
                     .onGloballyPositioned {
                         editorDockOffsetInRoot = it.positionInParent()
+                        editorDockHeightPx = it.size.height
                     }
                     .editorPaperBackground(editorPaperTile) { editorDockOffsetInRoot }
                     .navigationBarsPadding()
@@ -6841,7 +6947,7 @@ fun DetailScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                     } else if (customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX) {
                         EditorSubcategoryNavBar(
-                            options = listOf("사진", "텍스트", "라벨"),
+                            options = listOf("사진", "텍스트", "라벨", "스티커 통"),
                             selectedIndex = stickerSubTabIndex,
                             onOptionSelected = { stickerSubTabIndex = it },
                             enabled = controlsEnabled
@@ -6895,6 +7001,13 @@ fun DetailScreen(
                 .padding(top = 64.dp)
         )
 
+        SnackbarHost(
+            hostState = stickerStashSnackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = with(LocalDensity.current) { editorDockHeightPx.toDp() })
+        )
+
         // 신문지 손은 엽서 밖(화면 아래)에서 올라와야 하므로 엽서 clip 바깥,
         // 화면 전체 위에 그린다. 엽서 콘텐츠가 아니라 저장·export와 무관하다.
         val stamping = sealStampSession.phase as? SealStampPhase.Stamping
@@ -6936,7 +7049,9 @@ fun DetailScreen(
                     val newSticker =
                         photoStickerPlaceSession.takeContactPlacement(
                             baseStickerSidePx = baseStickerPx
-                        )?.toPhotoStickerItem()
+                        )?.toPhotoStickerItem()?.let { placed ->
+                            pendingStashedStickerShape?.applyTo(placed) ?: placed
+                        }
                     if (newSticker != null) {
                         val aimSilhouette = placingSticker.aim.activeCutoutSilhouette
                         if (newSticker.isBackgroundRemoved && aimSilhouette != null) {

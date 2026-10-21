@@ -31,7 +31,13 @@ import com.postcardmemory.utils.PostcardAssetDirectory
 import com.postcardmemory.utils.PostcardDeletionManager
 import com.postcardmemory.utils.PostcardDraftStorage
 import com.postcardmemory.utils.PostcardImageExporter
+import com.postcardmemory.utils.PhotoStickerStashSource
+import com.postcardmemory.utils.StashedPhotoSticker
+import com.postcardmemory.utils.StickerStashResult
+import com.postcardmemory.utils.StickerStashStorage
 import com.postcardmemory.utils.deserializeDoodleStroke
+import com.postcardmemory.utils.imageFileExtensionForMimeType
+import com.postcardmemory.utils.isDecodableStashImage
 import com.postcardmemory.utils.isInsideDirectory
 import com.postcardmemory.utils.serialize as serializeDoodleStroke
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -371,6 +377,13 @@ class DetailViewModel @Inject constructor(
 
     val textScaleSaveErrors: Flow<String> =
         _textScaleSaveErrors.receiveAsFlow()
+
+    // 110일차: 스티커 통 담기·꺼내기 결과. 엽서를 가리지 않게 화면이 하단 메뉴 위에 따로 띄운다.
+    private val _stickerStashMessages =
+        Channel<String>(Channel.BUFFERED)
+
+    val stickerStashMessages: Flow<String> =
+        _stickerStashMessages.receiveAsFlow()
 
     private var messageTextScaleSaveJob: Job? = null
 
@@ -906,6 +919,13 @@ class DetailViewModel @Inject constructor(
 
     val photoStickers: StateFlow<List<PhotoStickerItem>> =
         _photoStickers
+
+    // 110일차: 스티커 통(엽서와 독립된 보관함)의 사진 스티커 목록. 스티커 통 칸을 열 때 읽는다.
+    private val _stashedPhotoStickers =
+        MutableStateFlow(listOf<StashedPhotoSticker>())
+
+    internal val stashedPhotoStickers: StateFlow<List<StashedPhotoSticker>> =
+        _stashedPhotoStickers
 
     private val _selectedStickerId =
         MutableStateFlow<String?>(null)
@@ -4130,6 +4150,135 @@ class DetailViewModel @Inject constructor(
         _photoStickers.value += sticker
         _selectedStickerId.value = sticker.id
         scheduleDraftAutosave()
+    }
+
+    fun loadStashedPhotoStickers() {
+        viewModelScope.launch {
+            _stashedPhotoStickers.value =
+                withContext(Dispatchers.IO) {
+                    StickerStashStorage.list(context.filesDir)
+                }
+        }
+    }
+
+    /**
+     * 110일차: 선택한 사진 스티커를 스티커 통에 담는다. 원본(과 켜져 있는 누끼)을 통 전용
+     * 폴더로 복사할 뿐 이 엽서의 스티커·파일·undo는 그대로다. 배경제거를 꺼 둔 스티커는
+     * 원본만 담는다(누끼는 다시 쓸 때 조준에서 새로 만들 수 있다).
+     */
+    fun stashPhotoSticker(
+        stickerId: String
+    ) {
+        val sticker =
+            _photoStickers.value.find { it.id == stickerId } ?: return
+        val cutoutUri =
+            sticker.removedBgUri.takeIf { sticker.isBackgroundRemoved }
+
+        viewModelScope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    StickerStashStorage.stash(
+                        filesDir = context.filesDir,
+                        source = PhotoStickerStashSource(
+                            openOriginal = {
+                                context.contentResolver.openInputStream(sticker.originalUri)
+                            },
+                            originalExtension = stashExtensionFor(sticker.originalUri),
+                            openCutout = cutoutUri?.let { uri ->
+                                { context.contentResolver.openInputStream(uri) }
+                            },
+                            isBackgroundRemoved = cutoutUri != null,
+                            edgeStyle = sticker.edgeStyle,
+                            edgeSeed = sticker.edgeSeed,
+                            flipHorizontal = sticker.flipHorizontal,
+                            flipVertical = sticker.flipVertical
+                        ),
+                        isReadableImage = ::isDecodableStashImage
+                    )
+                }
+
+            _stickerStashMessages.trySend(
+                when (result) {
+                    is StickerStashResult.Stashed -> "스티커 통에 담았어."
+                    StickerStashResult.AlreadyStashed -> "이미 스티커 통에 있는 조각이야."
+                    StickerStashResult.Full ->
+                        "스티커 통이 가득 찼어. 갤러리 달력 아래 통에서 조각을 빼고 다시 담아줘."
+                    StickerStashResult.Failed -> "스티커를 통에 담지 못했어."
+                }
+            )
+            if (result is StickerStashResult.Stashed) {
+                loadStashedPhotoStickers()
+            }
+        }
+    }
+
+    private fun stashExtensionFor(
+        uri: Uri
+    ): String =
+        if (uri.scheme == "file") {
+            uri.path
+                ?.substringAfterLast('/')
+                ?.substringAfterLast('.', missingDelimiterValue = "")
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { ".$it" }
+                ?: ".jpg"
+        } else {
+            imageFileExtensionForMimeType(context.contentResolver.getType(uri))
+        }
+
+    /**
+     * 110일차: 통의 조각을 이 엽서 몫으로 복사한 뒤 조준을 시작하게 넘긴다. 원본은 기존
+     * 사진 스티커와 같은 sticker_originals/<postcardId>/로, 누끼는 배경제거 결과와 같은
+     * cache/photo_stickers/로 복사해 기존 저장 시 승격·정리 경로를 그대로 탄다. 통의 파일은
+     * 읽기만 한다. 누끼 복사가 실패하면 반쪽 스티커를 만들지 않고 복사한 원본도 정리한다.
+     */
+    internal fun importStashedPhotoSticker(
+        postcardId: Long,
+        stashed: StashedPhotoSticker,
+        onImported: (originalUri: Uri, cutoutUri: Uri?, cutoutSilhouette: List<Offset>?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val imported =
+                withContext(Dispatchers.IO) {
+                    val originalUri =
+                        try {
+                            PhotoStickerImageStorage.copyToStickerOriginalStorage(
+                                context = context,
+                                postcardId = postcardId,
+                                sourceFile = stashed.originalFile
+                            )
+                        } catch (_: Exception) {
+                            null
+                        } ?: return@withContext null
+
+                    val cutoutFile = stashed.cutoutFile
+                        ?: return@withContext Triple(originalUri, null, null)
+                    val cutoutUri =
+                        copyStickerBackgroundToCache(
+                            sourceUri = Uri.fromFile(cutoutFile),
+                            newId = UUID.randomUUID().toString()
+                        )
+                    if (cutoutUri == null) {
+                        PhotoStickerImageStorage.deleteOriginalIfUnreferenced(
+                            context = context,
+                            deletedUri = originalUri,
+                            remainingStickers = _photoStickers.value
+                        )
+                        return@withContext null
+                    }
+                    val silhouette =
+                        runCatching { decodeStickerCutoutSilhouette(cutoutUri) }.getOrNull()
+                    Triple(originalUri, cutoutUri, silhouette)
+                }
+
+            if (imported != null) {
+                onImported(imported.first, imported.second, imported.third)
+            } else {
+                _stickerStashMessages.trySend(
+                    "스티커 통에서 꺼내지 못했어."
+                )
+            }
+        }
     }
 
     fun duplicateSticker(

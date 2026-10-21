@@ -148,17 +148,22 @@ internal class PhotoStickerPlaceSession<S : Any> {
     /**
      * 새 사진으로 조준을 시작한다. 이미 조준 중이면 새 사진으로 바꾼다.
      * 더 이상 쓰이지 않게 된 파일 목록을 돌려준다(손 연출 중이면 새 원본 자체).
+     * 110일차: 스티커 통에서 꺼낸 조각처럼 누끼가 이미 있으면 [removedBgSource]·
+     * [cutoutSilhouette]를 함께 넘겨 배경제거를 다시 돌리지 않는다.
      */
     fun startAiming(
         source: S,
         postcardSize: IntSize,
-        baseStickerSidePx: Float
+        baseStickerSidePx: Float,
+        removedBgSource: S? = null,
+        isBackgroundRemoved: Boolean = false,
+        cutoutSilhouette: List<Offset>? = null
     ): List<S> {
-        if (isPlacing) return listOf(source)
+        if (isPlacing) return listOfNotNull(source, removedBgSource)
         val replaced =
             (phase as? PhotoStickerPlacePhase.Aiming<S>)
                 ?.leftovers()
-                ?.filter { it != source }
+                ?.filter { it != source && it != removedBgSource }
                 .orEmpty()
         val scale = 1f
         phase =
@@ -171,7 +176,10 @@ internal class PhotoStickerPlaceSession<S : Any> {
                     postcardSize = postcardSize
                 ),
                 scale = scale,
-                rotationDegrees = 0f
+                rotationDegrees = 0f,
+                removedBgSource = removedBgSource,
+                isBackgroundRemoved = isBackgroundRemoved && removedBgSource != null,
+                cutoutSilhouette = cutoutSilhouette.takeIf { removedBgSource != null }
             )
         return replaced
     }
