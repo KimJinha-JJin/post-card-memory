@@ -37,7 +37,8 @@
   - 앱 백업 설정과의 관계는 미확인이야.
   - ModalNavigationDrawer는 닫힌 상태에서도 내용을 구성하기 때문에 파우치 애니메이션은 `drawerState.isOpen`으로 직접 막았어. 오전 목업 메모의 "닫히면 구성하지 않아"는 틀린 설명이야.
 - **이미지 자산(승인 대기, 미적용):** 파우치·보관함 종이는 임시 코드 그림이야. 최종 자산(닫힌 파우치 뒷판·앞판, 필요하면 열린 파우치)은 별도 제작·승인 단계로 남겨 둬.
-- **Git:** commit·push는 미승인·미실행이야. 마감할 때 위 변경 파일만 명시 경로로 stage해야 하고, 보호 untracked와 사용자 목업 파일은 제외해.
+- **Git:** 사용자 승인으로 위 변경 13개 파일만 명시 경로로 stage해 `86b0b3f`로 commit·push했어. GitHub CI run `39564979477`은 success야(JVM·debug APK·instrumentation 컴파일 통과, instrumentation 실행은 없음). CI 로그에 `setup-java v4` 지원 종료 안내와 ubuntu-latest의 Ubuntu 26 전환 안내가 떴어. CI 설정은 바꾸지 않았고 후속 후보로 남겨 둬. 하루 마감 때 사용자 요청으로 이 Git 줄과 사용자가 추가한 목업 `docs/ai/mockups/sticker-pouch-mockup.html`(110일차 오전 목업 사본)을 함께 commit해. 목업의 "닫히면 내용을 구성하지 않아" 메모는 틀린 설명이니 위 미검증·위험 항목을 기준으로 봐. 보호 untracked 5종(+ ignored `.claude/settings.local.json`)은 계속 제외해.
+- **다음 후보(승인 아님):** 파우치 최종 이미지 제작(뒷판·앞판 594×396px 투명 PNG, 같은 캔버스 정합; 열린 파우치는 선택), 텍스트·라벨 스티커 통 확장, CI 설정 안내 2건 정리.
 
 ---
 
