@@ -30,7 +30,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -57,6 +56,9 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Path
@@ -80,6 +82,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.postcardmemory.R
@@ -96,6 +99,7 @@ import com.postcardmemory.utils.VisitHistoryStorage
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -354,13 +358,6 @@ internal fun isCurrentMonthCell(year: Int, month: Int, today: YearMonth): Boolea
 internal fun isCurrentYearCell(year: Int, today: YearMonth): Boolean = year == today.year
 
 /**
- * 현재 위치 표시(아주 연한 원)를 그릴지. 선택 강조와 같은 칸이면 그리지 않는다 —
- * "선택 상태와 현재 상태는 다른 의미"이지만 같은 칸일 때 두 강조를 겹겹이 쌓지 않는다.
- */
-internal fun visitCalendarShowsCurrentMarker(isCurrentPeriod: Boolean, isSelected: Boolean): Boolean =
-    isCurrentPeriod && !isSelected
-
-/**
  * MONTH_PICKER 한 칸의 색상 우선순위: 선택 > 실제 현재 월 > 현재 연도 소속 월(다음 해 칸은
  * 제외) > 다음 해(연한 구분) > 일반. 다음 해 버퍼 칸이 우연히 오늘의 달과 겹치는 경우(예:
  * pickerYear가 작년이라 다음 해 1~4월 칸에 오늘이 있을 때)에도 "실제 현재 월"이 "다음 해라 연하게"
@@ -531,25 +528,11 @@ private fun VisitCalendarPickerTodayReturnLink(label: String, onReturnToToday: (
 // InkSecondary를 더 낮은 alpha로 재사용한다(장식선과 같은 방식).
 private val VisitCalendarAdjacentPeriodColor = InkSecondary.copy(alpha = 0.4f)
 
-// "지금 여기"라는 조용한 위치 안내일 뿐 성취가 아니므로, 선택 강조(InkPrimary)보다 훨씬
-// 연한 alpha만 쓴다. 새 색을 만들지 않고 기존 InkSecondary를 한 번 더 낮춰 재사용한다.
-private val VisitCalendarCurrentPeriodMarkerColor = InkSecondary.copy(alpha = 0.16f)
-private val VisitCalendarCurrentPeriodMarkerSize = 26.dp
-
-// 연한 원(marker)은 "정확한 위치", 색상은 "현재 연도에 속한 시간대"라는 다른 의미를 맡는다.
+// 111일차: 연도/월 picker의 현재 원은 제거하고 잉크 색만 유지한다.
 // 실제 현재 월/연도에는 방문일 marker와 같은 계열(VisitFillColorToday, "오늘" 테마)을 그대로
 // 재사용해 또렷하게, MONTH_PICKER에서 "올해 전체"를 은근하게 알릴 때는 같은 색을 훨씬 낮은
 // alpha로만 써서 실제 현재 월보다 한 단계 약하게 만든다. 새 색상 팔레트를 추가하지 않는다.
 private val VisitCalendarCurrentYearMonthTintColor = VisitFillColorToday.copy(alpha = 0.5f)
-
-@Composable
-private fun VisitCalendarCurrentPeriodMarker() {
-    Box(
-        modifier = Modifier
-            .size(VisitCalendarCurrentPeriodMarkerSize)
-            .background(VisitCalendarCurrentPeriodMarkerColor, CircleShape)
-    )
-}
 
 /**
  * 다른 달에서 오늘로 돌아왔을 때 딱 한 번 울리는 가벼운 "톡". 인트로 방문 소인이 종이에
@@ -620,85 +603,61 @@ private fun rememberVisitCalendarPickerSwipeModifier(
     }
 }
 
-// 월/연도 고르기 칸마다 글자 뒤에 달력 종이의 자투리 한 조각. 새 자산 없이
-// 이미 불러온 visit_calendar_paper를 칸마다 다른 하단 위치에서 잘라 써 종이결이 복붙되지 않고,
-// 가장자리는 달력 장과 같은 손으로 자른 윤곽·같은 아주 옅은 접촉 그림자를 칸마다 다른 seed로 쓴다.
-// 칸 크기·글자·선택 표시·현재 표시 동그라미·터치는 그대로다. 값은 실기기 QA로 다듬는 미감 값이다.
-private val VISIT_CALENDAR_PICKER_SCRAP_INSET_X = 4.dp
-private val VISIT_CALENDAR_PICKER_SCRAP_INSET_Y = 4.dp
-private const val VISIT_CALENDAR_PICKER_SCRAP_SEED = 96_600
-// 자투리는 종이 아래쪽 이 비율부터 끝까지에서만 고른다.
-internal const val VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP = 0.55f
-
-internal fun visitCalendarMonthPickerScrapSeed(year: Int, month: Int): Int =
-    VISIT_CALENDAR_PICKER_SCRAP_SEED + year * 13 + month
-
-internal fun visitCalendarYearPickerScrapSeed(year: Int): Int = VISIT_CALENDAR_PICKER_SCRAP_SEED + 50_000 + year
-
-/**
- * [paperWidth]×[paperHeight] 종이에서 [cropWidth]×[cropHeight] 자투리를 잘라 낼 왼쪽 위(px).
- * 종이 하단([VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP]~끝) 안에서 seed마다 다르게 고르고, 같은 seed면 같다.
- */
-internal fun visitCalendarPickerScrapCrop(
-    seed: Int,
-    paperWidth: Int,
-    paperHeight: Int,
-    cropWidth: Int,
-    cropHeight: Int
-): IntOffset {
-    val random = kotlin.random.Random(seed)
-    val maxX = (paperWidth - cropWidth).coerceAtLeast(0)
-    val top = (paperHeight * VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP).toInt()
-    val maxY = (paperHeight - cropHeight).coerceAtLeast(0)
-    val minY = top.coerceAtMost(maxY)
-    return IntOffset(
-        if (maxX == 0) 0 else random.nextInt(maxX + 1),
-        if (maxY == minY) minY else minY + random.nextInt(maxY - minY + 1)
+// 111일차: 승인된 봉투 한 장을 연도/월 picker가 공유한다. 숫자·선택·현재 색은 코드로 유지해.
+// 64×40dp 터치 칸 안에 기존처럼 사방 4dp 여백, 숫자 중심은 기본 글꼴 배율에서 y≈13dp.
+private val VISIT_CALENDAR_PICKER_ENVELOPE_INSET = 4.dp
+private val VISIT_CALENDAR_PICKER_NUMBER_TOP = 6.dp
+private val VisitCalendarSelectedEnvelopeFilter by lazy {
+    ColorFilter.colorMatrix(
+        ColorMatrix(floatArrayOf(
+            0.94f, 0f, 0f, 0f, 0f,
+            0f, 0.94f, 0f, 0f, 0f,
+            0f, 0f, 0.94f, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f
+        ))
     )
 }
 
-/** 칸 뒤에 [visitCalendarPickerScrapCrop] 자리의 종이 자투리를 손으로 자른 윤곽으로 깐다. */
-private fun Modifier.visitCalendarPickerPaperScrap(paper: ImageBitmap, seed: Int, gridWidthCells: Int = 4): Modifier =
+/** 남은 칸 안에 원본 전체를 Fit. 작은 화면에서도 봉투 비율·투명 여백을 보존한다. */
+internal fun visitCalendarPickerEnvelopeSize(
+    availableWidth: Int,
+    availableHeight: Int,
+    imageWidth: Int,
+    imageHeight: Int
+): IntSize {
+    if (availableWidth <= 0 || availableHeight <= 0 || imageWidth <= 0 || imageHeight <= 0) {
+        return IntSize.Zero
+    }
+    val scale = minOf(availableWidth.toFloat() / imageWidth, availableHeight.toFloat() / imageHeight)
+    return IntSize(
+        (imageWidth * scale).roundToInt().coerceIn(1, availableWidth),
+        (imageHeight * scale).roundToInt().coerceIn(1, availableHeight)
+    )
+}
+
+private fun Modifier.visitCalendarPickerEnvelope(envelope: ImageBitmap, selected: Boolean): Modifier =
     drawWithCache {
-        val insetX = VISIT_CALENDAR_PICKER_SCRAP_INSET_X.toPx()
-        val insetY = VISIT_CALENDAR_PICKER_SCRAP_INSET_Y.toPx()
-        val pieceWidth = (size.width - insetX * 2).coerceAtLeast(1f)
-        val pieceHeight = (size.height - insetY * 2).coerceAtLeast(1f)
-        // 종이결 크기를 달력 장과 맞춘다 — 종이 한 장의 폭이 grid 한 줄 폭에 놓이는 배율.
-        val scale = size.width * gridWidthCells / paper.width
-        val crop = visitCalendarPickerScrapCrop(
-            seed = seed,
-            paperWidth = paper.width,
-            paperHeight = paper.height,
-            cropWidth = (pieceWidth / scale).toInt().coerceAtLeast(1),
-            cropHeight = (pieceHeight / scale).toInt().coerceAtLeast(1)
+        val inset = VISIT_CALENDAR_PICKER_ENVELOPE_INSET.toPx()
+        val target = visitCalendarPickerEnvelopeSize(
+            availableWidth = (size.width - inset * 2).roundToInt(),
+            availableHeight = (size.height - inset * 2).roundToInt(),
+            imageWidth = envelope.width,
+            imageHeight = envelope.height
         )
-        val brush = ShaderBrush(
-            ImageShader(paper).apply {
-                setLocalMatrix(
-                    android.graphics.Matrix().apply {
-                        setTranslate(-crop.x.toFloat(), -crop.y.toFloat())
-                        postScale(scale, scale)
-                        postTranslate(insetX, insetY)
-                    }
+        val offset = IntOffset(
+            ((size.width - target.width) / 2).roundToInt(),
+            ((size.height - target.height) / 2).roundToInt()
+        )
+        onDrawBehind {
+            if (target.width > 0 && target.height > 0) {
+                drawImage(
+                    image = envelope,
+                    dstOffset = offset,
+                    dstSize = target,
+                    colorFilter = if (selected) VisitCalendarSelectedEnvelopeFilter else null,
+                    filterQuality = FilterQuality.High
                 )
             }
-        )
-        val outline = Path().apply {
-            visitCalendarPaperEdgeOutline(pieceWidth / density, pieceHeight / density, seed).forEachIndexed { index, point ->
-                val x = insetX + point.x * density
-                val y = insetY + point.y * density
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
-            }
-            close()
-        }
-        onDrawBehind {
-            VISIT_CALENDAR_PAPER_SHADOW_LAYERS.forEach { (dx, dy, alpha) ->
-                translate(left = dx * density, top = dy * density) {
-                    drawPath(outline, color = VisitCalendarPaperShadowColor, alpha = alpha)
-                }
-            }
-            drawPath(outline, brush = brush)
         }
     }
 
@@ -711,7 +670,7 @@ private fun VisitCalendarMonthPicker(
     pickerYear: Int,
     displayedMonth: YearMonth,
     today: YearMonth,
-    paper: ImageBitmap,
+    envelope: ImageBitmap,
     onMonthSelected: (year: Int, month: Int) -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
@@ -731,13 +690,10 @@ private fun VisitCalendarMonthPicker(
                         modifier = Modifier
                             .weight(1f)
                             .height(40.dp)
-                            .visitCalendarPickerPaperScrap(paper, visitCalendarMonthPickerScrapSeed(year, month))
+                            .visitCalendarPickerEnvelope(envelope, isHighlighted)
                             .clickable(onClick = { onMonthSelected(year, month) }),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (visitCalendarShowsCurrentMarker(isCurrent, isHighlighted)) {
-                            VisitCalendarCurrentPeriodMarker()
-                        }
                         Text(
                             text = month.toString(),
                             textAlign = TextAlign.Center,
@@ -749,7 +705,9 @@ private fun VisitCalendarMonthPicker(
                                 VisitCalendarMonthCellEmphasis.NORMAL -> InkSecondary
                             },
                             fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            lineHeight = 14.sp,
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = VISIT_CALENDAR_PICKER_NUMBER_TOP)
                         )
                     }
                 }
@@ -767,7 +725,7 @@ private fun VisitCalendarYearPicker(
     decadeStart: Int,
     highlightYear: Int?,
     today: YearMonth,
-    paper: ImageBitmap,
+    envelope: ImageBitmap,
     onYearSelected: (Int) -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
@@ -786,13 +744,10 @@ private fun VisitCalendarYearPicker(
                         modifier = Modifier
                             .weight(1f)
                             .height(40.dp)
-                            .visitCalendarPickerPaperScrap(paper, visitCalendarYearPickerScrapSeed(year))
+                            .visitCalendarPickerEnvelope(envelope, isHighlighted)
                             .clickable(onClick = { onYearSelected(year) }),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (visitCalendarShowsCurrentMarker(isCurrent, isHighlighted)) {
-                            VisitCalendarCurrentPeriodMarker()
-                        }
                         Text(
                             text = year.toString(),
                             textAlign = TextAlign.Center,
@@ -803,7 +758,9 @@ private fun VisitCalendarYearPicker(
                                 VisitCalendarYearCellEmphasis.OUT_OF_DECADE -> VisitCalendarAdjacentPeriodColor
                             },
                             fontWeight = if (isHighlighted) FontWeight.Medium else FontWeight.Normal,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            lineHeight = 14.sp,
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = VISIT_CALENDAR_PICKER_NUMBER_TOP)
                         )
                     }
                 }
@@ -1717,6 +1674,8 @@ internal fun MonthlyVisitCalendar(
     // 달력 종이는 여기서 한 번만 불러와 모든 장이 같은 bitmap을 나눠 쓴다. 월 이동
     // AnimatedContent 안에서 불러오면 달이 바뀔 때마다 새 장이 다시 decode한다.
     val calendarPaper = ImageBitmap.imageResource(R.drawable.visit_calendar_paper)
+    // 단계·월 전환 바깥에서 한 번 decode해 두 picker의 모든 칸이 같은 bitmap을 써.
+    val pickerEnvelope = ImageBitmap.imageResource(R.drawable.visit_calendar_envelope_base)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         AnimatedContent(
@@ -1820,7 +1779,7 @@ internal fun MonthlyVisitCalendar(
                             onStepDown = onStepDown
                         )
                         // 지금 보는 4×4 창에 오늘이 없으면(다른 연도를 탐색 중이면) 헤더 아래
-                        // 조용한 복귀 링크를 보여준다 — 오늘이 이미 보이면(칸 안 marker로 충분)
+                        // 조용한 복귀 링크를 보여준다 — 오늘이 이미 보이면(칸 안 청록 숫자로 충분)
                         // 굳이 중복 표시하지 않는다.
                         if (!isCurrentMonthVisibleInMonthPicker(pickerYear, todayYearMonth)) {
                             VisitCalendarPickerTodayReturnLink(
@@ -1840,7 +1799,7 @@ internal fun MonthlyVisitCalendar(
                                 pickerYear = year,
                                 displayedMonth = displayedMonth,
                                 today = todayYearMonth,
-                                paper = calendarPaper,
+                                envelope = pickerEnvelope,
                                 onMonthSelected = { selectedYear, month ->
                                     displayedMonth = YearMonth.of(selectedYear, month)
                                     onNavLevelChange(VisitCalendarNavLevel.CALENDAR)
@@ -1877,7 +1836,7 @@ internal fun MonthlyVisitCalendar(
                                 decadeStart = start,
                                 highlightYear = highlightedYearFor(start, displayedMonth),
                                 today = todayYearMonth,
-                                paper = calendarPaper,
+                                envelope = pickerEnvelope,
                                 onYearSelected = { year ->
                                     pickerYear = year
                                     onNavLevelChange(VisitCalendarNavLevel.MONTH_PICKER)

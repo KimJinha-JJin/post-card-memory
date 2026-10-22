@@ -202,29 +202,33 @@ class VisitCalendarPaperPageStructureTest {
     }
 
     @Test
-    fun pickerCellsSitOnCalendarPaperScrapsWithoutBecomingCards() {
-        listOf(
-            "private fun VisitCalendarMonthPicker(" to ".visitCalendarPickerPaperScrap(paper, visitCalendarMonthPickerScrapSeed(year, month))",
-            "private fun VisitCalendarYearPicker(" to ".visitCalendarPickerPaperScrap(paper, visitCalendarYearPickerScrapSeed(year))"
-        ).forEach { (picker, scrap) ->
+    fun pickerCellsShareOneEnvelopeAndKeepTheirInteractionAndInkRules() {
+        val load = calendarBody.indexOf("R.drawable.visit_calendar_envelope_base")
+        assertEquals(1, Regex("""R\.drawable\.visit_calendar_envelope_base""").findAll(sourceText).count())
+        assertTrue("봉투는 단계 전환 바깥에서 한 번만 decode", load >= 0 && load < calendarBody.indexOf("targetState = navLevel"))
+        listOf("private fun VisitCalendarMonthPicker(", "private fun VisitCalendarYearPicker(").forEach { picker ->
             val body = functionBody(picker)
             val height = body.indexOf(".height(40.dp)")
-            val paper = body.indexOf(scrap)
+            val image = body.indexOf(".visitCalendarPickerEnvelope(envelope, isHighlighted)")
             val click = body.indexOf(".clickable(")
-            assertTrue("$picker 칸 높이 40dp 그대로", height >= 0)
-            assertTrue("$picker 칸마다 다른 seed의 종이 자투리를 글자 뒤에 깔아야 함", paper > height && click > paper)
-            assertTrue("$picker 현재 표시 동그라미 유지", body.contains("VisitCalendarCurrentPeriodMarker()"))
-            assertFalse("$picker 카드·단색 배경·테두리 금지",
-                listOf(".background(", ".border(", "Card(", ".shadow(").any { body.contains(it) })
+            assertTrue("4열 배열과 동일한 터치 칸 유지", body.contains(".chunked(4)") && body.contains(".weight(1f)") && height >= 0)
+            assertTrue("봉투 뒤에도 전체 칸 클릭 유지", image > height && click > image)
+            assertTrue("인장형 숫자는 상단, 기존 앱 글꼴 유지", body.contains("Alignment.TopCenter") && body.contains("VISIT_CALENDAR_PICKER_NUMBER_TOP"))
+            assertFalse("기본 글꼴을 새 서체로 바꾸지 않음", body.contains("fontFamily"))
+            assertTrue("기존 선택 글자와 굵기 유지", body.contains("-> InkPrimary") && body.contains("FontWeight.Medium else FontWeight.Normal"))
+            assertTrue("현재 시점 청록 유지", body.contains("-> VisitFillColorToday"))
+            assertFalse("연도/월 현재 숫자 뒤 원 제거", body.contains("CurrentPeriodMarker") || body.contains("ShowsCurrentMarker"))
+            assertFalse("칸마다 decode하지 않음", body.contains("imageResource"))
+            assertFalse("숫자 뒤 별도 카드·판·테두리 금지", listOf(".background(", ".border(", "Card(", ".shadow(").any { body.contains(it) })
         }
-        val scrap = functionBody("private fun Modifier.visitCalendarPickerPaperScrap(")
-        assertTrue("달력 장과 같은 종이 bitmap을 잘라 써야 함", scrap.contains("ImageShader(paper)"))
-        assertTrue("달력 장과 같은 손으로 자른 윤곽", scrap.contains("visitCalendarPaperEdgeOutline("))
-        assertFalse("새 자산을 불러오면 안 됨", scrap.contains("R.drawable"))
+        val envelope = functionBody("private fun Modifier.visitCalendarPickerEnvelope(")
+        assertTrue("bitmap 재생성 없이 공유 자산을 그림", envelope.contains("drawImage(") && envelope.contains("image = envelope"))
+        assertTrue("원본 비율과 투명 여백을 보존해 Fit", envelope.contains("visitCalendarPickerEnvelopeSize(") && envelope.contains("dstSize = target"))
+        assertTrue("선택 톤만 바꾸고 alpha는 유지", envelope.contains("if (selected) VisitCalendarSelectedEnvelopeFilter else null"))
+        assertFalse("추가 bitmap allocation과 셀별 decode 금지", envelope.contains("ImageBitmap(") || envelope.contains("imageResource"))
         listOf("VisitCalendarMonthPicker(", "VisitCalendarYearPicker(").forEach { call ->
-            val at = calendarBody.indexOf("$call\n")
-            assertTrue("$call 은 이미 불러온 달력 종이를 받아야 함",
-                at >= 0 && calendarBody.substring(at, minOf(at + 300, calendarBody.length)).contains("paper = calendarPaper"))
+            val at = calendarBody.indexOf(call + "\n")
+            assertTrue("두 picker가 같은 봉투를 받음", at >= 0 && calendarBody.substring(at, minOf(at + 300, calendarBody.length)).contains("envelope = pickerEnvelope"))
         }
     }
 

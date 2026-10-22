@@ -1,3 +1,60 @@
+# HANDOFF — 111일차 최종: 봉투형 달력 적용 · 스티커 통 A안 · 실기기 QA 완료
+
+확인일: 2026-10-22. 담당 Codex, 수동 표준 모드. **구현·로컬 검증·SM-S936N 데이터 보존 설치·사용자 QA 완료.** 이번 최종 작업지시로 HANDOFF 추가 갱신, 승인 파일 commit·push·해당 GitHub Actions CI 확인까지 승인됐어. 이 절은 마감 직전 검증 기록이며 실제 commit hash·원격 동기화·CI run 결과는 Git/Actions와 최종 완료보고로 확정해. 성공 기록만 추가하는 별도 문서 커밋은 만들지 않아.
+
+## 앱의 주요 변경
+
+- 방문 달력 연도/월 선택에 **공통 봉투 PNG 한 장**을 재사용해. `drawable-nodpi/visit_calendar_envelope_base.png`, **252×144px RGBA / 35,078B**야. 승인 목업의 원본1659×948을 전체 비율·원점·투명 여백 그대로 줄이고 분리된 바깥 잔점8px만 제거했어. 숫자를 굽거나 새 그림을 생성하지 않았어.
+- 기존 앱 글꼴·연도12sp/월13sp·상단 인장형 배치·청록 현재·진한 선택·선택 우선순위·4×4 배열·40dp 셀과 터치를 유지해. 선택창 현재 숫자 뒤 원만 제거했고 봉투 여닫기 애니메이션은 추가하지 않았어.
+- 실제 날짜 달력의 오늘 펜 원·민트 출석·방문 기록·날짜 계산·장 넘김·기간 선택을 유지해. **Room schema19·Migration·저장 구조·dependency/Gradle 변경 없음.**
+- 스티커 통은 **A안: 닫힌/열린 모두 기존 코드 파우치** 유지야. 신규 파우치 PNG는0장. 110일차 보관·선택·확인 후 삭제·다른 엽서 재사용 기능을 유지했고 관련 production은 수정하지 않았어. 기존 조각/엽서 삭제는 이번 기기 시험에서 제외했어.
+- 봉투 decode 추정은 ARGB_8888 **145,152B,약0.138MiB 한 장**. 단계/월 전환 바깥에서 불러와 연도/월 모든 칸이 공유해. 칸별 decode·중간 bitmap 재생성 없음. GPU/실제 프로세스 증가는 미측정이야.
+
+## 검증 결과
+
+- **로컬 자동검증: 실행·통과.** 관련 JVM99건, 전체 **108 XML / 992 tests, 실패·오류·skip0**. `assembleDebug`와 `assembleDebugAndroidTest` 성공. instrumentation21건/8파일은 **컴파일만** 했고 실제 실행0회야. TEST-COVERAGE-MAP 갱신 완료. JVM 소스992개/107파일+helper1개, 구조 검사194개야.
+- **검증 대상 보존:** 달력 코드1개·테스트2개·봉투PNG1개는 검증 뒤 변경하지 않았어. 이번 마감은 문서 추가·정합화라 전체 빌드를 반복하지 않아. diff/staged diff·자산 규격/중복·테스트 수·보호 파일을 마감 전에 확인해.
+- **환경:** Gradle9.4.1/JBR21 사용자 환경에서 성공. Wrapper 실행 파일 부재와 격리 환경의 기존 foojay 해석 실패는 설정 변경 없이 권한 실행으로 해소했어. 전일990건과 오늘992건은 별도 기록이야.
+- **설치 성공:** SM-S936N(serial R3KYB00HAYY,1080×2340/450dpi,font_scale0.9,SDK37). 기존/신규 APK 인증서 일치 확인 후 `adb -s R3KYB00HAYY install -r`만 사용했어. lastUpdateTime은2026-10-22 20:26:36, firstInstallTime은2026-10-05 14:19:35 유지, UID10525 유지야. uninstall/pm clear/기기 APK·다운로드 정리 없음.
+- **설치 직전/직후 보존:** 앱을 열기 전 `files/databases/shared_prefs`의 **74개 파일,30,771,932B** 경로·크기·mtime 일치, **DB폴더5개 파일 SHA-256 모두 일치**야. 모든 사진 내용의 전체 hash 검사는 아니야. 비교 원본은 PC Temp에만 두고 저장소에는 사용자 파일 목록을 넣지 않았어.
+- **사용자 실기기 QA 정상 확인:** 연도/월 봉투·숫자·기존 글꼴·청록/선택·원 제거·4×4·이동·실제 날짜 표시가 모두 정상이야. 통 목록·원본/누끼·선택/해제·월/연도 선택 중 보관함 진입/복귀·이전 상태·반복 복귀·흔들림도 모두 정상 확인받았어.
+- **새 QA 엽서 재사용:** 사용자가 새 QA용 엽서에서만 꺼내기·이동·크기·회전·저장 후 재진입을 정상 확인했어. 기존 조각/엽서를 삭제하지 않았고, 새 QA 엽서 저장은 사용자가 승인 범위에서 직접 한 정상 데이터 변경이야.
+- **실행 로그:** PID13246와 MainActivity 실행 확인.20:25:18~20:33:39 관찰의 crash buffer/앱 PID 로그에서 FATAL·ANR·OOM·AndroidRuntime·Exception/Error 미발견. QA 중 추가 production 수정 없음.
+- **GitHub CI:** 이번 승인 commit의 push로 발생하는 Android CI를 확인해. 현 workflow는 JVM·debug APK·instrumentation APK **컴파일**이며 실기기 계측 실행이 아니야. 최종 결과는 해당 SHA의 Actions run과 완료보고에 남겨. 별도 수동 dispatch/중복 재실행은 하지 않아.
+
+## 마감 범위와 남은 과제
+
+- 비교/시작 기준은 `feature/photo-sticker`, HEAD `4b865dfe55fb787e12625fdfb23ecee815fdc13c`. fetch 후 local/origin0/0 확인. 정상111일차 구현·테스트·자산·문서·목업을 명시 경로로 stage해. 보호 설정/로그/기존 PNG·기존 보호 파우치 목업은 제외해.
+- 현재 근거: [달력 구현·실기기 QA](DAY-111-CALENDAR-AUDIT.md#device-qa), [파우치 조사·A안 판단](DAY-111-STICKER-POUCH-ASSET-PLAN.md), [자산 지도](IMAGE-ASSET-MAP.md), [테스트 지도](TEST-COVERAGE-MAP.md), [봉투 목업](mockups/visit-calendar-envelope-mockup.html), [111일차 파우치 비교](mockups/sticker-pouch-comparison-day111.html).
+- **미검증:** 다른 기기 및 큰 글꼴, 장시간 메모리/GPU 캐시, 저장·복사 실패 및 취소 조건의 실제 기기 재현. 원본 사진 전체 복사와 다른 엽서 재사용 시 추가 복사의 저장공간 비용은 그대로야.
+- **후속 과제(이번 마감 포함 아님): 스티커 통 60개 보관 시 실제 저장공간 실측, 원본 사진 복사 비용 확인 후 이미지 압축/축소 여부 결정.** 60개 파일 채우기·저장 방식·상한·Room 변경은 하지 않아. 파우치 PNG 교체도 승인되지 않았어.
+
+아래 기존 HANDOFF 원문은 삭제·덮어쓰기 없이 보존했어. 아래111일차 조사 단계의 '미적용/승인 대기/QA 대기'는 당시 이력이야. 현재 상태는 위 최종 기록과 실제 Git/코드가 기준이야.
+
+---
+
+# HANDOFF — 111일차: 파우치 자산 계획 · 달력 구조 감사와 봉투 비교 목업
+
+확인일: 2026-10-22. 담당 Codex, 수동 표준 모드. **앱은 바꾸지 않았고 조사·문서·독립 HTML 목업만 작성했어. 이미지 적용과 프로덕션 UI 수정은 사용자 승인 대기야. 111일차 전체 완료나 실기기 QA 완료는 아니야.**
+
+- **시작 기준:** `feature/photo-sticker`, HEAD `4b865dfe55fb787e12625fdfb23ecee815fdc13c`, 로컬 origin 추적 ref 대비 0/0, tracked/staged clean. 전일 지시서의 `86b0b3f` 뒤에는 HANDOFF/기존 목업 보존 커밋만 있었고 사용자가 `4b865df`를 기준으로 인정했어. 최신 원격 직접 조회는 네트워크 실패라 미확인. Git 전역 ignore 접근 경고도 있었고 설정은 변경하지 않았어.
+- **이번 직접 지시:** 단순 HEAD 차이·설명 가능한 문서 변경은 자동 STOP하지 않고 실제 데이터·보호 파일·미승인 수정 위험으로 판단해. 기존 승인 안의 읽기 전용 조사·계획과 독립 달력 HTML은 추가 진행 승인을 묻지 않아. 파우치 이미지 적용/프로덕션 달력 적용/Git 마감 승인은 각각 별도야. 이 기준으로 1차 이미지 적용 대기와 독립적인 2차 감사·목업을 진행했어.
+- **규칙 확인:** AGENTS/CLAUDE, canonical workflow의 Codex 실행·UI/UX·이미지·공통 마감, IMAGE-ASSET-STANDARD/MAP, DECISIONS, 관련 test와 CI YAML을 읽었어. canonical `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow`와 현재 Codex 캐시의 전체 15개 파일은 해시 일치야. 아래 과거 '설치 차이' 기록과 구분해. 단계 추적 전용 도구는 없어서 대화·문서에 진행 상태를 기록했어.
+- **1차 조사 결과:** [스티커 통 구조와 자산 계획](DAY-111-STICKER-POUCH-ASSET-PLAN.md). 파우치는 132×88dp, 뒷판→30dp 조각 최대 3개→앞판→앱 글자 구조. 닫힌 파우치용 PNG 2장(각 594×396px RGBA nodpi)을 권장했어. 3x 밀도 가정×1.5 해상도 여유 산정이며 현재 기기 밀도를 잰 값이 아니야. 원점·전체 캔버스·입구/중앙 홈 좌표를 보존하고 개별 alpha trim 금지. 독립 제작 프롬프트 2개를 문서에 완성했어. 자산 생성·추가·리사이즈·적용은 하지 않았어.
+  - 보관함 상단 90% 크기 파우치는 `open=true`라 외곽이 달라. 최소안은 닫힌 자산 2장만 바꾸고 보관함 상단 코드 그림은 유지하는 것이며 사용자 검토 대상이야. 열린 파우치 자산·큰 sheet 자산을 자동으로 추가하지 않아.
+  - 원본 전체 decode 두 장은 약 1.79MiB, 현재 3x 크기 baking 두 장보다 약1MiB 증가 가능. 실제 RAM/APK·GPU 비용은 미측정. 통의 원본 사진 복사·재사용 추가 복사·60개 상한·실제 저장공간 미측정 위험은 그대로야.
+  - outgoing 달력 파우치에는 `!showStickerStash`가 직접 전달되지 않아 보관함 전환 약170ms 동안 흔들림이 남을 가능성이 있어. 전환 종료 뒤 보관함 조각은 정적. 수정하지 않았고 실제 감각은 미검증이야.
+- **2차 감사·목업:** [방문 달력 감사](DAY-111-CALENDAR-AUDIT.md), [독립 HTML 비교](mockups/visit-calendar-envelope-mockup.html). 연도는 decade 앞2+10+뒤4년, 월은 해당 연도1~12+다음 해1~4월의 4×4 구조야. 왼쪽 현재 자투리/오른쪽 봉투를 연도·월 각각 같은304px 폭으로 비교해. 셀40px 높이·연도12px/월13px·기존 선택과 현재 표시를 유지하고 숫자 뒤 별도 라벨을 만들지 않았어. 선택/오늘이 같거나 다른 경우와 좁은 공간280px 가정 비교가 있어. 실제 navigation/date/방문 저장 로직은 연결·복제하지 않았고 애니메이션 없음. 기존 `visit_calendar_paper.png`를 상대 경로로 읽어 새 PNG는 없어.
+  - `showStickerStash`와 `navLevel`은 별도 상태, `SaveableStateProvider`가 월·picker 연도를 보존해. 재열기 때만 CALENDAR/달력 장면으로 초기화하며 displayedMonth는 건드리지 않아. 직접 덮어쓰기 충돌은 발견 못 했지만 실제 runtime 복원 검증은 이번에 하지 않았어. 일반 remember인 방문 cache·보관함 선택 id의 재생성은 월 saveable 보존과 별개야.
+- **로컬 정적 검증: 실행·통과.** Node로 HTML script 구문, id중복 없음(12개), 내부 SVG 참조5개, 기존 이미지 경로1개, 정적 연도16/월16 샘플과 인접 범위, 문서 링크9개, 새 파일 공백 검사와 `git diff --check`. 이는 실제 브라우저 동작 검증이 아니야.
+- **브라우저 시각 검수: 실행 불가.** CUA inventory의 browser 목록은 비었고 iab 열기는 `Browser is not available: iab`로 실패했어. 실제 HTML 렌더링·키보드/탭 동작·좁은 화면 표시를 확인했다고 말하지 않아. HTML의 현재 모습은 코드 기반 근사이며 실기기 스크린샷이 아니야.
+- **앱 검증 상태:** JVM·debug APK·instrumentation 컴파일은 조사/문서/독립 목업만이라 불필요·미실행. 실사용 기기 instrumentation·실기기 QA는 미실행. 신규 GitHub Actions CI는 불필요·미실행. 기존 990건·CI success·실기기 승인은 아래110일차 기록일 뿐 이번 실행 결과가 아니야. 현재 YAML은 JVM·debug APK·androidTest 컴파일이며 실제 instrumentation 실행은 없어.
+- **테스트 영향:** production/test 무변경이라 TEST-COVERAGE-MAP은 갱신 불필요. 향후 적용 때 `StickerStashWiringStructureTest.pouchPaper_isBakedOnceInsteadOfRedrawnEveryFrame`와 `VisitCalendarPaperPageStructureTest.pickerCellsSitOnCalendarPaperScrapsWithoutBecomingCards`는 구현 문자열 고정 부분을 새 승인된 구조에 맞춰야 해. 매 프레임 재생성 방지·공유 종이·40dp·marker·터치 보호 의미는 유지해야 해. 지금은 테스트를 바꾸거나 실행하지 않았어.
+- **변경 파일:** 신규 `DAY-111-STICKER-POUCH-ASSET-PLAN.md`, `DAY-111-CALENDAR-AUDIT.md`, `mockups/visit-calendar-envelope-mockup.html`; 이 HANDOFF 앞에 현황 추가. production/test/Room(schema19)/PNG/설정/기존 목업 무변경. 보호 파일6종은 그대로, 기존 파우치 목업은 working blob과 HEAD blob 해시 일치 확인. stage·commit·push 없음.
+- **승인 대기·재개:** 사용자가 HTML을 브라우저로 검토하고 봉투 전면·숫자·상태 표시를 승인하면 달력 picker 배경 최소 변경을 진행할 수 있어. 별도로 파우치 2장 명세·적용 범위 승인과 실제 자산 제공이 필요해. 양쪽 승인 없이 production에 적용하지 않아. 기기 설치와 Git 마감도 별도 명시 승인 후 진행해.
+
+---
+
 # HANDOFF — 110일차: 스티커 통 1차 구현(사진 스티커 보관·재사용)
 
 확인일: 2026-10-21. 수동 표준 모드(110일차 구조 감사·목업 → 후속 작업지시서 "스티커 통 1차 구현" 승인), 담당 Claude Code. 내장 Task 도구 없음. 시작 HEAD `255c3b2`(전일 기록의 `f0fb6b2` 뒤 문서 정비 커밋, 선행 문서 변경은 이미 그 커밋에 포함), origin 0/0, tracked clean. 보호 untracked 6종 유지. 사용자가 오전 목업 사본 `docs/ai/mockups/sticker-pouch-mockup.html`을 직접 추가함(untracked, 손대지 않음).

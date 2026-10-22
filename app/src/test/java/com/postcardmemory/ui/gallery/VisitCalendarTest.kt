@@ -4,6 +4,9 @@ import com.postcardmemory.utils.millisUntilNextMidnight
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntSize
+import java.io.File
+import javax.imageio.ImageIO
 import com.postcardmemory.ui.detail.LABEL_STICKER_DARK_TEXT_ARGB
 import com.postcardmemory.ui.detail.LABEL_STICKER_LIGHT_TEXT_ARGB
 import com.postcardmemory.ui.detail.labelStickerTextColorArgbFor
@@ -183,11 +186,10 @@ class VisitCalendarTest {
         assertFalse(isCurrentYearCell(2027, today))
     }
 
-    @Test fun currentMarkerNeverStacksWithSelectionHighlightOnTheSameCell() {
-        assertTrue(visitCalendarShowsCurrentMarker(isCurrentPeriod = true, isSelected = false))
-        assertFalse(visitCalendarShowsCurrentMarker(isCurrentPeriod = true, isSelected = true))
-        assertFalse(visitCalendarShowsCurrentMarker(isCurrentPeriod = false, isSelected = false))
-        assertFalse(visitCalendarShowsCurrentMarker(isCurrentPeriod = false, isSelected = true))
+    @Test fun pickerEnvelopeFitsItsOriginalAspectInsideTheCell() {
+        assertEquals(IntSize(56, 32), visitCalendarPickerEnvelopeSize(56, 32, 252, 144))
+        assertEquals(IntSize(168, 96), visitCalendarPickerEnvelopeSize(168, 96, 252, 144))
+        assertEquals(IntSize(224, 128), visitCalendarPickerEnvelopeSize(224, 128, 252, 144))
     }
 
     // 77일차: MONTH_PICKER/YEAR_PICKER 공용 수직 swipe 방향 판정 — ▲/▼ 버튼과 같은 결과를 내야 한다.
@@ -627,32 +629,55 @@ class VisitCalendarTest {
         assertEquals(left.outline.map { Offset(20f - it.x, it.y) }, right.outline)
     }
 
-    @Test fun pickerPaperScrapsComeFromTheBottomOfThePaperAndStayInside() {
-        val seeds = (2020..2032).flatMap { year -> (1..12).map { visitCalendarMonthPickerScrapSeed(year, it) } } +
-            (1990..2060).map { visitCalendarYearPickerScrapSeed(it) }
-        seeds.forEach { seed ->
-            val crop = visitCalendarPickerScrapCrop(seed, 1122, 1402, 280, 130)
-            assertEquals(crop, visitCalendarPickerScrapCrop(seed, 1122, 1402, 280, 130))
-            assertTrue("$seed 가로 $crop", crop.x in 0..(1122 - 280))
-            assertTrue("$seed 하단 영역 $crop", crop.y in (1402 * VISIT_CALENDAR_PICKER_SCRAP_REGION_TOP).toInt()..(1402 - 130))
+    @Test fun pickerEnvelopeStaysInsideNarrowAndTinyCellsWithoutCropping() {
+        assertEquals(IntSize(50, 29), visitCalendarPickerEnvelopeSize(50, 32, 252, 144))
+        for (width in 1..70) for (height in 1..40) {
+            val fit = visitCalendarPickerEnvelopeSize(width, height, 252, 144)
+            assertTrue(fit.width in 1..width)
+            assertTrue(fit.height in 1..height)
+            // 정수 px 반올림으로 생기는 가로·세로 오차만 허용해.
+            assertTrue(kotlin.math.abs(fit.width / 252f - fit.height / 144f) <= 1f / 144f)
         }
-        // 종이보다 큰 자투리도 종이 밖을 가리키지 않는다.
-        assertEquals(0, visitCalendarPickerScrapCrop(1, 100, 100, 200, 200).x)
-        assertEquals(0, visitCalendarPickerScrapCrop(1, 100, 100, 200, 200).y)
     }
 
-    @Test fun pickerPaperScrapsAreNotTheSamePieceCopiedIntoEveryCell() {
-        val monthCells = monthPickerGridCells(2026).map { (year, month) -> visitCalendarMonthPickerScrapSeed(year, month) }
-        val yearCells = yearPickerGridYears(2020).map { visitCalendarYearPickerScrapSeed(it) }
-        listOf(monthCells, yearCells).forEach { seeds ->
-            assertEquals(16, seeds.toSet().size)
-            val crops = seeds.map { visitCalendarPickerScrapCrop(it, 1122, 1402, 280, 130) }
-            assertTrue("자투리 위치가 거의 다 달라야 함 ${crops.toSet().size}", crops.toSet().size >= 14)
-            assertNotEquals(
-                visitCalendarPaperEdgeOutline(70f, 32f, seeds[0]),
-                visitCalendarPaperEdgeOutline(70f, 32f, seeds[1])
-            )
+    @Test fun pickerEnvelopeDoesNotDrawForUnmeasuredBoundsOrInvalidSource() {
+        listOf(
+            intArrayOf(0, 32, 252, 144), intArrayOf(56, 0, 252, 144),
+            intArrayOf(-1, 32, 252, 144), intArrayOf(56, 32, 0, 144),
+            intArrayOf(56, 32, 252, -1)
+        ).forEach { values ->
+            assertEquals(IntSize.Zero, visitCalendarPickerEnvelopeSize(values[0], values[1], values[2], values[3]))
         }
+    }
+
+    private fun pickerEnvelopeAsset() = ImageIO.read(
+        listOf(
+            File("src/main/res/drawable-nodpi/visit_calendar_envelope_base.png"),
+            File("app/src/main/res/drawable-nodpi/visit_calendar_envelope_base.png")
+        ).first { it.isFile }
+    ) ?: error("봉투 PNG를 읽을 수 없음")
+
+    @Test fun pickerEnvelopeAssetHasRealAlphaAtTheApprovedDecodeBudget() {
+        val image = pickerEnvelopeAsset()
+        assertEquals(252, image.width)
+        assertEquals(144, image.height)
+        assertTrue(image.colorModel.hasAlpha())
+        assertEquals(145_152, image.width * image.height * 4)
+        assertTrue("숫자 뒤 종이 면이 사라지면 안 됨", image.getRGB(126, 40).ushr(24) >= 245)
+        assertTrue("중앙 종이 면이 사라지면 안 됨", image.getRGB(126, 72).ushr(24) >= 245)
+    }
+
+    @Test fun pickerEnvelopeAssetKeepsTransparentMarginsWithoutAnOpaqueRectangle() {
+        val image = pickerEnvelopeAsset()
+        var visible = 0
+        for (y in 0 until image.height) for (x in 0 until image.width) {
+            val alpha = image.getRGB(x, y).ushr(24)
+            if (x == 0 || y == 0 || x == image.width - 1 || y == image.height - 1) {
+                assertEquals("바깥 여백 ($x,$y)", 0, alpha)
+            }
+            if (alpha > 0) visible++
+        }
+        assertTrue("투명 캔버스만 남거나 흰 사각 배경이 생기면 안 됨", visible.toFloat() / (image.width * image.height) in 0.75f..0.95f)
     }
 
     @Test fun todayCircleIsNothingForAnUnmeasuredNumber() {
