@@ -71,6 +71,7 @@ import com.postcardmemory.ui.theme.InkPrimary
 import com.postcardmemory.ui.theme.InkSecondary
 import com.postcardmemory.ui.theme.PaperSurface
 import com.postcardmemory.utils.StashedPhotoSticker
+import com.postcardmemory.utils.StickerStashStorage
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -300,9 +301,13 @@ internal fun StickerStashPage(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = if (stickers.isEmpty()) "비어 있음" else "${stickers.size}조각",
+                text = "${stickers.size} / ${StickerStashStorage.MAX_STASHED_STICKERS}",
                 color = InkSecondary,
-                fontSize = 10.sp
+                fontSize = 10.sp,
+                modifier = Modifier.clearAndSetSemantics {
+                    contentDescription =
+                        "최대 ${StickerStashStorage.MAX_STASHED_STICKERS}개 중 ${stickers.size}개 보관 중"
+                }
             )
         }
 
