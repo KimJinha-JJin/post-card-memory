@@ -1,3 +1,16 @@
+# HANDOFF — 2026-10-23 후속: Claude Code Task 도구 부재 예외 규칙 정리 · 문서-only · 미커밋
+
+담당 Claude Code, 수동 표준 모드. 사용자가 Claude Code 전용 규칙에 한정한 최소 수정을 직접 지시했어. 이 세션에도 `TaskCreate/TaskUpdate/TaskList/TaskGet`은 제공되지 않아 진행 안내로 대체했어.
+
+- **Git 기준:** `feature/photo-sticker`, HEAD `375c97f`, origin과 동기. 기존 미추적 `.codex-config.candidate.toml`, `.kotlin/`, `drawable-nodpi/` PNG 3개는 건드리지 않았어.
+- **확인한 문제:** ① Task 사용 의무가 무조건형이고 예외는 문서 끝에만 있어 "Task 생성 뒤에만 Git·조사 시작" 절차와 충돌해 보였어 ② "텍스트 목록은 Task를 대신할 수 없다"가 도구 부재 시의 진행 안내 대체와 충돌했어 ③ 반복 호출·재검색·설정 변경 같은 복구 금지가 없었어 ④ "읽기 전용 조사까지 막지 않는다"가 구현·검증 계속 여부를 모호하게 했어.
+- **변경:** 저장소 `CLAUDE.md` 내장 Task 운영 절(도구 제공 시 사용 조건, 부재 시 1회 안내·복구 금지·진행 안내 대체·안전 작업 계속·기존 규칙 유지). 저장소 밖 canonical `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/references/claude-code-execution-rules.md`의 같은 의미 4곳(Git 저장소 아님). `AGENTS.md`, Codex 규칙, SKILL.md, 작업지시서 템플릿, 앱 코드·리소스는 미변경.
+- **설치 캐시:** 수정 전 canonical과 Codex 캐시 `0.1.0+codex.20260927080957` 15개 파일은 모두 같았어. 이제 `claude-code-execution-rules.md` 1개만 달라. 캐시는 승인 없이 덮어쓰지 않았어. 동기화는 별도 승인 후보야.
+- **검증:** 문서-only라 테스트·빌드·CI 불필요·미실행. diff 검토와 `git diff --check`만 수행. 실기기 QA 불필요(앱 영향 없음). TEST-COVERAGE-MAP 변경 없음.
+- **Git:** 사용자가 이 두 파일(`CLAUDE.md`, `docs/ai/HANDOFF.md`)의 commit·push와 해당 push CI 확인을 승인했어. 이 기록은 커밋 직전 상태이며 실제 SHA·원격 동기화·CI 결과는 Git/Actions와 완료보고가 기준이야. CI 성공 기록용 추가 문서 커밋은 만들지 않아. canonical 규칙 파일은 저장소 밖이라 Git 대상이 아니야.
+
+---
+
 # HANDOFF — 2026-10-23: 보관함 보관량 표시 · 구현/설치/사용자 QA 완료 · 승인된 Git 마감
 
 담당 Codex, 수동 표준 모드의 새 구현 작업. 사용자의 "Codex 실행 규칙 2차 검증" 지시로 보관량 UI와 로컬 검증을 승인받았어. 이후 사용자가 **112일차 2차 결과의 SM-S936N 데이터 보존 설치(`adb install -r`)와 앱 실행·보존 확인을 명시 승인**해서 아래 사전 확인 후 설치했어. **자동 기기 테스트는 SAFE instrumentation까지 포함해 금지됐고 실행하지 않았어.** 사용자 실기기 QA 정상 확인 뒤 별도 지시 **"커밋 푸시합시다"**로 이번 UI 파일·HANDOFF의 commit·push와 해당 push CI 확인을 승인받았어. 아래 111일차의 QA·설치·Git 마감 승인은 이번 작업의 승인 근거가 아니야.
