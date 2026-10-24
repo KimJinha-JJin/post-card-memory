@@ -1,3 +1,20 @@
+# HANDOFF — 113일차: CI JDK 보안 패치 · GitHub Actions 갱신 · CI 설정만 미커밋
+
+담당 Claude Code, 수동 표준 모드. 113일차는 방문 달력 폴리싱 대신 보안 정비를 했고, **114일차 방문 달력 페이지 컬은 이월 상태 그대로야.** 이 세션엔 Task 도구가 없어서 진행 안내로 대체했어.
+
+- **Git 기준:** `feature/photo-sticker`, HEAD `cbea6b9`(Security: upgrade Gradle to 9.8.2), origin과 동기. 기존 미추적 보호 파일 5개(`.codex-config.candidate.toml`, `.kotlin/`, `drawable-nodpi/` PNG 3개)는 건드리지 않았어. `cbea6b9`(사용자 수행: Node/npm 갱신, 로컬 JDK Zulu 17.0.21+9, Gradle 9.4.1→9.8.2)에 해당하는 HANDOFF 항목은 없었어. Git과 CI run `40094205123`(해당 SHA, success)만 확인했고, 그 밖의 로컬 결과(992건 통과 등)는 사용자 보고일 뿐 이 세션에서 다시 검증하지 않았어.
+- **확인한 문제(실측):** CI run `40094205123`이 runner 이미지(ubuntu-26.04, 10/12 빌드)에 미리 깔린 **Temurin 17.0.20+1**을 썼어(`check-latest: false`). 10/20 정기 보안 패치와 8월 17.0.20.1 긴급 패치가 모두 빠진 상태야. 경고는 `setup-java v4 deprecated`와 `Node.js 20 deprecated`(checkout@v4, setup-java@v4, setup-gradle@v4가 Node 24로 강제 실행)였어.
+- **eMudhra CVE-2026-91403(CVSS 9.1, javax.net.ssl):** OpenJDK 권고상 17.0.21도 영향권이야. 대응은 cacerts에서 `emsigneccrootcag3`, `comodoaaaca`를 제거하는 거야(openjdk.org/emudhra). **Temurin 17.0.21+9 Linux x64 사전 검사 통과:** 공식 SHA-256 `8b9b611d…8711`이 일치하고, Adoptium GPG 키 `3B04D753…65F8F04B`로 서명 Good이야. 압축본의 cacerts를 SHA-256 지문으로 대조한 결과 두 대상과 `emsignrootcag2`는 없고, `emsignrootcag1`(G1)만 남아 있어. G1은 공식 삭제 대상이 아니라서 사용자가 유지를 승인했어. 임의로 삭제하지 마.
+- **변경(미커밋):** `.github/workflows/android-ci.yml` 한 파일만 바꿨어. `actions/checkout@v4→v7.0.1`, `actions/setup-java@v4→v6` + `check-latest: true`(Java 17, temurin 유지), `gradle/actions/setup-gradle@v4→v6.4.0` + `cache-provider: basic`. trigger(push/pull_request), step 구성, `gradle-version: "9.8.2"`는 그대로야. 앱 코드, Room 19, Gradle·Kotlin·KSP·AGP는 미변경.
+- **setup-gradle 판단:** v6 기본값(enhanced)은 독점 `gradle-actions-caching`을 쓰고, 그 경우 Gradle 약관이 적용돼. v6.4.0 소스 `cache-service-loader.ts`를 확인해 보니 `basic`이면 vendored 모듈을 import하기 전에 `BasicCacheService`를 반환해(DISTRIBUTION.md: Basic = MIT). **enhanced 사용은 금지야.** v5.0.2는 lockfile 감사에서 critical 1 / high 7 / moderate 4가 나와서 채택하지 않았어(현재 v4는 critical 2).
+- **남은 Actions 의존성 취약점(npm audit, lockfile 기준):** setup-gradle v6.4.0에 high 2건(`undici` 6.28.1/7.29.1, `brace-expansion` 1.1.18/2.1.4/5.0.9)이 있어. source map으로 확인해 보니 **둘 다 실제 dist 번들(main/post)에 포함**돼 있고, 독점 caching 소스는 번들에 0개야. setup-java v6.1.0은 high 1(undici), checkout v7.0.1은 high 1(undici)이야. 공격하려면 GitHub/Gradle 인프라 응답을 조작하거나 TLS를 가로채야 해서 실제 위험은 낮다고 판단했지만, **미해결 잔여 위험**이야. 이 수치는 lockfile 기준이라 실행 경로 도달 여부까지는 분석하지 않았어.
+- **검증:** `git diff`(의도한 4줄 변경 + 2줄 추가), `git diff --check` 통과, 변경 tracked 파일 1개(+이 HANDOFF), 줄바꿈 LF 유지. 새 입력값(`check-latest`, `cache-provider`, `gradle-version`)이 각 버전 action.yml에 정의된 것도 확인했어. YAML 파서 검증은 로컬에 pyyaml이 없어서 **미실행**. CI 설정 변경이라 JVM·APK 로컬 재실행은 의미가 없어서 안 했어. **원격 CI 미실행(push 미승인).** 실기기 QA 불필요(앱 영향 없음). TEST-COVERAGE-MAP 변경 없음.
+- **push 후 확인할 완료 조건:** CI 로그에 실제 Temurin `17.0.21+9`(또는 그 이후 respin), setup-java deprecated 경고와 Node 20 경고 해소, `Basic Caching` 사용 메시지(Enhanced 메시지 없음), `testDebugUnitTest`·`assembleDebug`·`assembleDebugAndroidTest` 성공. 이게 확인돼야 CI JDK 보안 수정 완료로 인정해.
+- **별도 후속(미착수):** ① 로컬 Zulu 17.0.21+9의 cacerts에 `comodoaaaca`, `emsigneccrootcag3`, `emsignrootcag1`, `emsignrootcag2`가 남아 있어서 CVE-2026-91403 미대응이야(JBR 17.0.14도 같음). 자동 수정·삭제는 금지야. Azul 수정판을 기다리거나 안전한 정리 방법을 따로 제안할 것. JBR은 보존해. ② 남은 보안 감사 후보(읽기 전용): Kotlin 취약점 적용 조건, 직접·전이 의존성 CVE, Actions SHA 고정 등 공급망, Android 자동 백업 정책, 이미지 입력·파일 접근, 비밀정보 노출. 저장소에 `gradle/verification-metadata.xml`이 없다는 사실도 공급망 감사 입력이야.
+- **Git:** commit·push 미승인·미실행.
+
+---
+
 # HANDOFF — 2026-10-23 후속: Claude Code Task 도구 부재 예외 규칙 정리 · 문서-only · 미커밋
 
 담당 Claude Code, 수동 표준 모드. 사용자가 Claude Code 전용 규칙에 한정한 최소 수정을 직접 지시했어. 이 세션에도 `TaskCreate/TaskUpdate/TaskList/TaskGet`은 제공되지 않아 진행 안내로 대체했어.
