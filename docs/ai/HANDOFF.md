@@ -1,3 +1,30 @@
+# HANDOFF — 113일차 후속: 로컬 Zulu 판정 정정 · 잔여 보안 감사 결과 · 문서-only · 미커밋
+
+담당 Claude Code, 수동 표준 모드. 사용자가 이 HANDOFF 정정을 승인했어. 개인정보 노출(C1)은 조사와 수정안 제시까지만 승인됐고, 과거 Git 이력 재작성·force push·공개 범위 변경은 승인되지 않았어. **114일차 방문 달력 페이지 컬은 이월 상태 그대로야.**
+
+- **현재 Git 기준:** `feature/photo-sticker`, HEAD `2c9a9cb`(Security: patch CI JDK and update GitHub Actions), origin과 동기. 바로 아래 113일차 항목의 "Git: commit·push 미승인·미실행"은 커밋 직전 기록이야. 실제로는 사용자 승인 후 워크플로 파일과 HANDOFF 두 파일만 commit·push했어. 보호 미추적 파일 5개는 그대로야.
+- **CI 결과(run `40096838020`, SHA `2c9a9cb`, success):** setup-java가 `check-latest`로 원격에서 **Temurin 17.0.21+9**를 받았고 서명 검증도 통과했어(사전 지문 검사한 공식 tar.gz와 같은 URL. CI 로그에 SHA-256은 안 찍혀). `##[warning]` 0건이야. setup-java deprecated 경고와 Node 20 경고가 사라졌어. `Basic Caching` 메시지가 찍혔고 Enhanced 사용 메시지는 0건이야. `testDebugUnitTest`·`assembleDebug`·`assembleDebugAndroidTest` 모두 성공. CI 로그에 JVM 테스트 개수는 안 나와서 이번 run의 개수는 미확인이야.
+- **정정(로컬 Zulu, CVE-2026-91403):**
+  - *기존 판정:* 아래 113일차 항목 ①은 "cacerts에 eMudhra/Comodo 루트가 남아 있으니 미대응"이라고 했어.
+  - *정정 이유:* 판정 방법이 틀렸어. Azul은 루트 인증서를 지우지 않고, 유출된 중간 인증서를 `lib/security/blocked.certs`에 차단 등록하는 방식으로 대응했어(Azul 10/21 Out-of-Cycle 릴리스 노트). cacerts만 보는 방법은 Temurin·OpenJDK식 루트 제거 대응에만 맞아.
+  - *실측 근거:* 설치본은 `Zulu17.70+111-CA` / `17.0.21+9-LTS`로, 릴리스 노트가 수정판으로 명시한 17.70.111 (CA)와 같아. `blocked.certs`(10/21, SHA-256 해시 86개)의 파일 SHA-256 `101200f8…e5ae`가 Azul 공식 Windows 대응 파일 해시와 정확히 같아. 공개 목록 `impacted-intermediates.json`의 16개(중간 인증서 8개 + Sectigo 교차서명 8개) 지문을 기계 대조한 결과 누락 0이야. ECDSA s↔n−s 변형 지문 8개도 직접 계산해 보니 모두 들어 있어. Zulu 런타임에서 `UntrustedCertificates.isUntrusted`를 실행하니 **16/16 차단**이야(같은 검사에서 JBR 17.0.14와 Android Studio 내장 JBR 21.0.10은 0/16).
+  - *결론:* 로컬 Zulu는 **대응 완료**야. **Zulu 재설치나 인증서 수동 삭제는 필요 없어.** 86개 = OpenJDK 기본 38 + eMudhra 16 + 변형 8 + 출처 미확인 24(Azul 공식 파일 그대로라 차단을 강하게 하는 쪽이야. 내용은 미확인).
+  - *Gradle JDK:* 이 프로젝트의 Android Studio Gradle JDK는 `zulu-17`이야. JBR 17.0.14는 등록만 돼 있고 이 프로젝트에선 안 써. 보존해.
+- **잔여 보안 감사 결과(읽기 전용, 분류):**
+  - *확인된 취약점* V1: Kotlin Gradle plugin 2.3.10 CVE-2026-53914(GHSA-r937-wjx7-w2jp, 빌드 캐시 역직렬화, `AV:L/PR:H`). 수정은 2.4.20 이상이야. 원격 빌드 캐시를 안 쓰고 `org.gradle.caching`도 꺼져 있어서 앱 실행에는 영향 없어. **별도 과제로 분리**(Kotlin·KSP·AGP 임의 업데이트 금지 유지).
+  - *조건부 위험* C1: **GitHub 저장소가 public**이야. 추적 문서에 실기기 serial 14회(3개 파일)와 사용자 이름이 들어간 PC 절대경로 10회(4개 파일)가 있고, 과거 커밋 16개의 작성자가 개인 이메일이야(현재 설정은 noreply). 비밀번호·토큰 패턴은 추적 파일과 전체 이력에서 0건. 이후 사용자 승인으로 아래 "C1 개인정보 마스킹" 내용을 적용했어. 이력 재작성은 승인되지 않았어. C2: Actions npm high 취약점(setup-gradle v6.4.0의 undici·brace-expansion이 dist 번들에 포함, setup-java·checkout에 undici 각 1건). 기록 유지. C3: Actions를 태그로 지정함(`sha_pinning_required: false`). 토큰 기본 권한 read, secret 0개, `pull_request` trigger. C4: `allowBackup="true"` 유지 결정. dataExtractionRules가 없어서 클라우드 백업·기기 간 이전 대상이야. **실제 백업 가능 여부, 용량(클라우드 한도 25MB 대비 앱 데이터 약 36MB), 복원·기기 간 이전은 미검증이고 별도 과제**야. Manifest와 사용자 데이터는 수정하지 않았어. C5: 일부 사진 디코드가 원본 해상도라 큰 이미지에서 메모리 부족 가능성(안정성). C6: Android Studio 내장 JBR 21.0.10은 2026-01 패치 수준이고 eMudhra 차단 0/16. **Android Studio 업데이트 검토 항목**으로 유지.
+  - *추가 확인 필요* U1: 해석된 전이 의존성 목록과 CVE 대조는 별도 과제야(직접 의존성 16개와 플러그인은 OSV 기준 V1 외 0건). U2: ML Kit/datatransport가 `INTERNET` 권한을 병합하는데, 이용 통계 전송 범위는 확인 필요 상태 유지. U3: Zulu blocked.certs의 출처 미확인 24개.
+  - *보안 문제 아님:* 외부 공개 컴포넌트는 런처 Activity와 DUMP 권한으로 보호된 ProfileInstallReceiver뿐이야. FileProvider는 `exported=false`이고 공유 시 해당 파일에만 권한을 줘. Photo Picker·SAF 입력은 앱 내부로 복사해. 삭제 경로는 canonical 경로로 filesDir 안쪽인지 확인한 뒤에만 지워. 로그에 사용자 본문 없음. keystore·local.properties는 저장소에 없어. Gradle 저장소 3개 + `FAIL_ON_PROJECT_REPOS`. `verification-metadata.xml` 도입은 보류 권장(관리 비용 큼, 자동 생성 안 함).
+- **C1 개인정보 마스킹(사용자 승인, 적용):** 공개 저장소의 추적 문서 4개(`HANDOFF.md`, `DAY-111-CALENDAR-AUDIT.md`, `DAY-111-STICKER-POUCH-ASSET-PLAN.md`, `archive/HANDOFF-through-2026-09-12.md`)에서 식별정보 문자열만 바꿨어. 실기기 serial **14건**은 전부 `[승인된 실사용 기기 식별자 비공개]`로 완전 마스킹했어(끝자리도 남기지 않음, 모델명 SM-S936N은 유지). 사용자 이름이 들어간 PC 경로 **10건**은 `%USERPROFILE%`로 바꿨어. 수정 전후 추적 파일 전체를 검색한 결과 serial·부분 serial·사용자 경로·사용자명·개인 이메일 모두 0건이야. 판단·날짜·검증 결과·작업 흐름 문장은 그대로야. 실행 대상 기기는 AGENTS 5절대로 실행 시점의 `adb devices -l` 실측으로 확인해.
+  - *archive 예외:* AGENTS 11절의 archive 원문 보존 규칙은 사고·실패 기록의 삭제·축약을 금지해. 이번 archive 수정은 사용자가 명시 승인한 **개인정보 보호 예외**이고, 식별자 문자열 2건(serial 1, 경로 1)만 바꿨어. 기록의 의미는 바뀌지 않았어.
+  - *한계:* 과거 Git 커밋 이력에는 원래 값이 남아 있어. 이력 재작성·force push·공개 범위 변경은 승인되지 않아서 하지 않았어. 과거 커밋 16개의 작성자 이메일도 이력이라 그대로야. README·CI 감사 문서의 GitHub 저장소 URL에 들어 있는 계정명은 공개 저장소 주소 자체라서 이번 4개 파일 범위에서 제외했어.
+  - *재발 방지:* `AGENTS.md` 11절에 추적 문서 개인정보 금지 규칙 1개를 추가했어.
+- **변경:** `docs/ai/HANDOFF.md`(이 항목 추가, 아래 113일차 ① 정정 표시, 마스킹), C1 문서 3개(마스킹), `AGENTS.md`(규칙 1개). 앱 코드·리소스·Manifest·데이터·Gradle·워크플로는 미변경.
+- **검증:** 문서-only라 `git diff --check`와 diff 검토만 했어. 테스트·빌드·CI 불필요·미실행. 실기기 QA 불필요. TEST-COVERAGE-MAP 변경 없음.
+- **Git:** commit·push 미승인·미실행.
+
+---
+
 # HANDOFF — 113일차: CI JDK 보안 패치 · GitHub Actions 갱신 · CI 설정만 미커밋
 
 담당 Claude Code, 수동 표준 모드. 113일차는 방문 달력 폴리싱 대신 보안 정비를 했고, **114일차 방문 달력 페이지 컬은 이월 상태 그대로야.** 이 세션엔 Task 도구가 없어서 진행 안내로 대체했어.
@@ -10,7 +37,7 @@
 - **남은 Actions 의존성 취약점(npm audit, lockfile 기준):** setup-gradle v6.4.0에 high 2건(`undici` 6.28.1/7.29.1, `brace-expansion` 1.1.18/2.1.4/5.0.9)이 있어. source map으로 확인해 보니 **둘 다 실제 dist 번들(main/post)에 포함**돼 있고, 독점 caching 소스는 번들에 0개야. setup-java v6.1.0은 high 1(undici), checkout v7.0.1은 high 1(undici)이야. 공격하려면 GitHub/Gradle 인프라 응답을 조작하거나 TLS를 가로채야 해서 실제 위험은 낮다고 판단했지만, **미해결 잔여 위험**이야. 이 수치는 lockfile 기준이라 실행 경로 도달 여부까지는 분석하지 않았어.
 - **검증:** `git diff`(의도한 4줄 변경 + 2줄 추가), `git diff --check` 통과, 변경 tracked 파일 1개(+이 HANDOFF), 줄바꿈 LF 유지. 새 입력값(`check-latest`, `cache-provider`, `gradle-version`)이 각 버전 action.yml에 정의된 것도 확인했어. YAML 파서 검증은 로컬에 pyyaml이 없어서 **미실행**. CI 설정 변경이라 JVM·APK 로컬 재실행은 의미가 없어서 안 했어. **원격 CI 미실행(push 미승인).** 실기기 QA 불필요(앱 영향 없음). TEST-COVERAGE-MAP 변경 없음.
 - **push 후 확인할 완료 조건:** CI 로그에 실제 Temurin `17.0.21+9`(또는 그 이후 respin), setup-java deprecated 경고와 Node 20 경고 해소, `Basic Caching` 사용 메시지(Enhanced 메시지 없음), `testDebugUnitTest`·`assembleDebug`·`assembleDebugAndroidTest` 성공. 이게 확인돼야 CI JDK 보안 수정 완료로 인정해.
-- **별도 후속(미착수):** ① 로컬 Zulu 17.0.21+9의 cacerts에 `comodoaaaca`, `emsigneccrootcag3`, `emsignrootcag1`, `emsignrootcag2`가 남아 있어서 CVE-2026-91403 미대응이야(JBR 17.0.14도 같음). 자동 수정·삭제는 금지야. Azul 수정판을 기다리거나 안전한 정리 방법을 따로 제안할 것. JBR은 보존해. ② 남은 보안 감사 후보(읽기 전용): Kotlin 취약점 적용 조건, 직접·전이 의존성 CVE, Actions SHA 고정 등 공급망, Android 자동 백업 정책, 이미지 입력·파일 접근, 비밀정보 노출. 저장소에 `gradle/verification-metadata.xml`이 없다는 사실도 공급망 감사 입력이야.
+- **별도 후속(미착수):** ① **[정정됨: 아래 ① 판정은 틀렸어. 바로 위 "113일차 후속" 항목 참고. 원문은 감사 기록으로 보존]** 로컬 Zulu 17.0.21+9의 cacerts에 `comodoaaaca`, `emsigneccrootcag3`, `emsignrootcag1`, `emsignrootcag2`가 남아 있어서 CVE-2026-91403 미대응이야(JBR 17.0.14도 같음). 자동 수정·삭제는 금지야. Azul 수정판을 기다리거나 안전한 정리 방법을 따로 제안할 것. JBR은 보존해. ② 남은 보안 감사 후보(읽기 전용): Kotlin 취약점 적용 조건, 직접·전이 의존성 CVE, Actions SHA 고정 등 공급망, Android 자동 백업 정책, 이미지 입력·파일 접근, 비밀정보 노출. 저장소에 `gradle/verification-metadata.xml`이 없다는 사실도 공급망 감사 입력이야.
 - **Git:** commit·push 미승인·미실행.
 
 ---
@@ -21,7 +48,7 @@
 
 - **Git 기준:** `feature/photo-sticker`, HEAD `375c97f`, origin과 동기. 기존 미추적 `.codex-config.candidate.toml`, `.kotlin/`, `drawable-nodpi/` PNG 3개는 건드리지 않았어.
 - **확인한 문제:** ① Task 사용 의무가 무조건형이고 예외는 문서 끝에만 있어 "Task 생성 뒤에만 Git·조사 시작" 절차와 충돌해 보였어 ② "텍스트 목록은 Task를 대신할 수 없다"가 도구 부재 시의 진행 안내 대체와 충돌했어 ③ 반복 호출·재검색·설정 변경 같은 복구 금지가 없었어 ④ "읽기 전용 조사까지 막지 않는다"가 구현·검증 계속 여부를 모호하게 했어.
-- **변경:** 저장소 `CLAUDE.md` 내장 Task 운영 절(도구 제공 시 사용 조건, 부재 시 1회 안내·복구 금지·진행 안내 대체·안전 작업 계속·기존 규칙 유지). 저장소 밖 canonical `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/references/claude-code-execution-rules.md`의 같은 의미 4곳(Git 저장소 아님). `AGENTS.md`, Codex 규칙, SKILL.md, 작업지시서 템플릿, 앱 코드·리소스는 미변경.
+- **변경:** 저장소 `CLAUDE.md` 내장 Task 운영 절(도구 제공 시 사용 조건, 부재 시 1회 안내·복구 금지·진행 안내 대체·안전 작업 계속·기존 규칙 유지). 저장소 밖 canonical `%USERPROFILE%/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/references/claude-code-execution-rules.md`의 같은 의미 4곳(Git 저장소 아님). `AGENTS.md`, Codex 규칙, SKILL.md, 작업지시서 템플릿, 앱 코드·리소스는 미변경.
 - **설치 캐시:** 수정 전 canonical과 Codex 캐시 `0.1.0+codex.20260927080957` 15개 파일은 모두 같았어. 이제 `claude-code-execution-rules.md` 1개만 달라. 캐시는 승인 없이 덮어쓰지 않았어. 동기화는 별도 승인 후보야.
 - **검증:** 문서-only라 테스트·빌드·CI 불필요·미실행. diff 검토와 `git diff --check`만 수행. 실기기 QA 불필요(앱 영향 없음). TEST-COVERAGE-MAP 변경 없음.
 - **Git:** 사용자가 이 두 파일(`CLAUDE.md`, `docs/ai/HANDOFF.md`)의 commit·push와 해당 push CI 확인을 승인했어. 이 기록은 커밋 직전 상태이며 실제 SHA·원격 동기화·CI 결과는 Git/Actions와 완료보고가 기준이야. CI 성공 기록용 추가 문서 커밋은 만들지 않아. canonical 규칙 파일은 저장소 밖이라 Git 대상이 아니야.
@@ -41,8 +68,8 @@
 - **환경 실패 구분:** 최초 격리 실행은 settings의 기존 foojay 플러그인을 찾지 못해 앱 컴파일/테스트 전에 실패했어. 설정 변경 없이 기존 사용자 캐시를 쓸 수 있는 권한 실행에서 같은 offline 명령이 성공했어. 기존 Gradle 경고는 이번 범위에서 수정하지 않았어.
 - **검증 범위:** 국소 표시 변경이라 전체 JVM·instrumentation APK 재컴파일은 로컬에서 반복하지 않았어. 실사용 기기 instrumentation **미실행**, 실기기 감각 QA **실행·사용자 정상 확인 완료**야. 테스트 소스·수·의미·보호 범위 변화가 없어 **TEST-COVERAGE-MAP: 변경 없음**. 단순 표시식을 복제하는 새 테스트는 추가하지 않았어. 기존 992건 전체 통과는 111일차 기록이며 이번 로컬 실행 결과가 아니야. QA 뒤 production 변경이 없고 XML24건·설치 APK 해시를 다시 대조했으므로 기존 로컬 검증을 재사용했어. 승인된 push로 발생하는 GitHub Actions의 JVM·debug APK·instrumentation APK 컴파일 결과를 확인해. 실제 instrumentation 실행은 아니며 수동 dispatch나 중복 재실행은 하지 않아.
 - **설치한 QA APK:** `app/build/outputs/apk/debug/app-debug.apk`, 2026-10-23 19:51:05 KST 생성, 53,620,057B, SHA-256 `57cfe4ff229f367da13be0838b19fbb3df85d79f7843b3df78a69e603202fb72`. 위 HEAD + 미커밋 보관량 UI 변경의 빌드야. 설치 직전 원본과 설치 후 기기에서 다시 읽은 APK의 전체 SHA-256이 모두 일치해. 빌드를 다시 하거나 다른 APK로 바꾸지 않았어.
-- **설치 사전 확인:** `adb devices -l`에서 연결 기기는 `SM_S936N`, serial `R3KYB00HAYY` 한 대였어. 실제 모델 SM-S936N / SDK37 / arm64-v8a / 현재 사용자0 확인. 기존 `com.postcardmemory`는 사용자0에 설치됨, versionCode1·minSdk26·targetSdk34로 신규 APK와 호환돼. 설치된 기존 APK와 신규 APK 모두 v2 서명 검증 성공, 인증서 SHA-256 `cec335400357d8165cc91246adfaa38a9342db90c7ef3f0369da3b73c7c875b9` 일치야. 설치 전 앱 프로세스 없음과 /data 약45.3GiB 여유를 확인했고 사용자 파일에 쓰지 않는 관찰만 수행했어.
-- **데이터 보존 설치: 실행·성공.** `adb -s R3KYB00HAYY install -r <위 APK>`만 실행했고 결과 `Success`야. uninstall·초기화·재설치 우회·instrumentation·기존 엽서/조각 삭제는 없었어. `lastUpdateTime`은 2026-10-23 20:29:53 KST로 갱신, UID10525와 `firstInstallTime=2026-10-05 14:19:35`, 사용자0 데이터 inode는 유지됐어. 사용자150은 이전/이후 모두 미설치 상태야.
+- **설치 사전 확인:** `adb devices -l`에서 연결 기기는 `SM_S936N`, serial `[승인된 실사용 기기 식별자 비공개]` 한 대였어. 실제 모델 SM-S936N / SDK37 / arm64-v8a / 현재 사용자0 확인. 기존 `com.postcardmemory`는 사용자0에 설치됨, versionCode1·minSdk26·targetSdk34로 신규 APK와 호환돼. 설치된 기존 APK와 신규 APK 모두 v2 서명 검증 성공, 인증서 SHA-256 `cec335400357d8165cc91246adfaa38a9342db90c7ef3f0369da3b73c7c875b9` 일치야. 설치 전 앱 프로세스 없음과 /data 약45.3GiB 여유를 확인했고 사용자 파일에 쓰지 않는 관찰만 수행했어.
+- **데이터 보존 설치: 실행·성공.** `adb -s [승인된 실사용 기기 식별자 비공개] install -r <위 APK>`만 실행했고 결과 `Success`야. uninstall·초기화·재설치 우회·instrumentation·기존 엽서/조각 삭제는 없었어. `lastUpdateTime`은 2026-10-23 20:29:53 KST로 갱신, UID10525와 `firstInstallTime=2026-10-05 14:19:35`, 사용자0 데이터 inode는 유지됐어. 사용자150은 이전/이후 모두 미설치 상태야.
 - **보존 비교 범위:** 설치 전 앱 프로세스가 없는 상태에서 `files`·`databases`·`shared_prefs`의 **77개 파일 / 36,139,777B** 경로·크기·mtime과 **77개 전체 내용 SHA-256**을 읽었어. 연속 메타데이터 관찰이 일치하고 앱이 계속 미실행인 것을 확인한 뒤 설치했어. 설치 직후 **앱을 열기 전** 경로·크기·mtime 및 전체 내용 해시 차이 모두0건이야. 비교 원본과 기존/신규 설치 APK readback은 PC Temp의 전용 `postcard-memory-112-qa-*` 폴더에만 있고 저장소에는 사용자 파일 목록·내용을 넣지 않았어. 이 기록은 위 세 디렉터리의 설치 전후 비교이며 앱 실행/수동 QA 뒤 정상적인 방문·저장 변경까지 불변이라고 주장하지 않아.
 - **앱 실행·관찰:** 20:30:35 KST부터 `am start -W -n com.postcardmemory/.MainActivity`로 실행, `Status: ok`, cold start483ms, PID30490과 topResumedActivity 확인. 이 시작 관찰 구간의 앱 PID 로그에 FATAL/ANR/OOM/AndroidRuntime 패턴0건이야. 화면1080×2340 / 450dpi / font_scale0.9 실측. 실제 개수 표시와 편집/갱신 동작의 사용자 QA를 대신하는 결과는 아니야.
 - **사용자 실기기 QA: 완료.** 위 설치 빌드의 SM-S936N에서 ① 제목 오른쪽 `현재 개수 / 60` ② 숫자 잘림·정렬·가독성 ③ 실제 기존 조각 수와 일치 ④ 새 QA용 조각 추가 후 재진입 시 증가 ⑤ 그 QA용 조각만 삭제할 때 감소 ⑥ 보관함 재진입 뒤 유지, 총6개 항목을 요청했고 사용자가 "좋아 승인 완료 실기기 확인 다 했어!"라고 정상 확인했어. 이는 사용자의 수동 확인 결과이며 자동 기기 테스트 결과가 아니야. 에이전트는 기존 엽서·조각을 삭제하거나 빈 통/60개 상태를 만들지 않았어. TalkBack·큰 글꼴·빈 통/60개 경계의 실제 렌더링은 여전히 미검증이야.
@@ -67,7 +94,7 @@
 - **로컬 자동검증: 실행·통과.** 관련 JVM99건, 전체 **108 XML / 992 tests, 실패·오류·skip0**. `assembleDebug`와 `assembleDebugAndroidTest` 성공. instrumentation21건/8파일은 **컴파일만** 했고 실제 실행0회야. TEST-COVERAGE-MAP 갱신 완료. JVM 소스992개/107파일+helper1개, 구조 검사194개야.
 - **검증 대상 보존:** 달력 코드1개·테스트2개·봉투PNG1개는 검증 뒤 변경하지 않았어. 이번 마감은 문서 추가·정합화라 전체 빌드를 반복하지 않아. diff/staged diff·자산 규격/중복·테스트 수·보호 파일을 마감 전에 확인해.
 - **환경:** Gradle9.4.1/JBR21 사용자 환경에서 성공. Wrapper 실행 파일 부재와 격리 환경의 기존 foojay 해석 실패는 설정 변경 없이 권한 실행으로 해소했어. 전일990건과 오늘992건은 별도 기록이야.
-- **설치 성공:** SM-S936N(serial R3KYB00HAYY,1080×2340/450dpi,font_scale0.9,SDK37). 기존/신규 APK 인증서 일치 확인 후 `adb -s R3KYB00HAYY install -r`만 사용했어. lastUpdateTime은2026-10-22 20:26:36, firstInstallTime은2026-10-05 14:19:35 유지, UID10525 유지야. uninstall/pm clear/기기 APK·다운로드 정리 없음.
+- **설치 성공:** SM-S936N(serial [승인된 실사용 기기 식별자 비공개],1080×2340/450dpi,font_scale0.9,SDK37). 기존/신규 APK 인증서 일치 확인 후 `adb -s [승인된 실사용 기기 식별자 비공개] install -r`만 사용했어. lastUpdateTime은2026-10-22 20:26:36, firstInstallTime은2026-10-05 14:19:35 유지, UID10525 유지야. uninstall/pm clear/기기 APK·다운로드 정리 없음.
 - **설치 직전/직후 보존:** 앱을 열기 전 `files/databases/shared_prefs`의 **74개 파일,30,771,932B** 경로·크기·mtime 일치, **DB폴더5개 파일 SHA-256 모두 일치**야. 모든 사진 내용의 전체 hash 검사는 아니야. 비교 원본은 PC Temp에만 두고 저장소에는 사용자 파일 목록을 넣지 않았어.
 - **사용자 실기기 QA 정상 확인:** 연도/월 봉투·숫자·기존 글꼴·청록/선택·원 제거·4×4·이동·실제 날짜 표시가 모두 정상이야. 통 목록·원본/누끼·선택/해제·월/연도 선택 중 보관함 진입/복귀·이전 상태·반복 복귀·흔들림도 모두 정상 확인받았어.
 - **새 QA 엽서 재사용:** 사용자가 새 QA용 엽서에서만 꺼내기·이동·크기·회전·저장 후 재진입을 정상 확인했어. 기존 조각/엽서를 삭제하지 않았고, 새 QA 엽서 저장은 사용자가 승인 범위에서 직접 한 정상 데이터 변경이야.
@@ -91,7 +118,7 @@
 
 - **시작 기준:** `feature/photo-sticker`, HEAD `4b865dfe55fb787e12625fdfb23ecee815fdc13c`, 로컬 origin 추적 ref 대비 0/0, tracked/staged clean. 전일 지시서의 `86b0b3f` 뒤에는 HANDOFF/기존 목업 보존 커밋만 있었고 사용자가 `4b865df`를 기준으로 인정했어. 최신 원격 직접 조회는 네트워크 실패라 미확인. Git 전역 ignore 접근 경고도 있었고 설정은 변경하지 않았어.
 - **이번 직접 지시:** 단순 HEAD 차이·설명 가능한 문서 변경은 자동 STOP하지 않고 실제 데이터·보호 파일·미승인 수정 위험으로 판단해. 기존 승인 안의 읽기 전용 조사·계획과 독립 달력 HTML은 추가 진행 승인을 묻지 않아. 파우치 이미지 적용/프로덕션 달력 적용/Git 마감 승인은 각각 별도야. 이 기준으로 1차 이미지 적용 대기와 독립적인 2차 감사·목업을 진행했어.
-- **규칙 확인:** AGENTS/CLAUDE, canonical workflow의 Codex 실행·UI/UX·이미지·공통 마감, IMAGE-ASSET-STANDARD/MAP, DECISIONS, 관련 test와 CI YAML을 읽었어. canonical `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow`와 현재 Codex 캐시의 전체 15개 파일은 해시 일치야. 아래 과거 '설치 차이' 기록과 구분해. 단계 추적 전용 도구는 없어서 대화·문서에 진행 상태를 기록했어.
+- **규칙 확인:** AGENTS/CLAUDE, canonical workflow의 Codex 실행·UI/UX·이미지·공통 마감, IMAGE-ASSET-STANDARD/MAP, DECISIONS, 관련 test와 CI YAML을 읽었어. canonical `%USERPROFILE%/plugins/post-card-memory-workflow/skills/post-card-memory-workflow`와 현재 Codex 캐시의 전체 15개 파일은 해시 일치야. 아래 과거 '설치 차이' 기록과 구분해. 단계 추적 전용 도구는 없어서 대화·문서에 진행 상태를 기록했어.
 - **1차 조사 결과:** [스티커 통 구조와 자산 계획](DAY-111-STICKER-POUCH-ASSET-PLAN.md). 파우치는 132×88dp, 뒷판→30dp 조각 최대 3개→앞판→앱 글자 구조. 닫힌 파우치용 PNG 2장(각 594×396px RGBA nodpi)을 권장했어. 3x 밀도 가정×1.5 해상도 여유 산정이며 현재 기기 밀도를 잰 값이 아니야. 원점·전체 캔버스·입구/중앙 홈 좌표를 보존하고 개별 alpha trim 금지. 독립 제작 프롬프트 2개를 문서에 완성했어. 자산 생성·추가·리사이즈·적용은 하지 않았어.
   - 보관함 상단 90% 크기 파우치는 `open=true`라 외곽이 달라. 최소안은 닫힌 자산 2장만 바꾸고 보관함 상단 코드 그림은 유지하는 것이며 사용자 검토 대상이야. 열린 파우치 자산·큰 sheet 자산을 자동으로 추가하지 않아.
   - 원본 전체 decode 두 장은 약 1.79MiB, 현재 3x 크기 baking 두 장보다 약1MiB 증가 가능. 실제 RAM/APK·GPU 비용은 미측정. 통의 원본 사진 복사·재사용 추가 복사·60개 상한·실제 저장공간 미측정 위험은 그대로야.
@@ -131,7 +158,7 @@
   - 변형 검증: 목록 실패 정리·빼기 순서를 지운 변형에서 2건, 누끼 전달을 지운 변형에서 4건이 실제로 실패하는 것을 확인했고, 해시 일치로 원복했어.
   - 중간에 기존 `VisitCalendarPaperPageStructureTest` 1건이 실패했어. 달력 단계 전환 함수를 제네릭으로 넓혀서 고정된 선언이 바뀐 탓이야. 원래 선언으로 되돌리고 장면 전환 함수를 따로 둬서 해결했어(테스트 무변경).
   - instrumentation 실행 0회. TEST-COVERAGE-MAP 갱신 완료.
-- **실기기 QA: 완료(사용자 확인, 대화창 질문으로 수집).** SM-S936N(R3KYB00HAYY)에 사용자 승인으로 `adb install -r`를 2회 했어(`firstInstallTime 2026-10-05 14:19:35` 유지, 마지막 `lastUpdateTime 2026-10-21 16:43:53`).
+- **실기기 QA: 완료(사용자 확인, 대화창 질문으로 수집).** SM-S936N([승인된 실사용 기기 식별자 비공개])에 사용자 승인으로 `adb install -r`를 2회 했어(`firstInstallTime 2026-10-05 14:19:35` 유지, 마지막 `lastUpdateTime 2026-10-21 16:43:53`).
   - 1차 피드백: 파우치 조각이 살짝 흔들리는 건 좋다고 했어. 사이드바를 열 때 버벅임이 있었고, 통 알림이 위쪽에서 엽서를 가렸어.
   - 버벅임: `dumpsys gfxinfo`(통계만 초기화, 사용자가 사이드바 5회 여닫기)로 쟀어. 늦은 프레임 170/2940(5.78%), 95%·99% 구간 46·85ms였고, 늦은 프레임은 모두 'Slow issue draw commands'였어. 원인은 임시 파우치 종이(망점 약 2,760점×2장과 오린 외곽 clip)를 사이드바가 움직이는 매 프레임 다시 그린 것으로 봤어. 크기가 정해질 때 한 번만 비트맵으로 굽도록 1회차에 수정했어. 같은 측정에서 19/3584(0.53%), 95%·99% 구간 12·17ms, 그리기 지연 12건으로 줄었고 사용자도 '부드러워졌어'라고 했어. 수정 전 빌드(110일차 이전)와의 기준 비교는 하지 않았어.
   - 최종: 알림 위치(하단 메뉴 위), 다른 엽서에서 꺼내 붙인 뒤 이동·크기·회전·저장 후 재진입, 통에서 빼기(확인 창) 뒤 엽서 스티커 유지, 뒤로가기, 다시 열면 달력부터 — 모두 '모두 정상 — 실기기 QA 승인'이었어. 원본·재사용 엽서 삭제 뒤 통 유지는 실제 엽서를 지우지 않고 JVM 실제 삭제 함수 테스트로만 확인했어.
@@ -195,7 +222,7 @@
 
 - 시작 Git: `feature/photo-sticker`, HEAD `2fa5239a4a8175ccac1b9dd89b684d65fb56504d`, origin 추적 ref 대비 0/0. tracked clean, staged 없음에서 시작했다.
 - 변경: `AGENTS.md` 8절에 실제 영향별 검증·기존 결과 재사용·CI 성공 종료/실패 재검증 경계를 명시했다. 6절 STOP 보고와 9절 명시적 stage 금지를 보강했다. 기존 안전·QA·Git 승인 및 과거 기록은 유지했다.
-- canonical: `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/`의 SKILL, 공통 마감 규칙, 작업지시서, Claude/Codex 어댑터에 같은 기준 참조를 연결했다. 공통 강제 규칙의 기준은 기존 결정대로 AGENTS.md이며 새 규칙 파일은 만들지 않았다.
+- canonical: `%USERPROFILE%/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/`의 SKILL, 공통 마감 규칙, 작업지시서, Claude/Codex 어댑터에 같은 기준 참조를 연결했다. 공통 강제 규칙의 기준은 기존 결정대로 AGENTS.md이며 새 규칙 파일은 만들지 않았다.
 - CI 조사: 현행 `android-ci.yml`은 경로 제한 없는 push/pull_request에서 JVM·debug APK·instrumentation APK 컴파일을 실행한다. 현재 브랜치 protection API는 `Branch not protected`, 저장소 rulesets 조회는 빈 목록을 반환했다. CI 설정은 변경하지 않았다. 후속 후보는 문서-only 판별과 무거운 job 조건 분리이며, 적용 시 보호/required checks와 push·PR 중복 실행 조건을 다시 확인해야 한다.
 - 검증 범위: 문서 검색·diff·참조 및 시나리오 A–F 정적 점검. 앱 코드·test·dependency·CI YAML 변경 없음. JVM·APK·instrumentation·실기기 QA·CI 새 실행은 일반 운영 문서 변경에 불필요해 수행하지 않는다. 과거 테스트 성공을 이번 실행 결과로 쓰지 않는다.
 - 설치 상태: canonical 개정과 설치 캐시 반영은 별개다. 현재 세션의 `0.1.0+codex.20260927080957` 캐시에는 이전 emulator 지침 등 기존 차이가 남아 있다. 이번에는 cache·manifest/version·설치 설정을 변경하지 않았으며, 설치본 반영/새 세션 로딩은 미검증이다. 현재 작업은 최신 저장소 AGENTS.md를 따른다.
@@ -271,7 +298,7 @@
   - 연못이 꺼진 일반 월별 보기·쉼터·쫑쫑컵 코드는 바뀌지 않았다. Room·저장 데이터 무변경.
 - **자산:** `pond_lily_pad.png` 사용자 제공 원본 그대로(1254² RGBA, 2.59MB, decode 추정 6.29MB — 연못 켜진 동안만). 제안 규격 448²보다 크고 가장자리 일부에 노란 반투명 띠가 있다(IMAGE-ASSET-MAP 108일차 절). 사용자가 QA에서 현 상태로 확정 — 축소·halo 정리는 후보일 뿐 승인 아님.
 - **로컬 자동검증: 통과.** 최종 상태에서 `testDebugUnitTest` 101 XML / 926 tests 실패·오류·skip 0(+6: `PondPostcardSelectionTest` 3, `GalleryMonthlyGridStructureTest` 구조 3), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 한 번 `processDebugResources`에서 `R.jar` 삭제 잠금(Android Studio 동시 사용 추정, 환경 실패)이 났고 1회 재시도로 성공. instrumentation 실행 0회, `connected*` 미실행. TEST-COVERAGE-MAP 갱신.
-- **실기기 QA: 완료(사용자 확인).** SM-S936N(serial R3KYB00HAYY, 1080×2340, 450dpi)에 사용자 승인으로 `adb install -r` 2회(debug, `firstInstallTime 2026-10-05 14:19:35` 유지 → 데이터 보존, 마지막 `lastUpdateTime 2026-10-19 13:44:46`). 확인: 최신 10장·월 헤더 없음, 연잎/우표 비율(22dp 여백으로 확정), 새총·벽 반사·복귀·흔들기·이웃 밀림에서 연잎과 우표 한 몸, 탭→상세→뒤로, 검색 열고 연못 켜면 검색 닫힘, 켜고 끄기 반복 시 월별 보기 정상. 메모리(meminfo) 실측 안 함.
+- **실기기 QA: 완료(사용자 확인).** SM-S936N(serial [승인된 실사용 기기 식별자 비공개], 1080×2340, 450dpi)에 사용자 승인으로 `adb install -r` 2회(debug, `firstInstallTime 2026-10-05 14:19:35` 유지 → 데이터 보존, 마지막 `lastUpdateTime 2026-10-19 13:44:46`). 확인: 최신 10장·월 헤더 없음, 연잎/우표 비율(22dp 여백으로 확정), 새총·벽 반사·복귀·흔들기·이웃 밀림에서 연잎과 우표 한 몸, 탭→상세→뒤로, 검색 열고 연못 켜면 검색 닫힘, 켜고 끄기 반복 시 월별 보기 정상. 메모리(meminfo) 실측 안 함.
 - **남은 위험·후보(승인 아님):** 연잎 448² 축소·노란 halo 정리(MEM-OPT), 연못을 켠 채 기억밀도 페이지로 넘겨도 POND 상태·흔들기 센서가 켜져 있음, 연못 전용 BackHandler 없음, 쉼터와 연못의 "최신 10장" 선정 규칙이 두 곳에 따로 있음(쉼터 코드는 범위 밖이라 미변경).
 - **Git:** 이번 변경은 production 3(`StampCard.kt`, `GalleryScreen.kt`, `PondController.kt`)·test 2(`GalleryMonthlyGridStructureTest.kt` 수정, `PondPostcardSelectionTest.kt` 신규)·자산 1(`pond_lily_pad.png` 신규)·문서 3(HANDOFF, IMAGE-ASSET-MAP, TEST-COVERAGE-MAP). commit·push는 사용자 마감 승인 대기. 승인 시 이 파일만 명시 경로로 stage하고, 이 HANDOFF는 그 commit 안에 들어가므로 commit SHA·CI 결과는 완료보고에서 확인한다.
 - **다음 출발점:** 109일차 쫑쫑컵 폴리싱 — `GalleryPlayStage`, `PostcardRace*`, `GalleryPlayStageZoneTest` 기준. 오늘 시작하지 않았다.
@@ -365,7 +392,7 @@
   - 한계: Graphics·TOTAL PSS는 After가 오히려 조금 높게 나왔으나(갤러리 시작 PSS 249.5→258.0, Graphics 86.5→93.1MB) GPU 캐시 변동이 커서 개선/악화 판단에 쓰지 않음. 샘플 수 Before 180 / After 142(After 체류가 약간 짧음). APK Before는 10-16 빌드(같은 HEAD 재빌드 아님, APK 안 띠 항목 차이 −868,271 B와 1B 차이).
 - **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, 96 suite / 902 tests 실패·오류·skip 0, `git diff --check` 통과. TEST-COVERAGE-MAP 변경 없음(테스트 수·의미 불변, 상수 고정 테스트 없음).
 - **실사용 기기 instrumentation:** 불필요(미실행).
-- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s R3KYB00HAYY install -r` debug Success(firstInstallTime 2026-10-05 유지). 사용자가 갤러리 월 라벨·편집 선택줄 라벨 "전이랑 똑같다" 확인.
+- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s [승인된 실사용 기기 식별자 비공개] install -r` debug Success(firstInstallTime 2026-10-05 유지). 사용자가 갤러리 월 라벨·편집 선택줄 라벨 "전이랑 똑같다" 확인.
 - **Git:** 사용자 승인으로 이번 범위(PNG 1, Kotlin 2, IMAGE-ASSET-MAP, 이 HANDOFF)만 명시 stage해 commit·push. 보호 untracked 제외. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
 - **후속(승인 아님):** 앱 아이콘 432² 축소(APK만), 도장·핀셋 손 소폭 축소(APK만), editor_label_peek 627² + crop 상수, 달력 GPU 잔존 원인. 108일차 예정: 쫑쫑컵·연못 폴리싱(107과 분리).
 
@@ -382,7 +409,7 @@
   - 이동·점프·낙하·들기·떨림·늘이기·복귀·탭 이동 로직 무변경.
 - **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug` 성공, XML 96 suite / 902 tests 실패·오류·skip 0. TEST-COVERAGE-MAP 변경 없음(테스트 수·의미 불변, 해당 파일 참조 테스트 없음).
 - **실사용 기기 instrumentation:** 불필요(미실행).
-- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s R3KYB00HAYY install -r` debug APK 설치 Success(firstInstallTime 2026-10-05 유지 = 재설치·데이터 삭제 없음). 사용자가 날짜·그림자·바닥 질감·놀이 동작·쫑쫑컵 확인 완료 후 commit/push 승인.
+- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s [승인된 실사용 기기 식별자 비공개] install -r` debug APK 설치 Success(firstInstallTime 2026-10-05 유지 = 재설치·데이터 삭제 없음). 사용자가 날짜·그림자·바닥 질감·놀이 동작·쫑쫑컵 확인 완료 후 commit/push 승인.
 - **Git:** 이번 범위(`SheepRanchStage.kt`, 이 HANDOFF)만 명시 stage해 commit·push. 보호 untracked 제외. release build는 이번 변경이 Kotlin UI 1파일이라 생략. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
 - **후속(승인 아님, 107일차 이후 후보):** SheepRanch 리브랜딩/rename, Quick Select 양 이미지 의미 교체, 보호 PNG 정리 판단, 사용자 제안 「착지 햅틱 + 작은 파문」(사용자가 놓아 떨어질 때만·쉼터 한정·정적 형태 먼저 승인 권장, 미착수).
 
@@ -397,7 +424,7 @@
 - **로컬 자동검증: 통과.** `testDebugUnitTest assembleDebug assembleRelease` BUILD SUCCESSFUL, 96 suite / 902 tests 실패·오류·skip 0. TEST-COVERAGE-MAP 변경 없음(테스트 수·의미 불변).
 - **IMAGE-ASSET-STANDARD.md: 저장소 정식 추가.** 2절 프리셋(실사·캐릭터·활자, 공통 금지, 고정 블록), 6절 자산당 독립 프롬프트, 7절 좌표 의존 조사가 오늘 운영 기준과 충돌 없음을 확인. 크기 값은 104일차 기록이라는 기존 고지에 MAP 105일차 절 링크 1문장만 추가.
 - **IMAGE-ASSET-MAP:** 105일차 절의 두 행·합계(21장 현재 9,822,008 B) 갱신.
-- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s R3KYB00HAYY install -r` debug APK 설치 Success(firstInstallTime 2026-10-05 유지 = 재설치·데이터 삭제 없음). 사용자가 동글이 쉼터·테이프 누르기 확인 완료 후 commit/push 승인.
+- **실기기 감각 QA: 완료.** 사용자 승인 후 `adb -s [승인된 실사용 기기 식별자 비공개] install -r` debug APK 설치 Success(firstInstallTime 2026-10-05 유지 = 재설치·데이터 삭제 없음). 사용자가 동글이 쉼터·테이프 누르기 확인 완료 후 commit/push 승인.
 - **Git:** 이번 범위(PNG 2장, IMAGE-ASSET-STANDARD.md 신규, IMAGE-ASSET-MAP, 이 HANDOFF)만 명시 stage. 보호 untracked(`.codex-config.candidate.toml`, `.kotlin/`, fiber·round_head·sheep PNG) 제외. CI 결과는 완료보고에서 확인(성공 기록용 docs-only commit 없음).
 - **105일차 이미지 작업: 종료.** 남은 후보(승인 아님): 미사용 `ic_launcher_foreground.png`·보호 PNG 3장 정리 판단, editor_label_peek 627² 다이어트(코드 상수 변경 필요), workflow 설치본 반영 보류.
 
@@ -462,7 +489,7 @@
 # HANDOFF — 2026-10-16 이미지 생성 프리셋 문서 보강
 
 - **범위/완료:** 사용자 제공 생성 테스트 결론으로 `IMAGE-ASSET-STANDARD.md` 2절에 「실사 인쇄물 오림 질감」과 캐릭터·활자 하위 프리셋을 명시했어. 사진 한 장→인쇄→한 조각 오림, 고정 영문 핵심/인쇄/금지 블록, 참조 해석·적용 제외를 추가하고 6·7절의 독립 프롬프트·정확한 배치 조사 규칙을 보강했어. 과거 기술 수치에는 조사 시점을 명시했어.
-- **canonical 연결:** `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/references/image-asset-workflow.md`만 수정. STANDARD의 프리셋 원문을 자산별로 재사용하고 실사/캐릭터/활자/적용 제외를 선택하게 했어. 기존 SKILL 진입 연결은 유지했어.
+- **canonical 연결:** `%USERPROFILE%/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/references/image-asset-workflow.md`만 수정. STANDARD의 프리셋 원문을 자산별로 재사용하고 실사/캐릭터/활자/적용 제외를 선택하게 했어. 기존 SKILL 진입 연결은 유지했어.
 - **Git/보존:** 시작 HEAD `b77c156`, `feature/photo-sticker`, 로컬 origin 추적 ref 대비 0/0. 시작 때 PNG 21개와 HANDOFF가 이미 수정돼 있었고 STANDARD도 기존 untracked였어. 기존 PNG·보호/기타 untracked 및 이전 기록을 보존했어. 이번 작업의 앱 코드·이미지 변경은 0이며 commit/push 미승인·미실행이야.
 - **검증:** 프리셋/예외/금지/독립 출력/좌표 조사 문구와 링크·공백 검사, 자원 전체 전후 hash 일치 확인. 공식 skill quick_validate는 `yaml` 모듈 부재로 실행 불가. 생성 품질 재시험·앱 build/test·실기기 명령·QA는 이번 문서 작업에서 실행하지 않았어. TEST-COVERAGE-MAP 변경 없음.
 - **설치 상태:** 이번에는 cache·manifest·version·설치 장부를 변경하지 않았어. 앞선 canonical 설치 반영 보류를 해제하거나 새 세션 로딩을 검증한 작업이 아니야. 설치본에 새 프리셋 경로가 반영됐다고 간주하지 않아.
@@ -539,7 +566,7 @@
 
 - **시작/종료 기준:** `feature/photo-sticker`, HEAD `e8ab9c9`, 로컬 origin 추적 ref 대비 0/0. 시작 tracked clean. 이번 작업은 commit/push 미승인·미실행이고 원격/CI 재조회는 하지 않았어.
 - **완료:** [IMAGE-ASSET-STANDARD.md](IMAGE-ASSET-STANDARD.md) 신규. 실제 PNG 헤더·소비 코드·대표 이미지 육안 확인을 바탕으로 자산군 10개, 표시 크기 기반 산정, 좌표 결합 예외, 생성 프롬프트와 읽기 전용 명세 조사 템플릿을 정리했어. MAP은 현황, STANDARD는 제작 규칙으로 분리했고 MAP의 과거 기록은 수정하지 않았어.
-- **workflow:** canonical `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/SKILL.md`에 이미지 경로를 추가하고 `references/image-asset-workflow.md`를 만들었어. A=생성 프롬프트, B=명세 조사. 수치·템플릿은 저장소 STANDARD를 읽으며 복제하지 않아. 웹 등 접근 불가 환경은 최신 문서 제공이 필요해.
+- **workflow:** canonical `%USERPROFILE%/plugins/post-card-memory-workflow/skills/post-card-memory-workflow/SKILL.md`에 이미지 경로를 추가하고 `references/image-asset-workflow.md`를 만들었어. A=생성 프롬프트, B=명세 조사. 수치·템플릿은 저장소 STANDARD를 읽으며 복제하지 않아. 웹 등 접근 불가 환경은 최신 문서 제공이 필요해.
 - **설치 반영은 보류:** 작업 시작 전부터 source/cache 7개 파일에 차이가 있었어. 현재 cache는 `0.1.0+codex.20260927080957`. 기존 차이는 main SKILL, Claude/Codex 실행 규칙, work-order/handoff 템플릿, write-project-handoff SKILL과 템플릿이야. canonical에는 현행 실기기 정책이 있지만 cache에는 예전 emulator 지침이 남아 있어. 다른 정책까지 섞어 설치하지 않도록 cache·manifest·version·설치 장부는 미변경. **새 이미지 경로가 설치본에 로딩됐다고 간주하지 않아.** 재개 조건은 기존 7개 차이와 이번 이미지 경로를 함께 배포할 범위 확인이야.
 - **검증:** 문서 링크·공백 검사, 기존 workflow 본문 보존 비교, canonical 변경 파일 범위 확인. 공식 skill quick_validate는 Python `yaml` 모듈 부재로 실행 불가였고 의존성은 설치하지 않았어. 링크·frontmatter 필수 항목·description 길이는 별도 검사했어. 실제 새 세션 경로 실행과 이미지 출력 품질은 미검증이야.
 - **불필요/미실행:** 앱 build/test·기기 명령·instrumentation·실기기 QA는 앱 변경 없는 문서 작업이라 불필요. JVM 902와 메모리/QA 값은 아래 기존 실행 기록이며 이번에 재실행하지 않았어. TEST-COVERAGE-MAP 변경 없음.
@@ -799,7 +826,7 @@
 - **4부 방문 조건:** 방문 기록은 `MainActivity`의 `LaunchedEffect(Unit)`이 프로세스당 1회 IO에서 `VisitRecordStorage.recordTodayVisit`로 먼저 끝냄. `TodayVisit.isFirstVisitToday` = 이번 실행에서 오늘 기록이 실제로 새로 쓰였는지(같은 날 재실행 false, 읽기 실패 시 record null·false). "최초 방문" = 이 값(앱 설치 후 최초가 아니라 **그날 첫 실행**). 새 저장 상태·DB·schema·migration 불필요.
 - **5부 손 도장:** 편집 화면 도장 찍기 손 `SealStampHandOverlay`(`seal_stamp_hand.png`, 화면 아래에서 올라와 0.72초)를 그대로 재사용. `shouldPlayIntroStampHand(record, isFirstVisitToday)`가 참이면 인트로 0.25초 뒤 손이 소인 중심을 향해 들어오고, 소인은 손이 닿을 때까지 비워 뒀다가 접촉 순간 `stampPress`를 접촉값에서 시작해 그 자리에 찍힘(기존 진동 호출 한 곳이 같은 접촉값에서 울림). 재방문·기록 없음은 기존 소인 낙하 그대로. 인트로 길이(1800+150ms) 불변. 방문 저장은 인트로 시작 전에 끝나 애니메이션 취소·끊김과 무관, 인트로는 저장소를 부르지 않음(구조 테스트로 고정). Activity 재생성 시 인트로 전체가 다시 그려지면 손도 다시 나올 수 있지만 방문 기록은 `AppIntroState`로 중복 생성 안 됨(기존 계약).
 - **검증:** 로컬 `testDebugUnitTest` **895/895**(XML 94, 실패·오류·skip 0; 890 + `AppIntroStampHandLogicTest` 4 + 구조 1), 구조 166→167, 테스트 파일 92→93. mutation: 판정을 `visitRecord != null`로 바꾸면 신규 2건 실패(원상복구). `assembleDebug`·`assembleDebugAndroidTest` 성공. GitHub Actions CI run `38113444475`(`c0cf2c7`) 성공. 실사용 기기 instrumentation 미실행(불필요, androidTest 변경 없음).
-- **실기기 통합 QA(사용자, 기기 `R3KYB00HAYY` SM-S936N 1대):** 사용자 승인 후 `adb install -r`(firstInstallTime 10-05 유지 = 데이터 보존). 그날 앱을 열기 전 설치해 첫 실행으로 최초 조건 확인 → 손 도장·재방문(손 없음·숫자 그대로)·코랄 테이프·카메라 아이콘·사진 스티커 X 제거 **모두 첫 시도 통과**, QA 후 코드 수정 없음(승인 코드 = 최종 테스트 코드).
+- **실기기 통합 QA(사용자, 기기 `[승인된 실사용 기기 식별자 비공개]` SM-S936N 1대):** 사용자 승인 후 `adb install -r`(firstInstallTime 10-05 유지 = 데이터 보존). 그날 앱을 열기 전 설치해 첫 실행으로 최초 조건 확인 → 손 도장·재방문(손 없음·숫자 그대로)·코랄 테이프·카메라 아이콘·사진 스티커 X 제거 **모두 첫 시도 통과**, QA 후 코드 수정 없음(승인 코드 = 최종 테스트 코드).
 - **독립 상태:** 구현 완료 / 자동 검증 통과 / 실기기 QA 완료 / TEST-COVERAGE-MAP 갱신 완료(JVM 895·파일 93·XML 94·구조 167, 100일차 항목·앱 시작 보호 범위) / repository HANDOFF 최신화 / commit `c0cf2c7` + 이 기록 commit, push 완료, 코드 CI 성공.
 - **남은 후속(실행 승인 아님, 오늘 미착수):** 99일차 공백 A(사진 파일 정리가 확정본 참조를 보지 않음) 수정 여부 결정, 사진 스티커·사진 테이프 Draft 왕복, 사진 테이프 `photoUri` 복원 검증, `StickerEditMode` dead branch, `presetLabelTapeStyles`, `tapePalette()`. 오늘 새로 발견한 별도 위험 없음.
 
@@ -847,7 +874,7 @@
 - **봉투·템플릿 legacy 추가 조사(읽기 전용, 사용자 사실: 봉투 사용 엽서 0, 템플릿 적용 엽서 0):**
   - 봉투: 쓰기는 사용자가 봉투를 고를 때만(`65fe77b` 08-04 ~ `7fe0047` 08-05), 자동 기록 경로 없음 → 실제 행은 전부 NULL/0으로 봐도 됨. 컬럼 제거는 DB 19→20 + 새 `MIGRATION_19_20` 필요(minSdk 26이라 `DROP COLUMN` 불가 → 테이블 재생성·전체 행 복사), 기존 migration 수정은 불필요하지만 Entity 필드도 같이 지워야 함. 검증할 migration 계측(`PostcardFullMigrationChainTest`, CONDITIONAL)은 실사용 기기에서 실행 불가. 이득은 2컬럼뿐 → **컬럼 유지, Repository 래퍼 + DAO 쿼리 3개만 제거 추천**(schema 무영향).
   - 템플릿: `Postcard`에 템플릿 전용 컬럼 없음(DAO `updatePostcardTemplateStyle`은 기존 스타일 컬럼 갱신일 뿐). 파일(`filesDir/postcard_templates/`)은 사용자가 "내 템플릿 저장/이름 변경/덮어쓰기"를 직접 눌렀을 때만 생성(07-24~08-28). "적용 0"은 "저장 0"과 다름. `allowBackup=true`(규칙 없음) + 10-05 런처 삭제 후 7~8월 클라우드 백업 자동 복원 → 그 시기 템플릿 파일이 지금 기기에 있을 수 있음. subsystem을 지워도 파일은 안 지워짐(삭제 코드 없음, `PostcardDeletionManager`·`OrphanFileDiagnostics` 무관) — 읽는 코드만 사라짐. **파일 존재 실측 전까지 판단 보류.**(→ 아래 실측으로 해소)
-- **템플릿 폴더 실기기 실측(읽기 전용, 사용자 승인):** 기기 `R3KYB00HAYY`(SM-S936N) 1대만 연결 확인. 설치 앱은 DEBUGGABLE, firstInstallTime 2026-10-05 14:19(그날 재설치·백업 복원과 일치). `adb shell run-as com.postcardmemory ls -la files/`, `ls -laR files/postcard_templates`만 실행 — `postcard_templates/`는 존재(백업 복원으로 생김)하지만 `templates/`·`previews/` 모두 **비어 있음(숨김 포함 0개)**. 수정·삭제·이동 0건. → 사용자 템플릿 파일 0개 확인, 템플릿 subsystem 제거의 파일 보존 전제는 해소(제거 자체는 미승인).
+- **템플릿 폴더 실기기 실측(읽기 전용, 사용자 승인):** 기기 `[승인된 실사용 기기 식별자 비공개]`(SM-S936N) 1대만 연결 확인. 설치 앱은 DEBUGGABLE, firstInstallTime 2026-10-05 14:19(그날 재설치·백업 복원과 일치). `adb shell run-as com.postcardmemory ls -la files/`, `ls -laR files/postcard_templates`만 실행 — `postcard_templates/`는 존재(백업 복원으로 생김)하지만 `templates/`·`previews/` 모두 **비어 있음(숨김 포함 0개)**. 수정·삭제·이동 0건. → 사용자 템플릿 파일 0개 확인, 템플릿 subsystem 제거의 파일 보존 전제는 해소(제거 자체는 미승인).
 - **사용자 결정(2단계 후):** 봉투 DB 컬럼·migration·schema 유지. 다음 코드 클린 후보 확정 = schema와 무관한 Repository/DAO 고아 메서드 + `EditorEmptyHint`·`EditorSegmentedTabRow`·`GalleryViewMode`. `PostcardImageStorage`와 전용 테스트 제거는 별도 묶음으로 보류.
 - **Git:** `480a5ef` commit·push, local/origin 0/0, CI 성공. 보호 untracked 3종 그대로.
 - **다음 후보(실행 승인 아님):** ① ~~확정된 코드 클린 묶음~~ → 아래 3단계에서 완료(`0fd4c1f`) ② ~~템플릿 subsystem 제거~~ → 아래 4단계에서 완료(`f59796d`) ③ ~~보류 묶음: `PostcardImageStorage`+전용 테스트~~ → 아래 5단계에서 완료(`84bf188`) ④ `PostcardDeletionManagerTest` KDoc의 "순수 JUnit으로 순서 재현 불가" 문장은 이제 일부 낡음(gate는 JVM으로 재현됨).
@@ -1269,7 +1296,7 @@
 - 미변경: 뒷면·PaperSurface, `postcardPreviewSize`/좌표/gesture/hit/누끼, OUTPUT_SIZE, Room/schema/migration/metadata.
 - 자동검증(2026-10-05 로컬): compileDebugKotlin, testDebugUnitTest **907/907, 95 suite, 실패·skip 0**, assembleDebug, assembleDebugAndroidTest 성공. 테스트 추가·변경 없음 → TEST-COVERAGE-MAP 변경 없음. `GalleryPaperBackgroundStructureTest`는 GalleryScreen.kt 안 참조만 세므로 영향 없음.
 - **정전 후 재개(2026-10-05):** 작업트리 생존 확인 결과 위 구현 전부 그대로 남음(재작성 0줄). 1차 강도는 실측 평균 검정 약 2.4/255(0.9%)·흰색 1.3/255라 사용자 육안으로 보이지 않음 → 사용자 선택 "중간"으로 상수만 상향: SHADE 4.0/최대 64, LIFT 2.0/최대 24(타일 기준 평균 검정 약 9.7/255≈3.8%, 흰색 약 5.1/255). 구조·호출부 불변. 재검증 testDebugUnitTest 907/907(95 suite, 실패·skip 0), assembleDebug 성공. 첫 Android Studio 설치는 기기에 반영되지 않았음(lastUpdateTime 2026-09-30 그대로) — QA 전 기기 업데이트 시각 확인 필요.
-- **실기기 결과(2026-10-05 14:0x):** `adb -s R3KYB00HAYY install -r` 사용자 승인 후 성공(lastUpdateTime 14:01:50, firstInstallTime 9/7 유지, DB·files 디렉터리 존재 확인). 꾸미기 화면 캡처를 3배 확대해야만 결이 보이고 **사용자 맨눈으로는 1·2차 강도 모두 보이지 않음.** 원인 분석: 타일 자체 휘도 편차가 작음(std 6.9/255), 엽서 전체에 늘린 뒤 화면 축소로 섬유가 평균화됨, 진한 배경에서 검정 overlay 효과 미미, 격자 패턴이 시선 점유. 같은 가설(강도 상향) 2회 실패 → 관련 production 수정 STOP.
+- **실기기 결과(2026-10-05 14:0x):** `adb -s [승인된 실사용 기기 식별자 비공개] install -r` 사용자 승인 후 성공(lastUpdateTime 14:01:50, firstInstallTime 9/7 유지, DB·files 디렉터리 존재 확인). 꾸미기 화면 캡처를 3배 확대해야만 결이 보이고 **사용자 맨눈으로는 1·2차 강도 모두 보이지 않음.** 원인 분석: 타일 자체 휘도 편차가 작음(std 6.9/255), 엽서 전체에 늘린 뒤 화면 축소로 섬유가 평균화됨, 진한 배경에서 검정 overlay 효과 미미, 격자 패턴이 시선 점유. 같은 가설(강도 상향) 2회 실패 → 관련 production 수정 STOP.
 - **재개 조건:** 사용자가 더 거친 질감의 새 이미지 자원을 직접 제작해 경로를 전달 예정(정사각형 약 1024², 색 무관, 잔결 위주, 비네팅·투명 없음 안내함). 도착하면 `drawable-nodpi`에 새 이름으로 추가(갤러리 타일은 GalleryScreen 전용 유지) → 휘도 편차 실측 → 강도 재산정 → 빌드·JVM → 승인 후 install -r → 사용자 맨눈 판정. 2026-10-05 당일 강도 상수 4.0/64·2.0/24는 미커밋 작업트리에 남아 있고 새 자원 기준으로 다시 정할 값.
 - **새 자원 적용(2026-10-05 14:15):** 사용자 제작 `drawable-nodpi/postcard_paper_fiber_tile.png`(1254², RGB 회색, 2,997,641 bytes, 평균 휘도 197.9·std 11.73, 4분면 평균 차 0.4 이내=비네팅 없음). `PostcardPaperTexture`만 새 자원을 load하고 갤러리는 `gallery_paper_tile` 유지. PC 합성 비교(청록·분홍·크림 × 강도 4종) 후 사용자 선택 "3열": SHADE 6.0/최대 96, LIFT 3.0/최대 40. testDebugUnitTest 907/907(95 suite), assembleDebug 성공, 승인된 install -r 성공(lastUpdateTime 14:15:48, firstInstallTime 유지, DB 존재). 사용자 맨눈 판정 대기.
 - **🚨 실기기 데이터 사고(2026-10-05, READ-ONLY 조사로 확인):** 사용자 보고 "9월 샘플 엽서가 사라지고 7·8월 엽서로 바뀜". 기기 logcat·Android Studio idea.log 근거 타임라인: 14:15:48 Claude `adb install -r` 성공(Retain data, firstInstallTime 9/7 유지 확인) → 14:16:40 **기기 홈 런처(uid 10161 com.sec.android.app.launcher)에서 ACTION_DELETE 제거 화면 실행, 14:16:41 `deletePackageX` result 1(앱·앱 데이터 삭제)** — adb 경로 아님 → 14:19:35 Android Studio Run이 패키지 없음(`DUMP_UNKNOWN_PACKAGE`)으로 새 설치 → `BackupManagerService restoreAtInstall`이 Google 클라우드 백업(restoreSet 3835d7b9334e27ea)을 복원해 7·8월 시점 DB·파일이 들어옴(새 uid u0_a525, firstInstallTime 14:19:35). `Pictures/PostcardMemory` 갤러리 내보내기 이미지는 MediaStore 조회 결과 0장. 세션 PC에는 앱 데이터 사본 없음(받아둔 건 설치 APK뿐). 9월 데이터의 기기 내 복구 수단은 현재 확인되지 않음. 사고 후 기기 쓰기·재시도·복구 시도 없음. 복구 후보(삼성 클라우드·Smart Switch 등 사용자 측 백업) 확인 전 앱 사용·추가 설치·백업 동작 보류 권고.
@@ -2077,8 +2104,8 @@
 - 시작 origin 관계: ahead·behind `0/0`
 - 시작 작업트리: tracked 변경 없음. 보호 untracked `.codex-config.candidate.toml`, `.kotlin/` 보존
 - 현재 repository 변경: `AGENTS.md`, `CLAUDE.md`, `docs/ai/HANDOFF.md` 문서-only
-- canonical workflow source: `C:/Users/estel/plugins/post-card-memory-workflow`
-- 설치 캐시: `C:/Users/estel/.codex/plugins/cache/personal/post-card-memory-workflow/0.1.0+codex.20260927080957`
+- canonical workflow source: `%USERPROFILE%/plugins/post-card-memory-workflow`
+- 설치 캐시: `%USERPROFILE%/.codex/plugins/cache/personal/post-card-memory-workflow/0.1.0+codex.20260927080957`
 - source/cache: 전체 18개 파일 SHA-256 일치, 차이 0건
 - plugin 내부 Markdown 링크: 14개 파일, 깨진 링크 0건
 - plugin 재설치 명령: 성공 메시지와 새 캐시 생성을 확인했어. 직후 첫 조회에서는 일시적으로 `installed: false`, `enabled: false`가 보였지만 최종 재조회에서 새 버전 `installed: true`, `enabled: true`를 확인했어. 현재 세션은 이전 설치본을 이미 로드한 상태라 새 세션 실제 로딩만 아직 미확인이야.

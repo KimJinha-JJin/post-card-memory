@@ -317,7 +317,7 @@
 
 - 사고 재발 방지를 위해 `AGENTS.md` 5절 끝에 "실사용 실기기는 테스트 대상이 아니라 보호 대상" 원칙을 추가했어. 명령어 이름이 아니라 효과 기준(설치 상태/package/내부 저장소/Room DB/SharedPreferences/앱 전용 파일 영향 가능성)으로 판단하고, connectedAndroidTest/connectedCheck/instrumented test/uninstall/pm clear/destructive migration을 실기기에서 사용자 명시 승인 없이 금지, 설치/제거 동작을 모르면 실행하지 않고 STOP, 자동 계측은 emulator/별도 환경 사용이 원칙임을 명시했어.
 
-### Room 18→19 적용과 검증 (실기기 R3KYB00HAYY)
+### Room 18→19 적용과 검증 (실기기 [승인된 실사용 기기 식별자 비공개])
 
 - 적용 전 diff 재확인: 66일차 미커밋 변경이 사고 직전과 동일(AGENTS.md 4줄 추가만 새로 생김). `MIGRATION_18_19`는 `ALTER TABLE ... ADD COLUMN` 4개만 수행하는 순수 additive migration이고 `DatabaseModule.kt`에 정상 등록돼 있음을 코드로 재확인했어.
 - install 직전 DB 스냅샷(run-as로 pull): `user_version=18`, `postcards` 1행 유지.
@@ -1755,7 +1755,7 @@ Room 선례: `PostcardDatabase` version 18/exportSchema=true, schema `app/schema
 - 브랜치 `feature/photo-sticker`, HEAD `ed8fe88` (`Adopt Codex postcards_temp cleanup with IO-dispatcher fix`).
 - local/origin HEAD 일치, ahead/behind `0/0`, staged·unstaged tracked 변경 없음.
 - 기존 untracked: `.claude/settings.local.json`, `.codex-config.candidate.toml`, `.kotlin/errors/*.log`. 이번 작업에서 수정·삭제·stage하지 않는다.
-- Git 조회는 성공했으나 사용자 홈의 global ignore(`C:\Users\estel\.config\git\ignore`) 접근에는 permission 경고가 있었다. 저장소 상태 판정에는 영향이 없었다.
+- Git 조회는 성공했으나 사용자 홈의 global ignore(`%USERPROFILE%\.config\git\ignore`) 접근에는 permission 경고가 있었다. 저장소 상태 판정에는 영향이 없었다.
 
 **설정용 Dialog / modal 비교**
 

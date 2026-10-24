@@ -11,7 +11,7 @@
 - 시작 tracked/staged clean, 로컬 origin 추적 ref와 0/0. 최신 원격 직접 조회는 네트워크 실패로 미확인.
 - `86b0b3f` 이후 `4b865df`는 HANDOFF와 기존 파우치 목업만 추가한 문서 커밋. 사용자가 현재 HEAD를 시작 기준으로 인정했어.
 - 보호 파일 6종과 `mockups/sticker-pouch-mockup.html`은 수정·삭제·stage하지 않았어.
-- canonical `C:/Users/estel/plugins/post-card-memory-workflow/skills/post-card-memory-workflow`와 이 세션 Codex 설치 캐시의 15개 파일은 모두 해시가 같았어. 전일 HANDOFF 아래 과거의 설치 차이 기록은 현재 비교 결과가 아니야.
+- canonical `%USERPROFILE%/plugins/post-card-memory-workflow/skills/post-card-memory-workflow`와 이 세션 Codex 설치 캐시의 15개 파일은 모두 해시가 같았어. 전일 HANDOFF 아래 과거의 설치 차이 기록은 현재 비교 결과가 아니야.
 - STEP 1 구조 조사와 STEP 2 자산 계획 작성 완료. 정식 이미지 적용과 실기기 QA는 대기. 독립적인 달력 조사·목업은 사용자의 후속 직접 지시에 따라 별도로 진행해.
 - AGENTS, CLAUDE, workflow의 Codex 실행·이미지·UI/UX·공통 마감 규칙, IMAGE-ASSET-STANDARD/MAP, DECISIONS, 관련 테스트와 CI YAML을 확인했어. 단계 추적 전용 도구가 없어 대화와 문서로 상태를 남겨.
 
