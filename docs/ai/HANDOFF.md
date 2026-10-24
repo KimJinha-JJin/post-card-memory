@@ -1,3 +1,32 @@
+# HANDOFF — 114일차: 사용자 실기기 확인 완료 · commit/push 승인 · 실행 직전 기록
+
+2026-10-25, 사용자가 이번 Page Curl 앱 적용에 대해 "좋아 실기기 확인 오나료"라고 직접 확인 완료를 알려 줬어. **A안 삼각형 접힘 + 650ms의 사용자 실기기 확인 완료**로 기록해. Codex가 기기를 조작하거나 설치·측정한 결과는 아니야. 세부 QA 항목별 결과·설치 방식·기기 설정은 이번 확인 메시지에 없으므로 추정하지 않아.
+
+- 코드/테스트/APK는 아래 최종 로컬 검증 상태 그대로야. JVM 998건 통과와 Debug APK 빌드 근거를 재사용하며, 이번에는 문서만 갱신하고 `git diff --check`로 확인했어.
+- 실기기 감각 QA는 **실행 — 사용자 확인 완료**야. instrumentation과 새 GitHub Actions CI는 여전히 미실행이고, 장시간 메모리/GPU·자정·재생성 등 항목별 실측 완료로 확대하지 않아.
+- 커밋 직전 기준은 브랜치 `feature/photo-sticker`, HEAD `42eb6ced3b1241eb2e2c513eaf1616e326e72d2f`야. 로컬 origin ref와 GitHub 원격 브랜치도 같은 HEAD인 걸 다시 확인했어. 기존 구현 변경과 보호 미추적 파일은 그대로야.
+- 사용자가 실기기 확인 뒤 **"커밋, 푸시 진행해줘"**라고 별도로 명시 승인했어. 이번 production 2개·test 3개·문서 2개만 명시 경로로 stage/commit/push하고, 보호 미추적 파일은 제외해. 실제 commit SHA·push·CI 결과는 Git/Actions와 최종 완료보고를 기준으로 확인해. push 후 현행 CI의 JVM·Debug APK·instrumentation 컴파일 결과를 확인하되 실제 기기 instrumentation 실행으로 확대하지 않아. 성공 기록만을 위한 추가 문서 commit/push는 만들지 않아.
+
+---
+
+# HANDOFF — 114일차 구현 직후: 방문 달력 A안 Page Curl · 650ms · 로컬 검증 완료 / 실기기 QA 대기
+
+확인일 2026-10-25, 담당 Codex, 수동 표준 모드. 사용자가 독립 목업 페이지를 확인하고 **A안 삼각형 접힘 + 650ms**를 선택한 뒤 앱 적용을 직접 승인했어. 이후 최종 직접 지시로 연속 입력은 **현재 장의 650ms 완료 → 마지막 요청 월까지 한 번의 추가 전환**으로 확정했어. 이전 선택 답변보다 이 최종 지시가 우선이야. 앱 설치·실기기 QA·commit·push는 수행하지 않았어.
+
+- **Git 기준:** `feature/photo-sticker`, HEAD `42eb6ced3b1241eb2e2c513eaf1616e326e72d2f`, 시작 tracked/staged clean, 로컬 origin 추적 ref 대비 0/0. 1부에서 GitHub 연결 도구로 같은 원격 HEAD와 기존 CI run `40099943240` success를 확인했어. 이번 구현 뒤 새 원격 조회·CI 실행은 하지 않았어. 아래 113일차 미커밋/HEAD 표기는 당시 이력이며 현재 기준과 구분해.
+- **사용자 관점 변경:** 월 이동은 오른쪽 아래(다음)/왼쪽 아래(이전)에서 접혀 현재 장을 걷고 목적지 월을 드러내. 종이·제목·장식·요일·날짜·방문 표시는 같은 인쇄면으로 함께 clip/반사해. 월 전환에 기존 윗변 `rotationX`와 장 전체 alpha 전환은 남기지 않았어. 새로운 이미지나 bitmap 캡처는 없어.
+- **입력/월 상태:** `VisitCalendarPagingState`가 마지막 요청 월 하나와 불변 `activeTurn(from,to)`을 분리해. 추가 화살표는 마지막 요청 월 기준으로 계산하고, 현재 장을 취소하거나 방향을 바꾸지 않아. 완료 시 마지막 요청과 도착 월이 다를 때만 다음 한 장을 시작해. 연월 봉투/오늘 복귀도 같은 요청 경로를 사용해. `displayedMonth`는 현재 진행 중 장의 목적지이고 각 인쇄면은 자기 월과 방문 집합을 사용해. 요청만 바뀔 때 방문 로딩 월은 바뀌지 않아.
+- **수명/보존:** `displayedMonth` Saver, TODAY 판정, 월별 방문 IO/캐시, 봉투 navigation, 42칸 높이, 화살표 터치/접근성, 스티커 통 왕복의 SaveableStateHolder는 유지했어. 월 전환 coroutine은 요청 월을 key로 취소하지 않아. composable이 제거되면 진행 중 coroutine은 취소되고 일시적인 접힘/마지막 요청은 저장하지 않아. 재생성 시 저장된 표시 월을 평평한 장으로 시작하도록 구현했으며 실제 복원 QA는 대기야.
+- **UI/UX 범위:** 사용자 행동은 기존 `이동`, 역할은 기존 월 탐색이야. 기존 진입·선택·고정 조작부·잉크/종이 토큰을 유지하고 모션만 승인된 A안으로 바꿨어. 새 toolbar/button/surface/저장 문법은 없어. 순수 반사로 종이 인쇄의 길이를 보존하며 B안 곡면은 구현하지 않았어. 작은 원근 차이·클리핑 가장자리·뒷면/그림자 감각은 실기기 확인이 필요해.
+- **변경 파일:** `VisitCalendarDrawer.kt`(월 이동 orchestrator/장 연결), 신규 `VisitCalendarPageCurl.kt`(입력 상태·접힘 기하·cached clip/반사 렌더링), `VisitCalendarTest.kt`와 `VisitCalendarPaperPageStructureTest.kt`(새 계약으로 교체), 신규 `VisitCalendarPageCurlTest.kt`(6건), `TEST-COVERAGE-MAP.md`, 이 HANDOFF. Room/schema19/DAO/Migration, 방문 저장소, 이미지, 봉투 렌더링, 파우치, 보안·Gradle·CI·공통 규칙은 수정하지 않았어.
+- **로컬 자동검증 — 실행:** Zulu `17.0.21+9`, 기존 Gradle `9.8.2`로 최종 `:app:testDebugUnitTest :app:assembleDebug` 성공. 결과 XML **109개 / 998 tests, 실패·오류·skip 0**. `git diff --check` 통과. 테스트 수 992→998, 파일107→108/helper1, instrumentation 소스21건/8파일 유지. TEST-COVERAGE-MAP 갱신 완료. APK는 `app/build/outputs/apk/debug/app-debug.apk`, 53,792,674 bytes, SHA-256 `A758188DD909EAE71657279D51124916177D04E5D6D98C4C14664A860554A81A`야.
+- **실행 중 실패와 해결:** 제한 환경의 offline 실행은 foojay 플러그인 해석 단계에서 막혀 앱 검사에 도달하지 못했어(test infrastructure/권한·해석 환경). 설정을 고치지 않고 승인 검토를 거친 기존 사용자 환경으로 실행했어. 첫 compile은 nested DrawScope에서 `drawContent` 수신자가 모호해 실패했고 명시 수신자로 보정했어(production 컴파일 오류). 이어 관련 87건 중 1건은 예전 직접 월 변경 handler 문자열을 요구해 실패했어(assertion/구조 계약 갱신 누락). 새 요청 handler로 교체하고 터치·접근성·신문 오림 조건을 유지한 뒤 최종 전체 998건이 통과했어. 핵심 접힘/입력 설계의 되돌림은 없어. 최종 diff에서 뒷면 색도 원래 월별 종이 윤곽으로 clip하도록 보정하고 전체 998건/APK를 다시 확인했어. 이 재검증의 첫 자동 권한 검토는 시간 초과로 실행되지 않았고, 허용된 1회 재시도는 정상 실행돼 성공했어.
+- **나머지 검증 영역:** 실사용 기기 instrumentation 미실행, GitHub Actions CI 새 실행 미실행, 실기기 감각 QA 미실행. 이번 `assembleDebugAndroidTest`도 미실행이야. Android Emulator는 사용하지 않았어. Android 앱 설치/기기 데이터 접근 없이 마감했어. AGP의 기존 deprecated/experimental 설정 경고는 관찰했지만 범위 밖이라 설정을 바꾸지 않았어.
+- **미검증/남은 위험:** 실제 Compose의 두 clip 인쇄 replay, 반사된 뒷면·얇은 그림자·650ms 정착, 연타/반대 입력·봉투 진입·drawer 닫기·스티커 통 왕복·재생성의 실제 조작, 자정/연도 경계의 runtime, 프레임 시간/장시간 메모리/GPU는 미실측이야. drawWithCache 안의 Path/좌표 버퍼/Matrix를 재사용하지만 성능/메모리 안전 검증 완료를 뜻하지 않아. 처음 여는 과거 월의 방문 로딩 전 빈 표시는 기존 구조 그대로야. JVM은 순수 정책/기하와 연결 구조를 검사하며 실제 렌더링·감각을 보장하지 않아.
+- **보호 상태/다음 출발점:** 기존 보호 미추적 5묶음(`.codex-config.candidate.toml`, `.kotlin/` 로그3개, 기존 PNG3개)과 별도 `.claude/settings.local.json`은 보존했어. 전역 Git ignore 접근 경고가 있어 `.claude/`도 untracked로 보이며 설정은 건드리지 않았어. 새 Kotlin 파일2개도 untracked이므로 이후 승인된 명시 stage 시 보호 파일과 구분해야 해. 현재 staged 변경·commit·push 없음. 다음은 사용자 승인 범위에서 기존 실사용 기기 데이터 보호·서명 확인·설치 승인 절차를 따르는 감각 QA야. 앱 실행 결과 확인 전 commit/push 금지를 유지해.
+
+---
+
 # HANDOFF — 113일차 후속: 로컬 Zulu 판정 정정 · 잔여 보안 감사 결과 · 문서-only · 미커밋
 
 담당 Claude Code, 수동 표준 모드. 사용자가 이 HANDOFF 정정을 승인했어. 개인정보 노출(C1)은 조사와 수정안 제시까지만 승인됐고, 과거 Git 이력 재작성·force push·공개 범위 변경은 승인되지 않았어. **114일차 방문 달력 페이지 컬은 이월 상태 그대로야.**

@@ -398,39 +398,45 @@ class VisitCalendarTest {
         assertFalse(isCurrentMonthVisibleInMonthPicker(2026, firstMonthOutsideWindow))
     }
 
-    @Test fun earlierMonthPageAlwaysLiesOnTopOfLaterMonthPage() {
-        // 90일차: 벽걸이 달력 묶음처럼 앞선 달이 위 — 다음 달로 가면 지금 장이 위에서 넘어가고,
-        // 이전 달로 가면 이전 장이 위에서 내려와 덮는다. 해가 바뀌는 경계와 먼 점프도 같다.
-        val pairs = listOf(
-            YearMonth.of(2026, 9) to YearMonth.of(2026, 10),
-            YearMonth.of(2026, 12) to YearMonth.of(2027, 1),
-            YearMonth.of(2019, 3) to YearMonth.of(2026, 9)
-        )
-        pairs.forEach { (earlier, later) ->
-            assertTrue(
-                "$earlier 장은 $later 장 위에 있어야 함",
-                visitCalendarPageStackZIndex(earlier) > visitCalendarPageStackZIndex(later)
-            )
-        }
-    }
-
-    @Test fun turningPageIsOpaqueWhenFlatAndGoneWhenFullyTurned() {
+    @Test fun pageFoldStartsAtTheRequestedLowerCorner() {
         listOf(true, false).forEach { forward ->
-            assertEquals(1f, visitCalendarPageTurnAlpha(0f, forward), 0f)
-            assertEquals(0f, visitCalendarPageTurnAlpha(1f, forward), 0f)
-            val samples = (0..20).map { visitCalendarPageTurnAlpha(it / 20f, forward) }
-            samples.zipWithNext().forEach { (a, b) -> assertTrue("들릴수록 흐려지기만 해야 함", b <= a) }
-            samples.forEach { assertTrue(it in 0f..1f) }
+            val fold = VisitCalendarPageFold()
+            fold.update(256f, 302f, .05f, forward, 1f)
+            val cornerX = if (forward) 256f else 0f
+            assertTrue(fold.signedDistance(cornerX, 302f) > 0f)
+            assertTrue(fold.signedDistance(256f - cornerX, 302f) < 0f)
+            assertTrue(fold.signedDistance(cornerX, 0f) < 0f)
         }
     }
 
-    @Test fun nextMonthPageStaysOpaqueWhileTurningSoTwoMonthsNeverShowThroughEachOther() {
-        // 90일차 QA: 다음 달로 넘길 때 현재 장이 반쯤 넘어간 채 반투명하면 두 달의 인쇄가 겹쳐
-        // crossfade처럼 보였다. 현재 장은 절반 넘게 넘어가도 불투명해야 하고, 어떤 지점에서도
-        // 이전 달로 내려오는 장보다 먼저 흐려지면 안 된다.
-        assertEquals(1f, visitCalendarPageTurnAlpha(0.5f, forward = true), 0f)
-        (0..20).map { it / 20f }.forEach { lift ->
-            assertTrue(visitCalendarPageTurnAlpha(lift, forward = true) >= visitCalendarPageTurnAlpha(lift, forward = false))
+    @Test fun pageFoldBeginsFlatAndEndsCompletelyOutsideThePrintedSheet() {
+        val fold = VisitCalendarPageFold()
+        val polygon = FloatArray(12)
+        listOf(true, false).forEach { forward ->
+            fold.update(256f, 302f, 0f, forward, 1f)
+            assertEquals(4, fold.writePolygon(polygon, folded = false))
+            assertEquals(0, fold.writePolygon(polygon, folded = true))
+            fold.update(256f, 302f, 1f, forward, 1f)
+            assertEquals(0, fold.writePolygon(polygon, folded = false))
+            for (x in listOf(0f, 256f)) for (y in listOf(0f, 302f)) {
+                val rx = fold.reflectedX(x, y)
+                val ry = fold.reflectedY(x, y)
+                assertTrue("다 넘어간 장이 달력 위에 남으면 안 됨", rx < -8f || rx > 264f || ry < -8f || ry > 310f)
+            }
+        }
+    }
+
+    @Test fun pageReflectionPreservesPrintDistancesAndIsItsOwnInverse() {
+        val fold = VisitCalendarPageFold()
+        listOf(true, false).forEach { forward ->
+            fold.update(256f, 302f, .5f, forward, 1f)
+            val ax = fold.reflectedX(180f, 250f)
+            val ay = fold.reflectedY(180f, 250f)
+            val bx = fold.reflectedX(210f, 290f)
+            val by = fold.reflectedY(210f, 290f)
+            assertEquals(2500f, (ax - bx) * (ax - bx) + (ay - by) * (ay - by), .02f)
+            assertEquals(180f, fold.reflectedX(ax, ay), .001f)
+            assertEquals(250f, fold.reflectedY(ax, ay), .001f)
         }
     }
 

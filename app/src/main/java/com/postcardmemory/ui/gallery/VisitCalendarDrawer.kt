@@ -6,16 +6,11 @@ import android.os.Vibrator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.EnterExitState
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,11 +44,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -64,14 +59,12 @@ import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
@@ -101,6 +94,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -205,109 +199,9 @@ private val VisitCalendarMonthSaver = Saver<YearMonth, String>(
     restore = { saved -> runCatching { YearMonth.parse(saved) }.getOrDefault(YearMonth.now()) }
 )
 
-// 90일차: 벽걸이 달력 한 장을 위로 넘기는 월 이동. 값은 실기기 QA로 다듬는 미감 값이다.
-private const val PAGE_TURN_DURATION_MS = 380
-// 원근을 약하게 둬 책장처럼 깊게 말리지 않고 얇은 종이가 살짝 들리는 정도로만 보이게 한다.
-private const val PAGE_TURN_CAMERA_DISTANCE = 14f
-
-// 이전 달: 이전 장이 위에서 내려와 덮는다. 실기기 QA에서 자연스럽다고 확인된 값이라 그대로 둔다.
-// 들린 채(80°, 반투명) 시작해 FastOutSlowIn으로 빨리 불투명해지고 천천히 내려앉는다.
-private const val PAGE_TURN_BACKWARD_MAX_ANGLE_DEG = 80f
-private const val PAGE_TURN_BACKWARD_FADE_START = 0.45f
-
-// 다음 달: 현재 장이 윗변을 축으로 위로 들려 넘어간다. 불투명한 채 천천히 들리다 빨라져
-// 옆면(90°)에서 선처럼 사라지고, 흐려짐은 마지막에만 쓴다 — 오래 반투명하게 떠 있으면
-// 두 달의 인쇄가 겹쳐 보여 종이가 아니라 화면 crossfade처럼 읽힌다(90일차 QA).
-private const val PAGE_TURN_FORWARD_MAX_ANGLE_DEG = 90f
-private const val PAGE_TURN_FORWARD_FADE_START = 0.9f
-
-// 그림자의 최대 농도. 다음 달에서는 들리는 현재 장에, 이전 달에서는 덮이는 아래 장에 드리운다.
-private const val PAGE_TURN_MAX_SHADE = 0.12f
-
-/**
- * 달력 묶음에서 이 달의 장이 놓이는 높이. 실제 벽걸이 달력처럼 앞선 달이 뒤 달 위에 겹쳐
- * 있다 — 다음 달로 가면 지금 장이 위에서 들려 넘어가며 아래 장이 드러나고, 이전 달로 가면
- * 이전 장이 위에서 내려와 덮는다. 달 자체로 정해지므로 별도 순서 state가 없다.
- */
-internal fun visitCalendarPageStackZIndex(month: YearMonth): Float =
-    -(month.year * 12 + month.monthValue - 1).toFloat()
-
-/**
- * 들린 정도(0 = 펼쳐짐, 1 = 다 넘어감)에 따른 움직이는 장의 불투명도. [forward]면 현재 장이
- * 거의 다 넘어갈 때까지 불투명하고, 이전 달로 내려오는 장은 더 일찍부터 흐려져 있다.
- */
-internal fun visitCalendarPageTurnAlpha(lift: Float, forward: Boolean): Float {
-    val fadeStart = if (forward) PAGE_TURN_FORWARD_FADE_START else PAGE_TURN_BACKWARD_FADE_START
-    return if (lift <= fadeStart) {
-        1f
-    } else {
-        (1f - (lift - fadeStart) / (1f - fadeStart)).coerceIn(0f, 1f)
-    }
-}
-
-/**
- * 월 이동의 AnimatedContent 전환. 움직임 자체는 각 장의 [visitCalendarPageTurnModifier]가
- * 맡고, 여기서는 두 장을 끝까지 남겨 두고 달력 묶음 순서로 겹치게만 한다. 어느 달이든 장의
- * 높이가 같아 크기 전환이 없고, 들린 장이 옆으로 살짝 넓어져도 잘리지 않게 clip하지 않는다.
- */
-private fun AnimatedContentTransitionScope<YearMonth>.visitCalendarPageTurnTransition(): ContentTransform =
-    ContentTransform(
-        targetContentEnter = EnterTransition.None,
-        initialContentExit = ExitTransition.KeepUntilTransitionsFinished,
-        targetContentZIndex = visitCalendarPageStackZIndex(targetState),
-        sizeTransform = SizeTransform(clip = false)
-    )
-
-/**
- * 달력 한 장의 넘김 표현. [forward](다음 달로 이동)이면 위에 놓인 현재 장이 불투명한 채 들려
- * 넘어가며 조금 어두워지고, 다음 장은 그 아래에 움직이지 않고 놓여 있다가 드러난다. 이전 달로
- * 이동하면 이전 장이 위에서 내려와 덮고, 덮이는 장은 그 아래에서 그림자가 짙어진다. 두 방향은
- * 대칭일 필요가 없어 값을 따로 둔다. 장 안의 종이·글자·방문 표시가 한 몸으로 움직인다.
- */
-@Composable
-private fun AnimatedVisibilityScope.visitCalendarPageTurnModifier(forward: Boolean): Modifier {
-    // 움직이는 장은 방향마다 하나뿐이다 — 다음 달은 나가는 장(PostExit), 이전 달은 들어오는 장(PreEnter).
-    val easing = if (forward) FastOutLinearInEasing else FastOutSlowInEasing
-    val lift by transition.animateFloat(
-        transitionSpec = { tween(PAGE_TURN_DURATION_MS, easing = easing) },
-        label = "visitCalendarPageLift"
-    ) { state ->
-        when (state) {
-            EnterExitState.PreEnter -> if (forward) 0f else 1f
-            EnterExitState.Visible -> 0f
-            EnterExitState.PostExit -> if (forward) 1f else 0f
-        }
-    }
-    // 그림자는 두 방향 모두 나가는 장에만 진다 — 다음 달에서는 들려 넘어가는 현재 장,
-    // 이전 달에서는 내려오는 장에 덮이는 아래 장. 다음 장이 그림자에서 밝아지며 나타나면
-    // fade-in처럼 보여서 들어오는 장에는 그림자를 두지 않는다.
-    val shade by transition.animateFloat(
-        transitionSpec = { tween(PAGE_TURN_DURATION_MS, easing = easing) },
-        label = "visitCalendarPageShade"
-    ) { state ->
-        when (state) {
-            EnterExitState.PreEnter -> 0f
-            EnterExitState.Visible -> 0f
-            EnterExitState.PostExit -> 1f
-        }
-    }
-    val maxAngle = if (forward) PAGE_TURN_FORWARD_MAX_ANGLE_DEG else PAGE_TURN_BACKWARD_MAX_ANGLE_DEG
-    return Modifier
-        .graphicsLayer {
-            transformOrigin = TransformOrigin(0.5f, 0f)
-            rotationX = lift * maxAngle
-            cameraDistance = PAGE_TURN_CAMERA_DISTANCE * density
-            alpha = visitCalendarPageTurnAlpha(lift, forward)
-        }
-        .drawWithContent {
-            drawContent()
-            if (shade > 0f) drawRect(Color.Black, alpha = shade * PAGE_TURN_MAX_SHADE)
-        }
-}
-
 /**
  * MONTH_PICKER/YEAR_PICKER 안에서 ▲▼로 연도·decade를 한 칸씩 옮길 때 쓰는 수직 슬라이드.
- * 월 이동의 가로 슬라이드와 같은 원리(state 비교가 방향을 정하고 animation은 표현만) —
+ * state 비교가 방향을 정하고 animation은 표현만 맡는다 —
  * ▲(다음)는 위로 스와이프하듯, ▼(이전)는 아래로 스와이프하듯 움직인다(실기기 QA 피드백).
  */
 private fun <T : Comparable<T>> AnimatedContentTransitionScope<T>.visitCalendarPickerStepTransition(): ContentTransform {
@@ -1644,6 +1538,27 @@ internal fun MonthlyVisitCalendar(
     var displayedMonth by rememberSaveable(stateSaver = VisitCalendarMonthSaver) {
         mutableStateOf(initialMonth)
     }
+    // 114일차: 진행 중인 장은 고정하고, 추가 입력은 마지막 요청 월 하나로 합친다.
+    // 일시적인 접힘/요청은 저장하지 않는다. 복원하면 saved 표시 월의 평평한 장으로 시작한다.
+    var paging by remember { mutableStateOf(VisitCalendarPagingState(displayedMonth)) }
+    val pageTurnProgress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { paging.requestedMonth }.collect {
+            while (paging.settledMonth != paging.requestedMonth) {
+                val started = paging.startNext()
+                val turn = started.activeTurn ?: break
+                pageTurnProgress.snapTo(0f)
+                paging = started
+                displayedMonth = turn.to
+                pageTurnProgress.animateTo(
+                    1f,
+                    animationSpec = tween(VISIT_CALENDAR_PAGE_TURN_DURATION_MS, easing = LinearEasing)
+                )
+                // 최신 requestedMonth를 보존한다. 목적지가 같으면 추가 장을 만들지 않는다.
+                paging = paging.complete()
+            }
+        }
+    }
     // MONTH_PICKER/YEAR_PICKER가 지금 보여주는 연도. 실제 달력의 displayedMonth와는 분리해서,
     // picker 안에서 연도만 훑어보다가 선택 없이 뒤로 가도 실제 표시 월을 건드리지 않는다.
     var pickerYear by rememberSaveable { mutableStateOf(initialMonth.year) }
@@ -1671,8 +1586,8 @@ internal fun MonthlyVisitCalendar(
         loadedVisitsByMonth[displayedMonth] = loaded
     }
 
-    // 달력 종이는 여기서 한 번만 불러와 모든 장이 같은 bitmap을 나눠 쓴다. 월 이동
-    // AnimatedContent 안에서 불러오면 달이 바뀔 때마다 새 장이 다시 decode한다.
+    // 달력 종이는 여기서 한 번만 불러와 아래 장/움직이는 장이 같은 bitmap을 나눠 쓴다.
+    // 각 장 안에서 불러오면 달이 바뀔 때마다 새 장이 다시 decode한다.
     val calendarPaper = ImageBitmap.imageResource(R.drawable.visit_calendar_paper)
     // 단계·월 전환 바깥에서 한 번 decode해 두 picker의 모든 칸이 같은 bitmap을 써.
     val pickerEnvelope = ImageBitmap.imageResource(R.drawable.visit_calendar_envelope_base)
@@ -1704,7 +1619,7 @@ internal fun MonthlyVisitCalendar(
                                     modifier = Modifier
                                         .padding(top = 1.dp)
                                         .clickable(onClick = {
-                                            displayedMonth = todayYearMonth
+                                            paging = paging.request(todayYearMonth)
                                             vibrateVisitCalendarTodayReturn(context)
                                         })
                                 )
@@ -1715,19 +1630,19 @@ internal fun MonthlyVisitCalendar(
                         // 묶어 월 이동 때 한 몸으로 움직인다. ◀ ▶는 인쇄물이 아닌 조작부라 종이 위에
                         // 겹쳐 고정해 두고, 가운데 빈 곳의 터치는 아래 제목으로 그대로 내려간다.
                         Box(Modifier.fillMaxWidth()) {
-                            val monthTransition = updateTransition(displayedMonth, label = "visitCalendarMonthPage")
-                            monthTransition.AnimatedContent(
-                                transitionSpec = { visitCalendarPageTurnTransition() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { month ->
-                                // 넘기는 도중에만 두 상태가 다르다. 다음 달로 가는지는 월 값 비교가
-                                // 정하고, animation은 그 결과를 표현만 한다.
-                                val forward = monthTransition.targetState > monthTransition.currentState
-                                // 나가는 장은 자기 [month]만 읽는다 — displayedMonth를 여기서 읽으면
-                                // 넘어가는 도중 다음 달 내용으로 바뀐다.
+                            // 아래 장과 움직이는 장은 각각 자기 월/방문 집합을 사용한다.
+                            // 요청이 바뀌어도 activeTurn의 from/to와 방향은 끝까지 유지된다.
+                            val activeTurn = paging.activeTurn
+                            val pageMonths = if (activeTurn == null) listOf(displayedMonth)
+                                else listOf(activeTurn.to, activeTurn.from)
+                            pageMonths.forEachIndexed { index, month ->
                                 VisitCalendarMonthPage(
                                     month = month,
-                                    modifier = visitCalendarPageTurnModifier(forward),
+                                    modifier = if (index == 0) Modifier else Modifier.visitCalendarPageCurl(
+                                        progress = { pageTurnProgress.value },
+                                        forward = activeTurn!!.forward,
+                                        month = month
+                                    ),
                                     paper = calendarPaper,
                                     visitedEpochDays = visitedDaysForMonth(
                                         month = month,
@@ -1747,7 +1662,7 @@ internal fun MonthlyVisitCalendar(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 // 96일차 추가: 터치 영역·클릭·접근성 설명은 그대로, 보이는 화살표만 신문 오림.
-                                IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
+                                IconButton(onClick = { paging = paging.step(-1) }) {
                                     Box(
                                         Modifier.size(VISIT_CALENDAR_ARROW_SIZE)
                                             .semantics { contentDescription = "이전 달" }
@@ -1755,7 +1670,7 @@ internal fun MonthlyVisitCalendar(
                                     )
                                 }
                                 Spacer(Modifier.weight(1f))
-                                IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
+                                IconButton(onClick = { paging = paging.step(1) }) {
                                     Box(
                                         Modifier.size(VISIT_CALENDAR_ARROW_SIZE)
                                             .semantics { contentDescription = "다음 달" }
@@ -1801,7 +1716,7 @@ internal fun MonthlyVisitCalendar(
                                 today = todayYearMonth,
                                 envelope = pickerEnvelope,
                                 onMonthSelected = { selectedYear, month ->
-                                    displayedMonth = YearMonth.of(selectedYear, month)
+                                    paging = paging.request(YearMonth.of(selectedYear, month))
                                     onNavLevelChange(VisitCalendarNavLevel.CALENDAR)
                                 }
                             )

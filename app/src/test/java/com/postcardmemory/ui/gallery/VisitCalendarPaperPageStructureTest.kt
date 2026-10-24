@@ -41,7 +41,7 @@ class VisitCalendarPaperPageStructureTest {
     private val calendarBody: String by lazy { functionBody("internal fun MonthlyVisitCalendar(") }
 
     // 월 이동(달력 한 장 넘김)이 시작되는 지점.
-    private val monthTransitionMarker = "updateTransition(displayedMonth"
+    private val monthTransitionMarker = "val pageMonths ="
     private val monthTransition: Int by lazy {
         calendarBody.indexOf(monthTransitionMarker).also {
             assertTrue("월 이동 transition을 찾지 못함", it >= 0)
@@ -57,7 +57,7 @@ class VisitCalendarPaperPageStructureTest {
         )
         val load = calendarBody.indexOf("R.drawable.visit_calendar_paper")
         assertTrue("종이는 MonthlyVisitCalendar 안에서 불러와야 함", load >= 0)
-        assertTrue("종이는 월 이동 AnimatedContent보다 먼저(바깥에서) 불러와야 함", load < monthTransition)
+        assertTrue("종이는 월별 장을 그리기 전(바깥에서) 불러와야 함", load < monthTransition)
         assertFalse("달력 장 안에서 종이를 다시 불러오면 안 됨", pageBody.contains("imageResource"))
     }
 
@@ -72,28 +72,39 @@ class VisitCalendarPaperPageStructureTest {
             "displayedMonth로 도는 AnimatedContent가 따로 남아 있으면 안 됨",
             sourceText.contains("targetState = displayedMonth")
         )
-        val animatedContent = calendarBody.indexOf("monthTransition.AnimatedContent(", monthTransition)
-        val pageCall = calendarBody.indexOf("VisitCalendarMonthPage(", animatedContent)
-        assertTrue("월 이동 AnimatedContent가 달력 한 장을 감싸야 함", animatedContent > monthTransition && pageCall > animatedContent)
+        val pageLoop = calendarBody.indexOf("pageMonths.forEachIndexed", monthTransition)
+        val pageCall = calendarBody.indexOf("VisitCalendarMonthPage(", pageLoop)
+        assertTrue("아래 장/넘기는 장 모두 같은 인쇄면을 사용해야 함", pageLoop > monthTransition && pageCall > pageLoop)
         assertTrue(
             "넘김 표현은 달력 한 장 전체(modifier)에 걸려야 함",
-            calendarBody.substring(pageCall, minOf(calendarBody.length, pageCall + 200))
-                .contains("modifier = visitCalendarPageTurnModifier(")
+            calendarBody.substring(pageCall, minOf(calendarBody.length, pageCall + 300))
+                .contains("Modifier.visitCalendarPageCurl(")
         )
-        assertTrue(calendarBody.contains("transitionSpec = { visitCalendarPageTurnTransition() }"))
+        assertTrue(calendarBody.contains("listOf(activeTurn.to, activeTurn.from)"))
     }
 
     @Test
-    fun pageTurn_hingesOnTheTopEdgeAndStacksByMonth() {
-        val turn = functionBody("private fun AnimatedVisibilityScope.visitCalendarPageTurnModifier(")
-        assertTrue("윗변을 축으로 위로 넘겨야 함(벽걸이 달력)", turn.contains("TransformOrigin(0.5f, 0f)"))
-        assertTrue("위로 넘김은 rotationX로 표현해야 함", turn.contains("rotationX ="))
-        assertFalse("옆으로 넘기거나 뒤집으면 안 됨", turn.contains("rotationY") || turn.contains("rotationZ"))
-        val spec = functionBody("private fun AnimatedContentTransitionScope<YearMonth>.visitCalendarPageTurnTransition(")
-        assertTrue("겹침 순서는 달력 묶음 순서를 따라야 함",
-            spec.contains("targetContentZIndex = visitCalendarPageStackZIndex(targetState)"))
-        assertTrue("넘어가는 장은 넘김이 끝날 때까지 남아야 함", spec.contains("ExitTransition.KeepUntilTransitionsFinished"))
-        assertTrue("들린 장이 잘리지 않게 clip하지 않아야 함", spec.contains("SizeTransform(clip = false)"))
+    fun pageTurn_keepsTheActiveSheetStableAndDrawsBothClippedPrintSurfaces() {
+        val file = listOf(
+            "src/main/java/com/postcardmemory/ui/gallery/VisitCalendarPageCurl.kt",
+            "app/src/main/java/com/postcardmemory/ui/gallery/VisitCalendarPageCurl.kt"
+        ).map { File(it) }.first { it.exists() }
+        val curl = file.readText()
+        assertTrue(calendarBody.contains("snapshotFlow { paging.requestedMonth }"))
+        assertTrue(calendarBody.contains("LaunchedEffect(Unit)"))
+        assertFalse("추가 입력이 진행 중인 장을 취소하면 안 됨", calendarBody.contains("LaunchedEffect(paging.requestedMonth)"))
+        assertTrue(calendarBody.contains("pageTurnProgress.animateTo("))
+        assertTrue(calendarBody.contains("VISIT_CALENDAR_PAGE_TURN_DURATION_MS, easing = LinearEasing"))
+        assertTrue(calendarBody.contains("progress = { pageTurnProgress.value }"))
+        assertTrue(calendarBody.contains("forward = activeTurn!!.forward"))
+        assertTrue(curl.contains("clipPath(front) { this@onDrawWithContent.drawContent() }"))
+        assertTrue(curl.contains("withTransform({ transform(reflection) })"))
+        assertTrue(curl.contains("clipPath(back) {"))
+        assertTrue("뒷면도 이 달의 손으로 자른 가장자리를 유지해야 함", curl.contains("clipPath(paperOutline)"))
+        assertTrue(curl.contains("seed = visitCalendarPaperEdgeSeed(month)"))
+        assertEquals("앞면과 접힌 면에 인쇄 전체를 그린다", 3, Regex(Regex.escape("drawContent()")).findAll(curl).count())
+        assertFalse("월 이동에 기존 윗변 회전을 남기면 안 됨", sourceText.contains("rotationX ="))
+        assertFalse("접힘 프레임마다 bitmap을 만들면 안 됨", curl.contains("createBitmap") || curl.contains("toImageBitmap"))
     }
 
     @Test
@@ -178,7 +189,7 @@ class VisitCalendarPaperPageStructureTest {
         val visitedLine = calendarBody.indexOf("\"다녀간 날들\"")
         assertTrue("\"다녀간 날들\" 줄은 달력 한 장 위에 있어야 함", visitedLine in 0 until monthTransition)
         listOf("\"이전 달\"", "\"다음 달\"").forEach { arrow ->
-            assertTrue("$arrow 버튼은 월 이동 AnimatedContent 뒤(위 z-order)에 있어야 함",
+            assertTrue("$arrow 버튼은 월별 장 뒤(위 z-order)에 있어야 함",
                 calendarBody.indexOf(arrow) > monthTransition)
         }
     }
@@ -186,10 +197,10 @@ class VisitCalendarPaperPageStructureTest {
     @Test
     fun monthArrowsKeepTheirButtonsAndOnlyLookCutFromNewsprint() {
         listOf(
-            Triple("minusMonths(1)", "\"이전 달\"", "pointsLeft = true"),
-            Triple("plusMonths(1)", "\"다음 달\"", "pointsLeft = false")
+            Triple("-1", "\"이전 달\"", "pointsLeft = true"),
+            Triple("1", "\"다음 달\"", "pointsLeft = false")
         ).forEach { (move, label, direction) ->
-            val button = calendarBody.indexOf("IconButton(onClick = { displayedMonth = displayedMonth.$move })")
+            val button = calendarBody.indexOf("IconButton(onClick = { paging = paging.step($move) })")
             assertTrue("$label 버튼(48dp 터치 영역·클릭)은 그대로여야 함", button > monthTransition)
             val inside = calendarBody.substring(button, calendarBody.indexOf("\n                                }", button))
             assertTrue("$label 접근성 설명 유지", inside.contains("contentDescription = $label"))
