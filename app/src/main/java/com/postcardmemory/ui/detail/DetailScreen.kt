@@ -114,14 +114,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
@@ -1288,10 +1293,9 @@ private fun cornerFoldClipPath(
 }
 
 /**
- * 접힘선 바로 옆에 종이가 접히며 생기는 그림자/하이라이트를 얹는다.
- * revealed(방금 드러난 면) 쪽엔 접힘 모서리가 빛을 받는 밝은 띠를,
- * remaining(아직 안 넘어간 면) 쪽엔 접힌 종이가 드리우는 어두운 띠를 그린다.
- * 이게 없으면 단순 대각선 wipe/슬라이드 전환처럼 보인다.
+ * 접힘선 바로 옆, 방금 드러난 면(revealed) 쪽에 접혀 올라간 종이가 드리우는
+ * 옅은 그림자를 얹는다. remaining 쪽 접힘선 옆은 [drawCornerFoldFlap]의 종이
+ * 날개가 덮으므로 따로 그리지 않는다. 이게 없으면 단순 대각선 wipe처럼 보인다.
  */
 private fun DrawScope.drawCornerFoldCreaseShade(
     revealProgress: Float,
@@ -1299,7 +1303,7 @@ private fun DrawScope.drawCornerFoldCreaseShade(
     bandWidthPx: Float
 ) {
     val progress = revealProgress.coerceIn(0f, 1f)
-    if (progress <= 0f || progress >= 1f || bandWidthPx <= 0f) {
+    if (!revealed || progress <= 0f || progress >= 1f || bandWidthPx <= 0f) {
         return
     }
     val crease = cornerFoldCrease(size, progress) ?: return
@@ -1322,15 +1326,10 @@ private fun DrawScope.drawCornerFoldCreaseShade(
     val bandPath = Path().apply {
         op(square, nearEdgeQuad, PathOperation.Intersect)
     }
-    val edgeColor = if (revealed) {
-        Color.White.copy(alpha = 0.32f)
-    } else {
-        Color.Black.copy(alpha = 0.30f)
-    }
     drawPath(
         path = bandPath,
         brush = Brush.linearGradient(
-            colors = listOf(edgeColor, Color.Transparent),
+            colors = listOf(Color.Black.copy(alpha = 0.16f), Color.Transparent),
             start = crease.point,
             end = farPoint
         )
@@ -1338,57 +1337,53 @@ private fun DrawScope.drawCornerFoldCreaseShade(
 }
 
 /**
- * 전환 애니메이션이 없을 때도 오른쪽 아래 모서리가 살짝 접혀 있는 것처럼
- * 보이게 하는 고정 크기 dog-ear 힌트. "이 엽서엔 뒷면이 있다"는 걸 정지
- * 화면만 봐도 암시하기 위함이다. 실제 반대 면 콘텐츠를 여기 넣으려면 항상
- * 두 면을 같이 mount해야 해서 비용이 커지므로, 대신 종이 뒷면 톤
- * (PaperSurface)·그림자·경계선만으로 가볍게 표현한다 — 장식이 아니라
- * "여길 넘겨볼 수 있다"는 발견 가능한 힌트가 목적.
+ * 넘어가는 면(remaining)의 모서리 부분이 접힘선을 따라 접혀 올라간 종이 날개.
+ * 방문 달력 Page Curl처럼 같은 인쇄면을 접힘선에 반사해 다시 그리고 그 위를
+ * 반대쪽 면의 종이색으로 덮어, 앞뒤가 한 장의 종이로 이어져 보이게 한다.
+ * 비트맵 캡처 없이 live 콘텐츠를 한 번 더 replay할 뿐이고, 날개는 엽서
+ * 사각형 밖으로 나가지 않는다(후반부엔 남은 면 전체를 덮으며 줄어든다).
  */
-private fun DrawScope.drawIdleCornerFoldHint(depthPx: Float) {
-    if (depthPx <= 0f || depthPx * 2f > size.width || depthPx * 2f > size.height) {
+private fun ContentDrawScope.drawCornerFoldFlap(
+    revealProgress: Float,
+    flapPaperColor: Color,
+    curlShadePx: Float
+) {
+    val progress = revealProgress.coerceIn(0f, 1f)
+    if (progress <= 0f || progress >= 1f) {
         return
     }
-    val corner = Offset(size.width, size.height)
-    val onRightEdge = corner - Offset(0f, depthPx)
-    val onBottomEdge = corner - Offset(depthPx, 0f)
-    val creaseMid = Offset(
-        (onRightEdge.x + onBottomEdge.x) / 2f,
-        (onRightEdge.y + onBottomEdge.y) / 2f
-    )
-
-    // 접힌 삼각형이 평평한 면 위에 드리우는 얕은 그림자
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(Color.Black.copy(alpha = 0.07f), Color.Transparent),
-            center = creaseMid,
-            radius = depthPx * 1.6f
-        ),
-        radius = depthPx * 1.6f,
-        center = creaseMid
-    )
-
-    val foldTriangle = Path().apply {
-        moveTo(onRightEdge.x, onRightEdge.y)
-        lineTo(corner.x, corner.y)
-        lineTo(onBottomEdge.x, onBottomEdge.y)
-        close()
+    val crease = cornerFoldCrease(size, progress) ?: return
+    val lifted = cornerFoldClipPath(size, progress, revealed = true)
+    val reflection = Matrix().apply {
+        setCreaseReflection(crease.point, crease.alongDiagonal)
     }
-    drawPath(path = foldTriangle, color = PaperSurface)
-    drawPath(
-        path = foldTriangle,
-        brush = Brush.linearGradient(
-            colors = listOf(Color.Black.copy(alpha = 0.06f), Color.Transparent),
-            start = corner,
-            end = creaseMid
+    val flap = Path().apply {
+        addPath(lifted)
+        transform(reflection)
+    }
+    clipRect(0f, 0f, size.width, size.height) {
+        withTransform({ transform(reflection) }) {
+            clipPath(lifted) {
+                this@drawCornerFoldFlap.drawContent()
+                drawRect(flapPaperColor.copy(alpha = 0.955f))
+            }
+        }
+        clipPath(flap) {
+            // 접힘선 쪽은 종이가 둥글게 말려 빛을 덜 받고, 날개 끝으로 갈수록 평평해진다.
+            drawRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(Color.Black.copy(alpha = 0.10f), Color.Transparent),
+                    start = crease.point,
+                    end = crease.point + crease.alongDiagonal * curlShadePx
+                )
+            )
+        }
+        drawPath(
+            path = flap,
+            color = Color.Black.copy(alpha = 0.10f),
+            style = Stroke(width = density)
         )
-    )
-    drawLine(
-        color = PaperDivider,
-        start = onRightEdge,
-        end = onBottomEdge,
-        strokeWidth = 1.2f * density
-    )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1468,19 +1463,19 @@ fun DetailScreen(
             flipCoroutineScope.launch {
                 // 단일 이징 곡선(tween)은 처음부터 끝까지 균일하게 매끈해서
                 // "스무스한 슬라이드" 느낌을 벗어나지 못했다 — 대신 손끝으로
-                // 모서리를 천천히 집어드는 구간(0~350ms, 전체 이동량의 10%만
-                // 진행) → 훅 넘어가는 구간(350~800ms, 나머지의 대부분을 처리)
-                // → 사뿐히 내려앉는 구간(800~1100ms)으로 나눈 keyframes를 쓴다.
+                // 모서리를 집어드는 구간(0~200ms, 전체 이동량의 10%만 진행)
+                // → 후루룩 넘어가는 구간(200~560ms, 나머지의 대부분을 처리)
+                // → 사뿐히 내려앉는 구간(560~800ms)으로 나눈 keyframes를 쓴다.
                 val startRotation = flipRotation.value
                 val rotationRange = targetRotation - startRotation
                 flipRotation.animateTo(
                     targetValue = targetRotation,
                     animationSpec = keyframes {
-                        durationMillis = 1100
+                        durationMillis = POSTCARD_FLIP_DURATION_MS
                         startRotation at 0
-                        (startRotation + rotationRange * 0.10f) at 350 using LinearEasing
-                        (startRotation + rotationRange * 0.88f) at 800 using FastOutSlowInEasing
-                        targetRotation at 1100 using LinearOutSlowInEasing
+                        (startRotation + rotationRange * 0.10f) at 200 using LinearEasing
+                        (startRotation + rotationRange * 0.88f) at 560 using FastOutSlowInEasing
+                        targetRotation at POSTCARD_FLIP_DURATION_MS using LinearOutSlowInEasing
                     }
                 )
                 isFlipAnimating = false
@@ -2501,10 +2496,11 @@ fun DetailScreen(
                 val postcardPreviewWidthFraction =
                     if (isFocusPreviewMode) 0.96f else 0.8f
 
-                // 앞↔뒤 page-turn: 카드를 회전시키는 대신, 오른쪽 위 모서리에서
-                // 왼쪽 아래로 이어지는 대각선을 따라 "이미 넘어간 삼각형"이
-                // 점점 커지는 clip으로 두 면을 합성한다. 앞/뒤 콘텐츠 자체는
-                // 그대로 두고, 각 Box에 drawWithContent+clipPath만 추가했다.
+                // 앞↔뒤 page-turn: 카드를 회전시키는 대신, 오른쪽 아래 모서리에서
+                // 왼쪽 위로 이어지는 대각선을 따라 "이미 넘어간 삼각형"이
+                // 점점 커지는 clip으로 두 면을 합성하고, 넘어가는 면 위에는
+                // 접힘선에 반사한 종이 날개(drawCornerFoldFlap)를 얹는다. 앞/뒤
+                // 콘텐츠 자체는 그대로 두고, 각 Box의 drawWithContent만 쓴다.
                 // (transformOrigin을 옮겨 카드 전체를 rotationY로 돌리던 이전
                 // 시도는 실기기에서 "화면 밖으로 튀어나가는 느낌"으로 확인돼
                 // 폐기했다 — cornerFoldClipPath 참고.)
@@ -2539,8 +2535,14 @@ fun DetailScreen(
                                         revealed = !isBackFace,
                                         bandWidthPx = 24f * density
                                     )
-                                } else {
-                                    drawIdleCornerFoldHint(depthPx = 26f * density)
+                                    if (isBackFace) {
+                                        // 앞면이 넘어가는 중: 날개에 보이는 건 뒷면 종이.
+                                        drawCornerFoldFlap(
+                                            revealProgress = legProgress,
+                                            flapPaperColor = PaperSurface,
+                                            curlShadePx = 40f * density
+                                        )
+                                    }
                                 }
                             }
                             .clip(RectangleShape)
@@ -4840,8 +4842,14 @@ fun DetailScreen(
                                         revealed = isBackFace,
                                         bandWidthPx = 24f * density
                                     )
-                                } else {
-                                    drawIdleCornerFoldHint(depthPx = 26f * density)
+                                    if (!isBackFace) {
+                                        // 뒷면이 넘어가는 중: 날개에 보이는 건 앞면 종이색.
+                                        drawCornerFoldFlap(
+                                            revealProgress = legProgress,
+                                            flapPaperColor = Color(pc.backgroundColorArgb),
+                                            curlShadePx = 40f * density
+                                        )
+                                    }
                                 }
                             }
                             .clip(RectangleShape)

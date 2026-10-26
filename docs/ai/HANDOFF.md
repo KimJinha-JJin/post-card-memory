@@ -1,3 +1,32 @@
+# HANDOFF — 115일차 후속: 사용자 실기기 QA 완료 · 정지 화면 dog-ear 힌트 제거 · 미커밋
+
+2026-10-26, 담당 Claude Code. 사용자가 기기를 연결하고 "설치하고 QA 진행해줘"로 설치·QA를 승인했어.
+
+- **설치(데이터 보존):** `adb devices -l`에 승인된 실사용 기기 SM-S936N 1대만 확인. 설치본과 새 debug APK의 서명 인증서 SHA-256이 같은 걸 `apksigner`로 확인한 뒤 `adb install -r -t`로 두 번 설치했어(첫 빌드, dog-ear 제거 빌드). 두 번 모두 Success, `firstInstallTime` 2026-10-05 그대로(재설치가 아닌 업데이트), DB `postcard_database` 크기·시각 그대로, `files` 용량 35510KB 그대로. 파일 수는 74→75였는데 첫 QA 중 앱 사용으로 생긴 것으로 보여(설치가 지우거나 덮은 흔적 없음, 정확한 파일은 미확인). uninstall·`pm clear`·instrumentation 없음.
+- **실기기 감각 QA — 실행, 사용자 확인 완료:** 날개 전환은 "스무스하고 부드러워", 연타·재진입·잔상 문제 없음. 이어 사용자 요청으로 **정지 화면의 오른쪽 아래 삼각형 dog-ear 힌트(`drawIdleCornerFoldHint`)를 제거**했어(날개 전환이 생긴 뒤 불필요해졌다는 판단). 함수와 앞/뒤 두 호출부를 지웠고, `PostcardFlipFoldTest`에 힌트가 다시 생기지 않는지 단언 1개를 추가했어(테스트 수 그대로). 재설치 뒤 사용자가 앞·뒷면 모두 삼각형 사라짐 + 날개 전환 그대로를 확인했어.
+- **자동검증(dog-ear 제거 뒤):** `:app:testDebugUnitTest :app:assembleDebug` 성공, XML 110개 / **1003 tests, 실패·오류·skip 0**, `git diff --check` 통과. `assembleDebugAndroidTest`는 제거 전 빌드에서만 성공 확인(이번 변경은 androidTest와 무관).
+- **Git:** commit·push 미승인·미실행. 승인 시 명시 경로만 stage: `DetailScreen.kt`, `PostcardFlipFold.kt`(신규), `PostcardFlipFoldTest.kt`(신규), `docs/ai/TEST-COVERAGE-MAP.md`, `docs/ai/HANDOFF.md`. 보호 미추적 5묶음 제외.
+
+---
+
+# HANDOFF — 115일차: 엽서 앞↔뒤 전환 종이 날개 · 800ms · 로컬 검증 완료 / 실기기 QA 대기 · 미커밋
+
+확인일 2026-10-26, 담당 Claude Code, 수동 표준 모드. 사용자 115일차 작업지시서로 조사→방식 선택→구현→자동 검증 연속 진행을 승인받았어. 이 세션엔 Task 도구가 없어 진행 안내로 대체했어. 앱 설치·실기기 QA·commit·push는 하지 않았어.
+
+- **시작 Git 기준:** `feature/photo-sticker`, HEAD `59e386b`(114일차 Page Curl), origin과 0/0, tracked clean. **114일차는 이미 사용자 실기기 확인 → 승인된 commit·push까지 끝났고**, 그 push의 CI run `40127234106`(SHA `59e386b`)은 success야(이번에 조회만 함). 따라서 이번 변경과 114일차 미커밋 변경이 섞일 일은 없어.
+- **기존 방식(조사 결과):** `DetailScreen.kt`의 앞/뒤 전환은 이미 rotationY가 아니라 오른쪽 아래→왼쪽 위 대각선 접힘선으로 두 면을 clip하는 2D 와이프였어(`cornerFoldClipPath`, 접힘선 양쪽 명암 띠, 1100ms 3구간 keyframes, `isFlipAnimating` 중 재입력 무시·버튼 비활성화, `isBackFace`는 remember만 해서 재진입 시 앞면). 접혀 올라간 종이 자체가 없어 "대각선 커튼"처럼 보일 수 있었어.
+- **적용한 방식:** 114일차 달력의 원리 중 "접힘선 반사로 같은 인쇄면을 다시 그리고 종이 뒷면색(alpha 0.955)으로 덮는 날개"만 응용했어. 넘어가는 면 위에 신규 `drawCornerFoldFlap`이 들린 모서리를 반사해 그리고, 날개 종이색은 반대 면(앞→뒤: `PaperSurface`, 뒤→앞: 엽서 배경색)이야. 날개 접힘선 쪽 옅은 말림 음영(40dp)과 1dp 윤곽, 새로 드러난 면 쪽엔 기존 흰 하이라이트 대신 옅은 그림자(0.16). 날개는 엽서 사각형 밖으로 안 나가(후반엔 남은 면을 덮으며 줄어듦). 달력의 월 대기열·좌표계·클래스는 복사/공통화하지 않았어. bitmap 캡처 없음, live 콘텐츠 1회 추가 replay.
+- **시간/입력:** 1100→**800ms**(집어듦 0~200ms 10% → 후루룩 200~560ms 88%까지 → 정착 560~800ms). 연속 입력은 기존 정책 그대로(진행 중 탭 무시, 버튼 비활성), 화면 이탈 시 `rememberCoroutineScope` 취소로 정리되는 기존 구조 유지.
+- **변경 파일:** `DetailScreen.kt`(날개 helper·명암 띠·두 면 호출부·keyframes·주석, 옛 주석의 대각선 방향 오기 정정), 신규 `ui/detail/PostcardFlipFold.kt`(시간 상수·반사 계산), 신규 `PostcardFlipFoldTest.kt`(5건), `TEST-COVERAGE-MAP.md`, 이 HANDOFF. Room schema 19/DAO/Migration, 저장·내보내기(`PostcardBackExportCapture` 등), 꾸미기 요소, 달력, 스티커 통, Gradle/CI/보안 설정은 미변경. 사용자 데이터 영향 없음(화면 그리기만).
+- **로컬 자동검증 — 실행:** Zulu 17 + Gradle 9.8.2로 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest` 성공. 결과 XML **110개 / 1003 tests, 실패·오류·skip 0**(998→+5). `git diff --check` 통과. 중간 실패 1회: 새 구조 테스트의 개수 정규식이 함수 정의까지 세서 3건이 됨(assertion/fixture) → 호출부만 세도록 보정, production 수정 아님. TEST-COVERAGE-MAP 갱신 완료.
+- **나머지 검증 영역:** 실사용 기기 instrumentation 미실행(이번 변경 대상 테스트 없음), GitHub Actions CI 미실행(push 미승인), **실기기 감각 QA 대기** — 작업 시점 `adb devices -l`에 연결 기기 없음. Emulator 미사용.
+- **실기기 QA 항목(SM-S936N, 데이터 보존 설치는 사용자 승인 필요):** 사진·텍스트·스티커·도장이 있는 엽서에서 앞→뒤/뒤→앞 전환, 날개가 한 장의 종이처럼 보이는지·반사된 흐릿한 비침이 거슬리지 않는지, 800ms 속도감, 빠른 연타, 전환 중 뒤로가기·재진입, 전환 후 크기·좌표·잔상, 끊김.
+- **미검증/위험:** 실제 Compose 렌더링 모양(날개·윤곽·그림자), 큰 사진 엽서에서 프레임 비용(두 번 replay + 프레임마다 Path 생성은 기존 구조와 같은 수준), 흰 배경 엽서에서 날개 경계 가독성. JVM은 반사 기하와 연결 구조만 보호해.
+- **보호 상태:** 보호 미추적 5묶음(`.codex-config.candidate.toml`, `.kotlin/`, PNG 3개) 미접촉. 새 Kotlin 파일 2개도 untracked라 승인 시 명시 경로로 stage해야 해.
+- **Git:** commit·push 미승인·미실행. 다음은 사용자 실기기 QA → 결과에 따라 승인된 commit·push → CI 확인.
+
+---
+
 # HANDOFF — 114일차: 사용자 실기기 확인 완료 · commit/push 승인 · 실행 직전 기록
 
 2026-10-25, 사용자가 이번 Page Curl 앱 적용에 대해 "좋아 실기기 확인 오나료"라고 직접 확인 완료를 알려 줬어. **A안 삼각형 접힘 + 650ms의 사용자 실기기 확인 완료**로 기록해. Codex가 기기를 조작하거나 설치·측정한 결과는 아니야. 세부 QA 항목별 결과·설치 방식·기기 설정은 이번 확인 메시지에 없으므로 추정하지 않아.
