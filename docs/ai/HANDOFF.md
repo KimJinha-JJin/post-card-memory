@@ -1,3 +1,25 @@
+# HANDOFF — 116일차 최종 마감: PR #4 `main` 병합 완료 · CI Success · main 보호 규칙 적용 · 문서 전용 PR
+
+2026-10-27, 담당 Claude Code(피코), 수동 표준 모드(116일차 최종 마감 작업지시서). 이 세션엔 Task 도구가 없어 진행 안내로 대체했어. 이번 작업은 **이 HANDOFF 1파일만** 바꿨어. 앱 코드·이미지 자산·Room schema·테스트·CI 워크플로우·사용자 데이터 미변경, 기기 접근 없음. 아래 "116일차: 통합 준비" 절의 "사용자 최종 승인 대기"는 병합 전 기록이고, 그 대기는 이 절로 해소됐어.
+
+- **병합 완료(GitHub에서 재확인):** PR #4(`main` ← `feature/photo-sticker`) `MERGED`, 2026-10-27T10:41:01Z, **merge commit 방식**. 최종 Merge commit = `9e15ed75564fc95061d8aa274fedb4014bbbd833`(`9e15ed7`), 부모는 이전 main `ac5cff5`와 개발 브랜치 `01621c3`. `9e15ed7` 트리는 `01621c3` 트리와 차이 0 — 병합으로 새로 바뀐 파일 없음.
+- **병합 후 CI:** GitHub Actions `Android CI` run `40490392658`(main push, `9e15ed7`) **success**, 6m2s. job `build-and-test`의 `Run JVM unit tests`·`Assemble debug APK`·`Compile instrumentation tests (assembleDebugAndroidTest)` 모두 success. instrumentation은 **컴파일만**이고 실제 기기 실행은 아니야.
+- **피코의 병합 준비 검증(아래 116일차 준비 절 요약):** README 충돌만 정합화(`1cd3930`), origin/main을 개발 브랜치로 `--no-ff` 병합(`da0fdd9`), LF 체크아웃에서 로컬 `testDebugUnitTest`(1003 tests, 실패·오류·skip 0)·`assembleDebug`·`assembleDebugAndroidTest` 성공, main 대비 새 삭제 0.
+- **패코 독립 감사:** 결론은 **조건부 병합 권고**(사용자가 작업지시서로 전달). 감사 원문·세부 조건은 저장소에 기록돼 있지 않아 **미확인**이야. 이 기록은 감사 결론의 전달이지 감사 범위 전체가 검증됐다는 뜻이 아니고, 독립 감사도 실기기 instrumentation·감각 QA를 대신하지 않아.
+- **main 보호 규칙:** Repository Ruleset `Protect main` **Active**(기본 브랜치 대상, bypass 없음). 규칙: 브랜치 삭제 금지, non-fast-forward(force push) 금지, PR 필수(허용 병합 방식 **merge만**, 필수 승인 리뷰 0), 필수 상태 검사 `build-and-test`(strict — PR 브랜치가 최신 main을 포함해야 함).
+- **기존 개발 브랜치 보존:** `feature/photo-sticker`는 로컬·원격 모두 `01621c3`으로 삭제·변경 없음.
+- **로컬 Git 동기화:** `git fetch origin` 후 로컬 `main`을 `4e3cc86` → `9e15ed7`로 **fast-forward**(조상 관계 확인 후, 강제 전환·초기화 없음). 이 문서는 `origin/main`에서 만든 `chore/day-116-closeout` 브랜치에서 수정했어.
+- **사용자 데이터·Room:** Room `version = 19`·schema export 변경 없음. 이번 병합·마감에서 사용자 데이터·기기 접근·설치 없음, emulator 미사용.
+- **보호 미추적 5묶음:** `.codex-config.candidate.toml`, `.kotlin/`, PNG 3개(`postcard_paper_fiber_tile.png`, `round_head.png`, `sheep_ranch_sheep.png`) 미접촉·미stage.
+- **검증 영역(이번 문서 작업):** 로컬 자동검증 = 문서 전용이라 `git diff --check`만 실행. 실사용 기기 instrumentation 불필요(대상 없음). 실기기 감각 QA 불필요(앱 변경 0). TEST-COVERAGE-MAP 변경 없음(테스트 변화 없음). 이 문서 PR의 번호·CI 결과는 완료보고 기준(결과 기록만을 위한 추가 commit은 만들지 않음).
+- **향후 브랜치 운영:** 새 작업은 **최신 `origin/main`에서 작업 브랜치를 만들어** 시작하고, PR(merge commit 방식) + `build-and-test` 통과 후 사용자 승인으로 병합해. `main` 직접 push 금지(규칙으로도 막힘). squash·rebase 병합은 규칙상 불가. `feature/photo-sticker`는 역사 보존용이며, 이어서 쓸 경우 먼저 최신 main을 받아야 해(새 브랜치 권장). 병합 후 작업 브랜치 자동 삭제는 하지 않아.
+- **잔여 과제(오늘 수정 안 함, 별도 승인 필요):**
+  1. **Windows CRLF 테스트 문제:** 시스템 Git `core.autocrlf=true` 환경에서 새로 체크아웃하면 소스 문자열에서 `\n`을 찾는 구조 테스트 11파일 20건이 깨져(test infrastructure, CI·기존 작업트리는 LF라 통과). 후보: `.gitattributes` 또는 테스트 쪽 줄바꿈 정규화.
+  2. **테스트 수 문서 불일치:** 실측 JVM `@Test` 1003 / instrumentation `@Test` 21건·8파일. `AGENTS.md` 5절은 "현재 20건 분류"로 남아 있고, `TEST-COVERAGE-MAP.md`는 상단·등급 표(21건/8파일)는 최신이지만 본문 일부 요약(예: JVM 992개·911건, XML 108개 문단)은 옛 합계라 정리가 필요해.
+- **다음 출발점:** 이 문서 PR 병합(사용자 승인) → 로컬 `main` fast-forward → 최신 main에서 다음 작업 브랜치. 위 잔여 과제는 후속 후보일 뿐 실행 승인이 아니야.
+
+---
+
 # HANDOFF — 116일차: `main` 통합 준비 · README 정합화 · main 병합 반영 · 사용자 최종 승인 대기
 
 2026-10-27, 담당 Claude Code, 수동 표준 모드(116일차 작업지시서). 이 세션엔 Task 도구가 없어 진행 안내로 대체했어. **`main`은 변경·병합하지 않았어.** 앱 코드·이미지 자산·Room schema·CI 설정·사용자 데이터 미변경.
