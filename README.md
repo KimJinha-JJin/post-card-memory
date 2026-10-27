@@ -1,4 +1,4 @@
-> **문서 상태:** 앱 소개·구조·검증 설명은 2026-10-18(107일차) 코드·운영 규칙 기준으로 갱신했어. 작업 규칙·현재 상태·승인 범위의 기준은 이 README가 아니라 [AGENTS.md](AGENTS.md), [현재 HANDOFF](docs/ai/HANDOFF.md), [유효한 결정](docs/ai/DECISIONS.md)이야.
+> **문서 상태:** 앱 소개·구조·검증 설명은 2026-10-27(116일차, `main` 통합 준비) 코드·운영 규칙 기준으로 갱신했어. 작업 규칙·현재 상태·승인 범위의 기준은 이 README가 아니라 [AGENTS.md](AGENTS.md), [현재 HANDOFF](docs/ai/HANDOFF.md), [유효한 결정](docs/ai/DECISIONS.md)이야.
 
 <div align="center">
 
@@ -16,6 +16,10 @@
 [![Android](https://img.shields.io/badge/Android-26%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Compose%20BOM-2026.04-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Room](https://img.shields.io/badge/Room-2.8.4-FF6F00?style=flat-square)](https://developer.android.com/training/data-storage/room)
+[![Last Commit](https://img.shields.io/github/last-commit/KimJinha-JJin/post-card-memory?style=flat-square&label=last%20commit&logo=github)](https://github.com/KimJinha-JJin/post-card-memory/commits)
+
+**오늘의 순간을 엽서로 남기고, 꾸미고, 미래의 나에게 보내는 Android 앱**
 
 </div>
 
@@ -43,12 +47,13 @@
 ### ✉️ 엽서 뒷면 — 편지
 - 카드를 뒤집어 뒷면에 "To." 받는 이 표현·본문·추신을 씁니다. "From."에는 엽서를 만든 날짜의 내가 적힙니다.
 - 작성 시각을 남기는 작성 기록(끌 수 있음).
+- 앞↔뒤 전환은 오른쪽 아래 모서리가 대각선으로 접혀 넘어가는 종이 날개 애니메이션(800ms)입니다.
 
 ### 🎨 꾸미기 (편집 탭: 사진 · 배경 · 글귀 · 스티커 · 테이프 · 도장 · 낙서)
 - **사진 스티커** — ML Kit 배경 제거(누끼), 오림 스타일 기본 / 폴라로이드 / 가위 오림 / 찢은 종이 / 잡지 오림.
 - **텍스트·라벨 스티커** — 글자 스티커와 라벨프린터로 뽑은 듯한 짧은 라벨.
 - **마스킹테이프** — 기본 디자인·커스텀 색·사진 테이프.
-- **도장** — 우편 소인 모양과 잉크 색, 엽서마다 다른 잉크 번짐 질감, 손이 찍어 주는 찍기 인터랙션.
+- **도장** — 우편 소인 모양과 잉크 색, 엽서마다 다른 잉크 번짐 질감, 손이 찍어 주는 찍기 인터랙션. 한 장에 최대 2개.
 - **낙서** — 펜·형광펜·점선·지우개.
 - 꾸미기 요소는 끌어서 배치하고, 이동·회전·크기·레이어 순서를 바꾸며, 되돌리기/다시하기가 됩니다.
 
@@ -71,15 +76,32 @@
 
 ### 📅 방문 기록 · 미래 우체통
 - **방문 기록과 방문 달력** — 하루 처음 앱을 연 날을 기록하고, 벽걸이 달력처럼 넘겨 봅니다.
+  월을 넘기면 종이 모서리가 접히며 넘어가고(650ms), 연·월 봉투에서 원하는 연도·월로 바로 이동할 수 있어요.
   시작 화면에는 방문 소인이 찍히고, 그날 처음 연 실행에서는 도장 손이 들어와 직접 찍어 줍니다.
+- **스티커 통** — 달력 사이드바 아래 신문지 파우치에 사진 스티커를 최대 60개까지 보관했다가 다른 엽서에 다시 붙입니다.
 - **미래 우체통** — 지정한 날짜가 되기 전까지 봉인되는 엽서를 보냅니다.
+  보낸 엽서는 갤러리에서 숨겨지고, 우체통에는 도착 날짜·건수·진행도만 보이며 사진·편지 내용은 도착일 전까지 보이지 않습니다.
 
 ---
 
 ## ✦ 디자인
 
-따뜻한 종이 톤 화면(`PaperCanvas` `#F4ECDE` 등)에 잉크색 글자(`InkPrimary` `#1A1324`)를 기본으로,
+따뜻한 종이 톤 화면에 잉크색 글자를 기본으로,
 신문·잡지 오림, 판지, 벽걸이 달력처럼 손으로 만든 종이 물건의 질감을 씁니다.
+
+| 역할 | 색상 |
+|---|---|
+| Paper Canvas | `#F4ECDE` |
+| Paper Tray | `#E8DCC6` |
+| Paper Surface | `#FFFBF3` |
+| Paper Field | `#FAF4E9` |
+| Ink Primary | `#1A1324` |
+| Ink Secondary | `#5B5046` |
+| Sunset Gold | `#8C5F00` |
+| Sunset Coral | `#FF7F8E` |
+
+엽서 콘텐츠 자체에는 민트·옐로·핑크·블루 등의 파스텔 색을 따로 씁니다.
+편집 UI는 모든 요소를 둥근 상자에 넣기보다, 실제 역할이 다른 곳에만 경계와 컨테이너를 쓰는 방향으로 다듬고 있습니다.
 
 ---
 
@@ -137,7 +159,7 @@ app/src/main/java/com/postcardmemory/
 
 | 구분 | 내용 |
 |------|------|
-| JVM 단위 테스트 | `testDebugUnitTest` — 920건(107일차 기준). 저장·초안·직렬화·삭제·좌표 계산·놀이 무대 구역 계산 등. 일부는 소스 구조를 고정하는 구조 테스트 |
+| JVM 단위 테스트 | `testDebugUnitTest` — 1003건(116일차 기준). 저장·초안·직렬화·삭제·좌표 계산·놀이 무대 구역 계산 등. 일부는 소스 구조를 고정하는 구조 테스트 |
 | 계측(instrumentation) 테스트 | `app/src/androidTest` 21건 — Room migration 1→19 연결, 삭제 순서, 렌더링, 사진 스티커 직렬화, EXIF 회전 등. 실제 앱 저장공간에서 돌기 때문에 SAFE 8 / CONDITIONAL 6 / FORBIDDEN 7 등급으로 관리하며, 실사용 기기에서는 **SAFE 8건만 사용자 승인 후 클래스 단위로** 실행할 수 있음 |
 | GitHub Actions CI | push마다 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest` 실행. 마지막 단계는 계측 테스트 APK를 **컴파일만** 하며 실행하지 않음 |
 | 실기기 | 로컬 기본 검증 환경. 실제 엽서가 있는 기기라 읽기·관찰 위주 확인과 사람이 직접 하는 감각 QA가 중심 |
@@ -163,7 +185,7 @@ cd post-card-memory
 
 Android Studio에서 프로젝트를 열고 Gradle Sync 후 실행하세요.
 (이 저장소에는 Gradle Wrapper가 포함되어 있지 않아 `./gradlew` 커맨드라인 빌드는 지원되지 않습니다.
-커맨드라인에서는 따로 설치한 Gradle 9.4.1과 JDK 17로 `gradle testDebugUnitTest assembleDebug`를 실행할 수 있고, CI도 같은 버전을 씁니다.)
+커맨드라인에서는 따로 설치한 Gradle 9.8.2와 JDK 17로 `gradle testDebugUnitTest assembleDebug`를 실행할 수 있고, CI도 같은 버전을 씁니다.)
 
 **주의:** 실제 엽서가 들어 있는 기기에서는 `connectedAndroidTest` 같은 `connected*` task를 실행하지 마세요. 실행 후 앱이 제거되면서 엽서 데이터가 지워질 수 있습니다. 업데이트 설치는 데이터를 보존하는 `adb install -r`을 씁니다.
 
@@ -177,6 +199,21 @@ Android Studio에서 프로젝트를 열고 Gradle Sync 후 실행하세요.
 | `VIBRATE` | 꾸미기 인터랙션 햅틱 |
 
 사진과 엽서 데이터는 앱 내부 저장소에만 저장됩니다.
+사진 선택은 시스템 Photo Picker를 쓰므로 전체 저장소 접근 권한을 요구하지 않습니다.
+
+---
+
+## ✦ 개발 상태
+
+계속 디자인과 기능을 다듬고 있는 개인 Android 프로젝트입니다. 기능을 무작정 늘리기보다
+
+- 실제 엽서와 다꾸 도구의 사용 문법이 자연스러운지
+- 편집 결과와 저장 이미지가 일치하는지
+- Undo/Redo와 저장 과정에서 데이터가 안전한지
+- 오래된 앱 데이터가 마이그레이션 뒤에도 유지되는지
+- 작은 화면에서도 편집 흐름이 복잡해지지 않는지
+
+를 반복해서 확인하며 발전시키고 있습니다.
 
 ---
 
