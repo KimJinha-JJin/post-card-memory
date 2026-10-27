@@ -1,0 +1,412 @@
+# 테스트 보호지도 — 91일차 저장 누락 방지 최신화 (원본 79일차 마감, 테스트 수는 102일차 기준)
+
+확인일: 2026-10-02 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `3b01f18` 위 91일차 작업트리. 2026-10-03(92일차 선행 안전정비): 테스트 수 변화 없이 로컬 emulator 폐기와 instrumentation 실사용 기기 안전 등급만 추가했어.
+
+기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치), 85일차에는 사진 스티커 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림), 87일차에는 사진 스티커 핀셋 붙이기(조준·핀셋 손) 상태 흐름, 88일차에는 갤러리 퀵 셀렉트(신문 오림 손 부채)의 열기/닫기 단계·중복 탭 방지·부채 배치, 89일차에는 메인 갤러리 종이 배경 구조, 90일차에는 방문 달력의 종이 한 장 구조와 위로 넘기는 월 이동, 91일차에는 꾸미기 디렉터리 계약(저장·삭제·고아 진단 일치), 96일차에는 방문 달력 질감(손으로 자른 장 가장자리·테이프·중성펜 출첵)에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
+
+## 115일차 — 엽서 앞↔뒤 전환 종이 날개 · 800ms (2026-10-26)
+
+- 기존 대각선 clip 전환에 접힘선 반사 종이 날개를 더하고 시간을 1100→800ms로 줄였어. 새 파일 `PostcardFlipFoldTest` 5건을 추가했어(혼합 파일: 행동 3 + 구조 2).
+- 행동 3건: 실제 production `reflectAcrossCrease`가 접힘선 위 점을 고정하고 두 번 반사하면 원점으로 돌아옴, `Matrix.setCreaseReflection`이 같은 반사를 만듦, 전반부엔 들린 모서리 끝이 엽서 안·남은 면 쪽에 놓임.
+- 구조 2건(`DetailScreen.kt` 소스): 앞/뒤 두 면이 각자 넘어갈 때만 날개를 그리고 날개 종이색이 반대 면(뒷면 `PaperSurface` / 앞면 배경색)임, 날개가 live 콘텐츠 반사 replay + 엽서 사각형 clip임, keyframes가 `POSTCARD_FLIP_DURATION_MS`를 쓰고 `isFlipAnimating` 중 재입력 무시·버튼 비활성화가 유지됨.
+- 최종 로컬 `testDebugUnitTest` 결과는 **1003 tests / XML 110개, 실패·오류·skip 0**, `assembleDebug`·`assembleDebugAndroidTest` 성공. 소스는 JVM `@Test` 1003개 / 테스트 파일 109개 / helper 1개, 구조 검사 194→196개. instrumentation 소스는 21건/8파일 그대로이고 실행하지 않았어. CI 미실행.
+- 자동 보호 공백: 실제 Compose에서 날개 반사·종이색 덮개·그림자의 모양과 800ms 감각, 사진·텍스트가 있는 엽서의 replay 비용/끊김, 화면 이탈·재진입 중 실제 동작 — 실기기 QA 대상이고, 사용자가 SM-S936N에서 부드러움·연타·재진입·잔상 문제없음을 확인했어(프레임 시간은 미측정).
+- 같은 날 QA 후속으로 정지 화면 dog-ear 힌트(`drawIdleCornerFoldHint`)를 제거했고, 구조 테스트 `flipUsesTheSharedDuration…`에 힌트 부재 단언을 더했어(테스트 수 1003 그대로, 재실행 통과).
+
+## 114일차 — 방문 달력 A안 Page Curl · 650ms (2026-10-25)
+
+- 사용자 목업 확인 뒤 A안 삼각형 접힘과 650ms 앱 적용을 승인받았어. 최종 연속 입력 정책은 **현재 장 완료 → 마지막 요청 월로 한 번 더 이동**이야. 무제한 대기열과 진행 중 방향 변경은 없어.
+- `VisitCalendarPageCurlTest` 6건을 추가했어. 실제 production `VisitCalendarPagingState`로 연타 100회 합치기, 진행 중 방향/목적지 고정, 목적지와 최종 요청이 같을 때 추가 전환 생략, 절대 월 선택·오늘 요청·연도 경계를 검사해. 실제 `VisitCalendarPageFold`로 0~100% 양방향 앞/뒤 영역의 합·유한 좌표·밀도 배율·미측정 크기도 검사해.
+- `VisitCalendarTest` 55건은 개수 그대로야. 폐기한 윗변 회전의 월별 z-order/alpha 검사 3건을, 시작 아랫모서리·시작/완료 시 장 잔존 방지·반사 전후 인쇄 거리 보존/역변환 검사 3건으로 교체했어. 날짜·TODAY·방문·봉투 관련 계산 검사는 유지해.
+- `VisitCalendarPaperPageStructureTest` 13건도 개수 그대로야. 종이 decode 1회, 한 장 전체 렌더링, 고정 화살표/터치/접근성, 오늘 펜 원, 봉투 UI 보호는 유지하고, 이전 `rotationX` 강제 조건을 새 앞면/뒷면 clip·전체 인쇄 replay·진행 중 장 고정·진행률의 draw 단계 읽기로 교체했어. 구조 검사는 실제 Compose 렌더링이나 프레임 성능 검사가 아니야.
+- 최종 로컬 `testDebugUnitTest` 결과는 **998 tests / XML 109개, 실패·오류·skip 0**이고 `assembleDebug`도 성공했어. 소스는 JVM `@Test` 998개 / 테스트 파일 108개 / helper 1개야(111일차 대비 +6건/+1파일, 구조 검사 수 194개는 그대로). instrumentation 소스는 **21건/8파일 그대로**이고 이번에는 컴파일·실행 모두 미실행이야. 새 GitHub Actions CI도 미실행이야. 이후 사용자가 **실기기 확인 완료**를 직접 알려 줬어. 감각 QA의 사용자 확인 근거로 기록하며 Codex의 설치·기기 측정이나 세부 시나리오 전수 완료를 뜻하지 않아.
+- 자동 보호 공백: 실제 글자·질감의 clip/반사 결과, 최종 그림자·속도 감각, 화면 이탈/복원 중 실제 Compose 동작, 빠른 조작의 터치 반응, 자정의 실제 TODAY 갱신, 장시간 메모리/GPU 비용. 기존 과거 월 비동기 로딩 전 빈 방문 표시는 유지되며 잘못된 월의 방문 집합으로 대체하지 않아.
+
+## 111일차 — 봉투 picker 반영, 파우치 A안 유지 (2026-10-22)
+
+- 사용자 승인 범위에서 연도·월 선택의 자투리 배경을 공통 봉투 PNG로 교체하고, 숫자를 기존 글꼴로 상단 배치했어. picker의 현재 원만 제거했으며 청록 현재/진한 선택 우선순위는 유지해. 실제 날짜 달력의 오늘 펜 원·민트 출석·날짜/방문 계산은 변경하지 않았어.
+- `VisitCalendarTest`는 53→55건이야. 폐기된 picker 원 판정 1건과 자투리 crop/seed 2건 대신, 전체 이미지 Fit·좁은/미측정 크기 3건과 실제 PNG alpha/여백/해상도·decode 예산 2건을 검사해. 기존 날짜·범위·선택 우선순위·오늘 원·출석 함수 검사는 유지해.
+- `VisitCalendarPaperPageStructureTest` 13건 중 기존 자투리 검사를, 단일 봉투 decode·연도/월 공유·셀 높이/터치·상단 정렬·기본 글꼴·현재 원 제거·잉크 우선순위·추가 bitmap 생성 방지로 바꿨어. 카드/별도 판/테두리 금지와 실제 날짜 원 보호 의미는 유지해.
+- 파우치 production은 무변경. 통 저장 13 + 조준 재사용 7 + 통 wiring 11건과 위 달력 68건, **관련 JVM 99건 통과**. 이어 **전체 JVM XML108개 / 992 tests, 실패·오류·skip0**, `assembleDebug`, `assembleDebugAndroidTest` 성공. 로컬 Gradle9.4.1/JBR21에서 실행했고, 격리 환경의 foojay 해석 실패는 사용자 환경 권한 실행으로 해소했어. 빌드/dependency 설정은 바꾸지 않았어.
+- 현재 소스 실측은 JVM `@Test`992개 / 테스트 파일107개 / helper1개, instrumentation `@Test`21개 / 8파일이야. 구조 검사 수194개는 그대로야. instrumentation은 **컴파일만** 했고 실제 실행0회, CONDITIONAL/FORBIDDEN은 기존대로 실행 불가야.
+- 자동검증과 별도로 111일차 SM-S936N(450dpi,font_scale0.9)에 서명 확인 뒤 데이터 보존 설치했어. 앱 실행·관찰 구간 오류 없음과 설치 전후74개 파일 메타데이터/DB5개 해시·UID/최초 설치 시각 유지를 확인했어. 사용자는 달력 외형/이동/기존 날짜 표시,통 목록·원본/누끼·선택/해제·월/연도 선택창 복귀·흔들림,새 QA 엽서 재사용·저장·재진입을 각각 모두 정상으로 확인했어. 이는 사용자 수동 QA이며 자동 보호 범위 확대가 아니야. 삭제·60개 파일 채우기는 제외했고 다른 기기/큰 글꼴·장시간 메모리는 미검증이야. QA 중 production 변경이 없어 테스트/빌드는 재실행하지 않았어. 신규 CI·commit·push 없음.
+
+## 먼저 읽는 지도
+
+**계산·문자 저장·개별 파일 저장은 꽤 믿을 만해. 실제 화면 조작, 화면을 나가는 순간, Android 사진 처리는 자동검증 공백이 커.** 아래 등급은 테스트가 다루는 범위에 대한 평가야. 오류가 없다는 보장이나 코드 커버리지 측정값은 아니야.
+
+| 기능 | 보호 수준 | 수동 확인 | 핵심 경계 |
+|---|---|---|---|
+| 엽서 편집 데이터 / 초안 | 강함 | 아니오: 데이터·파일 단위 | 화면 이탈·재진입은 별도 항목 |
+| 상세 화면 저장 | 중간 | 예 | 실제 완료 버튼부터 저장·복원까지 공백 |
+| 배경색 / 스타일 저장 경합 | 중간 | 예 | 실제 연결 계측 2건 80~81일차 실행 통과, replica 25개는 여전히 별개 |
+| 파일 저장 / 삭제 | 중간 | 예: 전체 삭제 흐름 | 개별 파일 helper·DB 삭제 gate는 강함(81일차 instrumentation), 꾸미기 디렉터리 저장·삭제·진단 일치(91일차), 고아 파일 정리는 진단 전용 |
+| Room database / migration | 중간 | 아니오: 별도 Android 자동검증 필요 | emulator 실제 실행 확인(80일차), CI 자동 실행은 아직 없음 |
+| 뒷면 작성 / 저장 / 렌더링 | 중간 | 예 | 가장 구체적인 UI 계측이 있지만 최신 실행 부족 |
+| 앞면 preview / exporter | 중간 | 예 | 좌표·도장 잉크 seed 전달·사진 스티커 오림 geometry는 직접 검사, 실제 그림 비교 부족 |
+| 방문 기록 / 달력 / 자정 처리 | 중간 | 예 | 계산·파일은 강함, 화면 갱신은 간접 검사 |
+| 미래 우체통 | 중간 | 예 | 도착 계산은 직접 검사, 실제 묶음 개봉은 공백 |
+| 갤러리 | 중간 | 예 | 검색·달력 계산과 실제 조작은 별개 |
+| 스티커 / 테이프 / 도장 / 낙서 | 중간 | 예 | 데이터·수치·도장 순수 상태 전이·사진 스티커 오림 모양 고정은 강함, 실제 터치·손 연출은 공백 |
+| 카메라 / 사진 처리 | 약함 | 예 | Android 실제 처리 연결 부족 |
+| 앱 시작 | 약함 | 예 | 시작 흐름은 주로 구조 검사 |
+| navigation: 화면 이동 | 약함 | 예 | 실제 화면 이동 자동검증 없음 |
+| ViewModel / lifecycle: 화면 상태 수명 | 약함 | 예 | 일부 helper·계측 외에는 replica 중심 |
+| 실제 Compose interaction: 버튼·터치 | 약함 | 예 | 뒷면 표시 3건(81일차 실제 실행 통과), 도장 조준·찍기는 순수 상태 전이만 보호 |
+
+미확인 등급을 붙인 기능은 없어. **instrumentation 20건/7파일 전부를 2026-10-01 검증 전용 `PostcardMemory_Test` emulator(API 37, 16KB page image)에서 실제 실행해 20/20 통과를 확인했어. 기존 미실행이던 `PhotoStickerEdgeStyleInstrumentedTest` 7건도 명시 실행과 전체 실행에서 통과했어. 이 실행은 로컬이고 GitHub Actions CI에는 포함되지 않아.** 80일차부터 push/PR 시 JVM 테스트·빌드는 GitHub Actions로 자동 실행돼 — 아래 "자동 실행 여부" 참고. 수동 확인 표시는 향후 해당 기능 변경 시 참고하는 지도이며, 오늘 전부 다시 확인하라는 요청은 아니야.
+
+## instrumentation 실사용 기기 안전 등급 (2026-10-03, 92일차 선행 안전정비)
+
+**로컬 Android Emulator는 2026-10-03에 폐기됐어**(emulator SDK·hypervisor driver·`PostcardMemory_Test` AVD 제거, Platform-Tools 유지). 이 문서의 80~91일차 emulator 실행 결과는 당시 기록으로 보존하지만, emulator를 다시 만들거나 띄우라는 지시가 아니야. 로컬 검증 기본 환경은 사용자가 연결한 실사용 기기이고, instrumentation은 실제 앱과 같은 package·저장공간(`targetContext`의 `filesDir`, DB 폴더, 갤러리 권한)에서 돌기 때문에 아래 등급으로 관리해. 규칙 원문은 `AGENTS.md` 5절 "로컬 검증 환경과 instrumentation 등급"이야.
+
+| 등급 | 테스트 클래스 | 건수 | 실사용 기기 | 근거(현재 코드 기준) |
+|---|---|---|---|---|
+| SAFE | `PhotoStickerEdgeStyleInstrumentedTest` | 7 | 실행 후보 — 매번 serial·클래스·데이터 영향 없음 명시 후 사용자 승인, `am instrument -e class`로 그 클래스만 | 직렬화 검사만 하고 파일·DB·갤러리 접근 없음 |
+| SAFE | `ExifOrientationInstrumentedTest` (107일차 4차 추가) | 1 | 위와 같음(아직 실기기 실행 0회 — CI 컴파일만) | 메모리 안 3×2 Bitmap만 만들어 공용 EXIF 회전과 예전 행렬을 픽셀 비교. 파일·DB·갤러리·`targetContext` 접근 없음 |
+| CONDITIONAL | `PostcardBackMigrationTest` | 1 | 기본 실행 안 함 | 실제 앱 DB 폴더에 UUID 이름 별도 DB 생성·삭제, 실패·중단 시 잔여 가능 |
+| CONDITIONAL | `PostcardFullMigrationChainTest` | 2 | 기본 실행 안 함 | 위와 같음 |
+| CONDITIONAL | `PostcardBackRenderingTest` | 3 | 기본 실행 안 함 | 1건이 실제 사용자 갤러리에 PNG 저장 후 삭제, 중간 실패 시 잔여 가능 |
+| FORBIDDEN | `PostcardDeletionOrchestrationTest` | 3 | 실행 금지 | 실제 `filesDir`에 쓰고 `deleteRecursively` |
+| FORBIDDEN | `PostcardBackSaveTest` | 2 | 실행 금지 | in-memory DB id + 실제 `targetContext` + `DetailViewModel.loadPostcard(id)` + `PostcardDraftStorage` 결합 — 같은 id의 실제 엽서 초안·확정 상태 파일을 읽기·쓰기·삭제할 가능성을 아직 배제 못 함 |
+| FORBIDDEN | `PostcardBackgroundColorSaveRaceTest` | 2 | 실행 금지 | 위와 같음 |
+
+합계 SAFE 8 + CONDITIONAL 6 + FORBIDDEN 7 = **21건/8파일**(107일차 4차에 SAFE 1건/1파일 추가 — 그 클래스는 추가 시점 코드 읽기로 분류). 나머지 등급은 2026-10-03 테스트 코드 읽기 조사 결과이며 실행으로 확인한 값이 아니야. 테스트 코드가 바뀌면 다시 분류해. `CONDITIONAL`은 구조 개선이나 데이터 격리가 따로 검증되기 전까지 `SAFE`로 올리지 않아. 격리된 실행 환경(원격 CI emulator 등)은 아직 없고 후속 후보라서, 그 전까지 `CONDITIONAL`·`FORBIDDEN` 13건의 Android 실제 실행 상태는 `실행 불가`로 기록해. Gradle `connected*` task는 실행 후 uninstall로 사용자 데이터를 잃을 수 있어 어떤 등급에도 쓰지 않아.
+
+## 테스트를 읽는 기준
+
+- **강함**: 실제 production 코드(앱이 사용하는 코드)를 직접 검사하고 주요 실패 상황도 어느 정도 다뤄.
+- **중간**: 일부 직접 검증은 있지만 중요한 실제 Android·화면 경로가 비어 있어.
+- **약함**: 구조 검사나 Fake 중심이거나 실제 사용 상황 검증이 거의 없어.
+- **미확인**: 현재 자료로는 판단 근거가 부족해.
+
+| 테스트 방식 | 무엇을 증명하나 | 무엇을 증명하지 못하나 |
+|---|---|---|
+| production 직접 테스트 | 앱과 같은 함수의 입력·출력 또는 저장 결과 | 그 함수를 실제 화면이 올바르게 사용하는지 전부 |
+| Fake / replica | 가짜 저장소·복제 모델에서 설계한 경합 규칙 | 실제 DetailViewModel 동작 |
+| 구조 테스트 | 소스의 선언·등록·호출 형태와 순서 | 실제 버튼 클릭·화면 표시 결과 |
+| Compose UI | 실제 Compose 화면의 표시·측정 등 검사한 시나리오 | 검사하지 않은 화면·터치·navigation |
+| instrumentation | Android 환경의 Room·Bitmap·ViewModel 등 | 존재·컴파일만으로 실제 실행 성공 |
+
+JVM은 일반 컴퓨터에서 실행하는 테스트이고, instrumentation은 Android 환경에서 실행하는 테스트야. Compose UI 3건은 instrumentation 13건 안에 포함돼. 구조·replica 역시 JVM 911건 안에 포함되므로 서로 더해서 총수로 쓰면 안 돼.
+
+현재 실측은 JVM `@Test` 992개, 테스트를 담은 파일 107개와 공용 helper 파일 1개야(helper `StructureTestSource.kt`에는 107일차부터 구조 테스트 4개가 각자 복사해 쓰던 `extractBalancedCall`도 함께 있어). 최신 로컬 결과의 테스트 클래스 XML은 108개여서 XML 수와 소스 테스트 파일 수를 혼동하면 안 돼. 구조 테스트는 194개(구조 전용 파일에 있는 180개 — 110일차 `StickerStashWiringStructureTest` 11건 포함 — + 혼합 파일에 있는 14개 — 108일차 `PondWaterSurfaceTest`의 소스 검사 3건·`PondLeafContactTest`의 소스 검사 1건 포함, 기울기 전달·reset 1건은 행동 검사로 셈), 명시적 Fake/replica는 최소 28개이며 핵심 DetailViewModel replica는 25개야. instrumentation은 21개/8파일(107일차 `ExifOrientationInstrumentedTest` 1건/1파일 포함), Compose UI는 3개, Robolectric은 없어.
+
+JVM 990개는 110일차(2026-10-21) 스티커 통 1차 구현에서 31건을 더한 결과야(`StickerStashStorageTest` 13건·`PhotoStickerPlaceSessionStashTest` 7건·`StickerStashWiringStructureTest` 구조 11건, 모두 신규 파일 — 상세는 아래 스티커 절). 최종 로컬 결과 XML 108개에서 990/990 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 959개는 108일차(2026-10-19) 연잎 접촉 충돌에서 `PondLeafContactTest` 11건(신규 파일)을 더한 결과야(상세는 아래 갤러리 절). 최종 로컬 결과 XML 105개에서 959/959 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 948개는 같은 108일차 연못 하프톤 수면·기울기에서 `PondWaterSurfaceTest` 17건(신규 파일)을 더한 결과야(상세는 아래 갤러리 절; `GalleryMonthlyGridStructureTest`는 동심원 대체로 테스트 1건 이름·단언만 바뀌고 수 불변). 최종 로컬 결과 XML 104개에서 948/948 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 931개는 같은 108일차 연못 중 기억 밀도 페이지 진입 차단에서 구조 3건을 더한 결과야(`GalleryPondPageLockStructureTest` 신규 파일 — 상세는 아래 갤러리 절). 최종 로컬 결과 XML 103개에서 931/931 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 928개는 같은 108일차 놀이 모드 상단 장면 퇴장 애니메이션에서 구조 2건을 더한 결과야(`GalleryTopSceneStructureTest` 신규 파일 — 상세는 아래 갤러리 절). 최종 로컬 결과 XML 102개에서 928/928 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 926개는 같은 108일차 연못 연잎·최신 10장 작업에서 6건을 더한 결과야(`PondPostcardSelectionTest` 행동 3건 신규 파일, `GalleryMonthlyGridStructureTest` 구조 3건 — 상세는 아래 갤러리 절). 최종 로컬 결과 XML 101개에서 926/926 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 920개는 107일차(2026-10-18) 4차 기술부채 상환에서 9건을 더한 결과야(`GalleryPlayStageZoneTest` +3 — seed 경계값·`Int.MIN_VALUE` 해시 재현·정상 해시 결과가 예전 계산과 필드까지 같음, `ExifOrientationTest` 3건, `ImageFileExtensionTest` 3건). 최종 로컬 결과 XML 100개에서 920/920 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 911개는 107일차(2026-10-18) 3차 코드 정리에서 행동 테스트 9건을 추가한 결과야(`GalleryPlayStageZoneTest` 7건 — 쉼터/쫑쫑컵 구역 분기·좌우 배회 범위·세로 바닥선·카드 움직임 사양의 결정성과 범위, `GalleryPlayModeTest` 2건 — 저장 상태 호환 enum 이름 고정). 최종 로컬 결과 XML 98개에서 911/911 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 902개는 102일차(2026-10-13) 편집 상위 기능줄 잡지 오림 삽화 전환(`EditorBottomTabBarStructureTest` 구조 1건 추가 — 기능명 7개 순서, 오림 삽화 7개가 같은 순서로 쓰임, Material 아이콘 복귀 금지, 칸 전체 "기능명 편집" 접근성 설명 유지. 기존 파라미터 검사는 `icons: List<ImageVector>`에서 `icons: List<Int>`로 의미 그대로 교체) 뒤 최종 로컬 결과 XML 96개에서 902/902 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 901개는 같은 101일차 테마 inverse 색 보강(`ThemeInverseColorsStructureTest` 구조 1건 — 테마에 `inverseSurface`·`inverseOnSurface`·`inversePrimary`가 있어 알림창이 Material 기본 보라색으로 돌아가지 않음) 뒤 최종 로컬 결과 XML 96개에서 901/901 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 900개는 같은 101일차 빠끔 얼굴 건너가기 애니메이션(`PaperLabelSubcategoryNavTest` 2건 추가 — 줄당 얼굴 1개·선택 칸에서 시작 구조 1건 + 건너가기 높이·기울기 계산 1건) 뒤 최종 로컬 결과 XML 95개에서 900/900 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 898개는 101일차(2026-10-12) 하단 세부 선택줄 종이 라벨 전환(`PaperLabelSubcategoryNavTest` 3건 추가 — 구조 1건 + 띠·빠끔 얼굴 배치 계산 2건, `EditorSubcategoryNavBarStructureTest`는 갈색 채움 계약을 종이 라벨 계약으로 교체해 4건 유지) 뒤 최종 로컬 결과 XML 95개에서 898/898 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 895개는 100일차(2026-10-11) 인트로 손 도장 추가(행동 4건 + 구조 1건) 뒤 최종 로컬 결과 XML 94개에서 895/895 통과(실패·오류·skip 0)를 확인했어. 그 전 JVM 890개는 98일차(2026-10-09) 테스트 보호 공백 보강(초안 완전 왕복 1건 + 이탈 저장 Job 누락 방지 구조 1건 추가) 뒤 최종 로컬 결과 XML 93개에서 890/890 통과(실패·오류·skip 0)를 확인했어. 그 전 888개는 같은 날 테스트 유효성 감사 후속으로 완전·실질 중복 테스트 11건을 지운 뒤 최종 로컬 결과 XML 92개에서 888/888 통과(실패·오류·skip 0), CI run `37911387665`(`1215e7d`)에서 통과했어. 그 전 899개는 98일차 5단계 `PostcardImageStorage` 제거(전용 테스트 1파일 6건 삭제) 후 최종 로컬 결과 XML 92개에서 899/899 통과(실패·오류·skip 0), CI run `37902444635`(`84bf188`)에서 통과했어. 그 전 905개(4단계 템플릿 기능 제거, 템플릿 전용 테스트 3파일 27건 삭제)는 XML 93개에서 905/905, CI run `37901299271`(`f59796d`)에서 통과했어. 직전 932개(삭제 gate 취소 전파 수정 + `PostcardDeletionDatabaseFirstGateTest` 2건 추가)는 XML 96개에서 932/932 통과했어. instrumentation은 2026-10-02 같은 검증 전용 emulator에서 `PostcardDeletionOrchestrationTest` 3/3, 이어 전체 20/20을 다시 실제 실행해 통과했어(boot 직후 첫 시도는 emulator lowmemorykiller가 test process를 죽여 status 없이 끝났고, 환경 문제로 분류해 test emulator만 재부팅 후 같은 APK로 통과). 그 전 2026-10-01 검증 전용 emulator에서 대상 7건을 먼저 7/7로, 이어 전체 20건을 20/20으로 실제 실행했어. 설치 직후 첫 대상 실행은 test process가 시작 전에 종료됐지만, boot 직후 UWB HAL 재시작과 설치 session 충돌이 있던 환경을 안정화하고 같은 APK·같은 테스트를 다시 실행해 모두 통과했어. production 실패로 재현되지 않았고 환경 문제로 분류했어. 실제 실행은 GitHub Actions CI가 아니라 로컬 emulator에서 이뤄졌고, CI는 여전히 instrumentation을 자동 실행하지 않아(아래 "자동 실행 여부" 참고).
+
+근거: [Gradle 테스트 설정](../../app/build.gradle.kts), [구조 테스트의 도입 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt), [79일차까지 원문 기록](archive/HANDOFF-through-2026-09-20-before-close.md), [과거 계측 실행과 사고 기록](archive/HANDOFF-through-2026-09-12.md).
+
+## 기능별 상세 지도
+
+### 기능: 엽서 편집 데이터 / 초안
+
+- **보호 수준:** 강함 — 데이터 변환과 개별 초안 파일 저장 범위.
+- **현재 보호하는 테스트:** `PostcardEditDraftTest`, `PostcardDraftStorageTest`, `ConfirmedEditStateStorageTest`, `DraftRestoreLogicTest`.
+- **실제 production 직접 검증:** 초안 저장 형식 변환, 옛 형식 읽기, 손상된 항목 처리, revision(저장 순서 번호), 실제 임시 파일 저장·덮어쓰기·읽기 실패 시 보존. 98일차부터 도장·낙서(펜·형광펜)·텍스트 스티커·마스킹테이프(프리셋·커스텀)·라벨(프리셋·커스텀)과 선택 id를 함께 가진 초안 하나를 실제 `saveDraftAtomically` → 파일 → `loadDraft`로 왕복해 객체 전체가 같은지 확인해(`PostcardDraftStorageTest`, Fake·replica 없음) — 요소 하나의 줄 순서·필드가 어긋나 뒤 요소가 밀리는 회귀를 잡아(직렬화 순서를 바꾸는 mutation에서 기존 요소별 테스트는 통과하고 이 테스트만 실패함을 확인).
+- **간접 검증:** 화면 이탈 중 초안 flush(대기 중 저장을 즉시 수행)는 별도 replica와 helper 테스트로 일부 확인해.
+- **현재 믿어도 되는 것:** 검증한 데이터 형식과 파일 실패 조건에서는 기존 초안을 보존하고 다시 읽는 방어가 있어.
+- **아직 믿으면 안 되는 것:** 화면에서 편집한 모든 상태가 초안에 빠짐없이 전달되는지, 화면 종료·재생성 시 전체 복원이 되는지. 사진 스티커와 사진 마스킹테이프는 JVM에서 `android.net.Uri`를 만들 수 없어 완전 왕복에 넣지 못했어(사진 스티커 한 줄 왕복만 `PhotoStickerEdgeStyleInstrumentedTest`, SAFE·자동 실행 아님).
+- **수동 확인 필요:** 아니오 — 직렬화·파일 실패를 사용자가 재현할 필요는 없어. 화면 재진입 확인은 상세 저장·lifecycle 항목에 포함해.
+
+근거: [초안 테스트](../../app/src/test/java/com/postcardmemory/utils/PostcardDraftStorageTest.kt), [production 초안 저장](../../app/src/main/java/com/postcardmemory/utils/PostcardDraftStorage.kt).
+
+### 기능: 상세 화면 저장
+
+- **보호 수준:** 중간.
+- **현재 보호하는 테스트:** `ConfirmSaveLogicTest`, `ConfirmSaveHistoryClearStructureTest`, `UpdateMessageSaveMutexStructureTest`, `ExitSaveTimeoutTest`, `PostcardBackSaveTest`.
+- **실제 production 직접 검증:** 완료 판정 함수(91일차부터 `shouldConfirmSaveSucceed`는 기본값 없이 여섯 종 결과를 모두 받아, 결과 하나를 빠뜨리면 컴파일 단계에서 실패해. `ConfirmSaveLogicTest` 12건도 여섯 값을 모두 명시), 저장 대기 시간과 저장 수명을 분리하는 helper. 뒷면 일부는 실제 ViewModel·Repository·Room을 쓰는 계측이 있어.
+- **간접 검증:** 완료 뒤 편집 이력 초기화·글귀 저장 Mutex(저장 순서를 한 줄로 세우는 장치)·오류 안내는 구조 검사. 이탈 저장에는 replica도 있어.
+- **현재 믿어도 되는 것:** 개별 저장 성공 여부를 합쳐 완료를 판정하는 규칙과 저장 helper의 일부 실패 방어.
+- **아직 믿으면 안 되는 것:** 실제 완료 버튼에서 모든 꾸미기 파일 저장과 초안 정리까지 끝나는 전체 과정, 모든 저장 필드의 복원.
+- **수동 확인 필요:** 예 — 향후 변경 빌드에서 대표 꾸미기 저장 후 재진입, 완료/원래대로, 오류 안내 확인. 의도적인 저장 실패는 별도 테스트 환경의 자동검증 대상이야.
+
+근거: [완료 판정 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/ConfirmSaveLogicTest.kt), [실제 상세 저장](../../app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt).
+
+### 기능: 배경색 / 스타일 저장 경합
+
+- **보호 수준:** 중간 (계측 2건은 80~81일차 emulator 실행으로 통과 확인됨).
+- **현재 보호하는 테스트:** `BackgroundColorSaveRaceTest` 11개, `StyleSaveRaceTest` 3개, `BackgroundColorSaveJobStructureTest`, `PostcardBackgroundColorSaveRaceTest` 계측 2개.
+- **실제 production 직접 검증:** 실제 ViewModel·Room으로 오래된 배경색 저장 취소와 실패 후 다음 저장을 검사하는 테스트가 존재해. **`PostcardBackgroundColorSaveRaceTest` 2/2는 80~81일차 검증 전용 emulator(API 37)에서 실제로 통과했어.**
+- **간접 검증:** JVM replica는 최신 값 재읽기·취소·실패 복원 규칙을 설명해. 실제 배경색 코드의 이전 Job 취소 여부는 구조 검사도 있어.
+- **현재 믿어도 되는 것:** 경합 설계에 대한 실행 가능한 모형이 있고 production 연결 검사 일부가 작성돼 있어.
+- **아직 믿으면 안 되는 것:** replica 25개를 실제 ViewModel 통과 25개로 해석하는 것. 배경색 replica에는 production과 달리 이전 Job을 취소하지 않는 모형과 현재 UI 호출자가 없는 배경 이미지 교체 가정이 있어.
+- **수동 확인 필요:** 예 — 색을 연속 변경하거나 슬라이더를 조절한 뒤 재진입해 마지막 값 확인. 드문 실패·취소 순서는 수동 확인만으로 보장할 수 없어.
+
+근거: [배경색 replica](../../app/src/test/java/com/postcardmemory/ui/detail/BackgroundColorSaveRaceTest.kt), [실제 연결 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackgroundColorSaveRaceTest.kt).
+
+### 기능: 파일 저장 / 삭제
+
+- **보호 수준:** 중간 — 개별 파일 저장·소유권 판정과 DB 삭제 gate(81일차부터)는 강함, 고아 파일 정리는 진단 전용으로 약함.
+- **현재 보호하는 테스트:** `AtomicFileReplaceTest`, `AppFileOwnershipTest`, `ProvisionalFileTest`, `PostcardDeletionManagerTest`, `PostcardDeletionDatabaseFirstGateTest`(98일차 신규 2건), `OrphanFileDiagnosticsTest`, `DecorationDirectoryContractTest`(91일차 신규 3건), `PostcardTempCleanupTest`, 공유 캐시 정리 테스트, `PostcardDeletionOrchestrationTest`(instrumentation, 81일차 신규).
+- **실제 production 직접 검증:** 실제 임시 파일로 교체·쓰기 실패·취소·소유 범위·엽서별 파일 정리·오래된 캐시 정리를 검사해. **81일차부터는 실제 Room + 실제 filesDir로 `DB 삭제 실패 → 파일 삭제 0건·DB 행 유지`, `DB 삭제 성공 → 소유 파일 실제 삭제`, `동일 삭제 재호출 → 멱등성 안전`까지 3건을 검증 전용 emulator에서 실제 실행해 3/3 통과를 확인했어.**
+- **91일차 디렉터리 계약:** 꾸미기 상태 파일 6종과 엽서별 자산 디렉터리 3종(`sticker_bgs`·`sticker_originals`·`masking_tape_photos`)의 위치를 `DecorationStateFile`/`PostcardAssetDirectory`(`utils/PostcardOwnedFileLayout.kt`) 한 곳에 두고, 저장(DetailViewModel)·삭제·고아 진단이 모두 그 정의를 써. `DecorationDirectoryContractTest`는 저장 경로 함수로 실제 파일을 만든 뒤 production 삭제가 전부 지우고(다른 엽서는 보존) production 진단이 전부 찾는지(엽서가 있으면 0건) 실제 파일 I/O로 확인해. 디렉터리 문자열은 production 상수를 참조하지 않는 리터럴로 독립 고정해. 삭제 목록에서 한 종류를 빼는 일시 변형으로 실패하는 것을 확인했어.
+- **110일차 스티커 통 폴더:** `sticker_stash/`는 엽서 소유 폴더가 아니라서 `DecorationStateFile`·`PostcardAssetDirectory`에 일부러 넣지 않았어(엽서 삭제가 통을 지우지 않게). 그래서 고아 진단 대상도 아니야. 독립성은 `StickerStashStorageTest`가 실제 삭제 함수로 검사하고, 세 파일이 통을 모른다는 사실은 `StickerStashWiringStructureTest`가 고정해(위 스티커 절).
+- **디렉터리 계약이 증명하지 못하는 것:** DetailViewModel이 실제로 enum 경로로 저장한다는 사실 자체(Robolectric 없이 ViewModel을 만들 수 없어 실제 저장 호출은 미검증 — 코드 리뷰와 기존 계측으로만 확인), 새 꾸미기 종류가 enum에 등록되지 않고 다른 경로로 저장되는 경우, 초안 전용 `draft_sticker_bgs`·`drafts/edit_state`(PostcardDraftStorage 관할, 진단만 같은 상수 사용).
+- **98일차 DB-우선 gate JVM 검증:** `PostcardDeletionDatabaseFirstGateTest`가 Manager가 그대로 위임하는 `deletePostcardDatabaseFirst`를 실제 `cleanupPostcardOwnedAssets` + TemporaryFolder로 불러, `DB 삭제 중 CancellationException → 실패 결과로 삼키지 않고 호출자에게 전파·파일 정리 0건`과 `일반 DB 오류 → databaseDeleted=false·파일 정리 0건`을 검사해. gate를 예전 `runCatching`으로 되돌리는 일시 변형에서 취소 테스트가 실패하는 것을 확인했어. 실제 Room DAO와 Manager의 Hilt/Context 연결 자체는 검사하지 않아(그 부분은 FORBIDDEN 등급 `PostcardDeletionOrchestrationTest`가 맡고 실사용 기기에서는 실행 불가).
+- **간접 검증:** `PostcardDeletionManagerTest`는 이름과 달리 파일 정리 helper만 호출해(JVM, 실제 Room 없이 파일 helper만 검사).
+- **현재 믿어도 되는 것:** 검증한 파일 경계와 실패 조건에서 다른 엽서 파일·앱 외부 경로를 보호하는 안전망, 그리고 DB 삭제가 실패하면 사용자 파일이 절대 지워지지 않는다는 것.
+- **아직 믿으면 안 되는 것:** DB 삭제 성공 직후 파일 정리 전에 프로세스가 종료돼 생기는 고아 파일(DB 행 없음 + 파일 잔존)의 자동 방지 — 이건 설계상 수용한 약한 위험이고 `OrphanFileDiagnostics`는 읽기 전용 진단이지 자동 삭제가 아니야. Android URI 권한·기기 파일시스템 모든 조건도 아직 공백이야.
+- **수동 확인 필요:** 예 — 향후 삭제 변경 시 별도 테스트용 엽서의 삭제·나머지 엽서 표시 확인. DB 성공/실패 gate 자체는 이제 자동 재현되므로 그 부분을 사용자 수동 QA로 떠넘기지 않아.
+
+근거: [파일 정리 테스트 범위](../../app/src/test/java/com/postcardmemory/utils/PostcardDeletionManagerTest.kt), [실제 삭제 순서](../../app/src/main/java/com/postcardmemory/utils/PostcardDeletionManager.kt), [DB-우선 삭제 gate 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardDeletionOrchestrationTest.kt).
+
+### 기능: Room database / migration
+
+- **보호 수준:** 중간 (80일차부터 실제 emulator 실행으로 한 단계 더 검증됨).
+- **현재 보호하는 테스트:** `PostcardMigrationRegistrationStructureTest`, `PostcardBackMigrationTest`, `PostcardFullMigrationChainTest`.
+- **실제 production 직접 검증:** Android 계측 3건에 실제 migration SQL, 기존 행 보존, 최신 DAO 읽기·쓰기, 재개방 검사가 작성돼 있어. **80일차에 emulator(`PostcardMemory_Test`, API 37)에서 3건 전부 실제 실행해 통과 확인함.**
+- **간접 검증:** migration 선언·등록 연속성과 schema 파일 존재는 구조 검사. 형태 자체가 계약이라 유효한 안전망이야.
+- **현재 믿어도 되는 것:** migration 등록 누락 감시와 실제 SQL을 검사할 테스트 기반이 있고, 최신 코드 기준 1→19 전체 chain 실행이 실제로 통과함을 확인했어.
+- **아직 믿으면 안 되는 것:** v1은 과거 코드에서 복원한 수동 schema이고 중간 버전 모든 실제 사용자 데이터 조합을 대표하지 않아. 이 실행은 CI 자동 실행이 아니라 로컬 emulator에서의 1회성 수동 실행이라 push마다 자동 보호되지는 않아.
+- **80일차에 실제로 발견·수정한 버그:** `message`/`futureMailDeliverAt`/`envelopeStyle` 3개 컬럼의 migration SQL DEFAULT 선언이 entity/schema export와 어긋나 있었어. 버전 증가·새 migration 없이 기존 migration SQL 3줄만 최소 수정했고, 재실행으로 통과를 확인했어. 상세는 [CI-AUDIT-80.md](CI-AUDIT-80.md).
+- **수동 확인 필요:** 아니오 — SQL 보존 검증은 80일차 당시 로컬 emulator 실행으로 확인됐어. 그 emulator는 2026-10-03 폐기됐고 두 migration 계측 테스트는 `CONDITIONAL` 등급이라 실사용 기기에서 실행하지 않아. 다음에 migration을 건드리면 JVM 구조 검사·schema export 대조로 확인하고, Android 실제 실행은 격리 환경(원격 CI 후보)이 생기기 전까지 `실행 불가`인 남은 위험으로 기록해.
+
+근거: [전체 migration 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardFullMigrationChainTest.kt), [18→19 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackMigrationTest.kt), [migration 수정](../../app/src/main/java/com/postcardmemory/data/PostcardDatabase.kt).
+
+### 기능: 뒷면 작성 / 저장 / 렌더링
+
+- **보호 수준:** 중간 (81일차 emulator 실행으로 계측 4건 전부 통과 확인됨).
+- **현재 보호하는 테스트:** `PostcardBackFaceTest`, `PostcardWritingRecordTest`, `PostcardBackSaveTest`, `PostcardBackRenderingTest`.
+- **실제 production 직접 검증:** 문구·최초 작성 시각 규칙, 실제 ViewModel·Room 저장 실패/복원, Compose 뒷면 캡처, 공유 PNG·갤러리 출력의 Bitmap 동일성, 장문 fitting(글자가 들어가도록 크기 맞춤). **`PostcardBackSaveTest`(2/2)와 `PostcardBackRenderingTest`(3/3)는 81일차 검증 전용 emulator(API 37)에서 실제로 통과했어.**
+- **간접 검증:** 계측의 DAO 대역은 특정 쓰기만 지연·실패시키며 핵심 저장 처리는 production이 수행해.
+- **현재 믿어도 되는 것:** 순수 작성 규칙은 직접 검사돼. Android 검증용 테스트 4건도 최신 코드 기준으로 실제 통과했어.
+- **아직 믿으면 안 되는 것:** 실제 키보드 입력·커서·모든 글꼴 크기·모든 본문 형태 — 계측은 대표 시나리오만 검사해.
+- **수동 확인 필요:** 예 — 본문·추신 입력, 재진입, 장문 읽기, 현재 뒷면 공유 결과의 가독성 확인.
+
+근거: [뒷면 렌더링 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackRenderingTest.kt), [뒷면 저장 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackSaveTest.kt).
+
+### 기능: 앞면 preview / exporter
+
+- **보호 수준:** 중간.
+- **현재 보호하는 테스트:** `PostcardOverlayExportLogicTest`, `SealInkWearTest`, `StickerPositionCalculationsTest`, `PostcardRenderSpecLayoutStyleTest`, `LabelStickerLayerOrderStructureTest`, `PhotoStickerEdgeStyleTest`(85일차).
+- **실제 production 직접 검증:** overlay(꾸미기 요소) 좌표·크기·정규화와 출력용 데이터 조립. 83일차에는 도장 id에서 만든 결정론적 잉크 seed가 화면 미리보기와 exporter에 동일하게 전달되는지, 저장·복원 뒤에도 같은 id와 질감 seed가 유지되는지 추가로 검사해.
+- **간접 검증:** 앞면 레이어 순서는 구조 검사. **실제 앞면 레이어 순서의 화면 검증은 구조 검사가 사실상 유일한 방어선**이야.
+- **현재 믿어도 되는 것:** 테스트한 수치 계산과 측정값이 없을 때 기본 크기 처리, 같은 도장 id에서 같은 잉크 결손 지도를 재현하고 preview/export 데이터가 같은 seed를 쓰는 연결. 85일차 사진 스티커 오림은 preview(`PhotoStickerPaperModifier`)와 exporter가 같은 `PhotoStickerPaperSpec`·망점 helper(`PhotoStickerHalftoneRenderer`)를 쓰고, 그 spec의 geometry(여백·외곽·사진 창·망점 강도)는 JVM에서 직접 검사해.
+- **아직 믿으면 안 되는 것:** preview와 exporter의 최종 Bitmap이 픽셀 단위로 같은지, 실제 기기에서 잉크 결손의 확대·합성이 같은지, 글자·EXIF·사진 decoding·잘림·MediaStore 전체 과정. 화면과 exporter가 공용 `SealInkWearRenderer`를 쓰는 것은 코드로 확인했지만 실제 그림 비교 테스트는 아니야. 사진 스티커 오림의 두 렌더러가 같은 모양·대칭 처리를 그리는지도 공통 spec까지만 자동 검사이고, 실제 그림 일치는 85일차 사용자 실기기 QA로만 확인했어. 기본(DEFAULT) 스타일의 기존 preview/export 차이(export만 검은 테두리, 회전 clip 순서)는 알려진 기존 차이로 남아 있어.
+- **수동 확인 필요:** 예 — 대표 앞면을 preview와 공유/저장 이미지로 비교해 위치·크기·순서·잘림을 확인해.
+
+근거: [출력 계산 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/PostcardOverlayExportLogicTest.kt), [도장 잉크 결정성 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealInkWearTest.kt), [production exporter](../../app/src/main/java/com/postcardmemory/utils/PostcardImageExporter.kt).
+
+### 기능: 방문 기록 / 달력 / 자정 처리
+
+- **보호 수준:** 중간 — 계산과 파일은 강함, 실제 화면 연결은 간접 보호.
+- **현재 보호하는 테스트:** `VisitRecordTest`, `VisitRecordStorageTest`, `VisitHistoryStorageTest`, `VisitCalendarTest`, `VisitCalendarMonthLoadingTest`, `DayBoundaryTest`, `VisitDayBoundaryDefinitionTest`, `VisitCalendarPaperPageStructureTest`(90일차 달력 한 장 구조, 96일차 장 가장자리·테이프·중성펜 자국 연결).
+- **실제 production 직접 검증:** 같은 날 중복 방문 억제, 날짜·월 경계, 읽기 실패 시 기존 기록 보존, 실제 방문 표식 파일, 월별 읽기, 자정 신호 helper, 달력 묶음 겹침 순서(앞선 달이 항상 위, 해 경계·먼 점프 포함), 넘어가는 장 불투명도(펼치면 불투명·다 넘어가면 0·단조 감소, 다음 달 장은 절반 넘게 넘어가도 불투명하고 이전 달 장보다 먼저 흐려지지 않음), 96일차 순수 생성 함수 — 장 가장자리 윤곽(같은 달 같은 모양·이웃 달 다름·장 밖 이탈 없음·0.5dp 띠 안·반듯한 사각형 아님), 테이프 조각(같은 달 같은 조각·각도 1~2°·길이 범위·섬유가 테이프 안·양 끝 비대칭), 방문일 중성펜 자국(같은 날 같은 자국·바탕 외곽이 칸 안 손떨림 띠·획 15개 이상·칸 밖 1dp 이내·굵기/농도 범위·약한 사선 각도), 96일차 후속 오늘 날짜 펜 동그라미(같은 날 같은 모양·다른 날 다름·3~4바퀴 끊김 없는 한 줄·바퀴별 농도 다름·닫히지 않음·얇은 굵기/농도 범위·숫자 위를 지나지 않음·크기 상한·거의 동그란 비율·미측정 시 없음), 96일차 추가 월 이동 신문 오림 화살표(같은 seed 같은 모양·seed별 다른 윤곽·끊어 자른 윤곽 6~9점·상자 안·끝점 세로 가운데·폭/높이 범위·망점 10개 이상·종이 비침 3~30%·◀▶ 거울상), 96일차 추가 월/연도 고르기 종이 자투리 위치(같은 seed 같은 위치·종이 하단 55%~끝·종이 안·한 화면 16칸 seed 모두 다름·위치 14곳 이상·윤곽 다름).
+- **간접 검증:** 화면의 자정 신호 연결·방문 생성 분리는 구조 검사. 새 소비자가 모두 감시된다는 전역 보장으로 해석하면 안 돼. 달력 종이 한 장(종이·제목·장식·요일·날짜 grid가 한 composable, 그 안에서 `displayedMonth`를 읽지 않음, 월 이동 transition 1개가 장 전체를 감쌈, 종이 drawable 1회·월 이동 밖에서 로드, 늘림·타일·윤곽선 없음, "다녀간 날들"·◀ ▶는 종이 밖, 윗변 축 `rotationX`·달력 묶음 zIndex·끝까지 유지·clip 없음, 월/연도 선택 단계 전환은 fade+scale 그대로, drawer 배경은 `PaperSurface` 그대로, 96일차: 종이를 이 달 seed의 오린 path로 채움·`clipPath` 미사용, 이 달의 테이프를 종이 다음에 코드로 그림·갤러리 테이프 자산 미사용, 방문일은 기존 채움 색 그대로 그 날짜의 중성펜 자국·`.background(` 복귀 금지, 오늘 동그라미는 오늘 날짜 숫자 Text의 modifier이고 방문 여부에 묶이지 않음, ◀ ▶는 IconButton·onClick·접근성 설명·20dp 그대로이고 신문 오림 화살표만 그림·`Icons.` 복귀와 배경·테두리·그림자 금지, 월/연도 고르기 칸 40dp 그대로·글자 뒤 같은 달력 종이 bitmap의 손으로 자른 자투리·현재 원 유지·카드/배경/테두리/그림자 modifier와 새 자산 금지)도 구조 검사가 유일한 자동 방어선이야.
+- **현재 믿어도 되는 것:** 검증한 날짜와 파일 조건에서 방문 수·월별 기록 계산.
+- **아직 믿으면 안 되는 것:** 앱을 켜 둔 실제 자정 전환·절전 복귀·화면 재구성에서 모든 표시가 갱신되는지. 넘김의 실제 렌더링(각도·원근·그림자·잘림·연타 중단)과 종이 질감·가독성, 96일차 가장자리·그림자·테이프·펜 자국·오늘 동그라미·신문 오림 화살표·고르기 화면 종이 자투리의 실제 인상과 펜 자국 위 날짜 글자 가독성은 자동 테스트가 없고 실기기 QA로만 확인했어.
+- **수동 확인 필요:** 예 — 다른 달 탐색과 정상 재실행 표시 확인. 자정은 자연적으로 넘길 기회에 관찰하며 기기 시간을 강제로 바꾸지 않아.
+
+근거: [방문 파일 테스트](../../app/src/test/java/com/postcardmemory/utils/VisitRecordStorageTest.kt), [월별 연결 검사](../../app/src/test/java/com/postcardmemory/ui/gallery/VisitCalendarMonthLoadingTest.kt).
+
+### 기능: 미래 우체통
+
+- **보호 수준:** 중간.
+- **현재 보호하는 테스트:** `FutureMailLogicTest`, `FutureMailOpeningGuardTest`, `FutureMailTimeBoundaryTest`.
+- **실제 production 직접 검증:** 도착·D-day·진행률·그룹화, 실패·취소 뒤 개봉 중 표시를 풀어 재시도하게 하는 가드.
+- **간접 검증:** **묶음 전체를 한 번에 개봉하는 DB 호출과 화면 자정 연결은 구조 검사가 유일한 자동 방어선**이야.
+- **현재 믿어도 되는 것:** 지정 날짜에 대한 계산과 개봉 재시도 가드 규칙.
+- **아직 믿으면 안 되는 것:** 실제 ViewModel+Room 묶음 개봉의 원자성(전부 성공하거나 전부 유지), 실제 화면 표시·이동.
+- **수동 확인 필요:** 예 — 테스트용 우편의 발송·도착·개봉·갤러리 복귀. 중간 DB 실패의 원자성은 별도 자동검증이 필요해.
+
+근거: [가드와 구조 검사](../../app/src/test/java/com/postcardmemory/ui/futuremail/FutureMailOpeningGuardTest.kt), [production 우체통](../../app/src/main/java/com/postcardmemory/ui/futuremail/FutureMailboxViewModel.kt).
+
+### 기능: 갤러리
+
+- **108일차 연잎 접촉 충돌:** `PondLeafContactTest` 11건. `pondLeafContact` — 실제로 맞닿고 다가갈 때만 충돌(닿지 않음·멀어지는 중은 없음), 법선·접근 속도. `PondController.resolveContacts` — 쉬던 연잎은 충돌 법선 방향으로 `approach×(1+0.75)/2` 속도·다음 단계로 `hits`에 실림, 쏜 연잎도 그만큼 느려짐, 충돌 지점에 수면 물살, 닿지 않으면 아무 변화 없음, 빠를수록 세게·물살도 크게·상한에서 묶임, 같은 쌍(양방향)은 350ms 재충돌 금지, 최대 단계(3) 초과·최소 전달 속도 미만이면 넘기지 않음(물살은 생김), A→B→C 연쇄에서 단계마다 약해짐, 붙잡힌 연잎은 그대로·쏜 쪽만 반사, 날고 있는 연잎은 새 비행 대신 추가 속도(`takePendingVelocity`, 한 번 꺼내면 비워짐), `reset`·등록 해제가 충돌 상태를 비움. 소스 — 비행 루프가 접촉 판정·추가 속도를 쓰고 `finally`로 비행 표시를 끔, 연못일 때 몸체 등록·해제, 맞으면 기존 `runPondFlight`로 날아감, 발사 지점 근접 밀림(`lastImpulse`/`notifyLaunch`) 없음. 재충돌 금지·단계 상한을 끈 변형에서 2건 실제 실패 확인. **보호하지 않는 것:** 실제 튕김·연쇄의 느낌, 화면 위치와 충돌 원의 일치, 활성 그림자 농도, 프레임 성능 — 실기기 QA로만 확인(성능 미측정).
+- **108일차 연못 하프톤 수면·기울기:** `PondWaterSurfaceTest` 17건. 순수 계산(`PondWaterField`) — 수위가 오를수록 망점이 늘고(차오름), 다 차면 수면 아래·화면 안에만 있으며, 같은 시각엔 같은 그림이고 시간이 흐르면 움직임, 물살은 중심 근처 망점만 흔듦, 망점 수가 격자 상한 이내, **최대 기울기에서도 도트가 푸른 윗선 위로 삐져나오지 않고 선 바로 밑(16dp)이 비지 않음**, 연잎이 타는 높이(`pondWaterTiltRiseDp`)가 윗선 변화와 같고 기울기 각도 부호가 맞음. 기울기 — 중력→화면 기울기 변환(4개 화면 회전, 감도 ×1.5, ±0.6 묶음), 수면 스프링이 3초 안에 가라앉고 과출렁임 없음·긴 프레임 끊김에도 튀지 않음, 센서 입력 저역 통과, 연잎 스프링이 카드마다 다르게 움직이고 모두 가라앉음, `PondController.waterTilt`가 `reset()`에서 0, 파문 2배 수명 정리. 소스 — 중력 센서(없으면 가속도계)를 ON_RESUME 등록·ON_PAUSE·onDispose 해제·중복 등록 방지, 연잎 기울기 레이어가 위치 측정 안쪽·연잎 그리기 바깥, 수면이 연못 분기에서만 grid 뒤에 그려지고 파문 이벤트를 받으며 `PondRippleOverlay`(청록 동심원) 없음. 회귀 검출 확인 — 물살 계산 끄기, 기울기 부호 뒤집기, 도트 판정을 쏠리기 전 x·옛 격자 시작으로 되돌리기 변형에서 각각 실제 실패. **보호하지 않는 것:** 색감·인쇄 질감·움직임의 느낌, 실제 센서 방향 감각, 프레임 성능·메모리 — SM-S936N 실기기 QA로만 확인(성능 미측정).
+- **108일차 연못 중 페이지 잠금:** `GalleryPondPageLockStructureTest` 3건이 `GalleryScreen.kt` 소스로 고정해 — `HorizontalPager`가 `userScrollEnabled = !isPondModeOn`(연못 중 기억 밀도로 스와이프 불가, 끄면 복원), 연못이 켜지면 `LaunchedEffect(isPondModeOn)`이 MONTHLY index로 `animateScrollToPage`, 연못 중엔 페이지 점만 감추고(`showPageIndicator && !isPondModeOn`) 상단 예약 여백은 `showPageIndicator`만 따름. 잠금과 월별 이동을 지운 변형에서 2건 실제 실패 확인. **보호하지 않는 것:** 실제 스와이프 차단 감각·페이지 이동 애니메이션·스크롤 위치 유지 — SM-S936N 실기기 QA로만 확인했어.
+- **108일차 놀이 모드 상단 장면 퇴장:** `GalleryTopSceneStructureTest` 2건이 `GalleryScreen.kt` 소스로 고정해 — `GalleryRetroClock`(시계·양손·커피 장면 전체)은 한 곳에서만 그리고, `playMode == GalleryPlayMode.NONE` 조건 하나의 `AnimatedVisibility` trailing lambda 안에 있으며, 퇴장은 위로 slide(`-fullHeight`) + `shrinkVertically`, 복귀는 같은 길의 slide + `expandVertically`, 네 전환이 모두 공용 `galleryTopSceneTween()`(450ms `FastOutSlowInEasing`)을 씀. 조건을 `!isPondModeOn`으로 바꾼 변형에서 실제 실패를 확인했어. **보호하지 않는 것:** 실제 움직임·끊김, 쉼터·쫑쫑컵 무대 높이가 바뀌는 450ms 동안의 카드 동작, 스크롤 위치 유지 — SM-S936N 실기기 QA로만 확인했어.
+- **108일차 연못(연잎 위 우표·최신 10장):** `PondPostcardSelectionTest` 3건이 `pondPostcardsFor`를 직접 호출해 고정해 — 여러 달에 걸친 15장에서 달별이 아니라 전체 `capturedAt` 최신 10장, 10장 미만·0장이면 있는 만큼, 같은 날짜는 id 큰 쪽 먼저이고 입력(갤러리 정렬) 순서와 무관. `GalleryMonthlyGridStructureTest`에 구조 3건 추가 — pager가 연못일 때만 `pondPostcardsFor(postcards)` 목록을 넘기고 연못이면 월 섹션(헤더·장수)을 만들지 않으며 별도 `pondGridState`를 씀 / 연잎은 페이지에서 연못이 켜진 동안만 한 번 decode해 넘기고, `StampCard`의 `graphicsLayer` 안쪽·`pointerInput` 앞에서 그림 / 연못을 켜면 검색을 닫음. 기존 `monthlyGridItem_…` 테스트에 연못 분기 날짜 줄 없음(`dateLabelOverride = ""`) 단언을 더했어. **보호하지 않는 것:** 연잎·우표의 실제 모양과 비율, 회전·움직임 동기화, 월별 스크롤 위치 복원, 메모리 — 이들은 SM-S936N 실기기 QA로만 확인했어.
+- **107일차 4차 극단값 수정:** `createPlayStageCardSpec`의 seed가 `abs(Int)`라 해시가 `Int.MIN_VALUE`일 때 음수로 남아 `jumpEvery = 0`(걷기 루프 `% jumpEvery`에서 ArithmeticException)·`walkMillis` 음수가 되던 결함을 `playStageSeed`(Long으로 넓혀 abs)로 고쳤어. 재현 입력은 엽서 id 108,841,867·index 9(실사용 id로는 도달 불가 수준). `GalleryPlayStageZoneTest`가 seed 경계값(0, ±, `Int.MAX_VALUE`, `Int.MIN_VALUE`), 재현 입력의 범위, 그리고 수정 전 계산 복사본과 id 1~2000×모든 자리×장수 1~10 + 고정 시드 큰 id 2만 개에서 **필드 하나까지 같은지**를 고정해. 옛 Int abs로 되돌린 변형에서 2건이 실제로 실패하는 것도 확인했어.
+- **107일차 3차 무대 보호 보강:** `GalleryPlayStageZoneTest` 7건이 공용 무대의 두 모드 분기를 직접 호출해 고정해 — 쉼터(`raceEnabled = false`)는 모든 카드가 `FULL_STAGE`, 쫑쫑컵은 앞 `RACE_MAX_RACERS`(3)장이 `RACE_PADDOCK`·나머지가 `RACE_SPECTATOR`, 패독만 좌우 범위가 출발선 쪽 절반, 쉼터 바닥은 높이 60%부터, 쫑쫑컵은 관중이 위·패독이 아래 절반, `createPlayStageCardSpec`은 같은 입력에 같은 값이고 조정 범위 안(빈 무대 `count = 0` 포함). 이를 위해 `StageMovementZone`·`movementZoneFor`·`zoneBoundsX`·`stageFloorY`·`RACE_MAX_RACERS`만 private → internal로 바꿨고 계산은 그대로야. 쉼터 분기를 일부러 깨뜨린 변형에서 `shelter_everyCardWandersTheFullStage`가 실제로 실패하는 것도 확인했어. `GalleryPlayModeTest` 2건은 `GalleryPlayMode` 이름 목록(`NONE`/`POND`/`SHEEP_RANCH`/`RACE`)과 `valueOf("SHEEP_RANCH")` 복원을 고정해. **보호하지 않는 것:** 실제 카드 애니메이션·제스처·레이스 진행 연출·쉼터 바닥 그림·`PlayModeSaver` 자체(private, 화면 안에서만 쓰임 — enum 이름 계약으로 간접 보호).
+- **107일차 식별자 정리:** `GalleryViewSelectionStructureTest`의 기대 문자열 2곳만 새 식별자로 갱신(`GalleryQuickSelectItem.DONGGEULI_SHELTER`, `R.drawable.quick_select_shelter_hand`). `GalleryPlayMode.SHEEP_RANCH`는 저장 상태 호환 때문에 그대로라 기대 문자열에도 남아. @Test 수·검사 방식·보호 범위 변화 없음(96 suite / 902 tests). 이름이 바뀐 놀이 무대 파일(`GalleryPlayStage*.kt`, `PostcardRace*.kt`)을 직접 검사하는 JVM 테스트는 전후 모두 없어 — 동작 동등성은 컴파일과 순수 이름 변경 diff로만 확인했어.
+- **105일차 명칭 전환:** `GalleryViewSelectionStructureTest`의 접근성 기대 문자열을 `양떼목장` → `동글이 쉼터`로 변경. 해당 파일 @Test 11개 유지, 검사 방식은 소스 문자열 구조 검사 그대로야. 양팔 든 동글이와 엽서 합성은 첫 시안 구현이며, 손끝 정렬·실제 렌더·사진 가독성·변형 결과는 이 구조 테스트가 보호하지 않아. 좁은 중앙 슬롯 방식은 사용하지 않아.
+- **105일차 최종 로컬 실행:** 격리 환경의 저장소 접근 차단을 확인한 뒤 권한 실행으로 `assembleDebug`/`testDebugUnitTest` 성공. 최신 XML 96 suite / 902 tests, failure/error/skip 0. 위 명칭 테스트 11개와 GalleryQuickSelectFanTest 14개 포함. 실제 기기 QA/instrumentation/CI 성공을 의미하지 않아.
+- **보호 수준:** 중간.
+- **현재 보호하는 테스트:** `GallerySearchFilterTest`, `GalleryCalendarCellsTest`, `GalleryMemoryDensityTest`, `GalleryPagerTargetIndexTest`, `GalleryRetroClockTest`, `GalleryShakeDetectorTest`(84일차), `GalleryRandomPostcardOverlayTest`(84일차), `GalleryQuickSelectFanTest`(88일차), 보기 선택·월 grid·퀵 셀렉트 연결 구조 테스트, `GalleryPaperBackgroundStructureTest`(89일차 종이 배경 구조).
+- **실제 production 직접 검증:** 검색 결과·순서 유지, 달력 칸, 월별 엽서 수, 기억밀도 막대 높이 비율(93일차 비례형: 1장마다 증가, 20장 = 꽉 참, 초과는 그대로)·20장 초과 표시 조건·중성펜 획(같은 seed면 같은 획, 막대 사각형에서 1.5dp 이내), 페이지 목표 index, 시계 표시 계산, 흔들림 판정(합성 가속도 sample로 정지·약한 흔들림·한쪽 충격·화면 회전 미발동, 명확한 흔들기 1회 인정, cooldown 중 무시·종료 후 재인정), 균등 랜덤 선택(후보 0/1/범위), overlay 날짜 문구(`capturedAt` 월·일), overlay 중 재흔들기 시 엽서 유지, overlay 배치(엽서가 화면 안·문구 자리·손이 화면 아래까지 닿고 왼쪽 귀퉁이를 집음), 퀵 셀렉트 단계 전이(닫힘→펼치는 중→펼침→닫히는 중, 같은 방향 연타는 재시작 없음, 도중 반대 요청은 방향만 전환, 펼침 완료 전·닫히는 중 탭 무효, 연타해도 기능 실행 1회)와 부채 배치(손 5개·슬롯 중복 없음, 아래→위 순서·가운데 0°·회전 ±20° 이내, 맨 아래 블록 높이, 닫힌 묶음이 오른쪽 끝에 숨고 닫힌 자리만 더 내려앉음, 젖힘은 아래 방향, stagger 짧음, 작은 화면 각도 clamp, 이웃 손 터치 영역 비겹침·높이 46dp 이상, 이웃 블록 간격 64dp 이상).
+- **간접 검증:** **보기 선택·drawer·월 grid·퀵 셀렉트(기존 callback 5종·노출 조건·뒤로가기·바깥 탭·손 자산·접근성 이름)·종이 배경(타일 drawable 1회 참조, 가로·세로 Repeated와 같은 배율, pager 밖·header 아래 한 레이어, 페이지 자체 배경 없음, 시계 header 불투명)의 UI 배선은 구조 검사 중심의 유일한 자동 방어선**이야.
+- **현재 믿어도 되는 것:** 테스트 입력에 대한 검색·집계·달력·표시 계산.
+- **아직 믿으면 안 되는 것:** 실제 선택·drag·스크롤·보기 전환·카드 animation·동글이 쉼터/쫑쫑컵/연못 놀이 동작. 실제 센서 감도·센서 등록/해제 lifecycle·흔들기 비활성 조건 배선·overlay 등장 animation·손 이미지 위치·커피 김 움직임, 퀵 셀렉트 손의 실제 렌더링·회전된 터치 판정·연출 리듬·PNG 안 블록 좌표의 정확도, 종이 질감의 농도·이음매 가시성·header 가림, 기억밀도 중성펜 선의 실제 화면 인상(굵기·농도·손떨림·"+" 표시)은 자동 테스트가 없고 실기기 QA로만 확인했어.
+- **수동 확인 필요:** 예 — 3열 목록, 검색, 보기 전환, 카드 진입, 해당 작업에서 바뀐 놀이 동작 확인.
+
+근거: [검색 테스트](../../app/src/test/java/com/postcardmemory/ui/gallery/GallerySearchFilterTest.kt), [production 갤러리](../../app/src/main/java/com/postcardmemory/ui/gallery/GalleryScreen.kt).
+
+### 기능: 스티커 / 테이프 / 도장 / 낙서
+
+- **보호 수준:** 중간 — 데이터·수치 범위는 강함.
+- **현재 보호하는 테스트:** `LabelStickerItemTest`, `MaskingTapeItemTest`, `TextStickerItemTest`, `PostcardSealItemTest`, `SealInkWearTest` 5건, `SealStampSessionTest` 10건, `PhotoStickerPlaceSessionTest` 20건·`LabelStickerPlaceSessionTest` 10건·`TextStickerPlaceSessionTest` 7건·`MaskingTapePlaceSessionTest` 16건·`PhotoStickerCutoutBoundsTest` 9건(87일차), `PhotoStickerEdgeStyleTest` 29건(85일차), `DoodleStrokeTest`, `DoodleLineSnapTest`, 위치·export 계산 테스트. instrumentation `PhotoStickerEdgeStyleInstrumentedTest` 7건(85일차, 미실행).
+- **실제 production 직접 검증:** 저장 형식·옛 값 호환, 위치/크기, 선 스냅, 지우개 충돌 계산, 테이프 윤곽점 등. 도장은 같은 id의 잉크 결손 결정성·서로 다른 id의 차이·결손값 범위·압력별 결손량과, 조준→찍기 상태 전이·중복 생성 방지·취소·상태 정리·위치/크기/회전 보존·크기 제한·preview/final id 일치·직렬화 round-trip·조준점 clamp를 직접 검사해.
+- **간접 검증:** **생성·편집 toolbar·다이얼로그 배선은 구조 검사 중심**. `SealStampSessionTest`·`PhotoStickerPlaceSessionTest`는 순수 상태 객체를 직접 검사하지만 Compose pointer 입력, 신문지 손·핀셋 손 animation, 진동, 실제 undo 연결, 조준 취소 시 원본 파일 정리까지 실행하지는 않아. ML Kit 배경제거 취소 3건은 처리 모형을 복제해.
+- **현재 믿어도 되는 것:** 검사한 꾸미기 데이터와 기하 계산의 경계 조건, 한 번의 도장 찍기 상태에서 최종 도장이 중복 생성되지 않고 조준 속성이 저장 가능한 `PostcardSealItem`으로 이어지는 규칙. 85일차 사진 스티커 오림: 스타일 필드가 없거나 알 수 없는 값·깨진 seed는 예외 없이 DEFAULT/미지정으로 읽힘, 같은 seed는 같은 모양, 가위 오림·찢은 종이의 실제 출력은 golden 값으로 고정(바뀌면 기존 스티커 모양 변경), 외곽이 스티커 박스 안에 머물고 사진을 침범하지 않음, 폴라로이드 하단 여백, 찢김의 돌기 억제와 흰 단면 띠 최소 폭, 잡지 망점 강도 상한과 가위 오림과의 구분.
+- **아직 믿으면 안 되는 것:** 실제 터치·pinch·회전, 신문지 손이 목표점에 닿는 화면 결과·animation timing·haptic, 실제 undo 한 건 연결, 사진 URI 영속성, 실제 배경제거 결과. 사진 스티커 오림의 `PhotoStickerItem` 직렬화 왕복·복제 시 style/seed 유지·누끼 중 스타일 보존은 Uri 때문에 JVM에서 만들 수 없어 instrumentation 7건으로 작성했지만 아직 실행하지 않았어. 스타일 변경의 undo/redo는 기존 스냅샷 경로(`recordStickerSnapshotForUndo`)를 그대로 쓰며 전용 자동 테스트는 없고 사용자 실기기 QA로 확인했어.
+- **하단 세부 선택줄(101일차):** 사진·배경·스티커·테이프·낙서 다섯 탭의 `EditorSubcategoryNavBar`는 종이 띠 라벨(`PaperLabelSubcategoryNavRow`)로 그려. 구조 테스트가 다섯 호출부 위치, 단색 채움·둥근 선택 상자 부재, 최소 44dp 터치 영역, 선택 시 월 라벨과 같은 바랜 갈색 필터(102일차, 이전 코랄)·미선택 연회색 필터, 펜 고리 부재를 고정하고, 순수 계산 테스트가 띠가 칸 안·터치 영역보다 낮게 놓이는지와 빠끔 얼굴이 띠 폭 안·선택줄 위 여백 안에서 앞발만 띠 가장자리에 걸치는지, 얼굴이 줄당 하나이고 선택 칸에서 시작하는지, 건너가기 높이가 출발·도착에서 0이고 가운데가 가장 높으며 가는 방향으로 기울었다 똑바로 서는지를 검사해. 실제 그림(색감·찌그러짐·얼굴 크기)과 애니메이션 속도·느낌, 탭 반응은 자동 검증하지 않아 실기기 QA로 확인해.
+- **상위 기능줄(102일차):** `EditorBottomTabBar`의 7개 기능 그림은 잡지 오림 PNG(`drawable-nodpi/editor_cutout_*.png`)야. 구조 테스트가 기능명 순서·오림 삽화 순서 일치·Material 아이콘 부재·칸 전체 접근성 설명·단일 호출부의 pager 상태·콜백 전달을 고정해. 그림 크기(투명 여백 자동 제거 후 공통 상자에 비율 맞춤)·색감·세트감·선택 표시와 하단 메뉴 바닥 종이 질감 이음새는 자동 검증하지 않고 실기기 QA로 확인했어.
+- **스티커 통(110일차):** 엽서와 독립된 사진 스티커 보관함(`utils/StickerStashStorage.kt`, `filesDir/sticker_stash/`). `StickerStashStorageTest` 13건이 TemporaryFolder 실제 파일 입출력으로 검사해: 담은 조각이 목록을 새로 읽어도 원본·누끼·오림 스타일·seed·뒤집기와 함께 돌아옴, 최근 순 정렬, **원본 엽서를 production `cleanupPostcardOwnedAssets`로 지워도 통의 복사본 유지**, **통에서 빼도 엽서 원본 파일 유지**, 목록 쓰기 실패·원본 읽기 실패(권한 소실 예외 포함)·빈 파일·그림 판독 실패·누끼 복사 실패 때 목록 변화와 남는 조각 파일이 0, 같은 그림·같은 모양 중복 거절, 60개 상한, 빼기의 목록 쓰기 실패 시 항목·파일 유지, 경로 모양 id 거절, 파일이 사라진 항목은 숨기되 해석 못 한 줄은 보존, 위험한 확장자는 `.jpg`로 대체. 목록 쓰기 실패 정리와 빼기 순서를 지운 변형에서 2건 실제 실패 확인 후 해시 일치 원복. `PhotoStickerPlaceSessionStashTest` 7건은 미리 만든 누끼로 조준을 시작하면 배경제거 요청 없이 켜고 끄기만 되고, 붙이면 누끼가 그대로 들어가며, 취소·교체·손 연출 중 거절 때 원본과 누끼 복사본을 둘 다 정리 대상으로 돌려주는지 검사해(누끼 전달을 지운 변형에서 4건 실패 확인 후 원복). `StickerStashWiringStructureTest` 11건은 소스 구조로 사이드바 뒤로가기 순서(보관함 → 달력 → 닫기), 다시 열면 달력부터·목록 재읽기, 보관함 동안 보던 월 보존(`SaveableStateProvider`), 사이드바가 열려 있고 움직임 끄기가 아닐 때만 파우치 애니메이션·graphicsLayer 안에서만 읽기, 파우치 종이를 크기가 정해질 때 한 번만 비트맵으로 굽기(실기기 QA의 사이드바 버벅임 수정), 통 알림이 엽서 위가 아니라 하단 메뉴 위에 뜨기, 빼기 확인 다이얼로그, 에디터 4번째 칸과 사진 칸 전환 뒤 꺼내기, 핀셋 접촉 때 오림 모양 입히기, 꺼내기가 엽서 소유 경로로만 복사하고 통 파일을 지우지 않음, 엽서 삭제·고아 진단·디렉터리 계약이 통 폴더를 모름을 고정해. **보호하지 않는 것:** DetailViewModel의 실제 담기·꺼내기 실행(Uri·ContentResolver라 JVM 불가), 실제 SAF 권한, 파우치·보관함 화면 모습·흔들림 느낌·작은 화면 스크롤, 실제 핀셋 붙이기 뒤 이동·회전·크기 조절, 재사용 엽서 삭제 — 실기기 QA 대상이야. 파우치·보관함 종이는 임시 코드 그림이라 최종 자산 교체 때 다시 확인해야 해.
+- **수동 확인 필요:** 예 — 추가·이동·회전·크기·삭제·되돌리기와 재진입/공유 결과.
+
+근거: [스티커 통 저장 테스트](../../app/src/test/java/com/postcardmemory/utils/StickerStashStorageTest.kt), [스티커 통 화면 연결 구조 테스트](../../app/src/test/java/com/postcardmemory/ui/gallery/StickerStashWiringStructureTest.kt), [상위 기능줄 구조 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/EditorBottomTabBarStructureTest.kt), [하단 세부 선택줄 종이 라벨 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/PaperLabelSubcategoryNavTest.kt), [사진 스티커 오림 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/PhotoStickerEdgeStyleTest.kt), [사진 스티커 오림 instrumentation](../../app/src/androidTest/java/com/postcardmemory/PhotoStickerEdgeStyleInstrumentedTest.kt), [도장 찍기 상태 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealStampSessionTest.kt), [스티커 핀셋 붙이기 상태 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/PhotoStickerPlaceSessionTest.kt), [도장 잉크 결정성 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/SealInkWearTest.kt), [낙서 테스트](../../app/src/test/java/com/postcardmemory/utils/DoodleStrokeTest.kt), [배경제거 replica](../../app/src/test/java/com/postcardmemory/ui/detail/StickerBackgroundRemovalCancellationTest.kt).
+
+### 기능: 카메라 / 사진 처리
+
+- **보호 수준:** 약함.
+- **현재 보호하는 테스트:** `ProvisionalFileTest`가 임시 파일 실패 정리의 일부 공통 규칙을 보호해. 107일차 4차부터 촬영 사진 자르기·스티커 내보내기·API 28 미만 렌더링이 함께 쓰는 EXIF 방향표를 `ExifOrientationTest`(JVM 3건 — 회전·반전 7종, NORMAL·UNDEFINED·잘못된 값은 무변환, 가로세로 뒤바뀜 4종)가, 실제 Bitmap 회전 결과를 `ExifOrientationInstrumentedTest`(SAFE 1건 — 예전 행렬과 픽셀 비교, 실기기 실행 0회)가 고정하고, 사진 스티커·테이프 원본 복사 확장자를 `ImageFileExtensionTest`(JVM 3건)가 고정해. 촬영·crop·색 추출의 실제 경로 테스트는 여전히 없어.
+- **실제 production 직접 검증:** 공통 임시 파일 helper 수준.
+- **간접 검증:** 배경제거 취소 replica가 있지만 카메라나 ML Kit 자체 실행은 없어.
+- **현재 믿어도 되는 것:** helper가 검사한 실패 정리 규칙만.
+- **아직 믿으면 안 되는 것:** 촬영부터 crop·Bitmap 압축·DB 등록·URI 복사·EXIF 회전까지 전체 과정.
+- **수동 확인 필요:** 예 — 테스트용 촬영, 회전 사진 crop, 취소, 결과 재진입과 사진 표시 확인.
+
+근거: [임시 파일 테스트](../../app/src/test/java/com/postcardmemory/utils/ProvisionalFileTest.kt), [카메라 production](../../app/src/main/java/com/postcardmemory/ui/camera/CameraViewModel.kt).
+
+### 기능: 앱 시작
+
+- **보호 수준:** 약함.
+- **현재 보호하는 테스트:** `AppIntroMessageLogicTest`, `AppIntroVisitPostmarkStructureTest`, `AppIntroStampHandLogicTest`(100일차), 방문 파일·임시 파일 정리 helper 테스트.
+- **실제 production 직접 검증:** 인트로 문구 선택, 손 도장 재생 판정(`shouldPlayIntroStampHand` — 실제 방문 저장소로 같은 날 첫 실행만 재생), 방문/정리 helper. 손이 들어오는 모양·접촉 시점·진동은 실기기 감각 QA 영역이야.
+- **간접 검증:** **앱 시작 시 방문 호출·인트로 표시 연결은 구조 검사가 주된 자동 방어선**이야.
+- **현재 믿어도 되는 것:** 문구 선택과 개별 helper 규칙.
+- **아직 믿으면 안 되는 것:** Application부터 Activity·인트로·갤러리로 이어지는 실제 시작과 DI(필요한 객체를 연결하는 설정).
+- **수동 확인 필요:** 예 — 정상 시작·재실행·백그라운드 복귀와 인트로 중복 표시 확인.
+
+근거: [인트로 구조 검사](../../app/src/test/java/com/postcardmemory/ui/intro/AppIntroVisitPostmarkStructureTest.kt), [앱 시작](../../app/src/main/java/com/postcardmemory/MainActivity.kt).
+
+### 기능: navigation — 화면 이동
+
+- **보호 수준:** 약함.
+- **현재 보호하는 테스트:** 이탈 저장 replica와 달력 내부 탐색 단계의 순수 함수 검사. 실제 navigation 테스트는 없어.
+- **실제 production 직접 검증:** 내부 탐색 상태 계산 일부만.
+- **간접 검증:** replica에서 scope 취소를 화면 이동에 대응시켜.
+- **현재 믿어도 되는 것:** 검사한 내부 단계 계산.
+- **아직 믿으면 안 되는 것:** 실제 뒤로가기·이동 경로·화면 제거·빠른 연속 입력에서의 저장 순서.
+- **수동 확인 필요:** 예 — 아이콘/시스템 뒤로가기, 갤러리↔상세↔카메라/우체통 이동 확인.
+
+근거: [이탈 모형](../../app/src/test/java/com/postcardmemory/ui/detail/DetailScreenExitSaveGuaranteeTest.kt), [navigation production](../../app/src/main/java/com/postcardmemory/MainActivity.kt).
+
+### 기능: ViewModel / lifecycle — 화면 상태가 살아 있는 시간
+
+- **보호 수준:** 약함.
+- **현재 보호하는 테스트:** 핵심 replica 25개, `ExitSaveTimeoutTest`, `PendingStyleSaveCoverageStructureTest`, 실제 ViewModel 계측 4개.
+- **실제 production 직접 검증:** 저장 timeout helper, 배경색·뒷면 일부 ViewModel 저장 시나리오가 계측으로 작성돼 있어. 98일차부터 `DetailViewModel`에 선언된 `Job?` 필드 전체를 소스에서 뽑아 `awaitPendingStyleSaves()`의 join 목록과 대조하는 구조 테스트가 있어 — 새 저장 Job을 목록에 넣지 않으면 실패하고, 의도적 예외(`draftAutosaveJob`: join 대신 cancel + `persistDraftNow()` 즉시 저장)는 이유와 대체 처리 존재까지 함께 확인해. 숫자·이름 목록을 고정하지 않아. Job 필드 없이 바로 launch하는 저장은 잡지 못해.
+- **간접 검증:** Android ViewModel 제거를 가짜 scope 취소로 치환한 모형. 실제 이탈 scope 주입·프로세스 종료는 검사하지 않아.
+- **현재 믿어도 되는 것:** timeout helper가 기다림과 저장을 분리하는 규칙.
+- **아직 믿으면 안 되는 것:** helper 검사를 실제 화면 이탈 전체의 보장으로 보는 것. 이탈 replica의 일부 설명·초안 flush 모형은 현재 production과 차이가 있어.
+- **수동 확인 필요:** 예 — 편집 후 뒤로가기·회전·백그라운드 복귀·재진입. 강제 종료/저장 실패는 별도 안전한 테스트 환경의 후속 후보야.
+
+근거: [실제 helper 테스트](../../app/src/test/java/com/postcardmemory/ui/detail/ExitSaveTimeoutTest.kt), [현재 이탈 저장](../../app/src/main/java/com/postcardmemory/ui/detail/DetailViewModel.kt).
+
+### 기능: 실제 Compose interaction — 버튼·터치 조작
+
+- **보호 수준:** 약함 (뒷면 표시 3건은 81일차부터 실제 통과, 나머지 편집 상호작용은 여전히 공백).
+- **현재 보호하는 테스트:** 뒷면 Compose UI 3개(`PostcardBackRenderingTest`)와 여러 UI 구조 검사.
+- **실제 production 직접 검증:** 뒷면 표시·캡처·글자 측정용 Compose를 실행하는 테스트가 있어. 80일차 emulator(API 37) 첫 실행에서는 3건 전부 `NoSuchMethodException: android.hardware.input.InputManager.getInstance`로 실패했어(Espresso가 `onIdle` 처리 중 쓰는 hidden API가 이 API 레벨과 안 맞는 test infrastructure 문제, production 문제 아님). **81일차에 `espresso-core`를 3.5.1→3.7.0, `androidx.test.ext:junit`을 1.1.5→1.3.0으로 두 테스트 dependency만 올려 이 hidden API 호출을 제거했고, 검증 전용 emulator(API 37)에서 3/3 통과를 확인했어.**
+- **간접 검증:** **대부분의 편집 버튼·toolbar·picker·dialog는 구조 검사가 유일한 자동 방어선**이야. 83일차 도장 조준·찍기 10건과 87일차 사진·라벨·텍스트 스티커·마스킹테이프 조준·붙이기 53건은 실제 Compose gesture가 아니라 UI가 사용하는 순수 `SealStampSession`·`PhotoStickerPlaceSession`·`LabelStickerPlaceSession`·`TextStickerPlaceSession`·`MaskingTapePlaceSession` 상태 전이와 테이프 쓸기 경로 계산을 검사해.
+- **현재 믿어도 되는 것:** 선언·호출 형태가 유지되는지, 그리고 뒷면 Compose 표시·캡처·글자 측정 3건은 API 37 emulator에서 실제로 통과한다는 것.
+- **아직 믿으면 안 되는 것:** 구조 검사 통과가 실제 클릭·drag·포커스·키보드·접근성·화면 크기별 정상 조작을 증명한다는 해석. 뒷면 3건 외 나머지 편집 버튼·제스처는 여전히 자동 실행 검증이 없어.
+- **수동 확인 필요:** 예 — 해당 변경의 실제 버튼과 gesture, 비활성 상태, 작은 화면·키보드 겹침 확인.
+- **과거 emulator 환경 메모(당시 기록, 현재 실행 절차 아님):** 81일차 무렵 draw/capture 계열 instrumentation은 emulator가 `mWakefulness=Asleep`이면 실제 draw pass가 없어 저장 timeout이 날 수 있었어(production 문제 아님). 로컬 emulator는 2026-10-03 폐기됐고 `PostcardBackRenderingTest`는 `CONDITIONAL`이라 실사용 기기에서 실행하지 않아.
+
+근거: [Compose 계측](../../app/src/androidTest/java/com/postcardmemory/PostcardBackRenderingTest.kt), [구조 검사의 한계와 이유](../../app/src/test/java/com/postcardmemory/testsupport/StructureTestSource.kt).
+
+## replica와 구조 테스트를 유지해서 읽는 법
+
+핵심 DetailViewModel replica 25건은 삭제 대상이라는 뜻이 아니야. **설계 의도와 경합 규칙을 설명하는 데 가치가 있지만 실제 production 동작의 직접 증거는 아니야.** 배경색 계측 2건은 실제 production 검증 일부 존재로 따로 표시해. 뒷면 저장 계측은 다른 필드의 저장을 검사하므로 슬라이더 replica의 전체 대체가 아니야.
+
+구조 테스트 167건도 역할을 나눠 읽어야 해. migration 등록, 공용 component 사용, 의존 관계처럼 형태가 계약이면 유효한 안전망이야. 버튼 반응·화면 갱신·레이어 결과를 대신 검사하면 간접 보호에 머물러. 직접 테스트와 구조 테스트를 묶어 볼 수는 있지만, 테스트 개수를 합쳐 보호가 강해졌다고 판단하지 않아.
+
+## 자동 실행 여부
+
+**80일차부터 바뀐 사실:** `feature/photo-sticker`에 push하거나 pull request를 열면 GitHub Actions(`.github/workflows/android-ci.yml`)가 다음을 자동 실행하고, 실제로 통과를 확인했어(2026-09-21, run 35563162247).
+
+| 항목 | 자동 실행 | 근거 |
+|---|---|---|
+| JVM unit test 911개 (`testDebugUnitTest`) | 예 — GitHub Actions에서 실제 자동 실행 확인됨 | 888개 기준 CI run `37911387665`(`1215e7d`) 성공, 895개는 CI run `38113444475`(`c0cf2c7`) 성공, 898개는 CI run `38236877420`(`d57107d`) 성공, 900개는 CI run `38238956502`(`e5fd585`)·`38241161177`(`a08d39c`) 성공, 901개는 CI run `38246874690`(`819d75e`) 성공, 902개는 CI run `39114320761`(`26a6fbb`) 성공, 911개는 로컬 911/911 통과(CI는 push 후 확인) |
+| `assembleDebug` (앱 빌드) | 예 — 자동 실행 확인됨 | CI 성공 로그 |
+| `assembleDebugAndroidTest` (Android 테스트 코드 컴파일) | 예 — 자동 실행 확인됨 | CI 성공 로그. **테스트 코드가 최신 소스 기준으로 컴파일된다는 뜻이지, 실제 Android 환경에서 실행됐다는 뜻이 아니야.** |
+| instrumentation 21개가 CI(GitHub Actions)에서 자동 실행 | 아니오 | CI에는 emulator가 없어 `connectedDebugAndroidTest`를 넣지 않았어. 과거 실제 실행은 로컬 검증 전용 emulator에서만 확인됐어(아래 참고, 그 emulator는 2026-10-03 폐기). 원격 CI의 격리된 instrumentation 환경은 후속 후보야. |
+| lint | 아니오 | 오늘 범위 밖 |
+
+79일차에는 이 표의 모든 항목이 "아니오"였어. 79일차 조사와 80일차 도입 과정은 [CI-AUDIT-79.md](CI-AUDIT-79.md), [CI-AUDIT-80.md](CI-AUDIT-80.md)를 확인해. **instrumentation의 "컴파일 자동검증됨"과 "CI에서 자동 실행됨"은 서로 다른 사실이니 혼동하면 안 돼.**
+
+**같은 날 추가로 확인된 사실 — instrumentation 10건 최초 실제 실행(CI 아님, 로컬 emulator):** 80일차에 사용자가 Android Studio에서 테스트 전용 AVD `PostcardMemory_Test`(API 37)를 직접 부팅했고, `adb devices -l`로 실사용 기기가 없고 `emulator-5554` 하나만 연결된 것을 실행 전마다 재확인한 뒤 로컬 Gradle(`connectedDebugAndroidTest`)로 10건을 처음 실제 실행했어.
+
+- **1차 결과: 5/10 성공.** `PostcardBackMigrationTest`(1/1), `PostcardBackSaveTest`(2/2), `PostcardBackgroundColorSaveRaceTest`(2/2)는 성공. `PostcardBackRenderingTest`(0/3)와 `PostcardFullMigrationChainTest`(0/2)는 실패.
+- `PostcardFullMigrationChainTest` 실패는 **재현 가능한 실제 production Room migration 버그**였어(`message`/`futureMailDeliverAt`/`envelopeStyle` 세 컬럼의 migration SQL DEFAULT 선언이 entity/schema export와 어긋남). `PostcardDatabase.kt`의 관련 3개 migration SQL을 최소 수정(버전 증가·새 migration 없음, 기존 데이터 영향 없음)한 뒤 재실행해 **2/2 통과**로 확인했어. 상세 원인·diff는 [CI-AUDIT-80.md](CI-AUDIT-80.md)에 있어.
+- `PostcardBackRenderingTest` 3건은 수정 전후 동일하게 실패해. 원인은 `NoSuchMethodException: android.hardware.input.InputManager.getInstance` — API 37이 최신 SDK라 현재 Espresso/androidx.test 버전과의 test infrastructure 호환 문제로 분류했고, production 문제가 아니라서 손대지 않았어.
+- **최종(수정 후) 재실행: 7/10 성공, 3/10 실패(test infrastructure), 0 skipped.** 이 3건은 위 "실제 Compose interaction" 항목과 "Room database / migration" 항목의 등급·근거에 반영해야 할 최신 사실이었고(81일차에 해결, 아래 문단 참고), 각 항목에도 반영했어.
+- 이 실행은 GitHub Actions CI가 아니라 **로컬**에서 사용자가 준비한 emulator 위에서 이뤄졌어 — 위 표의 "instrumentation이 CI에서 자동 실행"은 여전히 "아니오"인 게 맞아.
+
+**81일차 추가 확인 — Espresso/API 37 수정 후 전량 재실행(CI 아님, 검증 전용 로컬 emulator):** `da78619`에서 `espresso-core`를 3.7.0으로, `androidx.test.ext:junit`을 1.3.0으로 올려 위 `PostcardBackRenderingTest` 3건 실패 원인이던 hidden API 호출을 제거했고, 같은 커밋에서 `PostcardDeletionOrchestrationTest` 3건(DB 삭제 실패 시 파일 미삭제·DB 행 유지, DB 삭제 성공 시 소유 파일 정리, 재호출 멱등성)을 추가했어. instrumentation 실행 전 `adb devices -l`로 검증 전용 `emulator-5554`만 연결된 걸 재확인했고, **13/13 전부 통과**했어 — `PostcardBackMigrationTest`(1/1), `PostcardFullMigrationChainTest`(2/2), `PostcardBackSaveTest`(2/2), `PostcardBackgroundColorSaveRaceTest`(2/2), `PostcardBackRenderingTest`(3/3), `PostcardDeletionOrchestrationTest`(3/3). 이 실행도 GitHub Actions CI가 아니라 로컬 검증 전용 emulator에서 이뤄졌고, `da78619`·`000e7ce` push 각각의 GitHub Actions run(`35701039918`, `35704566020`)은 JVM unit test·`assembleDebug`·`assembleDebugAndroidTest`(컴파일)만 성공을 확인했을 뿐 emulator instrumentation은 여전히 CI에 포함되지 않아.
+
+**83일차 추가 확인 — 도장 잉크 질감·찍기 상호작용 보호 확대:** `d833c2a`에서 `SealInkWearTest` 5건과 `PostcardOverlayExportLogicTest`의 preview/export seed 연결 1건이 추가돼 JVM 750→756개가 됐고, `0a19187`에서 `SealStampSessionTest` 10건이 추가돼 756→766개가 됐어. 현재 소스 실측과 로컬 결과 XML 모두 766개이며 766/766 통과(실패·오류·skip 0), GitHub Actions run `35977829337`에서 `testDebugUnitTest`·`assembleDebug`·`assembleDebugAndroidTest`가 전부 성공했어. 두 commit 모두 `app/src/androidTest` 변경은 없어 instrumentation은 13개/6파일 그대로고, 83일차 CI의 `assembleDebugAndroidTest` 성공은 실행이 아니라 컴파일 확인이야.
+
+**84일차 추가 확인 — 흔들어서 한 장:** 갤러리 흔들림 판정을 센서 callback에서 분리한 `GalleryShakeDetector`와 균등 랜덤 선택에 `GalleryShakeDetectorTest` 11건, 랜덤 엽서 overlay의 날짜 문구·재흔들기 처리·화면 배치에 `GalleryRandomPostcardOverlayTest` 7건이 추가돼 JVM 766→784개가 됐어. 로컬 결과 XML 784/784 통과(실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest`(컴파일) 성공. `app/src/androidTest` 변경은 없어 instrumentation은 13개/6파일 그대로야. 커피 김 애니메이션은 시각 전용이라 테스트를 추가하지 않았어.
+
+**85일차 추가 확인 — 사진 스티커 오림 스타일:** 사진 스티커에 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림)과 고정 seed가 추가돼, 순수 geometry·저장값 해석·golden 모양 고정을 검사하는 `PhotoStickerEdgeStyleTest` 29건으로 JVM 784→813개가 됐어. 로컬 결과 XML 813/813 통과(실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest`(컴파일) 성공. `PhotoStickerItem` 자체(Uri 포함)의 직렬화 왕복·옛 형식 fallback·복제·누끼 보존은 `PhotoStickerEdgeStyleInstrumentedTest` 7건으로 추가해 instrumentation이 13→20개/7파일이 됐지만, 작업 중 `adb devices -l`에 실사용 기기만 연결돼 있고 검증 전용 emulator가 없어 **실행하지 않았어(미실행, 컴파일만 확인)**. 중간에 기존 구조 테스트 `StickerItemFlatBoxRemovalStructureTest`가 `PhotoStickerDetailScreen.kt` 안의 타일 호출 수 2개를 고정하고 있어 스타일 선택 줄을 별도 파일(`PhotoStickerEdgeStyleRow.kt`)로 분리했고, 그 테스트의 조건은 바꾸지 않았어. 모양·망점 미감, preview/export 그림 일치, 이동·회전 중 외곽 안정성, 저장·재실행 복원, 복제·undo/redo·누끼 ON/OFF는 사용자 실기기 QA 영역이야.
+
+**87일차 추가 확인 — 사진 스티커 핀셋 붙이기:** 사진 스티커 추가가 "고르면 즉시 생성"에서 "조준 → 붙이기 → 핀셋이 닿는 순간 생성"으로 바뀌어, 조준·붙이기 상태 흐름을 검사하는 `PhotoStickerPlaceSessionTest` 20건으로 JVM 813→833개, 테스트 파일 85→86개가 됐어. 보호 범위: 연타·중복 닿기에도 스티커 1개, 닿기 전·취소 후 생성 0개, 손 연출 중 취소·새 조준·조작 차단, 조준한 중심·크기·각도가 그대로 실제 스티커 offset·scale·rotation이 됨, 조준 중심이 붙인 스티커와 같은 `clampStickerOffset` 규칙으로 엽서 안에 갇힘(키울 때 재보정 포함), 크기 0.5~2.5배·회전 정규화, 새 사진으로 조준 교체 시 이전 파일 반환, 화면 이탈 시 아직 스티커가 되지 못한 파일만 반환, 조준 중 배경제거(처리 중 재요청·붙이기 차단, 결과 적용 후 누끼 스티커로 생성, 원본복원 후 결과 재사용, 조준 취소·교체 뒤 늦게 온 결과와 남은 결과 파일 반환, 실패 후 재시도), 누끼 불투명 표본점의 Fit 배치 계산, 회전까지 반영한 핀셋 집는 자리(누끼 = 가장 아래 불투명 점, 기본 = 아래 변 가운데). `android.net.Uri`는 순수 JUnit에서 만들 수 없어 세션을 원본 타입 제네릭으로 두고 테스트는 문자열로 검사해 — `Uri` → `PhotoStickerItem` 변환 자체는 자동 테스트 밖이야. 로컬 결과 XML 833/833 통과(실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest` 성공. `app/src/androidTest` 변경은 없어 instrumentation은 20개/7파일 그대로이고 `PhotoStickerEdgeStyleInstrumentedTest` 7건은 여전히 **미실행**(연결 기기·emulator 없음). ML Kit 배경제거 실제 실행·표본점 추출(Bitmap), 핀셋 손 위치·크기·타이밍 미감, 실제 gesture, 진동, undo/redo 연결, 취소 시 파일 정리는 사용자 실기기 QA 영역이야.
+
+**87일차 후속 — 라벨·텍스트 스티커 조준:** 사용자 선택으로 같은 조준 문법을 라벨 스티커(핀셋 손 포함, 자리·각도만 — 붙인 라벨도 크기 조절이 없음)와 텍스트 스티커(사용자 요청으로 핀셋 손 포함)에 옮겼어. `LabelStickerPlaceSessionTest` 10건(연타·중복 닿기에도 1개, 취소·닿기 전 생성 0, 손 연출 중 차단, 조준 중심 = 라벨 중심·각도 보존·문구/종류/id 보존, 라벨 전체가 엽서 안, 회전 정규화, 회전한 직사각형에서 화면 아래를 향한 변 가운데를 집는 `rectStickerGripOffset` 3건)과 `TextStickerPlaceSessionTest` 7건(연타·중복 닿기에도 1개, 손 연출 중 차단, 조준 중심·배율·각도 보존, 취소·닿기 전 생성 0, 키워도 엽서 안, 붙이기 때 마지막 측정 크기로 재보정해 손 목표 = 착지, 배율 0.5~3배)으로 JVM 833→850개, 테스트 파일 86→88개가 됐어. 로컬 결과 XML 850/850 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, instrumentation은 20개/7파일 그대로(미실행 7건 유지). 라벨 크기 계산(`LabelStickerRenderer`·Paint)과 텍스트 미리보기 측정(onSizeChanged), 실제 gesture·핀셋 미감은 사용자 실기기 QA 영역이야.
+
+**87일차 후속 — 마스킹테이프 쓸어 붙이기:** 사용자 선택으로 같은 조준 문법을 마스킹테이프에 옮기고(추가하면 세부 편집창이 바로 뜨고, 조준 중 `취소 | 편집 | 붙이기`), 손은 테이프 긴 축을 따라 한 번만 쓸게 했어. `MaskingTapePlaceSessionTest` 16건(연타·중복 닿기에도 1개, 손 연출 중 취소·새 조준·조작 차단, 취소·닿기 전 생성 0과 초안 반환, 조준 교체 시 이전 초안 반환, 화면 이탈 시 아직 닿지 않은 초안만 반환, 조준 중심 = 테이프 중심·각도·디자인/길이/굵기 보존, 테이프 전체가 엽서 안, 회전 정규화, 쓸기 경로가 화면 가로가 아니라 테이프 각도의 긴 축을 따름·0°는 왼쪽→오른쪽·90°를 넘으면 같은 축에서 손이 뒤집히지 않음·아주 짧은 테이프에서 뒤로 가지 않음, 손 앞쪽 "아직 안 눌린" 구간 계산, 편집창 값(가장자리·길이·굵기·각도)이 미리보기와 붙은 테이프에 반영·범위 제한·길어지면 엽서 안으로 재보정·손 연출 중 무시)으로 JVM 850→866개, 테스트 파일 88→89개가 됐어. 로컬 결과 XML 866/866 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, instrumentation은 20개/7파일 그대로(미실행 7건 유지). 사진 테이프 복사·조준 취소 시 파일 정리(`deleteMaskingTapePhotoIfUnreferenced`), 실제 gesture, 손 위치·쓸기 속도·밀착 막의 미감, 진동은 사용자 실기기 QA 영역이야.
+
+**87일차 후속 — 누끼 스티커 이동 경계 수정:** 사용자 QA 제보("배경 제거 후 크기를 키우면 원본 사진 크기가 테두리처럼 작용해 원하는 위치까지 못 옮김")로, 누끼 스티커는 원본 칸 전체가 아니라 보이는 부분(불투명 표본점, 회전·뒤집기 반영)이 엽서 안에 있으면 되도록 바꿨어. `PhotoStickerCutoutBoundsTest` 9건(기본 모양은 예전 칸 전체 규칙 그대로, 누끼는 보이는 부분이 가장자리에 닿을 때까지 투명 여백이 밖으로 나감, 범위 안이면 안 움직임, 회전·치우친 피사체에서도 보이는 점이 엽서 밖으로 안 나감, 좌우 뒤집기 반영, 느슨한 규칙(저장된 자리 재보정·저장본)이 정확한 규칙으로 놓은 자리를 절대 당기지 않음, 표본점 없으면 느슨한 규칙, 조준 중 누끼도 같은 규칙·원본복원 시 칸 기준 재보정)으로 JVM 866→875개, 테스트 파일 89→90개가 됐어. 로컬 결과 XML 875/875 통과, `assembleDebug` 성공. 수정 전 코드에서는 누끼가 칸 밖으로 나가는 기대값 테스트가 실패하는 구조야. `createStickerOverlayForExport`는 `android.net.Uri`를 받아 순수 JUnit에서 누끼 경로를 직접 검사하지 못하고(규칙 함수만 검사), exporter의 캔버스 밖 그리기, 그림을 줄여 읽는 표본점 계산(BitmapFactory), 실제 제스처는 사용자 실기기 QA 영역이야.
+
+**88일차 추가 확인 — 갤러리 퀵 셀렉트 손 부채:** 우측 하단 + 클러스터가 신문 오림 손 5장의 부채로 바뀌어, 순수 단계·geometry를 검사하는 `GalleryQuickSelectFanTest` 14건이 추가되고(파일 90→91), `GalleryViewSelectionStructureTest`는 옛 클러스터 구조 7건(+ anchor·롱프레스 드래그·선택 링·punch)이 퀵 셀렉트 구조 6건으로 바뀌어 12→11건이 돼 JVM 875→888개가 됐어. 사용자 승인으로 롱프레스 드래그 바로 실행과 "특별한 갤러리" 묶음 단계가 빠져 그 보호는 더 이상 없고(구조 테스트가 제거 상태를 고정), 기존 callback·노출 조건·뒤로가기·바깥 탭은 구조 테스트로 계속 보호해. `AppIntroVisitPostmarkStructureTest`의 "인트로 진동은 갤러리 롱프레스보다 짧고 약하다"는 롱프레스 상수가 사라져 옛 값(35ms/190)을 테스트 안 고정값으로 옮겼어(보호 의미 유지). 로컬 결과 XML 888/888 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 손 부채의 실제 렌더링·회전된 터치 판정·연출 리듬·간격 미감은 사용자 실기기 QA(2회, 간격·손잡이 높이 보정 후 통과)로 확인했어.
+
+**89일차 추가 확인 — 메인 갤러리 종이 배경:** 구분선 아래 본문에 사용자 제공 seamless 종이 타일을 한 레이어로 깔고 시계·커피 header를 불투명하게 만들어, 구조만 고정하는 `GalleryPaperBackgroundStructureTest` 5건이 추가돼(파일 91→92, 구조 147→152) JVM 888→893개가 됐어. `GalleryMonthlyGridStructureTest`의 "월별 페이지 배경 개수"는 grid 컨테이너 배경이 pager 밖 종이 레이어로 옮겨져 1→0으로 바꿨어(월 섹션마다 배경을 씌우지 않는다는 보호 의미는 유지, 조건은 더 엄격). 농도·색·타일 크기 같은 미감 값은 테스트로 고정하지 않았어. 로컬 결과 XML 893/893 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 질감 농도·가로 이음매 가시성·header 가림·기존 기능은 사용자 실기기 QA(이미지 교체 1회 후 통과)로 확인했어.
+
+**90일차 추가 확인 — 방문 달력 종이 한 장 + 위로 넘기는 월 이동:** 달력의 제목·장식·요일·날짜 grid를 사용자 제공 종이(`visit_calendar_paper.png`, 한 장 crop) 위 한 장(`VisitCalendarMonthPage`)으로 묶고, 월 이동을 가로 슬라이드에서 벽걸이 달력처럼 윗변을 축으로 위로 넘기는 넘김으로 바꿨어. 구조만 고정하는 `VisitCalendarPaperPageStructureTest` 7건(파일 92→93, 구조 152→159)과 `VisitCalendarTest`의 순수 계산 3건(달력 묶음 겹침 순서, 넘어가는 장 불투명도 경계·단조성, 다음 달 장이 반투명하게 겹치지 않음)으로 JVM 893→903개가 됐어. 각도·시간·그림자 농도 같은 미감 값은 테스트로 고정하지 않았어. 로컬 결과 XML 903/903 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일, 미실행 7건 유지). 종이 질감·윤곽선 제거·다음 달 넘김(반투명 겹침 보정 후)·이전 달 넘김·연타·오늘 복귀·선택 단계 전환·하단 가로선 제거는 사용자 실기기 QA로 확인했어.
+
+**91일차 추가 확인 — 꾸미기 저장 누락 방지:** `shouldConfirmSaveSucceed`의 `= true` 기본값 4개를 없애고 production 호출부를 이름 있는 인자로 바꿨어(판정 논리 불변). 꾸미기 디렉터리 목록을 `PostcardOwnedFileLayout.kt`로 모으고 삭제·진단이 그 목록을 순회하게 했어(문자열·순서·결과 이름 불변). 행동 테스트 `DecorationDirectoryContractTest` 3건(테스트 파일 93→94, helper 포함 소스 파일 94→95, 구조 테스트 159 변화 없음)으로 JVM 903→906개가 됐어. 로컬 XML 906/906, `assembleDebug`·`assembleDebugAndroidTest` 성공, 검증 전용 emulator instrumentation 대상 3/3·전체 20/20 통과(`app/src/androidTest` 변경 없음). 구조 테스트의 한계 자체는 변하지 않았어 — `StructureTestSource`의 오래된 "emulator 미준비" 설명만 현재 사실(수동 emulator 실행 가능, CI는 컴파일만)로 고쳤어.
+
+**93일차 추가 확인 — 기억밀도 중성펜 막대(비례형):** 줄기·하트·고정 얼굴을 걷어내고 엽서 수에 비례한 중성펜 막대(20장 = 꽉 참, 초과는 위에 펜으로 그은 작은 "+")와 월 숫자만 남겼어. `GalleryMemoryDensityTest`는 계단 칸·하트 진하기 4건을 지우고 비례 높이·20장 초과·펜 획(결정성, 실루엣 이탈 1.5dp 이내, 빈 막대) 5건을 넣어 13→14건이 됐어. `GalleryMemoryDensityStructureTest`는 7건 그대로야. 얼굴 고정 검사는 "월 숫자만 남음" 검사로, 줄기·하트 검사는 "비례형 중성펜 막대·장식 없음·접근성 설명 유지" 검사로 바꿨어(파일 수·구조 159 변화 없음). 그래서 JVM 906→907개가 됐어. 로컬 XML 907/907 통과, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 선 굵기·농도·손떨림 같은 미감 값은 테스트로 고정하지 않았어. 실기기 감각 QA는 94일차로 미뤘어(사용자 결정).
+
+**96일차 추가 확인 — 방문 달력 질감(장 가장자리·테이프·중성펜 출첵):** 달력 장을 손으로 자른 종이처럼 0.5dp 안쪽 띠에서만 흔들린 윤곽으로 오려 그리고(아주 옅은 접촉 그림자), 윗변 가운데에 아이보리 반투명 테이프 한 조각을 코드로 그리고, 방문일 민트 단색 상자를 같은 색의 중성펜 자국(옅은 잉크 바탕 + 약한 사선 획)으로 바꿨어. 색 상수·글자 자동 대비·날짜 계산·방문 데이터는 그대로야. `VisitCalendarTest` 37→46(순수 생성 함수 9건), `VisitCalendarPaperPageStructureTest` 7→10(구조 3건; 종이 그리기 확인 문자열은 `drawImage(`→`ImageShader(paper)`로 바꿨고 의미는 같음, 윤곽선·늘림 금지 검사 유지)이라 JVM 907→919개, 구조 159→162개가 됐어(파일 수 변화 없음). 로컬 XML 919/919 통과, `assembleDebug` 성공, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 진하기·크기·각도 같은 미감 값은 범위만 고정하고 정확한 값은 고정하지 않았어. 세 단계 모두 사용자 실기기 감각 QA로 승인받았어(펜 바탕은 첫 QA 후 α0.75→0.5로 옅게 조정).
+
+**96일차 후속 — 오늘 날짜 펜 동그라미:** 오늘 날짜 숫자 둘레에 기존 일요일 빨강(`SealInkRed`)으로 얇은 펜을 떼지 않고 2.4~3.2바퀴 휘갈긴 동그라미를 숫자 뒤에 그려. 방문 여부와 상관없고, 접근성 설명에 ", 오늘"이 붙어. `VisitCalendarTest` 46→49(순수 생성 함수 3건), `VisitCalendarPaperPageStructureTest` 10→11(구조 1건)이라 JVM 919→923개, 구조 162→163개(파일 수 변화 없음). 로컬 XML 923/923 통과, `assembleDebug` 성공, `app/src/androidTest` 변경 없음. 미감 값은 범위만 고정했어. 크기·위치는 실기기 QA 세 번으로 다듬고 사용자 승인("동그라미 크기 딱 마음에 들어")을 받았어.
+
+**96일차 추가 — 월 이동 신문 오림 화살표:** ◀ ▶의 Material 꺾쇠 아이콘을 코드로 그린 신문 오림 삼각형(가위로 끊어 자른 윤곽, InkPrimary 잉크, 옅은 번짐, 45° 망점)으로 바꿨어. IconButton 터치 영역·클릭·접근성 설명·크기는 그대로야. 하단 리본 교체(`33a2ce9`)는 테스트 변화가 없었어. `VisitCalendarTest` 49→52(순수 생성 함수 3건), `VisitCalendarPaperPageStructureTest` 11→12(구조 1건)라 JVM 923→927개, 구조 163→164개(파일 수 변화 없음). 로컬 XML 927/927 통과, `assembleDebug` 성공, `app/src/androidTest` 변경 없음. 미감 값은 범위만 고정했어. 사용자 실기기 감각 QA 승인(첫 시도 값 그대로).
+
+**96일차 추가 — 월/연도 고르기 종이 자투리:** 두 고르기 화면의 칸마다 글자 뒤에, 이미 불러온 달력 종이의 하단을 칸마다 다른 위치에서 잘라 손으로 자른 윤곽(달력 장과 같은 함수)·같은 옅은 접촉 그림자로 깔았어. 새 자산 없음, 칸 크기·글자·선택 표시·현재 원·터치 그대로. `VisitCalendarTest` 52→54(순수 함수 2건), `VisitCalendarPaperPageStructureTest` 12→13(구조 1건)이라 JVM 927→930개, 구조 164→165개(파일 수 변화 없음). 로컬 XML 930/930 통과, `assembleDebug` 성공, `app/src/androidTest` 변경 없음. 사용자 실기기 감각 QA 승인(첫 시도 값 그대로).
+
+**98일차 4단계 — 템플릿 기능 제거:** 화면에서 템플릿을 만들거나 불러올 경로가 이미 없고, 템플릿을 적용한 엽서·실기기 템플릿 파일이 모두 0개로 확인돼 템플릿 기능 코드 전체를 지웠어. 템플릿만 검증하던 `PostcardTemplateTest` 15건(직렬화·스타일 추출/적용·선택 유지 판정), `BuiltInTemplatesTest` 5건(기본 템플릿 목록), `PostcardTemplateStorageTest` 7건(템플릿 파일 저장·읽기·삭제)을 함께 지워 JVM 932→905개, 테스트 파일 95→92개, 결과 XML 96→93개가 됐어. 세 파일 모두 일반 엽서 스타일 저장·Room·다른 파일 저장소 계약은 잠그지 않아 남길 부분이 없었어(구조 테스트·Fake/replica 아님, 구조 165개 변화 없음). 템플릿은 Room 컬럼이 따로 없어서 schema·migration·DB version은 그대로이고, `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 905/905 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
+
+**98일차 5단계 — `PostcardImageStorage` 제거:** 옛 중심 사진 교체 뒤 이전 파일을 지우던 `PostcardImageStorage.deleteIfOwnedByApp`는 사진 교체 기능이 사라진 뒤 production 호출부가 0이어서 object째 지웠어. 그 object만 직접 부르던 `PostcardImageStorageTest` 6건(filesDir 안 파일 삭제·밖 파일 보존·null/빈 경로·없는 파일·같은 경로)을 함께 지워 JVM 905→899개, 테스트 파일 92→91개, 결과 XML 93→92개가 됐어. 소유 범위 경계(`isInsideDirectory`)는 production 공용 helper로 그대로 남았고 `AppFileOwnershipTest`가 계속 직접 검증하며, 실제 엽서 파일 삭제는 `PostcardDeletionManagerTest`·`PostcardDeletionDatabaseFirstGateTest`·`DecorationDirectoryContractTest`가 계속 맡아 보호 범위가 줄지 않았어. `BackgroundColorSaveRaceTest`의 대역 주석 2곳은 테스트 동작 변경 없이 "98일차에 제거된 옛 헬퍼"로 고쳤어. schema·migration·DB version·`app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 899/899 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
+
+**98일차 6단계 — 중복 테스트 11건 정리:** 읽기 전용 테스트 유효성 감사에서 같은 계약·같은 실패 모드를 반복한다고 확인된 테스트만 지웠어. `ConfirmSaveLogicTest` 15→12(본문이 `whenStickersAndSealsBothSaved`와 완전히 같은 "전부 저장 성공" 3건; 요소별 실패 6건은 유지), `AppIntroMessageLogicTest` 18→14(33일차 확정 문구 2건은 `atEachDriverNumberMilestone`·`milestoneMessages_matchFixedSpec`이, 32·34일차 2건은 `daysAdjacentToDriverNumberMilestones`가 같은 방식으로 이미 검사; 77일차 회귀를 막는 `atNonMilestoneVisitDays`는 유지), `PostcardOverlayExportLogicTest` 56→53(가로·세로 fallback 오버로드를 `fallbackSize_widthHeight_*` 2건이 같은 실패 모드로 이미 검사), `VisitCalendarTest` 54→53(오늘 방문 색은 `visitDayFillColorIsDarkerOnlyForToday…`가 그대로 검사하고, 지운 테스트의 나머지 단언은 테스트가 직접 만든 Set 포함 여부뿐이었어). 보호하는 동작은 줄지 않았어. JVM 899→888개, 테스트 파일 91개·결과 XML 92개·구조 165개·replica 수 변화 없음(지운 11건은 모두 행동 테스트). 같은 작업에서 `MaskingTapeCreationGrammarStructureTest`의 78일차에 삭제된 `EditorOutlineButton` 부재 단언 한 줄을 걷어냈어(테스트 수 불변, 편집·복제·삭제 평면 액션 존재 검사는 그대로). 테스트 설명 주석 몇 곳도 실제 검증 범위에 맞게 고쳤어. `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 888/888 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
+
+**98일차 7단계 — 테스트 보호 공백 보강:** 감사에서 확인한 공백 2개를 production 경로에 직접 연결된 테스트로 메웠어. ① `PostcardDraftStorageTest.saveDraftAtomically_thenLoadDraft_draftWithEveryNonPhotoDecorationKeepsAllFields` — 도장 2(offset 없는 미니 도장 포함)·낙서 2(펜·형광펜)·텍스트 스티커 1·마스킹테이프 2(프리셋·커스텀 색/무늬/가장자리/길이/굵기)·라벨 2(프리셋·커스텀 색)와 선택 id를 가진 초안을 실제 저장소 함수로 임시 폴더에 저장·읽어 객체 전체를 비교해. 사진 스티커·사진 테이프는 JVM Uri 제약으로 제외. ② `PendingStyleSaveCoverageStructureTest.everyDeclaredSaveJob_isJoinedOnExit_orExplicitlyHandledSeparately` — 선언된 `Job?` 필드 − 이유가 적힌 예외(`draftAutosaveJob`) ⊆ `awaitPendingStyleSaves()` join 목록. mutation 확인(작업트리에만 임시 적용 후 원상복구, 최종 diff 없음): 초안 직렬화의 텍스트 스티커/마스킹테이프 순서 교환·텍스트 스티커 외곽선 색 역직렬화 누락에서 ①이 실패(순서 교환은 기존 테스트 전부 통과), join 목록에서 `confirmSaveJob` 제거·목록에 없는 새 `Job?` 필드 추가에서 ②가 실패했어. production 코드 변경 없음. `PostcardEditDraftTest` 머리 주석(도장도 Uri를 쓴다는 틀린 설명, 완전 왕복 테스트가 없다는 설명)을 실제에 맞게 고쳤어. JVM 888→890개, 테스트 파일 91→92개, 결과 XML 92→93개, 구조 165→166개, replica 수 변화 없음. `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 890/890 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공.
+
+**100일차 — 인트로 손 도장:** 그날 첫 실행(`TodayVisit.isFirstVisitToday`)에서만 편집 화면 도장 손(`SealStampHandOverlay`)이 인트로 소인을 찍어 주게 됐어. 신규 `AppIntroStampHandLogicTest` 4건(첫 방문 재생·재방문 미재생·기록 모름 미재생, 실제 `VisitRecordStorage`로 같은 날 첫 실행만 재생하고 방문은 1회 유지)과 `AppIntroVisitPostmarkStructureTest` 1건(손 재사용·재생 판정·손이 닿기 전 소인 대기·인트로가 방문 저장소를 부르지 않음)을 더하고, 같은 파일의 기존 단언 하나는 LaunchedEffect key에 `stampHandContacted`가 더해져 그 문자열로 바꿨어(보호 의미 유지). mutation 확인: 판정을 `visitRecord != null`로 바꾸면 신규 행동 테스트 2건이 실패(원상복구). JVM 890→895개, 테스트 파일 92→93개, 결과 XML 93→94개, 구조 166→167개. 같은 날 사진 스티커 삭제 X 제거·카메라 셔터 아이콘·갤러리 월 테이프 코랄 필터는 테스트 변화 없음(미감 값 미고정). `app/src/androidTest` 변경 없음(instrumentation 20개/7파일). 로컬 XML 895/895 통과, `assembleDebug`·`assembleDebugAndroidTest` 성공, 사용자 실기기 감각 QA 통과.
+
+## 마지막 요약
+
+### 지금 테스트를 꽤 믿어도 되는 영역
+
+- 초안·꾸미기 데이터의 저장 형식과 옛 데이터 읽기.
+- 개별 파일의 덮어쓰기·실패 시 보존·소유 경계, DB 삭제 성공/실패에 따른 파일 정리 gate(81일차 instrumentation).
+- 방문일·날짜·검색·달력·꾸미기 위치 같은 순수 계산.
+
+이 신뢰는 해당 테스트를 실행해 통과했을 때의 검사 범위에 한정돼. push 자체가 자동 검사를 해 주지는 않아.
+
+### 테스트 통과 후에도 수동 확인이 필요한 영역
+
+- 상세 편집 저장 후 재진입과 실제 뒤로가기.
+- 앞면·뒷면 preview와 저장/공유 이미지.
+- 달력·우체통의 화면 갱신과 개봉.
+- 스티커·테이프·낙서의 터치, 카메라 촬영·crop.
+- 사진 스티커 오림 스타일의 미감과 preview/export 그림 일치.
+
+이는 오늘 재QA 요청이 아니라 향후 변경 시 확인할 지도야. 자동으로 재현 가능한 DB/파일 실패는 사용자 수동 QA로 떠넘기지 않아.
+
+### 현재 자동검증 공백이 큰 영역
+
+- 카메라·Android 사진/URI 처리 전체 과정.
+- navigation·ViewModel 제거·프로세스 lifecycle.
+- 실제 Compose 버튼·drag·키보드 상호작용.
+- 앞면 최종 렌더링 비교, DB 실패와 파일 삭제가 연결된 전체 과정.
+- instrumentation이 **CI에서 자동으로** 실행되는 것(여전히 없음). 실제 emulator 실행 자체는 80일차에 처음 확인했고(7/10 성공, 3/10은 API 37/Espresso 환경 문제), 81일차에 그 3건의 원인(Espresso hidden API)을 test dependency 갱신으로 해결하고 신규 삭제 테스트 3건을 더해 **13/13 통과**로 확정했어 — 위 "자동 실행 여부" 참고. 85일차 신규 사진 스티커 오림 instrumentation 7건은 90일차에 당시 로컬 emulator에서 7/7 통과했어(당시 기록). 로컬 emulator는 2026-10-03 폐기됐어. 이제 Android 실제 실행은 위 "instrumentation 실사용 기기 안전 등급"의 `SAFE` 7건만 사용자 승인 후 가능하고, 나머지 13건은 격리 환경(원격 CI 후보)이 생기기 전까지 실행 불가야. push 시 JVM 테스트·빌드 자동 실행은 80일차에 해결됐어.
+
+테스트 수와 실제 안전성은 부분적으로 일치해. **계산·직렬화·파일 helper와 도장 순수 상태 전이에는 근거가 두껍지만, Android 화면으로 조립된 전체 앱과 자동 실행 보호까지 875개라는 숫자로 보장할 수는 없어.**

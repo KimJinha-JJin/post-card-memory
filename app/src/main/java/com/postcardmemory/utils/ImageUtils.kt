@@ -3,10 +3,10 @@ package com.postcardmemory.utils
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStream
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -57,10 +57,7 @@ object ImageUtils {
         )
 
         val widthAndHeightSwapped =
-            orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
-                    orientation == ExifInterface.ORIENTATION_ROTATE_270 ||
-                    orientation == ExifInterface.ORIENTATION_TRANSPOSE ||
-                    orientation == ExifInterface.ORIENTATION_TRANSVERSE
+            exifOrientationTransform(orientation)?.swapsWidthAndHeight == true
 
         return if (widthAndHeightSwapped) {
             OrientedImageSize(
@@ -73,35 +70,6 @@ object ImageUtils {
                 height = options.outHeight
             )
         }
-    }
-
-    /**
-     * 기존 방식과의 호환을 위한 중앙 정사각형 자르기 함수.
-     *
-     * 아직 CameraViewModel이 기존 함수를 사용하고 있어도
-     * 정상적으로 빌드되고 동작한다.
-     */
-    fun cropToStampRatio(
-        context: Context,
-        sourceFile: File
-    ): File {
-        val imageSize = getOrientedImageSize(
-            sourceFile
-        )
-
-        val viewportSize = min(
-            imageSize.width,
-            imageSize.height
-        ).toFloat()
-
-        return cropToStampRatio(
-            context = context,
-            sourceFile = sourceFile,
-            zoom = 1f,
-            offsetX = 0f,
-            offsetY = 0f,
-            viewportSize = viewportSize
-        )
     }
 
     /**
@@ -139,7 +107,8 @@ object ImageUtils {
             "사진을 불러올 수 없습니다."
         )
 
-        val rotatedBitmap = rotateBitmapUsingExif(
+        // 원본은 여기서 recycle하지 않는다(예전 동작 그대로).
+        val rotatedBitmap = rotateBitmapForExifOrientation(
             bitmap = originalBitmap,
             orientation = orientation
         )
@@ -259,104 +228,49 @@ object ImageUtils {
             "postcard_${System.currentTimeMillis()}.jpg"
         )
 
-        FileOutputStream(outputFile).use { outputStream ->
-            val saved = finalBitmap.compress(
+        writeOrDeletePartialFile(outputFile) { outputStream ->
+            finalBitmap.compress(
                 Bitmap.CompressFormat.JPEG,
                 92,
                 outputStream
             )
-
-            if (!saved) {
-                throw IllegalStateException(
-                    "정사각형 사진을 저장하지 못했습니다."
-                )
-            }
-
-            outputStream.flush()
         }
 
         return outputFile
     }
 
     /**
-     * 사진의 EXIF 방향 정보에 맞게
-     * 비트맵을 실제 방향으로 회전하거나 반전한다.
+     * [outputFile]에 [write]로 내용을 쓰되, 쓰다가 실패하면 **만들다 만
+     * 파일을 남기지 않는다**.
+     *
+     * 예전에는 compress가 false를 돌려주거나 도중에 예외가 나면 0바이트이거나
+     * 반쯤 쓰인 JPEG가 postcards/ 에 그대로 남았다. 그 파일은 DB가 참조하지
+     * 않으므로 어느 화면에도 나타나지 않고, 지워주는 주체도 없는 고아가 된다.
+     *
+     * [write]가 false를 돌려주는 것도 실패로 본다(Bitmap.compress의 실패
+     * 신호). 예외는 정리 후 그대로 다시 던져 호출부가 실패를 알 수 있게 한다.
+     *
+     * internal: Bitmap 없이 순수 JUnit에서 이 정리 규칙만 직접 검증하기 위함.
      */
-    private fun rotateBitmapUsingExif(
-        bitmap: Bitmap,
-        orientation: Int
-    ): Bitmap {
-        val matrix = Matrix()
+    internal fun writeOrDeletePartialFile(
+        outputFile: File,
+        write: (OutputStream) -> Boolean
+    ) {
+        try {
+            FileOutputStream(outputFile).use { outputStream ->
+                val saved = write(outputStream)
 
-        when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
-                matrix.setScale(
-                    -1f,
-                    1f
-                )
-            }
+                if (!saved) {
+                    throw IllegalStateException(
+                        "정사각형 사진을 저장하지 못했습니다."
+                    )
+                }
 
-            ExifInterface.ORIENTATION_ROTATE_180 -> {
-                matrix.setRotate(
-                    180f
-                )
+                outputStream.flush()
             }
-
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
-                matrix.setRotate(
-                    180f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_TRANSPOSE -> {
-                matrix.setRotate(
-                    90f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_90 -> {
-                matrix.setRotate(
-                    90f
-                )
-            }
-
-            ExifInterface.ORIENTATION_TRANSVERSE -> {
-                matrix.setRotate(
-                    270f
-                )
-                matrix.postScale(
-                    -1f,
-                    1f
-                )
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_270 -> {
-                matrix.setRotate(
-                    270f
-                )
-            }
-
-            else -> {
-                return bitmap
-            }
+        } catch (failure: Throwable) {
+            outputFile.delete()
+            throw failure
         }
-
-        return Bitmap.createBitmap(
-            bitmap,
-            0,
-            0,
-            bitmap.width,
-            bitmap.height,
-            matrix,
-            true
-        )
     }
 }

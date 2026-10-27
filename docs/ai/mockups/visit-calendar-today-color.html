@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>오늘 방문 색 후보 비교</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f1ece4;color:#1a1324;font-family:Arial,'Malgun Gothic',sans-serif}main{max-width:1100px;margin:48px auto;padding:0 28px}h1{font-size:26px;font-weight:500;margin:0 0 12px}p{font-size:14px;line-height:1.7;color:#5b5046}header{max-width:900px}
+.samples{display:grid;grid-template-columns:repeat(3,304px);gap:36px;justify-content:space-between;margin-top:26px}
+h2{font-size:16px;font-weight:500;margin:0 0 2px}.hex{font-size:13px;color:#5b5046;margin:0 0 14px;font-family:Consolas,monospace}
+.paper{width:304px;padding:24px;background:#fffbf3;color:#5b5046;min-height:320px}
+.month{font-size:14px;font-weight:500;color:#1a1324}.subtitle{font-size:9px;margin-top:1px}
+.ornament{height:21px;width:100%;display:flex;align-items:center;color:rgba(91,80,70,.29);font-size:9px;white-space:nowrap;gap:6px;margin-top:1px}
+.ornament .line{height:.5px;flex:1;background:currentColor}
+.weekdays,.week{display:grid;grid-template-columns:repeat(7,1fr)}
+.weekdays{font-size:10px;text-align:center;margin-bottom:6px}
+.cell{height:34px;position:relative;text-align:center}
+.fill{position:absolute;inset:3px;background:#16a7a1;border-radius:2px}
+.fill.today{background:var(--today-color)}
+.number{position:absolute;top:2px;left:0;right:0;font-size:11px;line-height:normal}
+.face{position:absolute;bottom:2px;left:0;right:0;font-size:8px;white-space:nowrap;line-height:normal}
+.visited{color:#f3f1ea}.sat{color:#30415f}.red{color:#b33a32}
+.week-rule{height:.5px;background:rgba(219,203,176,.3);margin:2px 0}
+.footer{display:flex;align-items:center;justify-content:space-between;font-size:10px;padding-top:2px}
+.legend{display:flex;gap:24px;flex-wrap:wrap;margin:30px 0 10px;font-size:13px}
+.dot{display:inline-block;width:9px;height:9px;margin-right:6px;background:currentColor;border-radius:2px}
+aside{border-top:1px solid #d4c8ba;margin-top:24px;padding-top:12px;font-size:12px;color:#5b5046;line-height:1.8}
+</style>
+<main>
+<header>
+<h1>오늘 방문 색, 세 후보 비교</h1>
+<p>2026년 9월, 9/10~9/16 연속 7일 방문(실제 오늘 날짜인 9/16 포함)을 그대로 두고 오늘 칸만 후보 색으로 바꿨어. 나머지 방문일은 전부 기존 <code>#16A7A1</code> 그대로야.<br>
+라벨 모서리 2dp, 3px 안쪽 여백, 카오모지·자동 대비 계산까지 실제 앱 로직을 그대로 옮겼어. 실제 방문 데이터·filesDir·visit_record와는 연결되지 않은 독립 목업이야.</p>
+</header>
+<section class="samples" id="samples"></section>
+<div class="legend">
+<span style="color:#16a7a1"><i class="dot" style="background:#16a7a1"></i>일반 방문 (기존)</span>
+</div>
+<aside id="notes"></aside>
+</main>
+<script>
+const faces=['•ᴗ•','˙ᵕ˙','ᵔᴗᵔ','ᵔ.ᵔ'];
+const TODAY=16; // 2026-09-16, 오늘
+const visited=[10,11,12,13,14,15,16];
+const candidates=[
+ {name:'A · 은은하게', hex:'#13908B'},
+ {name:'B · 또렷하게', hex:'#117E7A'},
+ {name:'C · 진하게', hex:'#0E6C68'}
+];
+function luminance(hex){
+ const c=parseInt(hex.slice(1),16),r=(c>>16)&255,g=(c>>8)&255,b=c&255;
+ return (0.299*r+0.587*g+0.114*b)/255;
+}
+function textColorFor(hex){ return luminance(hex)>0.6 ? '#2b2825' : '#f3f1ea'; }
+function render(){
+ const dates=[...Array(2).fill(null),...Array.from({length:30},(_,i)=>i+1)]; // 2026-09-01은 화요일
+ const weeks=Array.from({length:5},(_,w)=>dates.slice(w*7,w*7+7));
+ document.querySelector('#samples').innerHTML=candidates.map(cand=>{
+  const textColor=textColorFor(cand.hex);
+  const weeksHtml=weeks.map((week,wi)=>{
+   const cells=week.map(day=>{
+    if(!day) return '<div class="cell"></div>';
+    const date=new Date(Date.UTC(2026,8,day)),dow=date.getUTCDay();
+    const isVisited=visited.includes(day), isToday=day===TODAY;
+    const cls=isVisited?'visited':(dow===0?'red':dow===6?'sat':'');
+    const face=faces[((date.getTime()/86400000)%4+4)%4];
+    const fillStyle=isToday?`style="--today-color:${cand.hex};color:${textColor}"`:'';
+    return `<div class="cell ${cls}" aria-label="9월 ${day}일${isVisited?', 방문':''}${isToday?', 오늘':''}">${isVisited?`<div class="fill${isToday?' today':''}" ${fillStyle}></div>`:''}<span class="number" ${isToday?`style="color:${textColor}"`:''}>${day}</span>${isVisited?`<span class="face" ${isToday?`style="color:${textColor}"`:''}>${face}</span>`:''}</div>`;
+   }).join('');
+   return `<div class="week">${cells}</div>${wi<4?'<div class="week-rule"></div>':''}`;
+  }).join('');
+  return `<article><h2>${cand.name}</h2><p class="hex">${cand.hex} · 오늘 칸만</p><div class="paper"><div class="month">2026년 9월</div><div class="subtitle">다녀간 날들</div><div class="ornament"><span class="line"></span><span>✦</span><span class="line"></span></div><div class="weekdays"><span class="red">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>${weeksHtml}<div class="footer"><span>오늘까지 ${visited.length}번 만났어요~!</span></div></div></article>`;
+ }).join('');
+ document.querySelector('#notes').innerHTML =
+  candidates.map(c=>`${c.name} 밝기(luminance) ${luminance(c.hex).toFixed(3)} → 자동 대비 글자색 ${textColorFor(c.hex)==='#f3f1ea'?'밝은 글자(F3F1EA)':'어두운 글자(2B2825)'}. 기존 #16A7A1 밝기는 0.482.`).join('<br>');
+}
+render();
+</script>
+</html>

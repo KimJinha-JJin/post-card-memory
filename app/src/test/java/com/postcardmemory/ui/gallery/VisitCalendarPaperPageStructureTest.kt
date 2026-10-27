@@ -1,0 +1,258 @@
+package com.postcardmemory.ui.gallery
+
+import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * 90일차: 방문 달력을 종이 한 장(VisitCalendarMonthPage) 단위로 묶은 구조를 고정한다 —
+ * 종이·제목·장식·요일·날짜 grid가 한 장 안에서 함께 움직이고, 종이 bitmap은 월 이동
+ * 바깥에서 한 번만 불러오며, "다녀간 날들 / 오늘" 줄과 월/연도 선택 단계 전환은 종이
+ * 밖에 그대로 남는다. 질감 농도·윤곽 색 같은 미감 값은 실기기 QA 대상이라 고정하지 않는다.
+ * `src/test` JVM에는 Robolectric이 없어 소스 텍스트 기준으로 검사한다.
+ */
+class VisitCalendarPaperPageStructureTest {
+
+    private val sourceText: String by lazy {
+        val candidates = listOf(
+            "src/main/java/com/postcardmemory/ui/gallery/VisitCalendarDrawer.kt",
+            "app/src/main/java/com/postcardmemory/ui/gallery/VisitCalendarDrawer.kt"
+        )
+        val file = candidates
+            .map { File(it) }
+            .firstOrNull { it.exists() }
+            ?: error(
+                "소스 파일을 찾을 수 없음(cwd=${File(".").absolutePath}). " +
+                    "candidates=$candidates"
+            )
+        file.readText()
+    }
+
+    private fun functionBody(declaration: String): String {
+        val start = sourceText.indexOf(declaration)
+        assertTrue("$declaration 선언을 찾지 못함", start >= 0)
+        val end = sourceText.indexOf("\n@Composable", start).let { if (it < 0) sourceText.length else it }
+        return sourceText.substring(start, end)
+    }
+
+    private val pageBody: String by lazy { functionBody("private fun VisitCalendarMonthPage(") }
+    private val calendarBody: String by lazy { functionBody("internal fun MonthlyVisitCalendar(") }
+
+    // 월 이동(달력 한 장 넘김)이 시작되는 지점.
+    private val monthTransitionMarker = "val pageMonths ="
+    private val monthTransition: Int by lazy {
+        calendarBody.indexOf(monthTransitionMarker).also {
+            assertTrue("월 이동 transition을 찾지 못함", it >= 0)
+        }
+    }
+
+    @Test
+    fun paper_isLoadedOnceOutsideTheMonthTransition() {
+        assertEquals(
+            "달력 종이 drawable은 한 번만 참조해야 함(장마다 decode 금지)",
+            1,
+            Regex("""R\.drawable\.visit_calendar_paper""").findAll(sourceText).count()
+        )
+        val load = calendarBody.indexOf("R.drawable.visit_calendar_paper")
+        assertTrue("종이는 MonthlyVisitCalendar 안에서 불러와야 함", load >= 0)
+        assertTrue("종이는 월별 장을 그리기 전(바깥에서) 불러와야 함", load < monthTransition)
+        assertFalse("달력 장 안에서 종이를 다시 불러오면 안 됨", pageBody.contains("imageResource"))
+    }
+
+    @Test
+    fun monthTransition_turnsOneWholePage() {
+        assertEquals(
+            "월 이동 transition은 하나여야 함(제목·grid가 따로 움직이면 안 됨)",
+            1,
+            Regex(Regex.escape(monthTransitionMarker)).findAll(sourceText).count()
+        )
+        assertFalse(
+            "displayedMonth로 도는 AnimatedContent가 따로 남아 있으면 안 됨",
+            sourceText.contains("targetState = displayedMonth")
+        )
+        val pageLoop = calendarBody.indexOf("pageMonths.forEachIndexed", monthTransition)
+        val pageCall = calendarBody.indexOf("VisitCalendarMonthPage(", pageLoop)
+        assertTrue("아래 장/넘기는 장 모두 같은 인쇄면을 사용해야 함", pageLoop > monthTransition && pageCall > pageLoop)
+        assertTrue(
+            "넘김 표현은 달력 한 장 전체(modifier)에 걸려야 함",
+            calendarBody.substring(pageCall, minOf(calendarBody.length, pageCall + 300))
+                .contains("Modifier.visitCalendarPageCurl(")
+        )
+        assertTrue(calendarBody.contains("listOf(activeTurn.to, activeTurn.from)"))
+    }
+
+    @Test
+    fun pageTurn_keepsTheActiveSheetStableAndDrawsBothClippedPrintSurfaces() {
+        val file = listOf(
+            "src/main/java/com/postcardmemory/ui/gallery/VisitCalendarPageCurl.kt",
+            "app/src/main/java/com/postcardmemory/ui/gallery/VisitCalendarPageCurl.kt"
+        ).map { File(it) }.first { it.exists() }
+        val curl = file.readText()
+        assertTrue(calendarBody.contains("snapshotFlow { paging.requestedMonth }"))
+        assertTrue(calendarBody.contains("LaunchedEffect(Unit)"))
+        assertFalse("추가 입력이 진행 중인 장을 취소하면 안 됨", calendarBody.contains("LaunchedEffect(paging.requestedMonth)"))
+        assertTrue(calendarBody.contains("pageTurnProgress.animateTo("))
+        assertTrue(calendarBody.contains("VISIT_CALENDAR_PAGE_TURN_DURATION_MS, easing = LinearEasing"))
+        assertTrue(calendarBody.contains("progress = { pageTurnProgress.value }"))
+        assertTrue(calendarBody.contains("forward = activeTurn!!.forward"))
+        assertTrue(curl.contains("clipPath(front) { this@onDrawWithContent.drawContent() }"))
+        assertTrue(curl.contains("withTransform({ transform(reflection) })"))
+        assertTrue(curl.contains("clipPath(back) {"))
+        assertTrue("뒷면도 이 달의 손으로 자른 가장자리를 유지해야 함", curl.contains("clipPath(paperOutline)"))
+        assertTrue(curl.contains("seed = visitCalendarPaperEdgeSeed(month)"))
+        assertEquals("앞면과 접힌 면에 인쇄 전체를 그린다", 3, Regex(Regex.escape("drawContent()")).findAll(curl).count())
+        assertFalse("월 이동에 기존 윗변 회전을 남기면 안 됨", sourceText.contains("rotationX ="))
+        assertFalse("접힘 프레임마다 bitmap을 만들면 안 됨", curl.contains("createBitmap") || curl.contains("toImageBitmap"))
+    }
+
+    @Test
+    fun page_containsEverythingPrintedOnThePaper() {
+        listOf(
+            "ImageShader(paper)",
+            "\${month.year}년 \${month.monthValue}월",
+            "VisitCalendarTopOrnament()",
+            "VISIT_CALENDAR_WEEKDAY_HEADERS",
+            "VisitCalendarMonthGrid("
+        ).forEach { printed ->
+            assertTrue("달력 한 장 안에 $printed 가 있어야 함", pageBody.contains(printed))
+        }
+        assertFalse(
+            "달력 한 장은 자기 month만 읽어야 함(나가는 장이 다음 달로 바뀌지 않게)",
+            pageBody.contains("displayedMonth")
+        )
+    }
+
+    @Test
+    fun paper_isCutAlongThisMonthsOwnHandCutEdge() {
+        assertTrue(
+            "종이는 이 장의 month로 고른 가장자리 모양으로 오려 그려야 함",
+            pageBody.contains("seed = visitCalendarPaperEdgeSeed(month)")
+        )
+        assertTrue("오린 종이는 path로 채워 그려야 함", pageBody.contains("drawPath(outline, brush = paperBrush)"))
+        assertFalse("가장자리는 안티에일리어싱 없는 clip이 아니라 채운 path여야 함", pageBody.contains("clipPath("))
+    }
+
+    @Test
+    fun visitedDay_isMarkedWithTheGelPenInTheUnchangedFillColor() {
+        val grid = functionBody("private fun VisitCalendarMonthGrid(")
+        assertTrue(
+            "방문일은 기존 채움 색 그대로 그 날짜의 중성펜 자국으로 칠해야 함",
+            grid.contains(".visitDayGelPenMark(visitDayFillColor(date, today), visitDayPenSeed(date))")
+        )
+        assertFalse("매끈한 단색 상자로 돌아가면 안 됨", grid.contains(".background("))
+    }
+
+    @Test
+    fun today_isCircledOnItsNumberWhetherOrNotItWasVisited() {
+        val grid = functionBody("private fun VisitCalendarMonthGrid(")
+        val circle = grid.indexOf(
+            ".then(if (date == today) Modifier.visitTodayPenCircle(visitTodayCircleSeed(date)) else Modifier)"
+        )
+        assertTrue("오늘 동그라미는 오늘 날짜 숫자에 붙어야 함", circle >= 0)
+        val number = grid.lastIndexOf("date.dayOfMonth.toString()", circle)
+        assertTrue("동그라미는 날짜 숫자 Text의 modifier여야 함", number >= 0 && circle - number < 300)
+        assertFalse(
+            "동그라미는 방문 여부(visited)에 묶이면 안 됨",
+            grid.substring(number, circle).contains("visited")
+        )
+    }
+
+    @Test
+    fun tape_isStuckOnThisMonthsPageAndTurnsWithIt() {
+        assertTrue(
+            "테이프는 이 장의 month로 고른 조각이어야 함",
+            pageBody.contains("visitCalendarTapePiece(visitCalendarTapeSeed(month))")
+        )
+        val paper = pageBody.indexOf("drawPath(outline, brush = paperBrush)")
+        val tape = pageBody.indexOf("drawVisitCalendarTape(")
+        assertTrue("테이프는 장 안에서 종이 위에 붙어야 함", paper >= 0 && tape > paper)
+        assertFalse("테이프는 자산 이미지가 아니라 코드 그림이어야 함", sourceText.contains("gallery_date_paper_strip"))
+    }
+
+    @Test
+    fun paper_isCroppedWithoutStretching() {
+        assertTrue("종이는 장을 꽉 채우는 큰 쪽 배율 하나로만 맞춰야 함", pageBody.contains("maxOf("))
+        assertFalse("FillBounds로 늘리면 안 됨", pageBody.contains("FillBounds"))
+        assertFalse("타일 반복이 아니라 한 장이어야 함", pageBody.contains("TileMode"))
+        assertFalse(
+            "장 둘레에 윤곽선을 그리면 카드형 박스처럼 보임(90일차 QA에서 제거)",
+            pageBody.contains("Stroke(") || pageBody.contains(".border(")
+        )
+    }
+
+    @Test
+    fun visitedDaysLineAndArrowsStayOutsideThePaper() {
+        assertFalse("\"다녀간 날들\" 줄은 종이 밖 고정이어야 함", pageBody.contains("다녀간 날들"))
+        assertFalse("◀ ▶ 버튼은 종이 밖 고정이어야 함", pageBody.contains("IconButton("))
+        val visitedLine = calendarBody.indexOf("\"다녀간 날들\"")
+        assertTrue("\"다녀간 날들\" 줄은 달력 한 장 위에 있어야 함", visitedLine in 0 until monthTransition)
+        listOf("\"이전 달\"", "\"다음 달\"").forEach { arrow ->
+            assertTrue("$arrow 버튼은 월별 장 뒤(위 z-order)에 있어야 함",
+                calendarBody.indexOf(arrow) > monthTransition)
+        }
+    }
+
+    @Test
+    fun monthArrowsKeepTheirButtonsAndOnlyLookCutFromNewsprint() {
+        listOf(
+            Triple("-1", "\"이전 달\"", "pointsLeft = true"),
+            Triple("1", "\"다음 달\"", "pointsLeft = false")
+        ).forEach { (move, label, direction) ->
+            val button = calendarBody.indexOf("IconButton(onClick = { paging = paging.step($move) })")
+            assertTrue("$label 버튼(48dp 터치 영역·클릭)은 그대로여야 함", button > monthTransition)
+            val inside = calendarBody.substring(button, calendarBody.indexOf("\n                                }", button))
+            assertTrue("$label 접근성 설명 유지", inside.contains("contentDescription = $label"))
+            assertTrue("$label 화살표는 신문 오림 삼각형", inside.contains(".visitCalendarNewsprintArrowMark($direction"))
+            assertTrue("$label 화살표 크기 유지", inside.contains("Modifier.size(VISIT_CALENDAR_ARROW_SIZE)"))
+            assertFalse("$label 디지털 아이콘으로 돌아가면 안 됨", inside.contains("Icons."))
+            assertFalse("$label 버튼 배경·테두리·그림자 금지",
+                listOf(".background(", ".border(", ".shadow(").any { inside.contains(it) })
+        }
+    }
+
+    @Test
+    fun pickerCellsShareOneEnvelopeAndKeepTheirInteractionAndInkRules() {
+        val load = calendarBody.indexOf("R.drawable.visit_calendar_envelope_base")
+        assertEquals(1, Regex("""R\.drawable\.visit_calendar_envelope_base""").findAll(sourceText).count())
+        assertTrue("봉투는 단계 전환 바깥에서 한 번만 decode", load >= 0 && load < calendarBody.indexOf("targetState = navLevel"))
+        listOf("private fun VisitCalendarMonthPicker(", "private fun VisitCalendarYearPicker(").forEach { picker ->
+            val body = functionBody(picker)
+            val height = body.indexOf(".height(40.dp)")
+            val image = body.indexOf(".visitCalendarPickerEnvelope(envelope, isHighlighted)")
+            val click = body.indexOf(".clickable(")
+            assertTrue("4열 배열과 동일한 터치 칸 유지", body.contains(".chunked(4)") && body.contains(".weight(1f)") && height >= 0)
+            assertTrue("봉투 뒤에도 전체 칸 클릭 유지", image > height && click > image)
+            assertTrue("인장형 숫자는 상단, 기존 앱 글꼴 유지", body.contains("Alignment.TopCenter") && body.contains("VISIT_CALENDAR_PICKER_NUMBER_TOP"))
+            assertFalse("기본 글꼴을 새 서체로 바꾸지 않음", body.contains("fontFamily"))
+            assertTrue("기존 선택 글자와 굵기 유지", body.contains("-> InkPrimary") && body.contains("FontWeight.Medium else FontWeight.Normal"))
+            assertTrue("현재 시점 청록 유지", body.contains("-> VisitFillColorToday"))
+            assertFalse("연도/월 현재 숫자 뒤 원 제거", body.contains("CurrentPeriodMarker") || body.contains("ShowsCurrentMarker"))
+            assertFalse("칸마다 decode하지 않음", body.contains("imageResource"))
+            assertFalse("숫자 뒤 별도 카드·판·테두리 금지", listOf(".background(", ".border(", "Card(", ".shadow(").any { body.contains(it) })
+        }
+        val envelope = functionBody("private fun Modifier.visitCalendarPickerEnvelope(")
+        assertTrue("bitmap 재생성 없이 공유 자산을 그림", envelope.contains("drawImage(") && envelope.contains("image = envelope"))
+        assertTrue("원본 비율과 투명 여백을 보존해 Fit", envelope.contains("visitCalendarPickerEnvelopeSize(") && envelope.contains("dstSize = target"))
+        assertTrue("선택 톤만 바꾸고 alpha는 유지", envelope.contains("if (selected) VisitCalendarSelectedEnvelopeFilter else null"))
+        assertFalse("추가 bitmap allocation과 셀별 decode 금지", envelope.contains("ImageBitmap(") || envelope.contains("imageResource"))
+        listOf("VisitCalendarMonthPicker(", "VisitCalendarYearPicker(").forEach { call ->
+            val at = calendarBody.indexOf(call + "\n")
+            assertTrue("두 picker가 같은 봉투를 받음", at >= 0 && calendarBody.substring(at, minOf(at + 300, calendarBody.length)).contains("envelope = pickerEnvelope"))
+        }
+    }
+
+    @Test
+    fun hierarchyTransitionAndDrawerSurfaceAreUnchanged() {
+        val hierarchy = functionBody("private fun AnimatedContentTransitionScope<VisitCalendarNavLevel>.visitCalendarHierarchyTransition(")
+        assertTrue("단계 전환은 fade + scale 그대로여야 함", hierarchy.contains("fadeIn(") && hierarchy.contains("scaleIn("))
+        assertFalse("단계 전환에 가로 슬라이드가 섞이면 안 됨", hierarchy.contains("slideIn"))
+        assertTrue(calendarBody.contains("transitionSpec = { visitCalendarHierarchyTransition() }"))
+
+        val drawer = functionBody("internal fun VisitCalendarDrawer(")
+        assertTrue("drawer 전체 배경은 종이가 아니라 PaperSurface 그대로여야 함",
+            drawer.contains("drawerContainerColor = PaperSurface"))
+        assertFalse("종이는 drawer 전체가 아니라 달력 한 장에만 깔려야 함", drawer.contains("visit_calendar_paper"))
+    }
+}

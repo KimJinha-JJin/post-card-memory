@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>월 라벨 종이 띠</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<style>
+  /* 95일차: 갤러리 월별 보기의 월 라벨(GalleryMonthHeader) 목업.
+     앱 수치를 1dp = 1px로 옮겼다. 종이 그림은 저장소의 실제 자산을 상대 경로로 불러온다
+     (저장소 안에서 이 파일을 열어야 보인다). 웹 근사라 실기기 인상과 다를 수 있다. */
+  :root {
+    --desk: #E3DACA;
+    --paper-canvas: #F4ECDE;   /* PaperCanvas = GalleryPaperWhite */
+    --paper-field: #FAF4E9;    /* PaperField: 이전 헤더 단색 띠 */
+    --paper-divider: #DBCBB0;  /* PaperDivider */
+    --ink-primary: #1A1324;    /* InkPrimary */
+    --ink-secondary: #5B5046;  /* InkSecondary */
+    --font-ui: -apple-system, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--desk);
+    color: var(--ink-primary);
+    font-family: var(--font-ui);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    font-size: 13px;
+  }
+  .controls button {
+    font: inherit;
+    border: 1px solid #B9A88C;
+    background: #FBF7EF;
+    color: var(--ink-primary);
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .controls button[aria-pressed="true"] {
+    background: #3B3128;
+    color: #FBF7EF;
+    border-color: #3B3128;
+  }
+  .note {
+    max-width: 390px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-secondary);
+    margin: 0;
+    text-align: center;
+  }
+  .device {
+    width: 390px;
+    max-width: 100%;
+    height: 760px;
+    border-radius: 28px;
+    box-shadow: 0 0 0 9px #2B2520, 0 18px 40px rgba(40, 30, 20, 0.28);
+    overflow: hidden;
+    position: relative;
+    background: var(--paper-canvas);
+    display: flex;
+    flex-direction: column;
+  }
+  .topbar {
+    flex: none;
+    height: 56px;
+    background: var(--paper-canvas);
+    border-bottom: 1px solid var(--paper-divider);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font-size: 17px;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+  }
+  /* GalleryPaperBackground: 360dp 타일 반복 */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    background-color: var(--paper-canvas);
+    background-image: url("../../../app/src/main/res/drawable-nodpi/gallery_paper_tile.png");
+    background-size: 360px 360px;
+    background-repeat: repeat;
+    padding: 14px 12px 40px;
+  }
+  .section { margin-bottom: 10px; }
+
+  /* GalleryMonthHeader */
+  .header { display: flex; flex-direction: column; margin-bottom: 10px; }
+  .header-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 16px 6px 0;
+  }
+  .label-strip {
+    position: relative;
+    min-width: 136px;
+    box-sizing: border-box;
+    padding: 5px 18px;
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+  }
+  /* 투명 여백을 뺀 종이 부분(89,172 / 2011×379 of 2172×724)만 상자에 맞춰 그린다 */
+  .label-strip img {
+    position: absolute;
+    width: 108.01%;
+    height: 191.03%;
+    left: -4.426%;
+    top: -45.38%;
+    pointer-events: none;
+    user-select: none;
+  }
+  .label-text {
+    position: relative;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-primary);
+    white-space: nowrap;
+  }
+  .spacer { flex: 1; }
+  .count { font-size: 12px; color: var(--ink-secondary); }
+  .divider { height: 1px; background: var(--paper-divider); }
+
+  /* 이전 모양: 화면 폭 PaperField 단색 띠, 가로 16 / 세로 10 */
+  body.old .header { background: var(--paper-field); }
+  body.old .header-row { padding: 10px 16px; }
+  body.old .label-strip { padding: 0; min-width: 0; }
+  body.old .label-strip img { display: none; }
+  body.no-divider .divider { display: none; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px 8px;
+  }
+  .card {
+    aspect-ratio: 1 / 1;
+    border-radius: 6px;
+    background: var(--c);
+    box-shadow: 0 1px 2px rgba(60, 40, 20, 0.18);
+    position: relative;
+    overflow: hidden;
+  }
+  .card::after {
+    content: "";
+    position: absolute;
+    inset: 16% 18% 30%;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.55);
+  }
+</style>
+</head>
+<body>
+  <div class="controls" role="group" aria-label="보기 전환">
+    <button type="button" id="btn-new" aria-pressed="true">새 모양 (종이 띠)</button>
+    <button type="button" id="btn-old" aria-pressed="false">이전 모양 (단색 띠)</button>
+    <button type="button" id="btn-divider" aria-pressed="true">구분선 있음</button>
+  </div>
+
+  <div class="device" aria-label="갤러리 월별 보기 목업">
+    <div class="topbar">갤러리</div>
+    <div class="content" id="content"></div>
+  </div>
+
+  <p class="note">앱 수치를 1dp = 1px로 옮긴 웹 근사야. 종이 띠는 좌우 18 · 위아래 5 여백, 최소 폭 136, 띠 왼쪽 끝은 첫 칸과 맞춰. 실기기 인상과 다를 수 있어.</p>
+
+<script>
+  const months = [
+    ["2026년 10월", ["#F6D6D6", "#CFE3E6"]],
+    ["2026년 9월", ["#E8DDF3", "#F7E7C6", "#D6E8D2", "#F3D9C9", "#DCE4F2"]],
+    ["2026년 8월", ["#4F6C73", "#F6D6D6", "#FAF3E1", "#E9D3E6", "#D4E4DA", "#F2E2C4", "#CFD9EC"]],
+    ["2026년 7월", ["#F7DCCB", "#D9E7F0", "#EFE6CF"]],
+    ["2025년 12월", ["#E3D7EF", "#F5E3D3"]]
+  ];
+
+  const content = document.getElementById("content");
+  const stripSrc = "../../../app/src/main/res/drawable-nodpi/gallery_date_paper_strip.png";
+
+  months.forEach(([label, colors]) => {
+    const section = document.createElement("section");
+    section.className = "section";
+    section.innerHTML = `
+      <div class="header" role="heading" aria-level="2" aria-label="${label}, 엽서 ${colors.length}장">
+        <div class="header-row">
+          <div class="label-strip">
+            <img src="${stripSrc}" alt="" />
+            <span class="label-text">${label}</span>
+          </div>
+          <span class="spacer"></span>
+          <span class="count">${colors.length}장</span>
+        </div>
+        <div class="divider"></div>
+      </div>
+      <div class="grid">${colors.map(c => `<div class="card" style="--c:${c}"></div>`).join("")}</div>`;
+    content.appendChild(section);
+  });
+
+  const btnNew = document.getElementById("btn-new");
+  const btnOld = document.getElementById("btn-old");
+  const btnDivider = document.getElementById("btn-divider");
+
+  function setOld(isOld) {
+    document.body.classList.toggle("old", isOld);
+    btnNew.setAttribute("aria-pressed", String(!isOld));
+    btnOld.setAttribute("aria-pressed", String(isOld));
+  }
+  btnNew.addEventListener("click", () => setOld(false));
+  btnOld.addEventListener("click", () => setOld(true));
+  btnDivider.addEventListener("click", () => {
+    const hide = !document.body.classList.contains("no-divider");
+    document.body.classList.toggle("no-divider", hide);
+    btnDivider.setAttribute("aria-pressed", String(!hide));
+    btnDivider.textContent = hide ? "구분선 없음" : "구분선 있음";
+  });
+</script>
+</body>
+</html>

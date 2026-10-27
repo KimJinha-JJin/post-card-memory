@@ -44,6 +44,11 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -83,6 +88,8 @@ dependencies {
         libs.androidx.lifecycle.viewmodel.compose
     )
     implementation(libs.androidx.exifinterface)
+    implementation(libs.mlkit.subject.segmentation)
+    implementation(libs.androidx.palette)
 
     testImplementation(libs.junit)
 

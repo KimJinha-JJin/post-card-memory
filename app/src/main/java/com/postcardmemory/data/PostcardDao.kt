@@ -1,7 +1,6 @@
 package com.postcardmemory.data
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -10,12 +9,35 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface PostcardDao {
 
+    /**
+     * 일반 갤러리(월별 3열 그리드/기억 밀도 보기 공통 원천)용 조회. 미래로
+     * 발송된(futureMailState != 'NONE') 엽서는 여기서 제외해 두 보기가
+     * 항상 같은 결과를 보게 한다.
+     */
     @Query(
         "SELECT * FROM postcards " +
+                "WHERE futureMailState = 'NONE' " +
                 "ORDER BY capturedAt DESC"
     )
     fun getAllPostcards(): Flow<List<Postcard>>
 
+    /**
+     * 미래 우체통용 조회. 상태와 무관하게 id로 직접 조회하는
+     * getPostcardById()와 달리, 배송 중인 엽서만 도착일 오름차순으로 가져온다.
+     */
+    @Query(
+        "SELECT * FROM postcards " +
+                "WHERE futureMailState = 'SENT' " +
+                "ORDER BY futureMailDeliverAt ASC"
+    )
+    fun getFutureMailPostcards(): Flow<List<Postcard>>
+
+    /**
+     * id로 직접 조회 — 상태 필터를 걸지 않는다. 미래로 발송된 엽서도
+     * (내용을 보여주기 위해서가 아니라) 봉인 안내 화면을 그리기 위해
+     * DetailViewModel이 이 함수로 로드해야 하므로, 노출 차단은 DAO가 아니라
+     * UI 레이어(DetailScreen)의 상태 분기 책임이다.
+     */
     @Query(
         "SELECT * FROM postcards " +
                 "WHERE id = :id"
@@ -24,6 +46,40 @@ interface PostcardDao {
         id: Long
     ): Postcard?
 
+    @Query(
+        """
+        UPDATE postcards
+        SET futureMailState = 'SENT',
+            futureMailDeliverAt = :deliverAt
+        WHERE id = :id
+        """
+    )
+    suspend fun sendToFutureMailbox(
+        id: Long,
+        deliverAt: Long
+    )
+
+    /**
+     * 개봉: 상태를 되돌리는 것뿐, 파일/이미지 등 어떤 자산도 건드리지 않는다.
+     *
+     * 같은 도착일 묶음은 한 번의 UPDATE로 연다. 예전에는 id마다 따로
+     * UPDATE를 보내서, 중간에 하나가 실패하면 앞의 몇 장만 열린 상태로
+     * 남았다. SQLite는 단일 문장을 그 자체로 원자적으로 처리하므로 이
+     * 형태에서는 전부 열리거나 전혀 열리지 않는다 — 별도 transaction
+     * 블록이나 schema 변경 없이 묶음 원자성이 확보된다.
+     */
+    @Query(
+        """
+        UPDATE postcards
+        SET futureMailState = 'NONE',
+            futureMailDeliverAt = NULL
+        WHERE id IN (:ids)
+        """
+    )
+    suspend fun openFutureMailGroup(
+        ids: List<Long>
+    )
+
     @Insert(
         onConflict = OnConflictStrategy.REPLACE
     )
@@ -31,25 +87,12 @@ interface PostcardDao {
         postcard: Postcard
     ): Long
 
-    @Delete
-    suspend fun deletePostcard(
-        postcard: Postcard
-    )
-
     @Query(
         "DELETE FROM postcards " +
                 "WHERE id = :id"
     )
     suspend fun deletePostcardById(
         id: Long
-    )
-
-    @Query(
-        "DELETE FROM postcards " +
-                "WHERE id IN (:ids)"
-    )
-    suspend fun deletePostcardsByIds(
-        ids: List<Long>
     )
 
     @Query(
@@ -91,18 +134,6 @@ interface PostcardDao {
     @Query(
         """
         UPDATE postcards
-        SET messageFont = :messageFont
-        WHERE id = :id
-        """
-    )
-    suspend fun updatePostcardMessageFont(
-        id: Long,
-        messageFont: String
-    )
-
-    @Query(
-        """
-        UPDATE postcards
         SET layoutStyle = :layoutStyle
         WHERE id = :id
         """
@@ -115,12 +146,171 @@ interface PostcardDao {
     @Query(
         """
         UPDATE postcards
-        SET dateFormat = :dateFormat
+        SET messageTextScale = :messageTextScale
         WHERE id = :id
         """
     )
-    suspend fun updatePostcardDateFormat(
+    suspend fun updatePostcardMessageTextScale(
         id: Long,
-        dateFormat: String
+        messageTextScale: Float
     )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET backgroundPatternDensity = :backgroundPatternDensity
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardBackgroundPatternDensity(
+        id: Long,
+        backgroundPatternDensity: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET stampPhotoScale = :stampPhotoScale
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardStampPhotoScale(
+        id: Long,
+        stampPhotoScale: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET polaroidPhotoScale = :polaroidPhotoScale
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPolaroidPhotoScale(
+        id: Long,
+        polaroidPhotoScale: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET photoEdgeBlur = :photoEdgeBlur
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPhotoEdgeBlur(
+        id: Long,
+        photoEdgeBlur: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET stampPhotoOffsetX = :stampPhotoOffsetX,
+            stampPhotoOffsetY = :stampPhotoOffsetY
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardStampPhotoOffset(
+        id: Long,
+        stampPhotoOffsetX: Float,
+        stampPhotoOffsetY: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET polaroidPhotoOffsetX = :polaroidPhotoOffsetX,
+            polaroidPhotoOffsetY = :polaroidPhotoOffsetY
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPolaroidPhotoOffset(
+        id: Long,
+        polaroidPhotoOffsetX: Float,
+        polaroidPhotoOffsetY: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET tapedFilmPhotoOffsetX = :tapedFilmPhotoOffsetX,
+            tapedFilmPhotoOffsetY = :tapedFilmPhotoOffsetY
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardTapedFilmPhotoOffset(
+        id: Long,
+        tapedFilmPhotoOffsetX: Float,
+        tapedFilmPhotoOffsetY: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET stampPhotoZoom = :stampPhotoZoom
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardStampPhotoZoom(
+        id: Long,
+        stampPhotoZoom: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET polaroidPhotoZoom = :polaroidPhotoZoom
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardPolaroidPhotoZoom(
+        id: Long,
+        polaroidPhotoZoom: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET tapedFilmPhotoZoom = :tapedFilmPhotoZoom
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardTapedFilmPhotoZoom(
+        id: Long,
+        tapedFilmPhotoZoom: Float
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET backRecipientModifier = :backRecipientModifier
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardBackRecipientModifier(
+        id: Long,
+        backRecipientModifier: String
+    )
+
+    @Query(
+        """
+        UPDATE postcards
+        SET backMessage = :backMessage,
+            backWrittenAt = CASE WHEN backWritingRecordEnabled = 1
+                THEN COALESCE(backWrittenAt, :writtenAt) ELSE backWrittenAt END,
+            backWrittenOffsetMinutes = CASE WHEN backWritingRecordEnabled = 1 AND backWrittenAt IS NULL
+                THEN :offsetMinutes ELSE backWrittenOffsetMinutes END
+        WHERE id = :id
+        """
+    )
+    suspend fun updatePostcardBackMessage(
+        id: Long,
+        backMessage: String,
+        writtenAt: Long? = null,
+        offsetMinutes: Int? = null
+    )
+
+    @Query("UPDATE postcards SET backPostscript = :postscript WHERE id = :id")
+    suspend fun updatePostcardBackPostscript(id: Long, postscript: String?)
 }

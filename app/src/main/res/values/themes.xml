@@ -3,5 +3,6 @@
     <style name="Theme.PostCardMemory" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">#FF1A1A1A</item>
         <item name="android:navigationBarColor">#FFFFFDF5</item>
+        <item name="android:windowBackground">#FFF4ECDE</item>
     </style>
 </resources>

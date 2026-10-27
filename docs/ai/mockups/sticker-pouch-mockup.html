@@ -1,0 +1,462 @@
+<title>스티커 통 목업</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Gowun+Batang:wght@400;700&display=swap">
+<style>
+/* 레이아웃: 회색 작업대 위에 실제 dp 비율로 그린 휴대폰들을 늘어놓고, 각 상태 옆에 짧은 구조 메모를 붙인다.
+   앱 화면 안쪽 색은 실제 앱 토큰(Color.kt)을 그대로 쓴다. 한 가지 화면 세계만 그리는 의도적 단일 테마. */
+:root{
+  --desk:#D9DAD2; --desk-ink:#26241F; --desk-sub:#5E5A50; --desk-line:#B9B8AD; --chip:#ECEBE4;
+  --paper-surface:#FFFBF3; --paper-canvas:#F7F1E6; --ink:#1A1324; --ink2:#5B5046; --divider:#DBCBB0;
+  --newsprint:#E9E1D3; --newsprint2:#E2D9C8; --mint:#16A7A1; --mint-today:#117E7A; --shadow:#3B3226;
+  --scrim:rgba(26,19,36,.32); --propose:#9A5B2E;
+  --f-ui:"Noto Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  --f-print:"Gowun Batang","Noto Serif KR",Batang,serif;
+  color-scheme:light;
+}
+body{background:var(--desk);color:var(--desk-ink);font-family:var(--f-ui);line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 56px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+header{display:flex;flex-direction:column;gap:10px;max-width:68ch}
+.eyebrow{font-size:12px;letter-spacing:.06em;color:var(--desk-sub)}
+h1{font-family:var(--f-print);font-weight:700;font-size:30px;line-height:1.25;margin:0;text-wrap:balance}
+h2{font-family:var(--f-print);font-weight:700;font-size:21px;margin:0;text-wrap:balance}
+h3{font-size:14px;margin:0;font-weight:700}
+p{margin:0}
+.lede{color:var(--desk-sub);font-size:14.5px}
+.warn{font-size:13px;border-left:3px solid var(--propose);padding:4px 0 4px 10px;color:var(--desk-ink)}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:13px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--desk);padding:10px 0;border-bottom:1px solid var(--desk-line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--desk)}
+.seg{display:inline-flex;border:1px solid var(--desk-line);border-radius:999px;overflow:hidden;background:var(--chip)}
+.seg button{font:inherit;font-size:12.5px;border:0;background:transparent;padding:6px 12px;color:var(--desk-sub);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--desk-ink);color:#F4F2EA}
+.seg button:focus-visible,.tap:focus-visible{outline:2px solid var(--propose);outline-offset:2px}
+section{display:flex;flex-direction:column;gap:16px}
+.sec-head{display:flex;flex-direction:column;gap:6px;max-width:72ch}
+.tag{display:inline-block;font-size:11px;letter-spacing:.04em;padding:1px 7px;border-radius:3px;background:var(--chip);color:var(--desk-sub);border:1px solid var(--desk-line);vertical-align:2px;margin-right:6px}
+.tag.p{color:var(--propose);border-color:#D6B79C;background:#F3E7DB}
+.row{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.fig{display:flex;flex-direction:column;gap:10px;min-width:0}
+.fig figcaption{font-size:12.5px;color:var(--desk-sub);max-width:34ch}
+.notes{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:10px;font-size:13.5px;max-width:62ch}
+.notes ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;font-size:12.5px;min-width:520px;width:100%}
+th,td{border-bottom:1px solid var(--desk-line);padding:7px 8px;text-align:left;vertical-align:top}
+th{font-weight:700;color:var(--desk-sub);font-size:12px}
+
+/* ---------- 휴대폰: 1 css px = 1 dp, 바깥 상자에서 축소 ---------- */
+.phone-shell{position:relative;flex:none}
+.phone{position:absolute;left:0;top:0;transform-origin:0 0;border-radius:30px;overflow:hidden;background:var(--paper-canvas);
+  box-shadow:0 0 0 7px #2E2C29,0 0 0 8px #55524C}
+.statusbar{position:absolute;inset:0 0 auto;height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:12px;color:var(--ink2);z-index:4}
+.navbar{position:absolute;inset:auto 0 0;height:22px;z-index:4;display:flex;justify-content:center;align-items:center}
+.navbar i{width:110px;height:4px;border-radius:2px;background:rgba(26,19,36,.35)}
+.gallery-bg{position:absolute;inset:0;padding:40px 16px 0}
+.g-top{height:52px;display:flex;align-items:center;gap:12px;color:var(--ink2);font-size:15px}
+.g-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px}
+.g-grid div{aspect-ratio:3/4;background:#E5DCCB;border-radius:2px}
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:1}
+.drawer{position:absolute;left:0;top:0;bottom:0;width:304px;background:var(--paper-surface);z-index:2;overflow:hidden}
+.drawer-scroll{position:absolute;left:0;right:0;top:32px;bottom:22px;overflow:hidden}
+.drawer-col{padding:24px;display:flex;flex-direction:column;transition:transform .45s cubic-bezier(.2,.7,.2,1)}
+.fold-line{position:absolute;left:0;right:0;border-top:1.5px dashed #C2543F;z-index:6;font-size:10px;color:#C2543F;padding-left:6px;background:linear-gradient(rgba(194,84,63,.08),transparent 18px)}
+.close{align-self:flex-end;width:48px;height:48px;display:grid;place-items:center;color:var(--ink2);font-size:18px}
+.tiny{font-size:9px;color:var(--ink2);line-height:14px}
+.cal-wrap{margin-top:6px;filter:drop-shadow(.6px 1px 0 rgba(59,50,38,.16)) drop-shadow(1.4px 2.2px 1px rgba(59,50,38,.08));position:relative}
+.cal-page{background:#F2EADB;padding:0 6px 8px;position:relative}
+.cal-page::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:multiply;background-image:var(--grain)}
+.cal-title{height:48px;display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:500;color:var(--ink)}
+.arrow{width:48px;text-align:center;color:var(--ink);opacity:.8;font-size:13px}
+.tape{position:absolute;left:50%;top:-4px;width:58px;height:11px;transform:translateX(-50%) rotate(-1.6deg);background:rgba(244,237,220,.78);z-index:2;box-shadow:0 0 0 .3px rgba(120,100,70,.25)}
+.orn{height:21px;display:flex;justify-content:space-between;align-items:center}
+.orn img{width:24px;height:18px}
+.wk{display:grid;grid-template-columns:repeat(7,1fr);font-size:10px;text-align:center;color:var(--ink2);margin-bottom:6px}
+.wk span:first-child{color:#B5574A}.wk span:last-child{color:#4B6C9A}
+.days{display:grid;grid-template-columns:repeat(7,1fr);row-gap:4.5px}
+.d{height:34px;position:relative;font-size:11px;text-align:center;color:var(--ink);padding-top:2px}
+.d.v::before{content:"";position:absolute;inset:3px;background:rgba(22,167,161,.5) repeating-linear-gradient(-20deg,rgba(22,167,161,.45) 0 1.1px,transparent 1.1px 2.4px);border-radius:1px}
+.d.t::before{background:rgba(17,126,122,.55) repeating-linear-gradient(-20deg,rgba(17,126,122,.5) 0 1.1px,transparent 1.1px 2.4px)}
+.d span{position:relative}
+.d.v span{color:#FBFFFE}
+.d.t span{outline:1px solid currentColor;outline-offset:1px;border-radius:50%;padding:0 2px}
+.d em{position:absolute;left:0;right:0;bottom:2px;font-style:normal;font-size:7px;color:#F2FFFE;white-space:nowrap}
+.count{display:flex;justify-content:space-between;font-size:10px;color:var(--ink2);padding-top:2px;height:16px}
+
+/* ---------- 파우치 ---------- */
+.pouch-slot{margin-top:18px;display:flex;align-items:flex-end;gap:10px}
+.pouch-slot .cap{font-size:9px;color:var(--ink2);line-height:1.4;padding-bottom:6px}
+.tap{cursor:pointer;background:none;border:0;padding:0;display:block}
+.pouch{display:block;overflow:visible}
+.piece{transform-box:fill-box;transform-origin:50% 100%;animation:bob var(--dur,3.4s) ease-in-out var(--del,0s) infinite alternate}
+@keyframes bob{
+  0%{transform:translate(0,0) rotate(calc(var(--r,0deg)*-1))}
+  50%{transform:translate(calc(var(--sx,1px)*.6),calc(var(--a,2px)*-1)) rotate(0deg)}
+  100%{transform:translate(var(--sx,1px),calc(var(--a,2px)*-.35)) rotate(var(--r,0deg))}
+}
+body.still .piece,body.still .breathe{animation:none!important}
+.offscreen .piece,.offscreen .breathe{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){.piece,.breathe{animation:none!important}}
+
+/* ---------- 열린 보관함 ---------- */
+.stash-page{position:absolute;left:0;right:0;top:32px;bottom:22px;background:var(--paper-surface);padding:16px 20px 20px;display:flex;flex-direction:column;gap:10px;z-index:3}
+.stash-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--ink2);height:40px}
+.stash-head b{font-size:14px;color:var(--ink);font-weight:500}
+.spread{position:relative;flex:1;min-height:0;padding:14px 8px 10px;background:#F2EADB;filter:drop-shadow(.6px 1px 0 rgba(59,50,38,.16))}
+.spread::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:multiply;background-image:var(--grain)}
+.spread-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;position:relative;z-index:1}
+.cell{height:76px;display:grid;place-items:center;position:relative;cursor:pointer;background:none;border:0;padding:0}
+.cell svg{overflow:visible}
+.cell.sel svg.piece-svg{transform:translateY(-3px)}
+.loop{position:absolute;inset:2px 0 0;pointer-events:none}
+.stash-bar{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink2);min-height:34px;gap:8px}
+.stash-bar .act{font-size:12px;color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(26,19,36,.35)}
+.hint{font-size:10px;color:var(--ink2);line-height:1.5}
+.empty-note{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px;z-index:1}
+.scissor-line{width:150px;height:44px;border:1.2px dashed rgba(91,80,70,.55);border-radius:2px;display:grid;place-items:center;font-size:18px;color:rgba(91,80,70,.6)}
+
+/* ---------- 흐름 스토리보드 ---------- */
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:18px}
+.frame{display:flex;flex-direction:column;gap:8px;min-width:0;cursor:pointer;background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit}
+.mini{position:relative;height:330px;border-radius:16px;overflow:hidden;background:var(--paper-canvas);box-shadow:0 0 0 4px #2E2C29;transition:box-shadow .2s}
+.frame[aria-current="true"] .mini{box-shadow:0 0 0 4px #2E2C29,0 0 0 7px var(--propose)}
+.frame .step{font-size:12.5px;line-height:1.45}
+.frame .step b{font-family:var(--f-print);font-size:14px;margin-right:4px}
+.m-top{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:10px;color:var(--ink2)}
+.m-card{position:absolute;left:14px;right:14px;top:34px;height:150px;background:#FFFDF8;box-shadow:0 1px 0 rgba(59,50,38,.18)}
+.m-photo{position:absolute;left:10px;top:10px;width:70px;height:90px;background:linear-gradient(160deg,#B8C2BE,#8E9A93)}
+.m-lines{position:absolute;right:10px;top:16px;width:58px}
+.m-lines i{display:block;height:2px;background:#DDD3C3;margin-bottom:7px}
+.m-tabs{position:absolute;left:0;right:0;top:196px;display:flex;justify-content:space-around;font-size:8px;color:var(--ink2);padding:0 4px}
+.m-tabs span.on{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.m-sub{position:absolute;left:8px;right:8px;top:214px;display:flex;gap:4px;font-size:8.5px}
+.m-sub span{flex:1;text-align:center;padding:3px 0;background:#EDE4D3;color:var(--ink2)}
+.m-sub span.on{background:#D9C9AC;color:var(--ink)}
+.m-sub span.new{outline:1.2px dashed var(--propose);outline-offset:-1px;color:var(--propose)}
+.m-panel{position:absolute;left:8px;right:8px;top:240px;bottom:10px;font-size:9px;color:var(--ink2);display:flex;flex-direction:column;gap:6px}
+.m-actions{display:flex;gap:12px;justify-content:center;font-size:10px;color:var(--ink)}
+.m-actions .new{color:var(--propose);border-bottom:1.2px dashed var(--propose)}
+.m-sel{position:absolute;outline:1px dashed rgba(26,19,36,.45);outline-offset:3px}
+.toast{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;background:#2E2A26;color:#F4EFE6;font-size:9.5px;padding:5px 10px;border-radius:12px;white-space:nowrap}
+.fly{position:absolute;animation:fly 1.6s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes fly{0%{transform:translate(0,0) scale(1) rotate(-4deg);opacity:1}70%{opacity:1}100%{transform:translate(64px,128px) scale(.35) rotate(8deg);opacity:0}}
+body.still .fly{animation:none}
+@media (prefers-reduced-motion:reduce){.fly{animation:none}}
+.mini-pouch{position:absolute}
+.badge{font-size:10px;padding:0 5px;border-radius:3px;border:1px solid var(--desk-line);color:var(--desk-sub);margin-left:4px}
+.badge.p{color:var(--propose);border-color:#D6B79C}
+footer{font-size:12.5px;color:var(--desk-sub);border-top:1px solid var(--desk-line);padding-top:14px;max-width:80ch}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="ht" width="2.2" height="2.2" patternUnits="userSpaceOnUse" patternTransform="rotate(15)">
+      <circle cx="1.1" cy="1.1" r=".42" fill="#2A251F"/>
+    </pattern>
+    <pattern id="htFine" width="1.6" height="1.6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <circle cx=".8" cy=".8" r=".3" fill="#2A251F"/>
+    </pattern>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B9C3C2"/><stop offset=".48" stop-color="#9EAEAF"/><stop offset=".5" stop-color="#6F8286"/><stop offset="1" stop-color="#8D9B98"/>
+    </linearGradient>
+    <linearGradient id="cat" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A9A196"/><stop offset="1" stop-color="#6E675F"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A7B19A"/><stop offset="1" stop-color="#6F7C67"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">post-card-memory · 110일차 · 독립 UI 목업</div>
+    <h1>스티커 통</h1>
+    <p class="lede">달력 사이드바 아래에 신문 인쇄지로 만든 납작한 파우치를 두고, 마음에 든 스티커 조각을 모아 두었다가 다른 엽서에서 다시 꺼내 쓰는 모습을 그려 봤어. 휴대폰 안쪽 크기는 실제 dp 비율이고, 사이드바·달력 치수는 현재 코드(VisitCalendarDrawer.kt)에서 잰 값이야.</p>
+    <p class="warn">브라우저용 목업이야. 실제 앱과 연결되지 않았고, 저장·불러오기·엽서에 붙이기는 동작하지 않아. <span class="tag p">제안</span> 표시는 앱에 아직 없는 경로야.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="목업 보기 설정">
+    <span>움직임</span>
+    <span class="seg" id="motionSeg"><button type="button" id="motionOn" aria-pressed="true">켜기</button><button type="button" id="motionOff" aria-pressed="false">멈춤</button></span>
+    <span>기기 높이</span>
+    <span class="seg" id="heightSeg"><button type="button" id="hBig" aria-pressed="true">384×832dp · 사용자 기기</button><button type="button" id="hSmall" aria-pressed="false">360×640dp · 작은 기기</button></span>
+  </div>
+
+  <section id="a">
+    <div class="sec-head">
+      <h2>A. 닫힌 파우치</h2>
+      <p class="lede">달력 한 장과 방문 횟수 줄 아래에 붙는 작은 주머니. 입구 위로 최근에 담은 조각 세 개만 살짝 보이고, 조각마다 다른 주기로 아주 조금 흔들려. 파우치를 누르면 C/B-2처럼 보관함이 열려(이 휴대폰에서 직접 눌러 볼 수 있어).</p>
+    </div>
+    <div class="row">
+      <figure class="fig" style="margin:0"><div id="phoneA"></div><figcaption id="capA"></figcaption></figure>
+      <div class="notes">
+        <h3>크기와 자리</h3>
+        <ul>
+          <li>사이드바 폭 304dp, 안쪽 여백 24dp라 내용 폭은 256dp. 파우치는 132×86dp로 달력 종이 폭의 절반 남짓이야. 달력보다 작고 색도 옅게 둬서 보조 수납처럼 보이게 했어.</li>
+          <li>지금 사이드바 내용(닫기 버튼부터 방문 횟수 줄과 아래 여백까지)은 계산상 약 476dp야. 달력은 어느 달이든 6주 높이로 고정이라 높이가 달마다 흔들리지 않아.</li>
+          <li>사용자 기기(약 384×832dp)에서는 아래에 280dp 안팎이 비어 있어서 파우치가 넉넉히 들어가.</li>
+          <li>작은 기기(360×640dp)에서는 남는 높이가 약 90dp라 파우치 아래쪽이 화면 밖으로 조금 밀려. 사이드바는 이미 세로 스크롤이 있어서 달력을 가리지는 않고, 살짝 밀어 올려야 다 보여(위 버튼으로 바꿔 봐. 빨간 점선이 화면 끝이야).</li>
+          <li>터치 영역은 파우치 전체(132×86dp)로 48dp 기준을 넘어. 조각 하나하나는 닫힌 상태에서 누를 수 없어(움직이는 걸 정확히 누르게 만들지 않으려고).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="b">
+    <div class="sec-head">
+      <h2>B. 열린 파우치, 두 가지 배치</h2>
+      <p class="lede">왼쪽은 사이드바 안에서 파우치가 그 자리에서 펼쳐지는 방식, 오른쪽은 사이드바 안의 장면이 달력에서 보관함 한 장으로 넘어가는 방식이야. 오른쪽은 지금 달력이 월·연도 고르기로 넘어갈 때 쓰는 구조(navLevel)와 같은 방식이야. 열린 상태에서는 조각을 고르기 쉽도록 움직임을 멈춰. 조각을 눌러 고르는 것까지 해 볼 수 있어.</p>
+    </div>
+    <div class="row">
+      <figure class="fig" style="margin:0"><div id="phoneB1"></div><figcaption><b>B-1 사이드바 안 펼침.</b> 달력이 위로 밀려나고 아래에 조각이 3열로 깔려.</figcaption></figure>
+      <figure class="fig" style="margin:0"><div id="phoneB2"></div><figcaption><b>B-2 보관함 장.</b> 달력 대신 보관함 한 장이 사이드바를 채우고, ‘← 달력’이나 뒤로 가기로 돌아와.</figcaption></figure>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>비교</th><th>B-1 사이드바 안 펼침</th><th>B-2 보관함 장 (사이드바 안 장면 전환)</th></tr></thead>
+        <tbody>
+          <tr><td>화면 공간</td><td>달력 476dp 아래에 붙어서, 열면 스크롤이 필수야. 한 화면에 조각 6~9개.</td><td>사이드바 높이 전부(약 770dp)를 써. 한 화면에 조각 15~18개.</td></tr>
+          <tr><td>조작 동선</td><td>파우치 누르기 → 스크롤 → 고르기. 열 때마다 스크롤 위치가 바뀌어.</td><td>파우치 누르기 → 바로 고르기. 돌아가기는 ‘← 달력’이나 뒤로 가기.</td></tr>
+          <tr><td>달력과의 간섭</td><td>같은 스크롤 안에 있어서, 조각을 스크롤하다 달력 화살표나 제목을 잘못 누를 수 있어.</td><td>둘이 동시에 보이지 않아서 간섭이 없어.</td></tr>
+          <tr><td>작은 화면</td><td>640dp에서는 파우치를 열자마자 대부분 화면 밖이야.</td><td>높이에 맞춰 줄 수만 바뀌어.</td></tr>
+          <tr><td>닫기</td><td>파우치를 다시 누르거나 위로 스크롤.</td><td>‘← 달력’, 뒤로 가기(지금 BackHandler가 이미 월·연도 고르기 → 달력 순서로 돌아가게 되어 있어).</td></tr>
+          <tr><td>기존 구조와의 결합</td><td>달력 Column 안에 펼침 상태와 목록이 섞여 들어가. 달력 높이 고정 원칙은 그대로 둘 수 있어.</td><td>달력의 AnimatedContent(navLevel)에 단계 하나를 더하는 모양이라 기존 문법과 가장 가까워. 단, 사이드바를 다시 열면 늘 달력부터 보여 주는 규칙(LaunchedEffect)과 맞출지 정해야 해.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="c">
+    <div class="sec-head">
+      <h2>C. 빈 스티커 통</h2>
+      <p class="lede">아직 아무것도 담지 않은 상태. 입구가 조금 벌어져 안쪽이 비어 보이고, 옆에 담는 방법을 한 줄로 적었어. 열면 빈 종이 위에 가위선만 있어. 오류 화면이 아니라, 아직 비어 있는 작은 주머니로 보이게 했어.</p>
+    </div>
+    <div class="row">
+      <figure class="fig" style="margin:0"><div id="phoneC1"></div><figcaption>닫힌 빈 파우치</figcaption></figure>
+      <figure class="fig" style="margin:0"><div id="phoneC2"></div><figcaption>열린 빈 보관함 (B-2 기준)</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="d">
+    <div class="sec-head">
+      <h2>D. 담기와 다시 쓰기</h2>
+      <p class="lede">사이드바는 갤러리 화면에만 있고, 엽서 편집 화면에는 없어. 그래서 ‘담기’와 ‘꺼내 붙이기’는 편집 화면에서 하고, 사이드바의 파우치는 모아 둔 걸 구경하고 정리하는 곳으로 나눴어. 장면을 누르거나 그대로 두면 순서대로 넘어가.</p>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section id="m">
+    <div class="sec-head">
+      <h2>움직임 메모</h2>
+    </div>
+    <div class="notes" style="max-width:80ch">
+      <ul>
+        <li>닫힌 파우치에서만 움직여. 조각 세 개가 각각 3.1·3.7·4.3초 주기로 위아래 1.5~2.5dp, 좌우 1dp 안팎, 회전 ±2° 이내에서 천천히 오가. 파우치 입구 밖으로 나가거나 서로 크게 겹치지 않아.</li>
+        <li>열린 보관함에서는 모두 멈춰. 고를 조각이 움직이면 누르기 어려워서야. 고른 조각만 3dp 들려 보여.</li>
+        <li>보여 주는 조각은 최근에 담은 3개로 정했어. 많이 모여도 입구에는 3개만 보이고 나머지는 숫자(예: 12조각)로만 알려.</li>
+        <li>이 목업은 화면 밖으로 스크롤된 휴대폰의 움직임을 멈추고, 기기의 ‘움직임 줄이기’ 설정이 켜져 있으면 처음부터 멈춘 상태로 보여 줘. 앱에서는 사이드바가 닫혀 있을 때 그리지 않는 게 기본이야(ModalNavigationDrawer는 닫히면 내용을 구성하지 않아).</li>
+        <li>연못처럼 매 프레임 계산하는 방식은 필요 없어. 조각 3개를 무한 반복 트윈(infiniteTransition)으로 graphicsLayer에서만 움직이면 다시 구성(recomposition) 없이 그리기만 갱신돼. 앱에는 아직 ‘움직임 줄이기’ 설정을 읽는 코드가 없어서, 따르려면 새로 추가해야 해.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>목업 기준 코드: feature/photo-sticker <code>255c3b2</code>. 달력 리본 그림은 앱 자산 visit_calendar_newspaper_ribbon.png를 참고용으로 넣었고, 나머지 종이·조각·파우치는 이 페이지에서 그린 그림이야. 실제 자산 제작이 정해지면 바뀔 수 있어.</footer>
+</div>
+
+<script>
+(function(){
+const RIBBON="data:image/png;base64,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";
+const GRAIN="url(\"data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .45  0 0 0 0 .4  0 0 0 0 .33  0 0 0 .22 0"/></filter><rect width="160" height="160" filter="url(#n)"/></svg>')+"\")";
+document.documentElement.style.setProperty("--grain",GRAIN);
+
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+// 가위로 오린 외곽: 꼭짓점 사이를 step 간격으로 쪼개 j만큼 흔든다.
+function cut(pts,seed,step=3,j=.45){const r=rng(seed);const out=[];
+  for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length];const dx=b[0]-a[0],dy=b[1]-a[1];const L=Math.hypot(dx,dy);const n=Math.max(1,Math.round(L/step));const nx=-dy/L,ny=dx/L;
+    for(let k=0;k<n;k++){const t=k/n;const w=(r()*2-1)*j;out.push([a[0]+dx*t+nx*w,a[1]+dy*t+ny*w]);}}
+  return "M"+out.map(p=>p[0].toFixed(2)+" "+p[1].toFixed(2)).join("L")+"Z";}
+function torn(pts,seed){return cut(pts,seed,1.6,1.1);}
+function zig(w,h,depth=1.6,step=3){let d=`M0 0`;for(let x=0;x<=w;x+=step){d+=`L${x} ${(x/step)%2?depth:0}`;}d+=`L${w} ${h}`;for(let x=w;x>=0;x-=step){d+=`L${x} ${h-((x/step)%2?depth:0)}`;}return d+"Z";}
+
+let uid=0;
+// 조각 그림: 실제 앱의 스티커 종류(사진 오림 가장자리 4종, 텍스트, 라벨)를 본떴다.
+const PIECES=[
+  {key:"sea",w:34,h:26,label:"바다 사진 · 찢김",draw(id){const p=torn([[0,1],[34,0],[33,26],[1,25]],11);return `<clipPath id="${id}"><path d="${p}"/></clipPath><g clip-path="url(#${id})"><rect width="34" height="26" fill="url(#sea)"/><path d="M0 14 Q10 11 18 14 T34 13 V26 H0Z" fill="#7C8C8B" opacity=".6"/><rect width="34" height="26" fill="url(#htFine)" opacity=".22"/></g><path d="${p}" fill="none" stroke="#F4EEE2" stroke-width=".7" opacity=".9"/>`;}},
+  {key:"label",w:30,h:11,label:"라벨 ‘여름’",draw(id){return `<path d="${zig(30,11,1.2,2.5)}" fill="#2B2926"/><text x="15" y="7.9" text-anchor="middle" font-family="Noto Sans KR,sans-serif" font-size="6.4" font-weight="700" fill="#F3EEE4" letter-spacing=".5">여름</text>`;}},
+  {key:"cat",w:28,h:30,label:"고양이 사진 · 가위",draw(id){const p=cut([[2,0],[27,2],[28,29],[0,30]],23,2.2,.9);return `<clipPath id="${id}"><path d="${p}"/></clipPath><g clip-path="url(#${id})"><rect width="28" height="30" fill="#CFC8BB"/><ellipse cx="14" cy="21" rx="10" ry="9" fill="url(#cat)"/><circle cx="14" cy="11" r="6.5" fill="url(#cat)"/><path d="M8.4 7 L9.5 1.8 L12 5.6Z M19.6 7 L18.5 1.8 L16 5.6Z" fill="#6E675F"/><rect width="28" height="30" fill="url(#htFine)" opacity=".2"/></g>`;}},
+  {key:"text",w:30,h:14,label:"텍스트 ‘안녕’",draw(id){return `<text x="15" y="11" text-anchor="middle" font-family="Gowun Batang,serif" font-weight="700" font-size="11.5" fill="#2B2722" stroke="#FBF7EE" stroke-width="1" paint-order="stroke">안녕</text>`;}},
+  {key:"flower",w:26,h:32,label:"꽃 사진 · 잡지",draw(id){const p=cut([[0,0],[26,1],[26,32],[1,31]],31,3,.4);return `<clipPath id="${id}"><path d="${p}"/></clipPath><g clip-path="url(#${id})"><rect width="26" height="32" fill="#D7B9B2"/><rect x="3" y="3" width="20" height="22" fill="#C9C7B7"/><circle cx="13" cy="12" r="5" fill="#B9928E"/><circle cx="13" cy="12" r="1.8" fill="#8A7A5A"/><path d="M13 17 V25" stroke="#78846A" stroke-width="1.2"/><rect x="3" y="27" width="14" height="1.3" fill="#8D6F6A" opacity=".7"/><rect width="26" height="32" fill="url(#ht)" opacity=".16"/></g>`;}},
+  {key:"leaf",w:30,h:24,label:"잎 사진 · 폴라로이드",draw(id){return `<rect width="30" height="24" fill="#F6F2EA" stroke="#DDD3C2" stroke-width=".4"/><rect x="2.4" y="2.4" width="25.2" height="16" fill="url(#leaf)"/><path d="M7 15 Q15 4 24 6 Q17 12 7 15Z" fill="#5E6B57" opacity=".7"/><rect x="2.4" y="2.4" width="25.2" height="16" fill="url(#htFine)" opacity=".2"/>`;}},
+];
+function pieceSvg(p,scale){const id="pc"+(++uid);return `<svg class="piece-svg" width="${p.w*scale}" height="${p.h*scale}" viewBox="0 0 ${p.w} ${p.h}" role="img" aria-label="${p.label}">${p.draw(id)}</svg>`;}
+
+// 파우치: 뒷판 → 안쪽 그늘 → (조각) → 앞판. 앞판 윗변에 엄지 홈이 있어 입구로 읽힌다.
+function pouchSvg({w=132,h=86,pieces=[],empty=false,open=false,id}){
+  const P="pz"+(++uid);
+  const back=cut([[4,open?4:12],[128,open?3:11],[127,84],[5,85]],101,3,.5);
+  const frontTop=open?44:30;
+  const front=cut([[3,frontTop],[46,frontTop-1],[56,frontTop+5],[66,frontTop+8],[76,frontTop+5],[86,frontTop-1],[129,frontTop+1],[127,86],[5,87]],202,3,.55);
+  const col=(x,y,ww,n,s)=>{const r=rng(s);let o="";for(let i=0;i<n;i++){const L=ww*(.55+.45*r());o+=`<rect x="${x}" y="${y+i*3.4}" width="${L.toFixed(1)}" height="1.1" fill="#3A332B" opacity=".2"/>`;}return o;};
+  let pcs="";
+  const slots=[{x:20,y:empty?40:(open?6:3),r:-3},{x:52,y:open?8:7,r:2},{x:84,y:open?4:2,r:-1.5}];
+  pieces.slice(0,3).forEach((p,i)=>{const s=slots[i];const sc=1.05;
+    pcs+=`<g class="piece" style="--dur:${[3.1,3.7,4.3][i]}s;--del:${[-0.4,-1.7,-2.6][i]}s;--a:${[2,2.5,1.5][i]}px;--sx:${[1,-1,.8][i]}px;--r:${[2,-1.5,1.8][i]}deg"><g transform="translate(${s.x} ${s.y}) rotate(${s.r} ${p.w/2} ${p.h/2}) scale(${sc})">${p.draw(P+"c"+i)}</g></g>`;});
+  return `<svg class="pouch" width="${w}" height="${h}" viewBox="0 0 132 88" aria-hidden="true">
+    <path d="${back}" fill="#3B3226" opacity=".13" transform="translate(1 1.6)"/>
+    <path d="${back}" fill="#DFD6C6"/>
+    <clipPath id="${P}b"><path d="${back}"/></clipPath>
+    <g clip-path="url(#${P}b)"><rect width="132" height="88" fill="url(#ht)" opacity=".09"/>${col(10,16,50,4,5)}${col(70,16,50,4,6)}
+      <rect x="0" y="${frontTop-8}" width="132" height="14" fill="#3B3226" opacity="${empty?.16:.1}"/></g>
+    ${pcs}
+    <path d="${front}" fill="#3B3226" opacity=".12" transform="translate(.8 1.4)"/>
+    <path d="${front}" fill="#EBE3D5"/>
+    <clipPath id="${P}f"><path d="${front}"/></clipPath>
+    <g clip-path="url(#${P}f)">
+      <rect width="132" height="88" fill="url(#ht)" opacity=".1"/>
+      <text x="12" y="${frontTop+19}" font-family="Gowun Batang,serif" font-weight="700" font-size="11" fill="#2D2721" opacity=".72">스티커 통</text>
+      <rect x="12" y="${frontTop+23}" width="48" height=".8" fill="#2D2721" opacity=".35"/>
+      ${col(12,frontTop+28,46,open?3:5,9)}${col(72,frontTop+12,46,open?6:10,10)}
+      <rect x="0" y="${open?72:66}" width="132" height=".8" fill="#FFFFFF" opacity=".55"/>
+      <rect x="0" y="${open?72.8:66.8}" width="132" height=".7" fill="#3B3226" opacity=".12"/>
+      ${pieces.length?`<text x="12" y="${open?82:80}" font-family="Noto Sans KR,sans-serif" font-size="6.5" fill="#3A332B" opacity=".6">${pieces.length===6?"6조각":pieces.length+"조각"}</text>`:""}
+    </g>
+  </svg>`;}
+
+function calendarHtml(){
+  let days="";const first=4;// 2026-10-01 = 목요일(일요일 시작 기준 4번째 칸)
+  const visited=new Set([1,2,5,6,7,9,12,13,14,15,16,19,20,21]);const kao=["(•ᴗ•)","(ᵔᴥᵔ)","(•‿•)","(´ω`)"];
+  for(let i=0;i<42;i++){const d=i-first+1;if(d<1||d>31){days+=`<div class="d"></div>`;continue;}
+    const v=visited.has(d),t=d===21;days+=`<div class="d${v?" v":""}${t?" t":""}"><span>${d}</span>${v?`<em>${kao[d%4]}</em>`:""}</div>`;}
+  return `<div class="close" aria-hidden="true">✕</div>
+  <div class="tiny">다녀간 날들</div>
+  <div class="cal-wrap"><div class="tape"></div><div class="cal-page" style="clip-path:${clipJag(256,323,96)}">
+    <div class="cal-title"><span class="arrow">◀</span><span>2026년 10월</span><span class="arrow">▶</span></div>
+    <div class="orn"><img src="${RIBBON}" alt=""><img src="${RIBBON}" alt=""></div>
+    <div class="wk"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+    <div class="days">${days}</div></div></div>
+  <div class="orn" style="margin-top:0"><img src="${RIBBON}" alt=""><img src="${RIBBON}" alt=""></div>
+  <div class="count"><span>오늘까지 42번 다녀갔어</span><span>✉ × 42</span></div>`;}
+function clipJag(w,h,seed){const r=rng(seed);const pts=[];const st=4,m=.5;
+  for(let x=0;x<=w;x+=st)pts.push([x,r()*m]);for(let y=0;y<=h;y+=st)pts.push([w-r()*m,y]);
+  for(let x=w;x>=0;x-=st)pts.push([x,h-r()*m]);for(let y=h;y>=0;y-=st)pts.push([r()*m,y]);
+  return "polygon("+pts.map(p=>`${p[0].toFixed(1)}px ${p[1].toFixed(1)}px`).join(",")+")";}
+
+let H=832,W=384;const SCALE=()=>window.innerWidth<520?Math.min(.78,(window.innerWidth-48)/W):.78;
+function shell(inner){const s=SCALE();return `<div class="phone-shell" style="width:${W*s}px;height:${H*s}px"><div class="phone" style="width:${W}px;height:${H}px;transform:scale(${s})">
+  <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+  <div class="gallery-bg"><div class="g-top">☰ <span style="font-family:var(--f-print);color:var(--ink)">2026년 10월</span></div><div class="g-grid">${"<div></div>".repeat(12)}</div></div>
+  <div class="scrim"></div>${inner}<div class="navbar"><i></i></div></div></div>`;}
+const visibleH=()=>H-32-22;// 상태바·내비게이션 막대를 뺀 사이드바 높이
+function foldLine(){return `<div class="fold-line" style="top:${H-22}px">화면 끝</div>`;}
+
+function drawerClosedPouch({pieces,empty,interactive}){
+  const pouch=pouchSvg({pieces,empty});
+  const cap=empty?`<span class="cap">아직 비어 있어.<br>엽서를 꾸미다가<br>‘통에 넣기’로 담아 봐.</span>`:`<span class="cap">최근 담은<br>조각 3개</span>`;
+  return `<div class="drawer"><div class="drawer-scroll"><div class="drawer-col">${calendarHtml()}
+    <div class="pouch-slot">${interactive?`<button class="tap" type="button" data-open aria-label="스티커 통 열기, ${pieces.length}조각">${pouch}</button>`:pouch}${cap}</div>
+  </div></div></div>`;}
+
+function spreadHtml(pieces,{cols=3,sel=-1}={}){
+  if(!pieces.length)return `<div class="spread"><div class="empty-note"><div class="scissor-line" aria-hidden="true">✂</div><p class="hint">아직 담은 조각이 없어.<br>엽서 편집 › 스티커에서 조각을 고르고<br>‘통에 넣기’를 누르면 여기 모여.</p></div></div>`;
+  const all=[...pieces,...pieces,...pieces].slice(0,cols===3?12:15);
+  const r=rng(77);
+  return `<div class="spread"><div class="spread-grid">${all.map((p,i)=>{const rot=((r()*2-1)*5).toFixed(1);
+    return `<button class="cell${i===sel?" sel":""}" type="button" data-cell="${i}" aria-pressed="${i===sel}" aria-label="${p.label}"><span style="display:block;transform:rotate(${rot}deg)">${pieceSvg(p,1.55)}</span>${i===sel?loopSvg():""}</button>`;}).join("")}</div></div>`;}
+function loopSvg(){const r=rng(5);let d="";const n=40;for(let i=0;i<=n+4;i++){const t=i/n*Math.PI*2-1;const rx=34+r()*1.2,ry=30+r()*1.2;d+=(i?"L":"M")+(38+Math.cos(t)*rx).toFixed(1)+" "+(38+Math.sin(t)*ry).toFixed(1);}
+  return `<svg class="loop" viewBox="0 0 76 76" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="#5B5046" stroke-width="1.1" stroke-linecap="round" opacity=".75"/></svg>`;}
+
+function stashPage(pieces,{sel=-1,closable}={}){
+  const has=pieces.length>0;
+  return `<div class="stash-page">
+    <div class="stash-head"><button class="tap" type="button" ${closable?"data-close":""} style="font-size:12px;color:var(--ink2);font-family:inherit">← 달력</button><b>스티커 통</b><span>${has?pieces.length+"조각":"비어 있음"}</span></div>
+    <div style="display:flex;justify-content:center">${pouchSvg({pieces:[],empty:!has,open:true,w:118,h:77})}</div>
+    ${spreadHtml(pieces,{sel})}
+    <div class="stash-bar">${sel>=0?`<span>${pieces[sel%pieces.length].label}</span><span class="act">통에서 빼기</span>`:`<span class="hint">${has?"조각을 누르면 고를 수 있어. 엽서에 붙이기는 편집 화면에서 해.":"빈 통도 사이드바에 늘 있어."}</span>`}</div>
+  </div>`;}
+
+function drawerB1(pieces){
+  // 같은 스크롤 안에서 파우치가 펼쳐진 모습. 내용을 위로 300dp 밀어 둔 상태를 보여 준다.
+  const r=rng(9);
+  const grid=pieces.concat(pieces.slice(0,3)).map(p=>`<div class="cell" style="height:66px"><span style="display:block;transform:rotate(${((r()*2-1)*5).toFixed(1)}deg)">${pieceSvg(p,1.35)}</span></div>`).join("");
+  return `<div class="drawer"><div class="drawer-scroll"><div class="drawer-col" style="transform:translateY(-318px)">${calendarHtml()}
+    <div style="margin-top:16px;display:flex;align-items:flex-end;justify-content:space-between"><span>${pouchSvg({pieces:[],open:true,w:118,h:77})}</span><span class="tiny" style="padding-bottom:8px;text-decoration:underline">접기</span></div>
+    <div class="spread" style="margin-top:-6px;padding:10px 4px"><div class="spread-grid">${grid}</div></div>
+  </div></div>
+  <div style="position:absolute;right:3px;top:120px;width:3px;height:120px;border-radius:2px;background:rgba(26,19,36,.25)"></div></div>`;}
+
+const FULL=PIECES, NONE=[];
+function render(){
+  uid=0;
+  const A=document.getElementById("phoneA");
+  A.innerHTML=shell(drawerClosedPouch({pieces:FULL,interactive:true})+foldLine());
+  document.getElementById("capA").textContent=H===832?"사용자 기기 높이. 파우치까지 한 화면에 다 보여.":"작은 기기 높이. 파우치 아래쪽이 화면 끝(점선) 밖으로 조금 밀려.";
+  const sCol=A.querySelector(".drawer-col");
+  bindA(A);
+  document.getElementById("phoneB1").innerHTML=shell(drawerB1(FULL));
+  document.getElementById("phoneB2").innerHTML=shell(`<div class="drawer">${stashPage(FULL,{sel:4})}</div>`);
+  bindCells(document.getElementById("phoneB2"),FULL);
+  document.getElementById("phoneC1").innerHTML=shell(drawerClosedPouch({pieces:NONE,empty:true}));
+  document.getElementById("phoneC2").innerHTML=shell(`<div class="drawer">${stashPage(NONE)}</div>`);
+  observe();
+}
+function bindA(A){
+  const open=()=>{const d=A.querySelector(".drawer");const pg=document.createElement("div");pg.innerHTML=stashPage(FULL,{closable:true});const el=pg.firstElementChild;el.style.opacity="0";el.style.transform="translateY(14px)";el.style.transition="opacity .28s ease, transform .32s cubic-bezier(.2,.7,.2,1)";d.appendChild(el);requestAnimationFrame(()=>{el.style.opacity="1";el.style.transform="none";});
+    el.querySelector("[data-close]").addEventListener("click",()=>{el.style.opacity="0";el.style.transform="translateY(14px)";setTimeout(()=>el.remove(),300);});bindCells(el,FULL);};
+  A.querySelector("[data-open]").addEventListener("click",open);
+}
+function bindCells(root,pieces){root.querySelectorAll("[data-cell]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.cell;const page=b.closest(".stash-page");const closable=!!page.querySelector("[data-close]");
+  const tmp=document.createElement("div");tmp.innerHTML=stashPage(pieces,{sel:i,closable});const nu=tmp.firstElementChild;page.replaceWith(nu);bindCells(nu.parentElement,pieces);
+  if(closable){nu.querySelector("[data-close]").addEventListener("click",()=>nu.remove());}}));}
+
+// ---------- D. 스토리보드 ----------
+const STEPS=[
+  {t:"고르기",tag:"기존",d:"엽서를 꾸미다 마음에 드는 사진 스티커를 누르면 지금처럼 선택돼.",draw:()=>miniEditor({sel:true,actions:true,newAct:false})},
+  {t:"통에 넣기",tag:"제안",d:"선택 패널의 ‘편집 | 삭제’ 옆에 ‘통에 넣기’를 더해. 엽서 위 스티커는 그대로 남아.",draw:()=>miniEditor({sel:true,actions:true,newAct:true})},
+  {t:"쏙 담김",tag:"제안",d:"조각 그림이 작아지며 화면 아래 파우치로 들어가고, ‘스티커 통에 담았어’가 잠깐 떠.",draw:()=>miniEditor({fly:true,toast:"스티커 통에 담았어"})},
+  {t:"사이드바에서 구경",tag:"제안",d:"갤러리 ☰ 사이드바의 파우치 입구에 방금 담은 조각이 맨 앞에 보여. 여기서는 구경하고 빼기만 해.",draw:()=>miniDrawer()},
+  {t:"다른 엽서에서 꺼내기",tag:"제안",d:"다른 엽서의 스티커 탭 하위 줄 ‘사진 | 텍스트 | 라벨’ 끝에 ‘스티커 통’ 칸을 더해. 담아 둔 조각이 나열돼.",draw:()=>miniEditor({other:true,stash:true})},
+  {t:"붙이기",tag:"기존 문법",d:"조각을 고르면 지금 사진 스티커와 같은 핀셋 연출로 엽서에 놓여. 이때 이 엽서 몫으로 새 복사본이 생겨.",draw:()=>miniEditor({other:true,placed:true})},
+];
+function miniEditor(o){
+  const tabs=["사진","배경","글귀","스티커","테이프","도장","낙서"].map(x=>`<span class="${x==="스티커"?"on":""}">${x}</span>`).join("");
+  const sea=PIECES[0];
+  let card=`<div class="m-card">${o.other?`<div class="m-photo" style="background:linear-gradient(160deg,#CBBFAE,#9E8F7C)"></div>`:`<div class="m-photo"></div>`}<div class="m-lines"><i></i><i></i><i style="width:70%"></i></div>`;
+  if(!o.other&&!o.fly)card+=`<div class="${o.sel?"m-sel":""}" style="position:absolute;left:58px;top:70px">${pieceSvg(sea,1.5)}</div>`;
+  if(o.fly)card+=`<div style="position:absolute;left:58px;top:70px">${pieceSvg(sea,1.5)}</div><div class="fly" style="left:58px;top:70px">${pieceSvg(sea,1.5)}</div>`;
+  if(o.placed)card+=`<div class="m-sel" style="position:absolute;left:84px;top:84px;transform:rotate(-4deg)">${pieceSvg(sea,1.5)}</div>`;
+  card+=`</div>`;
+  const sub=`<div class="m-sub"><span class="${!o.stash?"on":""}">사진</span><span>텍스트</span><span>라벨</span>${o.stash||o.fly||o.placed||o.other?`<span class="new${o.stash?" on":""}">스티커 통</span>`:""}</div>`;
+  let panel="";
+  if(o.actions)panel=`<div class="m-actions"><span>편집</span><span>|</span><span>삭제</span>${o.newAct?`<span>|</span><span class="new">통에 넣기</span>`:""}</div><div style="text-align:center">바다 사진 · 찢김</div>`;
+  else if(o.stash)panel=`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">${PIECES.map((p,i)=>`<span style="display:inline-block;padding:2px;${i===0?"outline:1px dashed rgba(26,19,36,.5);":""}">${pieceSvg(p,.95)}</span>`).join("")}</div><div style="text-align:center">고르면 엽서 위로 집어 옮겨</div>`;
+  else if(o.placed)panel=`<div style="text-align:center">핀셋으로 놓기 · 기존 사진 스티커 배치와 같음</div>`;
+  else if(o.fly)panel=`<div style="text-align:center;opacity:.7">사진 | 텍스트 | 라벨 목록</div>`;
+  const pouch=o.fly?`<div class="mini-pouch" style="left:118px;top:262px">${pouchSvg({pieces:PIECES.slice(0,2),w:52,h:34})}</div>`:"";
+  return `<div class="m-top"><span>←</span><span>${o.other?"엽서 #18":"엽서 #12"}</span><span>완료</span></div>${card}<div class="m-tabs">${tabs}</div>${sub}<div class="m-panel">${panel}</div>${pouch}${o.toast?`<div class="toast">${o.toast}</div>`:""}`;}
+function miniDrawer(){
+  return `<div style="position:absolute;inset:0;background:var(--scrim)"></div><div style="position:absolute;left:0;top:0;bottom:0;width:80%;background:var(--paper-surface);padding:14px 10px;display:flex;flex-direction:column;gap:8px">
+    <div class="tiny" style="text-align:right">✕</div><div style="height:150px;background:#F2EADB;display:grid;place-items:center;font-size:9px;color:var(--ink2)">달력 한 장</div>
+    <div style="font-size:8px;color:var(--ink2)">✉ × 42</div><div>${pouchSvg({pieces:PIECES,w:96,h:63})}</div></div>`;}
+function renderBoard(){
+  const b=document.getElementById("board");
+  b.innerHTML=STEPS.map((s,i)=>`<button type="button" class="frame" data-step="${i}" aria-current="${i===0}"><div class="mini">${s.draw()}</div><div class="step"><b>${i+1}</b>${s.t}<span class="badge${s.tag==="제안"?" p":""}">${s.tag}</span><br>${s.d}</div></button>`).join("");
+  b.querySelectorAll(".frame").forEach(f=>f.addEventListener("click",()=>{cur=+f.dataset.step;mark();hold=Date.now()+8000;}));
+}
+let cur=0,hold=0;function mark(){document.querySelectorAll("#board .frame").forEach((f,i)=>f.setAttribute("aria-current",String(i===cur)));}
+setInterval(()=>{if(document.body.classList.contains("still")||Date.now()<hold)return;cur=(cur+1)%STEPS.length;mark();},2600);
+
+// 화면 밖 휴대폰은 움직임을 멈춘다.
+let io;function observe(){if(io)io.disconnect();if(!("IntersectionObserver" in window))return;io=new IntersectionObserver(es=>es.forEach(e=>e.target.classList.toggle("offscreen",!e.isIntersecting)));document.querySelectorAll(".phone-shell,.mini").forEach(el=>io.observe(el));}
+
+function seg(onId,offId,fn){const on=document.getElementById(onId),off=document.getElementById(offId);
+  on.addEventListener("click",()=>{on.setAttribute("aria-pressed","true");off.setAttribute("aria-pressed","false");fn(true);});
+  off.addEventListener("click",()=>{off.setAttribute("aria-pressed","true");on.setAttribute("aria-pressed","false");fn(false);});}
+seg("motionOn","motionOff",v=>document.body.classList.toggle("still",!v));
+seg("hBig","hSmall",v=>{if(v){W=384;H=832;}else{W=360;H=640;}render();});
+if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches){document.body.classList.add("still");document.getElementById("motionOff").click();}
+let rt;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(render,150);});
+render();renderBoard();observe();
+})();
+</script>
