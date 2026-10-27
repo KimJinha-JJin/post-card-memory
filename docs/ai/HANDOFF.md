@@ -1,3 +1,23 @@
+# HANDOFF — 116일차: `main` 통합 준비 · README 정합화 · main 병합 반영 · 사용자 최종 승인 대기
+
+2026-10-27, 담당 Claude Code, 수동 표준 모드(116일차 작업지시서). 이 세션엔 Task 도구가 없어 진행 안내로 대체했어. **`main`은 변경·병합하지 않았어.** 앱 코드·이미지 자산·Room schema·CI 설정·사용자 데이터 미변경.
+
+- **시작 Git:** `feature/photo-sticker` HEAD `485fb81`(115일차 커밋 완료 — 아래 115일차 후속 제목의 "미커밋"은 커밋 직전 기록), origin과 0/0, tracked clean. `git fetch origin` 후 `origin/main` = `ac5cff5`(로컬 `main`은 `4e3cc86`로 2 뒤, 건드리지 않음).
+- **브랜치 차이:** 공통 조상 `4e3cc86`(2026-07-02). main 전용 2커밋(`27b1ed2`·`ac5cff5`, 2026-09-03 GitHub 웹 편집)은 **README.md만** 수정 — 개발 브랜치 상태를 설명하는 README 재작성 + feature 브랜치 last-commit 배지. 개발 브랜치 전용 389커밋. 앱 코드·자산·schema·CI 쪽 main 전용 변경 없음.
+- **판정 C(충돌 해결 필요):** 양쪽이 README를 크게 고쳐 README 1파일만 내용 충돌. GitHub PR #4도 `CONFLICTING/DIRTY`였어.
+- **README 정합화 `1cd3930`(README만):** 개발 브랜치 README를 기준으로 main 전용의 유효 정보(Room·last-commit 배지 — 배지는 기본 브랜치 기준으로 변경, 한 줄 소개, 미래 우체통 비공개 동작, 도장 최대 2개, Photo Picker 안내, 색상 토큰 표, 개발 원칙)를 코드 대조 후 흡수. 오래된 값 정정(Gradle 9.4.1→9.8.2, JVM 920→1003) + 107일차 이후 기능 추가(스티커 통 60개, 달력 650ms 접힘·연월 봉투, 앞뒤 800ms 종이 날개). main의 "개발 브랜치 안내" 박스와 화면 흐름 그림은 병합 후 의미가 없거나 기능 설명과 중복이라 넣지 않았어.
+- **병합 `da0fdd9`(origin/main → feature, 이력 보존 `--no-ff`):** 격리 임시 worktree에서 병합, README 충돌은 그 파일만 1cd3930 버전으로 해결. 병합 결과 트리 = `1cd3930` 트리(차이 0). 이제 `origin/main`이 작업 브랜치의 조상이라 PR #4는 충돌 없이 병합 가능한 상태가 됨(fast-forward도 가능).
+- **병합 결과 자동검증 — 실행:** Zulu 17 + Gradle 9.8.2, LF 체크아웃 임시 worktree에서 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest` 성공. XML 110개 / **1003 tests, 실패·오류·skip 0**. 소스 JVM `@Test` 1003 / instrumentation `@Test` 21. Room `version = 19`, schema export 변경 없음. `git diff --check` 통과.
+  - 첫 실행 실패 20건 = **test infrastructure**: 시스템 Git `core.autocrlf=true`로 새 worktree가 CRLF로 체크아웃돼, 소스 문자열에 `\n`을 넣어 찾는 구조 테스트 11파일 20건이 깨짐. 원본 작업트리·CI(Linux)는 LF. 같은 커밋을 `-c core.autocrlf=false`로 다시 꺼내 통과 확인. production·병합 문제 아님. **CRLF 체크아웃 환경(Windows 새 clone 등)에서 구조 테스트가 깨지는 건 기존 잠재 위험**이고 이번 범위에서 고치지 않았어(후속 후보: `.gitattributes` 또는 테스트 줄바꿈 정규화 — 별도 승인 필요).
+- **데이터·자산 보호:** main 대비 삭제 12파일은 모두 개발 브랜치의 과거 정리 커밋(예: `bd8d645`, `ed80d76`, `8d9bae5`) 결과이고 이번 병합에서 새로 지운 것 0. 삭제 리소스 참조 없음. 사용자 데이터·기기 접근 없음, 설치·instrumentation 실행 없음, emulator 미사용.
+- **나머지 검증 영역:** 실사용 기기 instrumentation 미실행(이번 변경 대상 없음), 실기기 감각 QA 불필요(앱 코드·자산 변경 0, README·HANDOFF만 변경), TEST-COVERAGE-MAP 변경 없음(테스트 변화 없음). GitHub Actions CI는 push 후 확인 — 결과는 완료보고 기준.
+- **임시 worktree 정리:** 이번 세션의 임시 worktree 2개는 Git 등록 해제 완료. 세션 scratchpad에 빌드 폴더 잔여물만 남음(긴 경로/잠금, 저장소 밖). 다른 세션이 남긴 `head-baseline-worktree`(prunable)는 건드리지 않음.
+- **보호 상태:** 보호 미추적 5묶음(`.codex-config.candidate.toml`, `.kotlin/`, PNG 3개) 미접촉.
+- **사용자 최종 승인 대기:** PR #4(base `main` ← `feature/photo-sticker`) 병합. 이력 보존을 위해 **merge commit 방식(또는 fast-forward)** 권장, squash·rebase 금지. 병합 후 작업 브랜치 삭제 안 함. 승인 전 `main` 변경·자동 병합 설정 금지.
+- **알려진 문서 불일치(범위 밖, 미수정):** `AGENTS.md` 5절의 "현재 20건 분류"는 실제 instrumentation 21건(TEST-COVERAGE-MAP 기준)과 다름 — 규칙 문서라 사용자 승인 시 정정.
+
+---
+
 # HANDOFF — 115일차 후속: 사용자 실기기 QA 완료 · 정지 화면 dog-ear 힌트 제거 · 미커밋
 
 2026-10-26, 담당 Claude Code. 사용자가 기기를 연결하고 "설치하고 QA 진행해줘"로 설치·QA를 승인했어.
