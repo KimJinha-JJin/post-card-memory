@@ -1,3 +1,19 @@
+# HANDOFF — 117일차 최종 마감: PR #6 `main` 병합 완료 · main CI Success
+
+2026-10-28, 담당 Claude Code(피코), 수동 표준 모드(117일차 4~6차 작업지시서). 이 절은 바로 아래 "117일차" 절(commit 시점 기록)의 "push 대기"·"push/PR/병합 승인 대기"를 해소한 결과야. 이번 변경은 **이 HANDOFF 1파일만**이고 앱 코드·이미지 자산·Room schema·테스트·CI 워크플로우·사용자 데이터 미변경, 기기 접근 없음.
+
+- **push:** `fix/windows-crlf-tests`(`8db2772`) → origin. push CI run `40652963052` success.
+- **PR #6:** `main` ← `fix/windows-crlf-tests`, commit `8db2772` 1개·파일 4개(`.gitattributes`, `AGENTS.md`, `docs/ai/HANDOFF.md`, `docs/ai/TEST-COVERAGE-MAP.md`). PR CI run `40653678186` success, 필수 검사 `build-and-test` 충족, MERGEABLE/CLEAN 확인 후 사용자 승인으로 병합.
+- **병합 완료:** 2026-10-28T08:05:53Z, **merge commit 방식**(auto-merge 미사용, head `8db2772` 고정). Merge commit = `32d8744c7765d2eafcbe85467d4c940d63dd91ad`(`32d8744`), 부모 `e10d853`·`8db2772`. `32d8744` 트리 = `8db2772` 트리(차이 0), `e10d853` 대비 변경은 위 4파일뿐(`app/` 변경 0).
+- **병합 후 main CI:** Android CI run `40654382653`(push, `32d8744`) **success** — `Run JVM unit tests`·`Assemble debug APK`·`Compile instrumentation tests (assembleDebugAndroidTest)` 모두 success. instrumentation은 컴파일만이고, CI는 Linux라 Windows(`autocrlf=true`) 해결 근거는 아래 절의 로컬 격리 클론 검증(1003/1003)이야.
+- **로컬 Git:** 로컬 `main`을 `e10d853` → `32d8744`로 `--ff-only` 동기화(로컬 전용 commit 없음 확인). 작업 브랜치 `fix/windows-crlf-tests`는 로컬·원격 `8db2772`로 보존(삭제 안 함). 이 문서는 `32d8744`에서 만든 `docs/day-117-closeout` 브랜치에서 수정했어.
+- **보호 상태:** 보호 미추적 5묶음(`.codex-config.candidate.toml`, `.kotlin/`, PNG 3개) 미접촉, `head-baseline-worktree`(prunable) 미접촉, 기존 브랜치(`feature/photo-sticker` 등) 변경 없음. Room `version = 19` 변경 없음.
+- **117일차 과제 상태:** B(CRLF·문서) 구현·검증·병합 완료. A(스티커 통 저장공간)는 정적 조사·실기기 읽기 전용 실측 완료, 최적화는 미구현(승인 범위 밖) — 결과·추정·잔여물은 아래 절.
+- **118일차 후보(실행 승인 아님):** ① 스티커 삭제+완료 저장 후 확정 누끼(`sticker_bgs/<id>/`)가 남는 원인 조사 ② 완료 저장 뒤 초안 재생성 원인 조사(기존 엽서 7장의 남은 초안 포함) ③ 저장공간 개선 방향 결정(누끼 해상도·압축, 중복 제거, cache·`sticker_stash` 잔여 진단) ④ `AGENTS.md`·`CLAUDE.md` 보고 형식에 PR 생성·PR CI·main 병합 상태 추가.
+- **다음 출발점:** 이 문서 변경의 commit·push·PR·병합은 각각 사용자 승인 후. 이후 최신 `main`에서 118일차 목적별 브랜치.
+
+---
+
 # HANDOFF — 117일차: Windows CRLF 테스트 수정(`.gitattributes`) · 테스트 문서 정합화 · 스티커 통 저장공간 실측 · commit 완료 / push 대기
 
 2026-10-28, 담당 Claude Code(피코), 수동 표준 모드(117일차 통합·2차 작업지시서). Task 도구가 없어 진행 안내로 대신했어. 두 과제(A 스티커 통 실측, B CRLF·문서)는 독립이고, 저장소 변경은 B뿐이야.
