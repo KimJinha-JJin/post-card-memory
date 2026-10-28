@@ -1,3 +1,24 @@
+# HANDOFF — 117일차: Windows CRLF 테스트 수정(`.gitattributes`) · 테스트 문서 정합화 · 스티커 통 저장공간 실측 · commit 완료 / push 대기
+
+2026-10-28, 담당 Claude Code(피코), 수동 표준 모드(117일차 통합·2차 작업지시서). Task 도구가 없어 진행 안내로 대신했어. 두 과제(A 스티커 통 실측, B CRLF·문서)는 독립이고, 저장소 변경은 B뿐이야.
+
+- **현재 Git:** 브랜치 `fix/windows-crlf-tests`(최신 `main` = `origin/main` = `e10d853`에서 생성), 117일차 3차 지시로 **commit만 승인**돼 아래 4개 파일만 명시 경로로 stage해 이 브랜치에 commit(SHA는 Git·완료보고 기준). **push·PR·병합은 미승인·미실행.** 변경: `.gitattributes`(신규), `AGENTS.md`, `docs/ai/TEST-COVERAGE-MAP.md`, 이 `HANDOFF.md`. 보호 미추적 5묶음(`.codex-config.candidate.toml`, `.kotlin/`, PNG 3개) 미접촉. 다른 세션의 `head-baseline-worktree`(prunable) 미접촉.
+- **B 원인(재현 확인):** 시스템 Git `core.autocrlf=true` + `.gitattributes` 없음 → 새 체크아웃이 CRLF가 되고, 소스에서 `"\n"` 포함 문자열을 찾는 구조 테스트 11클래스 20건이 실패(test infrastructure, production 무관). `git -c core.autocrlf=true archive e10d853` 사본에서 1003 중 20 실패로 116일차 보고와 동일하게 재현. index는 원래부터 텍스트 전부 LF(CRLF 0).
+- **B 수정:** `.gitattributes` = `* text=auto eol=lf` + 바이너리(`*.png` 등 이미지·jar·폰트) `binary`. helper·테스트·assertion·production·전역 Git 설정 변경 없음. 임시 index로 `git add --renormalize` 결과를 HEAD와 비교해 **내용 차이 0파일**, 추적 PNG 34개 해시 동일. 실제 index는 건드리지 않았고(`--renormalize --dry-run`은 tracked 전부를 나열하지만 내용 변화가 아님), 기존 작업트리의 CRLF 파일 21개는 그대로 둠(git status 변화 없음).
+- **B 검증(scratchpad 격리 클론, 새 정책을 index에 넣고 `checkout-index`로 실제 체크아웃):** ① `core.autocrlf=true` 클론: 텍스트 295개 전부 LF로 체크아웃, `testDebugUnitTest` **1003/1003 통과**(XML 110, 실패·오류·skip 0 — 기존 실패 11클래스 20건 포함), `assembleDebug`·`assembleDebugAndroidTest` 성공. ② `core.autocrlf=false` 클론: 1003/1003 통과(XML 110). Zulu 17 + Gradle 9.8.2. `git diff --check` 통과. instrumentation은 **컴파일만**, 실기기·CI 실행 없음. GitHub Actions CI 미실행(push 전).
+- **B 문서:** `AGENTS.md` 5절 "현재 20건" → 21건/8파일. `TEST-COVERAGE-MAP.md` 현재 상태 문장 5곳 정정(제목의 "102일차 기준", Compose 설명의 13건/911건, 현재 실측 992/107/XML108 → 1003/109/XML110·구조 196(180+16, 115일차 기록 합산이며 이번에 재집계하지 않음), CI 표 911개 행, 마지막 요약 875개). 날짜가 붙은 과거 기록(2026-10-01 20건/7파일, 111일차 992 등)은 보존. 실측: JVM `@Test` 1003 / 파일 109 / helper 1, instrumentation 21 / 8파일, SAFE 8·CONDITIONAL 6·FORBIDDEN 7. 테스트 추가·삭제 없음.
+- **A 실측(승인된 실사용 기기 SM-S936N, `com.postcardmemory` DEBUGGABLE, `run-as` 읽기 전용 `find`/`stat`/`sha256sum`/`file`/`du`, 앱 조작은 사용자 직접, 테스트 엽서 3장 생성 후 사용자가 삭제):** 기존 파일 31개는 시작·종료 해시가 모두 동일(사용자 데이터 무변경). 측정 원본 기록은 세션 scratchpad에만 있음(저장소 미포함).
+  - 담기 = 원본·누끼 **바이트 복사 1벌**(해시 동일, 재인코딩 없음). 통에서 빼기 = 조각 폴더 삭제, 목록 파일이 담기 전과 같은 해시로 복귀, 엽서 파일 무영향.
+  - **재사용 1회 = 파일 4개**(원본 1 + 같은 누끼 3: `sticker_bgs`·`draft_sticker_bgs`·`cache/photo_stickers`), 2회 반복에서 동일. 테스트 스티커 하나가 기기에 누끼 10개·원본 4개까지 늘었음.
+  - **관찰된 잔여물:** ① 완료 저장 **뒤에** 초안(`drafts/edit_state/<id>.draft.txt` + `draft_sticker_bgs/<id>/`)이 다시 생김(T2: 확정 16:37:32, 초안 누끼 16:37:35) — 화면 이탈 시 초안 flush 경로로 추정, 코드 재확인 필요. 기존 엽서 14·15·16·19·20·21·23에도 초안 파일이 있음. ② 스티커 삭제+완료 저장 뒤 원본·초안 누끼는 지워지지만 **확정 누끼(`sticker_bgs/<id>/`)는 남음**(원인 미확인). ③ cache 사본은 확정 저장 뒤에도 남음(OS 회수 영역). ④ 엽서 삭제는 그 엽서의 원본·확정 누끼·초안을 모두 정리 — 최종 잔여는 cache 3개(372KB)뿐.
+  - 크기 표본: 테스트 사진은 736×492(원본 30KB, 누끼 126KB)로 작음. 기존 카메라 출처 데이터는 누끼 PNG가 **2992×2992 원본 해상도**, 0.22~3.68MB, 원본 JPEG 1.6~2.6MB, 기존 통 조각 2개는 각 약 5.4MB. **60개 보관 추정(가설): 조각당 약 1.8~6.3MB → 약 110~380MB, 카메라 사진 위주면 300MB 안팎.** 표본이 적어 분포는 미확정.
+  - 시작 시점 기존 데이터에도 같은 해시 중복 5묶음, `cache/photo_stickers` 약 20MB, `draft_sticker_bgs` 약 7.4MB가 있었음(정리하지 않음).
+- **사용자 QA:** 앱 동작 변경 0이라 불필요. A 조작은 측정 절차였고 QA가 아님.
+- **남은 위험·후속 후보(실행 승인 아님):** (1) 이 브랜치 push/PR/병합 승인 대기 — push 후 CI 확인. (2) 스티커 저장공간 개선 후보: 스티커 삭제 시 확정 누끼 미삭제 원인 조사, 완료 저장 후 초안 재생성 원인 조사, 누끼 저장 해상도/압축, 해시 중복 제거·참조 공유, `sticker_stash`·cache 잔여 진단, 파일 없는 조각의 60개 상한 산입. (3) `AGENTS.md`·`CLAUDE.md` Git 보고 형식에 PR 생성·PR CI·main 병합 상태 추가(118일차 이후 후보). (4) `TEST-COVERAGE-MAP.md` "80일차부터 바뀐 사실"의 `feature/photo-sticker` push 표현 등 승인 범위 밖 문장은 손대지 않음.
+- **다음 출발점:** 사용자 승인 시 push → PR(`main` ← `fix/windows-crlf-tests`) → `build-and-test` 확인 → 사용자 병합 승인.
+
+---
+
 # HANDOFF — 116일차 최종 마감: PR #4 `main` 병합 완료 · CI Success · main 보호 규칙 적용 · 문서 전용 PR
 
 2026-10-27, 담당 Claude Code(피코), 수동 표준 모드(116일차 최종 마감 작업지시서). 이 세션엔 Task 도구가 없어 진행 안내로 대체했어. 이번 작업은 **이 HANDOFF 1파일만** 바꿨어. 앱 코드·이미지 자산·Room schema·테스트·CI 워크플로우·사용자 데이터 미변경, 기기 접근 없음. 아래 "116일차: 통합 준비" 절의 "사용자 최종 승인 대기"는 병합 전 기록이고, 그 대기는 이 절로 해소됐어.
