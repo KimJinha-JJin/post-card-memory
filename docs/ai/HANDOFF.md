@@ -1,3 +1,17 @@
+# HANDOFF — 118일차: Git·CI·HANDOFF 정책 반영 · PR 검증 준비 / main 병합 미승인
+
+2026-10-29, 담당 Work(Codex), 수동 표준 모드. 작성 시점은 최종 commit 전이며 이후 PR 번호·최종 SHA·CI 결과는 완료보고로 확인해. 정상 성공 결과만을 위한 추가 HANDOFF commit은 만들지 않아.
+
+- **작성 시점 Git:** `chore/git-ci-workflow-policy`, 기준 `main` = `origin/main` = `32d8744c7765d2eafcbe85467d4c940d63dd91ad`. 승인 범위는 저장소 5파일(AGENTS·CLAUDE·CI YAML·README·이 HANDOFF), canonical 9파일과 대응 설치 캐시야. commit·작업 브랜치 push·PR·필수 CI는 승인, **main 병합과 브랜치 삭제는 미승인**이야. 실제 Git과 완료보고를 먼저 대조해.
+- **정책 변경:** 1단계는 작업 범위 내 브랜치·수정·검증·명시적 stage·commit/push·PR·필수 CI 및 최소 실패 보정, 2단계는 최종 PR·head/base SHA 검토 후 Merge commit·main CI·안전한 동기화·조건부 브랜치 정리야. 명시적 제외·새 위험 STOP·실기기 별도 승인은 유지해. CI는 PR과 main push에만 실행하고 작업 브랜치 push에는 별도 실행하지 않아. HANDOFF는 최종 commit 전의 구현·검증·위험·재개 조건을, 완료보고는 최종 Git·CI 결과를 담당해.
+- **검증 상태:** 문서·diff·규칙 일관성, 상대 참조 32개, AGENTS 5절·기존 HANDOFF 이력 무변경, YAML 변경이 main push 필터 2줄뿐이며 job/step은 동일함을 확인했어. canonical/cache는 전체 19파일 SHA-256 일치, 승인 대상 각 9파일 외 내용 무변경이야. `quick_validate.py`는 기존 Python의 PyYAML 부재로 실행 불가(추가 설치 없음), YAML 전용 파서도 미확보라 PR `build-and-test`로 실제 실행 조건을 검증해. 작성 시점 PR CI와 새 세션 로딩은 아직 미확인이며 결과는 완료보고 기준이야. 로컬 JVM·APK 빌드, 실기기 instrumentation·감각 QA는 앱 변경 없는 정책 작업에 불필요해. instrumentation 컴파일과 실제 실행은 구분하고, 테스트 변화가 없어 TEST-COVERAGE-MAP은 수정하지 않아.
+- **117일차 선별 인수:** B(CRLF·테스트 문서)는 PR #6으로 `32d8744`에 Merge commit 병합 완료됐어. 아래 117일차의 push·PR·병합 대기와 다음 출발점은 **당시 기록이며 해소됨**이야. Windows 새 체크아웃 검증은 기존 격리 클론의 `autocrlf=true/false` 각각 JVM 1003/1003 결과가 근거이고, Linux main CI `40654382653` 성공은 별도 근거야. 이번에 재실행하지 않았어.
+- **스티커 저장공간:** A는 읽기 전용 실측 완료, 최적화는 미구현이야. 스티커 삭제+완료 저장 후 확정 누끼(`sticker_bgs/<id>/`) 잔존과 완료 저장 뒤 초안 재생성이 관찰됐고 원인은 미확정이야. cache·중복 저장·해상도/압축은 후속 후보이며 조사·정리·삭제의 실행 승인이 아니야. 표본 기반 저장공간 추정은 전체 분포 실측이나 보장값으로 확대하지 않아.
+- **안전 상태:** production·test·dependency·이미지·Room schema(version 19) 변경 없음, 사용자 데이터·실기기 접근 없음. 보호 미추적 5묶음(`.codex-config.candidate.toml`, `.kotlin/`, PNG 3개)과 ignored `.claude/` 및 다른 worktree는 미접촉·미stage. 과거 실측의 기존 31파일 해시 보존은 당시 확인 범위이며 이번 데이터 복구·백업을 뜻하지 않아.
+- **보존·재개 조건:** `docs/day-117-closeout`(`10d32e2`)은 병합·삭제하지 않고 보존해. 해당 16줄 전체를 가져오지 않고 필요한 사실만 위에 선별했어. 현재 PR CI가 성공해도 최종 PR·head/base SHA에 대한 별도 승인 전에는 main에 병합하지 않아. 병합 후 main CI와 동기화·조건부 브랜치 정리는 4부 승인 후 진행하며, 캐시 해시 일치와 새 세션 실제 로딩은 구분해 보고해.
+
+---
+
 # HANDOFF — 117일차: Windows CRLF 테스트 수정(`.gitattributes`) · 테스트 문서 정합화 · 스티커 통 저장공간 실측 · commit 완료 / push 대기
 
 2026-10-28, 담당 Claude Code(피코), 수동 표준 모드(117일차 통합·2차 작업지시서). Task 도구가 없어 진행 안내로 대신했어. 두 과제(A 스티커 통 실측, B CRLF·문서)는 독립이고, 저장소 변경은 B뿐이야.
