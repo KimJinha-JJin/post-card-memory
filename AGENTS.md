@@ -162,7 +162,7 @@ ChatGPT가 상세 작업지시서 작성
 
 아래 자율 진행과 선례 활용은 5절의 공통 효과 기반 실행 안전 원칙 안에서만 적용한다.
 
-중대한 중단 사유가 없다면 조사, 코드 수정, 자동 검증, diff 검토는 이어서 진행한다. 중간 보고는 현재 위치를 알리기 위한 것이며, 단순히 보고했다는 이유로 사용자 응답을 기다리며 멈추지 않는다. commit과 push는 이 진행 원칙과 별개이며, 항상 사용자의 명시적 승인 또는 요청 후에만 수행한다.
+중대한 중단 사유가 없다면 조사, 코드 수정, 자동 검증, diff 검토는 이어서 진행한다. 중간 보고는 현재 위치를 알리기 위한 것이며, 단순히 보고했다는 이유로 사용자 응답을 기다리며 멈추지 않는다. Git 반영은 9절의 2단계 승인을 따른다. 승인된 작업 범위 안의 Git 단계마다 같은 승인을 반복해서 요구하지 않는다.
 
 ### 승인과 STOP 범위
 
@@ -246,7 +246,7 @@ STOP은 현재 승인에 포함되지 않은 새로운 위험·범위·제품 �
 - 테스트 실패는 최소한 `test infrastructure`, `device / OS environment`, `fixture`, `timing / race`, `DB / migration`, `assertion`, `production`으로 분류한 뒤 수정 대상을 정한다. stack trace의 발생 위치와 timeout 값, production 코드의 timeout 값을 대조해 테스트 자체가 본문이나 assertion에 진입했는지도 확인한다.
 - Compose BOM·Compose UI test·`androidx.test`·Espresso처럼 함께 동작하는 테스트 dependency 일부를 변경할 때는 현재 해석된 dependency, 최신 안정 버전, 대상 OS/API 호환성, 실제 resolved classpath를 함께 확인한다. 특정 버전 숫자를 영구 규칙으로 고정하지 않는다.
 - 실제 Room 동작을 유지하면서 특정 DAO 실패만 재현해야 하면 `Room.inMemoryDatabaseBuilder`와 `object : Dao by realDao { override ... throw ... }` 위임 패턴을 권장 후보로 검토한다. 모든 테스트에 강제하거나 production 구조를 테스트 편의 때문에 바꾸지 않는다.
-- push가 승인되어 수행됐다면 현재 `.github/workflows/android-ci.yml`의 실제 step과 GitHub Actions 결과를 확인한다. 현재 workflow는 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 실행하며 instrumentation을 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.
+- 승인된 Git 단계에서 CI가 실행되면 현재 `.github/workflows/android-ci.yml`의 실제 step과 해당 revision의 결과를 확인한다. CI는 PR과 `main` push에서 실행하고 작업 브랜치 push에는 별도 실행하지 않는다. 현재 workflow는 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 실행하며 instrumentation을 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.
 - 자동 테스트 결과와 사용자의 실기기 결과를 분리한다.
 - 자동 테스트 통과를 실기기 만족이나 버그가 전혀 없다는 뜻으로 과장하지 않는다.
 - commit 분리나 임시 편집을 수행했다면 최종 diff와 기존 검증 근거의 대상·범위·환경이 최종 상태에도 유효한지 확인한다. 확인은 무조건 재실행을 뜻하지 않는다. 결과를 무효화하는 변경·환경 차이·실패가 있을 때 영향받은 검증만 다시 수행한다.
@@ -265,9 +265,9 @@ STOP은 현재 승인에 포함되지 않은 새로운 위험·범위·제품 �
 
 문서라도 코드 생성·빌드 설정·실행 환경에 영향을 주면 일반 문서로 분류하지 않는다. 읽기 전용 단계에는 문서·HANDOFF를 포함한 파일 변경도 하지 않는다. 일반 문서만 바뀌었는데 JVM·APK 검증을 관성적으로 실행하지 않는다. 이미 승인된 push가 현행 설정에 따라 CI를 자동 실행하면 그 결과는 확인하되, 이를 새 실행·재실행의 근거로 삼지 않는다.
 
-- 코드 작업은 `승인 범위 구현 → 영향 범위 로컬 검증 → 필요한 전체 회귀·빌드 → 관련 문서 현행화 → 최종 변경·위험 보고 → 사용자 마감 승인 → 명시적 stage·commit/push → CI 결과 확인 → 종료`를 기본으로 한다. 필요한 실기기 QA·승인 관문은 유지한다. 이미 같은 범위의 마감까지 명시 승인됐으면 반복 승인받지 않는다.
+- 코드 작업은 `1단계 작업 범위 승인 → 목적별 브랜치 → 구현·영향 범위 검증·필요 QA → 관련 문서·HANDOFF 현행화 → diff·명시적 stage·commit/push → PR·필수 CI → 최종 검토 보고 → 2단계 병합 승인 → Merge commit → main CI·안전한 동기화·조건부 브랜치 정리 → 종료`를 기본으로 한다. 필요한 실기기 QA·승인 관문과 현재 지시의 Git 제한은 유지한다.
 - CI 확인만을 위한 반복 commit/push, 성공한 CI의 단순 확인용 재실행, 문서 정리를 이유로 완료된 코드 작업을 다시 여는 행동을 금지한다. 최종 문서 갱신은 가능한 한 최종 commit 전에 끝낸다.
-- 실패 시 원인을 분류하고 승인 범위 안의 해당 실패에 필요한 최소 수정·재검증만 수행한다. 실제 결함·검증 실패 해결에 필요한 재실행은 허용하지만 새 위험·범위 확대는 6절에 따라 STOP한다. 실패 해결 승인을 추가 commit/push 승인으로 확대하지 않는다.
+- 실패 시 원인을 분류하고 승인 범위 안의 해당 실패에 필요한 최소 수정·재검증만 수행한다. 1단계 승인 범위 안의 최소 수정·commit/push·PR 갱신·필요 CI 재검증은 반복 승인 없이 진행한다. 새 위험·범위 확대나 명시적으로 제외된 Git 행위는 6절에 따라 STOP한다. 실패 해결을 새로운 작업이나 main 병합 승인으로 확대하지 않는다.
 - 성공한 CI와 승인된 완료 조건을 확인하면 결과를 보고하고 종료한다. 새 개선점은 후속 후보일 뿐 실행 승인이 아니다. 완료보고나 성공 기록 자체를 추가 commit/push 사유로 삼지 않는다.
 - CI 설정 최적화는 필수 상태 검사·브랜치 보호·실제 trigger를 확인한 뒤 별도 검증한다. 비용 절감을 이유로 필수 검증을 제거하거나 실패를 숨기지 않는다.
 
@@ -298,7 +298,7 @@ QA가 필요하면 대상 build/commit, 준비 조건·조작 순서, 기대 결
 5. 알려진 미검증·위험·STOP과 재개 조건
 6. 변경 파일과 이유
 7. repository HANDOFF 상태
-8. Git 상태(commit·push 별도)
+8. Git 상태(commit·push·PR·PR CI·main 병합·main CI·동기화·로컬/원격 브랜치 정리 별도)
 9. 다음 행동(후보와 승인된 실행을 구분)
 
 ## 9. Git 안전
@@ -308,8 +308,11 @@ QA가 필요하면 대상 build/commit, 준비 조건·조작 순서, 기대 결
 - 기존 사용자 변경을 덮어쓰지 않는다.
 - 관련 파일만 명시적으로 stage하고 `git add .`, `git add -A`, `git add -N .`를 사용하지 않는다.
 - 필요한 사용자 QA가 남아 있으면 commit하거나 push하지 않는다. 8절 기준으로 실기기 불필요인 작업까지 기기 확인을 요구하지 않는다. QA 승인은 Git 승인을 대신하지 않는다.
-- 필요한 확인 뒤에도 commit과 push는 각각 명시적인 요청·승인 범위에서만 수행한다. 이미 승인된 동일 범위를 반복 승인받지 않되 조건 변화나 새 위험은 5·6절로 판단한다.
-- merge, rebase, reset, force push, 브랜치 삭제는 별도 요청 없이 하지 않는다.
+- **1단계 — 작업 범위 승인:** 사용자가 목적·수정 범위를 승인하면 최신 main 기준 목적별 작업 브랜치 생성, 범위 내 수정·검증, 명시적 stage·commit, 작업 브랜치 push, PR 생성·갱신·필수 CI 확인과 범위 내 실패의 최소 보정까지 연속 수행할 수 있다. 읽기 전용 조사·기능 논의·다음 후보는 이 승인이 아니다. 사용자가 commit/push 등 일부를 제외하거나 별도 관문을 지정하면 그 제한이 우선하며, 필요한 QA 완료 조건도 유지한다.
+- 하나의 독립 목적에는 하나의 작업 브랜치와 하나의 최종 PR을 기본으로 한다. 같은 목적은 여러 날 이어가고 필요한 commit을 추가할 수 있다. strict 검사 충족을 위한 최신 main의 충돌 없는 병합은 1단계 범위에서 가능하되, 실제 충돌·사용자 변경 겹침은 관련 작업을 STOP한다. rebase/reset으로 우회하지 않는다.
+- **2단계 — 최종 병합 승인:** 사용자가 최종 PR·전체 head SHA·확인한 base SHA와 CI를 검토하고 명시 승인한 경우만 main에 Merge commit으로 병합한다. 승인에는 병합 후 main CI 확인, 안전한 fast-forward 동기화, 아래 조건의 해당 작업 브랜치 정리를 포함한다. head 또는 검토한 base가 바뀌면 다시 검증·보고하고 병합 승인을 갱신한다. 같은 SHA의 필요한 CI 재검증만으로 동일 승인을 반복 요구하지 않는다.
+- `Protect main` Ruleset, strict 최신 main 조건과 필수 `build-and-test`를 준수한다. main 직접 push·force push·무단 이력 재작성·squash/rebase 병합·관리자 우회·자동 병합은 하지 않는다. rebase/reset은 이 표준 흐름의 권한에 포함되지 않는다.
+- 브랜치 정리는 2단계 승인에 포함된 해당 PR의 식별된 로컬·원격 작업 브랜치만 대상으로 한다. main 병합 및 병합 후 CI 성공, 최신 main에 tip 포함, 미병합·로컬 전용 commit 없음, 미커밋 변경 없음, 다른 worktree·진행 작업 의존 없음, 사용자 보존 지시 없음과 삭제 대상 일치를 모두 확인한다. 충족하지 못하면 삭제하지 않고 보류 이유를 보고한다. 강제 삭제나 저장소 전체 자동 삭제 설정을 사용하지 않으며 로컬·원격 결과를 구분한다. 기존 미병합 브랜치는 별도 승인 없이 정리하지 않는다.
 - `git reset --hard`, `git clean -fd`, `git checkout .`, `git checkout -- .`, `git restore .`를 임의로 사용하지 않는다.
 - `.kotlin/`, `build/`, `.gradle/`, `.idea/` 등 로컬 빌드·IDE 산출물을 임의 수동 편집·정리·삭제·stage·commit하지 않는다. 승인된 검증에서 발생하는 정상 산출물 생성은 5절로 판단한다.
 - commit을 분리했다면 staged 내용과 전체 작업트리를 대조해 필요한 파일이 빠지지 않았는지 확인한다.
@@ -337,7 +340,7 @@ QA가 필요하면 대상 build/commit, 준비 조건·조작 순서, 기대 결
 - 조사 완료
 - 구현 + 자동 검증 완료
 - 실기기 검증 완료
-- commit / push 완료
+- 최종 commit 전 작성 시점의 Git 상태 확정(정상 commit·push·CI 성공만으로 재갱신하지 않음)
 - 중요한 제품 판단 확정
 - 다음 독립 작업 진입 직전
 
@@ -366,12 +369,13 @@ QA가 필요하면 대상 build/commit, 준비 조건·조작 순서, 기대 결
 → 테스트 변화가 있을 때 TEST-COVERAGE-MAP 갱신
 → repository HANDOFF 갱신
 → 전체 diff 확인
-→ 명시적으로 승인된 commit / push
-→ push했다면 CI 확인
+→ 1단계 승인 범위의 명시적 stage·commit / push
+→ PR·필수 CI 확인·최종 검토 보고
+→ 2단계 병합 승인 시 Merge commit·main CI·안전한 동기화·조건부 브랜치 정리
 → 최종 완료보고
 ```
 
-commit 또는 push 승인이 없으면 repository HANDOFF까지 갱신하고 Git 마감이 대기 중임을 보고한다. push·CI에서 예상 밖 실패, 범위 변화, 새 위험이 생기면 최종 완료보고 전에 HANDOFF의 현재 위험과 재개 조건을 보정한다. 단순 성공 결과를 기록하려고 끝없는 docs-only commit 순환을 만들지는 않는다.
+HANDOFF는 가능한 한 작업 브랜치의 최종 commit 전에 작성해 같은 PR에 포함한다. 구현·검증·QA·기술/제품 결정·미해결 위험·데이터/Room/보호 파일·재개 조건과 작성 시점의 Git 상태를 기록한다. 1단계 승인이 없거나 Git 단계가 제외됐다면 대기 상태를 보고한다. PR 번호·최종 SHA·병합·main CI·동기화·브랜치 정리의 최종 결과는 대화상 완료보고에 남기며, 정상 성공 기록만을 위한 추가 HANDOFF commit·문서 PR을 만들지 않는다. 병합 전 실패는 승인 범위에서 필요한 위험·재개 조건만 보정하고, 병합 후 실패·새 위험은 먼저 보고하고 필요한 지속 기록은 승인된 후속 작업에서 처리한다. 이 구분은 1·2절의 HANDOFF 최신화 의무에도 적용한다.
 
 `HANDOFF.md`를 코드 상태의 절대 진실 소스로 취급하지 않는다. 실제 코드 상태는 항상 Git이 기준이다. 에이전트별 세션 관리 조건은 해당 전용 문서를 따른다.
 

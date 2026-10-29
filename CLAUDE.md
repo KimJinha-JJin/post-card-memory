@@ -40,7 +40,7 @@ Claude Code가 사용자에게 직접 답할 때는 `AGENTS.md` 8절의 공통 �
 미검증·위험·STOP과 재개 조건:
 변경 파일과 이유:
 repository HANDOFF 상태:
-Git 상태: (commit·push 별도)
+Git 상태: (commit·push·PR·PR CI·main 병합·main CI·동기화·로컬/원격 브랜치 정리 별도)
 다음 행동:
 ```
 
@@ -52,6 +52,10 @@ Git 상태: (commit·push 별도)
 - 사용자가 상세 보고를 요청한 경우
 
 작업 규모에 비해 불필요하게 긴 보고 양식을 강제하지 않는다.
+
+## Git 반영과 기록
+
+Git 반영은 `AGENTS.md` 9절의 2단계 승인 범위를 따른다. 1단계에서 승인된 작업 브랜치 commit·push·PR·필수 CI를 단계마다 재승인받지 않고, 실제 main 병합과 조건부 브랜치 정리는 2단계 승인 후에만 수행한다. HANDOFF와 최종 보고의 역할은 11절을 따른다.
 
 ## 실기기 QA 질문
 
