@@ -22,6 +22,7 @@ import com.postcardmemory.ui.components.withBackMessage
 import com.postcardmemory.ui.components.writingOffsetMinutes
 import com.postcardmemory.ui.components.BACK_RECIPIENT_MODIFIER_MAX_LENGTH
 import com.postcardmemory.utils.ConfirmedEditStateStorage
+import com.postcardmemory.utils.ConfirmedStickerBackgroundCleanup
 import com.postcardmemory.utils.DecorationStateFile
 import com.postcardmemory.utils.DoodleStroke
 import com.postcardmemory.utils.MaskingTapePhotoStorage
@@ -477,6 +478,18 @@ class DetailViewModel @Inject constructor(
     private val draftSaveMutex = Mutex()
     private var draftAutosaveJob: Job? = null
 
+    // 119일차: 꾸미기 내용이 바뀔 때마다 오르는 편집 세대와, 그 세대가 초안 저장·완료
+    // 저장으로 디스크에 반영된 마지막 값(hasUnpersistedDraftEdits 참고). 이탈 flush는
+    // exitSaveScope(Dispatchers.Default)에서도 돌므로 Atomic으로 둔다.
+    private val draftEditGeneration = AtomicLong(0L)
+    private val draftPersistedGeneration = AtomicLong(0L)
+
+    // 119일차: 초안 자동저장이 draft_sticker_bgs/로 옮겨 적어 화면이 더 이상 가리키지 않게 된
+    // cache/photo_stickers/ 누끼. undo/redo가 아직 가리킬 수 있어 그때는 지우지 않고,
+    // 완료 저장 성공 시 정리 후보(stickerCleanupCandidates)로 넘겨 기존 참조 확인을 거쳐 지운다.
+    private val promotedStickerCacheSources =
+        java.util.concurrent.ConcurrentHashMap.newKeySet<Uri>()
+
     /** "원래대로"를 눌렀을 때 되돌아갈 확정 저장 상태(임시저장 적용 직전 스냅샷). */
     private var confirmedStickersBaseline: List<PhotoStickerItem> = emptyList()
     private var confirmedSealsBaseline: List<PostcardSealItem> = emptyList()
@@ -505,6 +518,8 @@ class DetailViewModel @Inject constructor(
         draftAutosaveJob?.cancel()
         draftRevisionCounter.set(0L)
         latestPersistedDraftRevision = 0L
+        draftEditGeneration.set(0L)
+        draftPersistedGeneration.set(0L)
         _draftSaveStatus.value = DraftSaveStatus.Idle
         confirmedStickersBaseline = emptyList()
         confirmedSealsBaseline = emptyList()
@@ -651,6 +666,8 @@ class DetailViewModel @Inject constructor(
         }
 
         draftAutosaveJob?.cancel()
+        // 확정 상태로 되돌리고 초안을 지우므로 디스크에 반영되지 않은 편집은 없다.
+        draftPersistedGeneration.set(draftEditGeneration.get())
 
         _photoStickers.value = confirmedStickersBaseline
         _selectedStickerId.value = null
@@ -689,6 +706,7 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        draftEditGeneration.incrementAndGet()
         _draftSaveStatus.value = DraftSaveStatus.PendingChanges
 
         draftAutosaveJob?.cancel()
@@ -698,9 +716,21 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    /** 디바운스를 건너뛰고 즉시 flush한다. 화면 이탈·백그라운드 전환 시 사용한다. */
+    /**
+     * 디바운스를 건너뛰고 즉시 flush한다. 화면 이탈·백그라운드 전환 시 사용한다.
+     * 마지막 초안 저장·완료 저장 뒤 편집이 없으면 아무것도 쓰지 않는다(119일차).
+     */
     fun flushDraftNow() {
         if (currentDraftPostcardId <= 0L) {
+            return
+        }
+
+        if (
+            !hasUnpersistedDraftEdits(
+                editGeneration = draftEditGeneration.get(),
+                persistedGeneration = draftPersistedGeneration.get()
+            )
+        ) {
             return
         }
 
@@ -751,6 +781,28 @@ class DetailViewModel @Inject constructor(
         return promoted
     }
 
+    /**
+     * 119일차: 초안 승격으로 화면 상태가 draft_sticker_bgs/ 사본을 가리키게 되면, 그 전의
+     * cache/photo_stickers/ 누끼는 화면에서 빠진다. 다만 undo/redo가 아직 가리킬 수 있어
+     * 여기서는 기억만 하고, 완료 저장 성공 시 정리 후보로 넘긴다(saveEditsAndClearDraft).
+     */
+    private fun rememberPromotedStickerCacheSources(
+        before: List<PhotoStickerItem>,
+        after: List<PhotoStickerItem>
+    ) {
+        val stickerCacheDir =
+            File(context.cacheDir, "photo_stickers").canonicalFile
+
+        before.zip(after).forEach { (previous, promoted) ->
+            val source = previous.removedBgUri ?: return@forEach
+            if (source == promoted.removedBgUri) return@forEach
+            val sourceFile = uriToLocalStickerFile(source) ?: return@forEach
+            if (isInsideDirectory(stickerCacheDir, sourceFile.canonicalFile)) {
+                promotedStickerCacheSources.add(source)
+            }
+        }
+    }
+
     private suspend fun persistDraftNow() {
         val postcardId = currentDraftPostcardId
         if (postcardId <= 0L) {
@@ -758,6 +810,7 @@ class DetailViewModel @Inject constructor(
         }
 
         val candidateRevision = draftRevisionCounter.incrementAndGet()
+        val snapshotEditGeneration = draftEditGeneration.get()
         val snapshotStickers = _photoStickers.value
         val snapshotSelectedStickerId = _selectedStickerId.value
         val snapshotSeals = _photoSeals.value
@@ -826,12 +879,21 @@ class DetailViewModel @Inject constructor(
         // 되돌아온 결과가 그 편집을 덮어쓰지 않도록 건너뛴다 — 다음 자동저장
         // 사이클이 최신 상태로 다시 승격을 시도한다.
         val promoted = promotedStickers
+        if (promoted != null) {
+            // 실제로 초안 파일을 쓴 경우에만(오래된 revision이라 건너뛴 경우 제외) 이 스냅샷의
+            // 편집 세대를 디스크에 반영된 것으로 본다.
+            draftPersistedGeneration.accumulateAndGet(snapshotEditGeneration, ::maxOf)
+        }
         if (
             success &&
             promoted != null &&
             _photoStickers.value == snapshotStickers
         ) {
             _photoStickers.value = promoted
+            rememberPromotedStickerCacheSources(
+                before = snapshotStickers,
+                after = promoted
+            )
         }
 
         _draftSaveStatus.value =
@@ -856,8 +918,15 @@ class DetailViewModel @Inject constructor(
 
         draftAutosaveJob?.cancel()
         _confirmSaveState.value = ConfirmSaveState.Saving
+        val confirmEditGeneration = draftEditGeneration.get()
 
         confirmSaveJob = viewModelScope.launch(Dispatchers.IO) {
+            // 119일차: 이번 저장 직전의 확정 스티커 id. 저장 뒤 목록에서 빠진 id의 확정 누끼만
+            // 정리 대상이 된다(이 세션 이전부터 남아 있던 잔여 파일은 건드리지 않는다).
+            val previouslyConfirmedStickerIds =
+                ConfirmedStickerBackgroundCleanup.readStickerIds(
+                    DecorationStateFile.PHOTO_STICKER.file(context.filesDir, postcardId)
+                )
             val stickersSaved = persistStickerEditState(postcardId)
             val sealsSaved = persistSealEditState(postcardId)
             val doodlesSaved = persistDoodleEditState(postcardId)
@@ -894,6 +963,22 @@ class DetailViewModel @Inject constructor(
                 // 하나라도 빠지면 그 요소만 확정 저장 후에도 이전 상태로 undo돼
                 // 저장된 결과와 화면이 어긋난다.
                 if (allSaved) {
+                    // 119일차: 방금 저장한 상태가 새 확정 상태다. "원래대로"가 이보다 오래된
+                    // 상태(그 사이 정리된 누끼를 가리킬 수 있음)로 돌아가지 않게 기준선을 옮긴다.
+                    confirmedStickersBaseline = _photoStickers.value
+                    confirmedSealsBaseline = _photoSeals.value
+                    confirmedDoodlesBaseline = _doodleStrokes.value
+                    confirmedTextStickersBaseline = _textStickers.value
+                    confirmedMaskingTapesBaseline = _photoMaskingTapes.value
+                    confirmedLabelStickersBaseline = _labelStickers.value
+                    draftPersistedGeneration.accumulateAndGet(confirmEditGeneration, ::maxOf)
+
+                    // 초안 폴더로 옮겨 적은 캐시 누끼를 정리 후보로 넘긴다. 바로 아래 스티커
+                    // 이력 정리의 sweep이 지금 상태·undo/redo 어디에서도 참조하지 않을 때만 지운다.
+                    val promotedCacheSources = promotedStickerCacheSources.toList()
+                    promotedStickerCacheSources.removeAll(promotedCacheSources.toSet())
+                    stickerCleanupCandidates.addAll(promotedCacheSources)
+
                     clearStickerHistory()
                     clearSealHistory()
                     clearDoodleHistory()
@@ -908,6 +993,28 @@ class DetailViewModel @Inject constructor(
                     } else {
                         ConfirmSaveState.Failed
                     }
+            }
+
+            // 119일차: 확정 상태 파일 쓰기를 포함한 여섯 종 저장이 모두 성공하고 초안·undo/redo가
+            // 비워진 뒤에만, 이번 저장에서 목록에서 빠진 스티커의 확정 누끼를 지운다. 지금 화면
+            // 상태·"원래대로" 기준선·undo/redo가 가리키는 id는 남긴다. 이전 확정 목록을 읽지
+            // 못했으면 아무것도 지우지 않는다.
+            if (allSaved && previouslyConfirmedStickerIds != null) {
+                val keepStickerIds =
+                    withContext(Dispatchers.Main) {
+                        (
+                            _photoStickers.value +
+                                confirmedStickersBaseline +
+                                stickerUndoStack.flatMap { it.stickers } +
+                                stickerRedoStack.flatMap { it.stickers }
+                            ).map { it.id }.toSet()
+                    }
+                ConfirmedStickerBackgroundCleanup.deleteDroppedBackgrounds(
+                    directory = PostcardAssetDirectory.CONFIRMED_STICKER_BACKGROUNDS
+                        .directory(context.filesDir, postcardId),
+                    previousStickerIds = previouslyConfirmedStickerIds,
+                    keepStickerIds = keepStickerIds
+                )
             }
         }
     }
