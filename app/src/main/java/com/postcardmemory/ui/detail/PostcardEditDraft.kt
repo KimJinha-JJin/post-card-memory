@@ -38,6 +38,16 @@ internal fun shouldPersistDraftRevision(
     latestPersistedRevision: Long
 ): Boolean = candidateRevision >= latestPersistedRevision
 
+/**
+ * 119일차: 마지막으로 초안 저장이나 완료 저장으로 디스크에 반영된 뒤 꾸미기 편집이
+ * 있었는지 판정한다. 없으면 화면 이탈(ON_STOP) flush가 초안을 다시 쓰지 않는다 —
+ * 그렇지 않으면 완료 저장 직후 나가기만 해도 확정 상태와 같은 초안이 다시 생긴다.
+ */
+internal fun hasUnpersistedDraftEdits(
+    editGeneration: Long,
+    persistedGeneration: Long
+): Boolean = editGeneration > persistedGeneration
+
 fun PostcardEditDraft.serialize(): String {
     val metaLine = listOf(
         draftFormatVersion.toString(),
