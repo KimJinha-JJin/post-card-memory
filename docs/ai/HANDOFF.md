@@ -1,3 +1,56 @@
+# HANDOFF — 120일차 후속: CI 정책 2.0(중복 빌드 생략·필수 체크 유지) / main 병합 미승인
+
+2026-11-01, 담당 Claude Code(피코), 수동 표준 모드(읽기 전용 CI 조사 → 권장 변경안 구현 승인). 내장 Task 도구가 없어 진행 안내로 대신했어. 작성 시점은 최종 commit 전이야. PR 번호·최종 SHA·CI 결과는 완료보고로 확인해.
+
+- **작성 시점 Git:** `chore/ci-verification-policy-v2`(기준 `main` = `origin/main` = `8b68ec8`). 1단계(브랜치·구현·검증·commit·push·PR·필수 CI)는 승인됐고, **main 병합·브랜치 정리는 미승인**이야.
+- **120일차 PR #9 현황 보정:** 아래 120일차 절의 "실기기 QA 대기"는 이후 해소됐어. 테스트 전용 엽서 31로 실기기 QA를 통과했고(기록: PR #9 댓글), Merge commit `8b68ec8`로 병합됐어. main CI run 41306784679는 전체 빌드로 성공했고, 작업 브랜치는 로컬·원격 모두 삭제했어. 테스트 엽서 31은 남겨 둔 상태고, 정리하려면 별도 승인이 필요해.
+- **확인된 문제(읽기 전용 조사):**
+  - 최근 PR 3건(#7·#8·#9)에서 PR CI와 병합 후 main CI가 같은 파일 상태를 두 번 전체 빌드했어. PR #9은 head tree = 병합 tree = `f1b4e62…`로 확인했어.
+  - 문서만 바꾼 병합(`e10d853`, `3d1829c`)도 전체 빌드를 했어.
+  - PR CI는 캐시를 읽기만 하고(`cache-read-only: true`) main push만 Gradle 캐시를 저장해서, main CI를 없앨 수는 없어.
+- **구현:**
+  - `.github/scripts/ci-verification-scope.sh`(새 파일)가 첫 단계에서 검증 범위를 판정해. 결과는 `full`·`docs-only`·`verified-merge`·`manual` 중 하나고, 판정 실패·불확실은 전체 검증이야(fail-closed).
+  - `docs-only`: 바뀐 파일이 `README.md`·`AGENTS.md`·`CLAUDE.md`·`docs/**/*.md`뿐일 때만이야. 이름 변경은 옛 경로까지 보고, docs의 HTML·PNG는 해당하지 않아.
+  - `verified-merge`(main push만 해당): 아래가 모두 확인될 때만이야.
+    - 부모가 2개인 병합 commit이고, 첫 부모가 `event.before`야.
+    - 병합 tree가 PR head tree와 같아.
+    - 빌드·CI 설정 파일(`*.gradle*`, `gradle.properties`, `gradle/`, `.github/`)이 바뀌지 않았어.
+    - PR head가 병합 직전 main을 포함해(compare `behind_by=0`).
+    - `merge_commit_sha`·head·base로 PR을 하나로 특정할 수 있어.
+    - head의 최신 `build-and-test`(github-actions)가 하나뿐이고 success야.
+    - 그 job에서 빌드 3단계가 모두 success야(건너뛴 단계는 통과로 보지 않아).
+    - 그 run이 `pull_request` 이벤트이고, 같은 head·같은 워크플로 경로야.
+    - main에 Gradle 캐시가 있어.
+  - `android-ci.yml` 변경:
+    - `workflow_dispatch`를 추가했어(항상 전체 검증).
+    - `concurrency`는 PR 번호로 묶어 이전 실행만 취소해. main push와 수동 실행은 run마다 고유 그룹이라 취소되지 않아.
+    - 읽기 전용 `permissions`(contents·pull-requests·checks·actions: read)를 명시했어. 쓰기 권한은 없어.
+    - checkout을 `fetch-depth: 2`로 바꿨어.
+    - 빌드를 생략할 때는 JDK·SDK·Gradle 설정·빌드 단계를 모두 건너뛰어 캐시를 건드리지 않아.
+    - job 이름 `build-and-test`와 step 이름은 그대로야. `paths`/`paths-ignore`는 쓰지 않았어.
+  - 문서: `AGENTS.md` 8절(CI 실행 조건, 문서 전용 행)과 9절(병합 후 main CI 보고 시 빌드 생략 판정 구분), `README.md` CI 행을 고쳤어.
+- **검증:**
+  - 로컬(scratchpad 임시 clone의 가상 병합) PR 판정 15사례가 모두 기대와 일치했어.
+    - 전체 검증: Kotlin·테스트·혼합·Gradle kts·versions toml·CI YAML·`.gitattributes`·PNG·docs HTML·kt→md 이름 변경·빈 diff·병합 아님·잘못된 SHA
+    - 생략: README만, docs/AGENTS/CLAUDE md만
+  - 실제 이력과 GitHub API로 push 판정을 확인했어.
+    - PR #9(`8b68ec8`)·PR #8(`a730159`) → `verified-merge`
+    - PR #7(`fb0c6be`, YAML 변경)·`9e15ed7` → 설정 변경으로 전체 검증
+    - PR #6(`32d8744`) → head의 `build-and-test`가 2개(브랜치 push+PR)라 불확실로 보고 전체 검증
+    - `e10d853` → `docs-only`
+    - 그 밖에 전체 검증으로 떨어진 경우: `before` 불일치, API 실패, 병합 아님, 기본 브랜치 아님, 워크플로 경로 불일치, tree 불일치(가상), 알 수 없는 이벤트
+    - 수동 실행 → `manual`
+  - jq step 필터는 필요한 단계가 하나라도 없으면 거부하는 것까지 확인했어.
+  - `bash -n` 통과. 로컬 YAML 파서가 없어서 워크플로 문법은 PR CI로 확인해.
+  - 앱 코드 변경이 없어 로컬 Gradle은 돌리지 않았어. Room 19·SAFE 등급·TEST-COVERAGE-MAP은 변경 없어.
+- **미검증·위험:**
+  - 실제 GitHub에서 문서 전용 PR의 빌드 생략, 같은 PR 재push 시 취소, main `verified-merge` 생략은 아직 실행되지 않았어. main 생략은 이 PR 병합 뒤에도 바로 확인할 수 없어. 이 PR은 `.github/`를 바꾸므로 병합 후 main도 전체 빌드가 정상이야.
+  - main 캐시가 있는지는 키 접두어(`setup-java-Linux-x64-gradle-`)로만 봐. 빌드 파일이 안 바뀐 상태에서 현재 키만 만료되고 예전 키가 남으면 생략될 수 있어. 그때는 수동 실행으로 캐시를 다시 채우면 돼.
+  - 판정이 GitHub API에 의존하므로, API 장애 때는 생략 없이 전체 빌드해(안전 쪽).
+- **다음 후보(승인 아님):** 병합 승인 시 main CI가 전체 빌드인지 확인, 다음 일반 PR 병합 때 `verified-merge` 동작 실측, 121일차 데이터 보존·무결성 정책 점검.
+
+---
+
 # HANDOFF — 120일차: 확정 사진 스티커 파일 보호 · D 진단 정확도 개선 · PR 검증 / main 병합 미승인
 
 2026-11-01, 담당 Claude Code(피코), 수동 표준 모드(1~4차 읽기 전용 조사 → 5차 구현 승인). 내장 Task 도구가 없어 진행 안내로 대신했어. 작성 시점은 최종 commit 전이야. PR 번호·최종 SHA·CI 결과는 완료보고로 확인해.

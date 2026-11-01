@@ -5,16 +5,47 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+
+# 같은 PR의 이전 실행만 취소한다. main push·수동 실행은 run마다 고유 그룹이라 서로 취소되지 않는다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# 검증 범위 판정(gh api)에 필요한 읽기 권한만 둔다.
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  actions: read
 
 jobs:
+  # 필수 체크 이름. job은 항상 실행되고, 범위 판정에 따라 빌드 단계만 생략될 수 있다.
   build-and-test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+        with:
+          # 판정에 대상 commit과 부모 commit이 필요하다(PR은 기준 main·PR head, main push는 직전 main·PR head).
+          fetch-depth: 2
 
+      - name: Decide verification scope
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF_NAME: ${{ github.ref_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          WORKFLOW_PATH: .github/workflows/android-ci.yml
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/ci-verification-scope.sh
+
+      # 아래 단계는 판정이 명시적으로 full=false일 때만 생략된다(출력이 없으면 전체 검증).
       - name: Set up JDK 17
+        if: steps.scope.outputs.full != 'false'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -22,23 +53,29 @@ jobs:
           check-latest: true
 
       - name: Verify Android SDK platform/build-tools already present
+        if: steps.scope.outputs.full != 'false'
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           ls "$ANDROID_HOME/platforms"
           ls "$ANDROID_HOME/build-tools"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
 
+      # 빌드를 생략하는 실행에서는 Gradle 캐시를 건드리지 않도록 설정 단계도 함께 생략한다.
       - name: Set up Gradle
+        if: steps.scope.outputs.full != 'false'
         uses: gradle/actions/setup-gradle@v6.4.0
         with:
           gradle-version: "9.8.2"
           cache-provider: basic
 
       - name: Run JVM unit tests
+        if: steps.scope.outputs.full != 'false'
         run: gradle testDebugUnitTest --console=plain
 
       - name: Assemble debug APK
+        if: steps.scope.outputs.full != 'false'
         run: gradle assembleDebug --console=plain
 
       - name: Compile instrumentation tests (assembleDebugAndroidTest)
+        if: steps.scope.outputs.full != 'false'
         run: gradle assembleDebugAndroidTest --console=plain
