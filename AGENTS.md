@@ -246,7 +246,7 @@ STOP은 현재 승인에 포함되지 않은 새로운 위험·범위·제품 �
 - 테스트 실패는 최소한 `test infrastructure`, `device / OS environment`, `fixture`, `timing / race`, `DB / migration`, `assertion`, `production`으로 분류한 뒤 수정 대상을 정한다. stack trace의 발생 위치와 timeout 값, production 코드의 timeout 값을 대조해 테스트 자체가 본문이나 assertion에 진입했는지도 확인한다.
 - Compose BOM·Compose UI test·`androidx.test`·Espresso처럼 함께 동작하는 테스트 dependency 일부를 변경할 때는 현재 해석된 dependency, 최신 안정 버전, 대상 OS/API 호환성, 실제 resolved classpath를 함께 확인한다. 특정 버전 숫자를 영구 규칙으로 고정하지 않는다.
 - 실제 Room 동작을 유지하면서 특정 DAO 실패만 재현해야 하면 `Room.inMemoryDatabaseBuilder`와 `object : Dao by realDao { override ... throw ... }` 위임 패턴을 권장 후보로 검토한다. 모든 테스트에 강제하거나 production 구조를 테스트 편의 때문에 바꾸지 않는다.
-- 승인된 Git 단계에서 CI가 실행되면 현재 `.github/workflows/android-ci.yml`의 실제 step과 해당 revision의 결과를 확인한다. CI는 PR과 `main` push에서 실행하고 작업 브랜치 push에는 별도 실행하지 않는다. 현재 workflow는 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 실행하며 instrumentation을 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.
+- 승인된 Git 단계에서 CI가 실행되면 현재 `.github/workflows/android-ci.yml`의 실제 step과 해당 revision의 결과를 확인한다. CI는 PR과 `main` push, 수동 실행(`workflow_dispatch`)에서 실행하고 작업 브랜치 push에는 별도 실행하지 않는다. 필수 `build-and-test` job은 항상 실행되고, 첫 단계의 범위 판정(`.github/scripts/ci-verification-scope.sh`)이 명시적으로 생략을 결정한 경우에만 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 건너뛴다. 생략은 ① 빌드에 참여하지 않는 Markdown(`README.md`·`AGENTS.md`·`CLAUDE.md`·`docs/**/*.md`)만 바뀐 경우(`docs-only`), ② main 병합 commit의 파일 상태가 이미 전체 빌드에 성공한 PR head와 같고 PR·체크·job·run 연결과 main Gradle 캐시 존재가 모두 확인되며 빌드·CI 설정 변경이 없는 경우(`verified-merge`)뿐이다. 판정 실패·불확실은 전체 검증이며, 수동 실행은 항상 전체 검증이다. 같은 PR의 이전 실행은 새 push에서 취소되고 main push·수동 실행은 취소되지 않는다. 워크플로 전체를 건너뛰는 `paths`/`paths-ignore`는 필수 체크를 Pending으로 남기므로 쓰지 않는다. instrumentation은 컴파일만 하며 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.
 - 자동 테스트 결과와 사용자의 실기기 결과를 분리한다.
 - 자동 테스트 통과를 실기기 만족이나 버그가 전혀 없다는 뜻으로 과장하지 않는다.
 - commit 분리나 임시 편집을 수행했다면 최종 diff와 기존 검증 근거의 대상·범위·환경이 최종 상태에도 유효한지 확인한다. 확인은 무조건 재실행을 뜻하지 않는다. 결과를 무효화하는 변경·환경 차이·실패가 있을 때 영향받은 검증만 다시 수행한다.
@@ -258,7 +258,7 @@ STOP은 현재 승인에 포함되지 않은 새로운 위험·범위·제품 �
 | 변경 유형 | 기본 검증 | CI 원칙 |
 |---|---|---|
 | 읽기 전용 조사 | 기존 파일·결과 조회만 수행; 테스트·빌드 실행 불필요 | 새 실행·재실행 금지; 기존 결과 조회만 가능 |
-| 일반 문서 전용 | 형식·참조·내용 일관성 및 `git diff --check` | 무거운 CI를 검증 목적으로 추가 실행하지 않음 |
+| 일반 문서 전용 | 형식·참조·내용 일관성 및 `git diff --check` | 무거운 CI를 검증 목적으로 추가 실행하지 않음; 자동 CI는 `docs-only`로 빌드 단계 생략 |
 | 코드 변경 | 영향 범위 테스트, 필요한 전체 회귀 검증과 빌드 | 중간 로컬 테스트 허용; 최종 검증 중심 |
 | 이미지 자산 변경 | 자산 규격·사용처·빌드 영향 확인 | 실제 영향에 맞는 검증 선택 |
 | 빌드·CI 설정 변경 | 설정 유효성·실행 조건·필수 검사 영향 확인 | 별도 위험 검토; 불명확하면 설정 변경 STOP |
@@ -310,7 +310,7 @@ QA가 필요하면 대상 build/commit, 준비 조건·조작 순서, 기대 결
 - 필요한 사용자 QA가 남아 있으면 commit하거나 push하지 않는다. 8절 기준으로 실기기 불필요인 작업까지 기기 확인을 요구하지 않는다. QA 승인은 Git 승인을 대신하지 않는다.
 - **1단계 — 작업 범위 승인:** 사용자가 목적·수정 범위를 승인하면 최신 main 기준 목적별 작업 브랜치 생성, 범위 내 수정·검증, 명시적 stage·commit, 작업 브랜치 push, PR 생성·갱신·필수 CI 확인과 범위 내 실패의 최소 보정까지 연속 수행할 수 있다. 읽기 전용 조사·기능 논의·다음 후보는 이 승인이 아니다. 사용자가 commit/push 등 일부를 제외하거나 별도 관문을 지정하면 그 제한이 우선하며, 필요한 QA 완료 조건도 유지한다.
 - 하나의 독립 목적에는 하나의 작업 브랜치와 하나의 최종 PR을 기본으로 한다. 같은 목적은 여러 날 이어가고 필요한 commit을 추가할 수 있다. strict 검사 충족을 위한 최신 main의 충돌 없는 병합은 1단계 범위에서 가능하되, 실제 충돌·사용자 변경 겹침은 관련 작업을 STOP한다. rebase/reset으로 우회하지 않는다.
-- **2단계 — 최종 병합 승인:** 사용자가 최종 PR·전체 head SHA·확인한 base SHA와 CI를 검토하고 명시 승인한 경우만 main에 Merge commit으로 병합한다. 승인에는 병합 후 main CI 확인, 안전한 fast-forward 동기화, 아래 조건의 해당 작업 브랜치 정리를 포함한다. head 또는 검토한 base가 바뀌면 다시 검증·보고하고 병합 승인을 갱신한다. 같은 SHA의 필요한 CI 재검증만으로 동일 승인을 반복 요구하지 않는다.
+- **2단계 — 최종 병합 승인:** 사용자가 최종 PR·전체 head SHA·확인한 base SHA와 CI를 검토하고 명시 승인한 경우만 main에 Merge commit으로 병합한다. 승인에는 병합 후 main CI 확인(전체 빌드가 실제 실행된 성공과 `docs-only`·`verified-merge` 판정으로 빌드를 생략한 성공을 구분해 보고), 안전한 fast-forward 동기화, 아래 조건의 해당 작업 브랜치 정리를 포함한다. head 또는 검토한 base가 바뀌면 다시 검증·보고하고 병합 승인을 갱신한다. 같은 SHA의 필요한 CI 재검증만으로 동일 승인을 반복 요구하지 않는다.
 - `Protect main` Ruleset, strict 최신 main 조건과 필수 `build-and-test`를 준수한다. main 직접 push·force push·무단 이력 재작성·squash/rebase 병합·관리자 우회·자동 병합은 하지 않는다. rebase/reset은 이 표준 흐름의 권한에 포함되지 않는다.
 - 브랜치 정리는 2단계 승인에 포함된 해당 PR의 식별된 로컬·원격 작업 브랜치만 대상으로 한다. main 병합 및 병합 후 CI 성공, 최신 main에 tip 포함, 미병합·로컬 전용 commit 없음, 미커밋 변경 없음, 다른 worktree·진행 작업 의존 없음, 사용자 보존 지시 없음과 삭제 대상 일치를 모두 확인한다. 충족하지 못하면 삭제하지 않고 보류 이유를 보고한다. 강제 삭제나 저장소 전체 자동 삭제 설정을 사용하지 않으며 로컬·원격 결과를 구분한다. 기존 미병합 브랜치는 별도 승인 없이 정리하지 않는다.
 - `git reset --hard`, `git clean -fd`, `git checkout .`, `git checkout -- .`, `git restore .`를 임의로 사용하지 않는다.
