@@ -71,7 +71,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "DetailViewModel"
 private const val SEAL_HISTORY_LIMIT = 50
-private const val STICKER_HISTORY_LIMIT = 30
+internal const val STICKER_HISTORY_LIMIT = 30
 private const val DOODLE_HISTORY_LIMIT = 50
 private const val TEXT_STICKER_HISTORY_LIMIT = 50
 private const val MASKING_TAPE_HISTORY_LIMIT = 50
@@ -126,6 +126,26 @@ internal fun shouldConfirmSaveSucceed(
             textStickersSaved &&
             maskingTapesSaved &&
             labelStickersSaved
+
+/**
+ * 120일차: 사진 스티커 파일(누끼·원본) 하나를 아직 누가 쓰는지 판정한다. 지금 화면과
+ * undo/redo뿐 아니라 마지막 완료 저장 상태(확정 기준선)도 본다 — 확정 상태 파일은 다음 완료
+ * 저장이 성공하기 전까지 그 파일을 가리키므로, 화면에서 지우고 undo 기록(상한 30)에서 밀려났다는
+ * 이유로 지우면 "원래대로"나 초안 폐기 뒤 확정 스티커의 누끼·원본이 사라진다. 완료 저장이
+ * 성공하면 기준선이 새 상태로 옮겨 가므로 그때부터 정리된다.
+ *
+ * Uri 없이 순수 JUnit에서 검증하려고 스티커 타입과 파일 위치 추출을 인자로 받는다.
+ */
+internal fun <S, U> isStickerFileReferenced(
+    uri: U,
+    currentStickers: List<S>,
+    confirmedBaseline: List<S>,
+    historyStickers: List<S>,
+    fileUrisOf: (S) -> List<U?>
+): Boolean =
+    sequenceOf(currentStickers, confirmedBaseline, historyStickers)
+        .flatMap { it.asSequence() }
+        .any { sticker -> uri in fileUrisOf(sticker) }
 
 /** 이미 확정 저장이 진행 중이면 완료 버튼 연타로 새 저장을 또 시작하지 않는다. */
 internal fun canStartConfirmSave(
@@ -543,6 +563,11 @@ class DetailViewModel @Inject constructor(
             val confirmedMaskingTapes = readConfirmedMaskingTapeState(postcardId)
             val confirmedLabelStickers = readConfirmedLabelStickerState(postcardId)
 
+            // 120일차: 화면에 스티커를 올리기 전에 확정 기준선부터 채운다. 그래야 화면에 보인
+            // 확정 스티커를 지울 때 정리 판정(isStickerFileStillReferenced)이 늘 그 확정
+            // 상태를 함께 본다.
+            confirmedStickersBaseline = confirmedStickers
+
             withContext(Dispatchers.Main) {
                 _photoStickers.value = confirmedStickers
                 _selectedStickerId.value = null
@@ -557,7 +582,6 @@ class DetailViewModel @Inject constructor(
                 _selectedLabelStickerId.value = null
             }
 
-            confirmedStickersBaseline = confirmedStickers
             confirmedSealsBaseline = confirmedSeals
             confirmedDoodlesBaseline = confirmedDoodles
             confirmedTextStickersBaseline = confirmedTextStickers
@@ -2014,16 +2038,16 @@ class DetailViewModel @Inject constructor(
 
     private fun isStickerFileStillReferenced(
         uri: Uri
-    ): Boolean {
-        val allReachableStickers =
-            _photoStickers.value +
-                    stickerUndoStack.flatMap { it.stickers } +
-                    stickerRedoStack.flatMap { it.stickers }
-
-        return allReachableStickers.any {
-            it.originalUri == uri || it.removedBgUri == uri
-        }
-    }
+    ): Boolean =
+        isStickerFileReferenced(
+            uri = uri,
+            currentStickers = _photoStickers.value,
+            confirmedBaseline = confirmedStickersBaseline,
+            historyStickers =
+                stickerUndoStack.flatMap { it.stickers } +
+                    stickerRedoStack.flatMap { it.stickers },
+            fileUrisOf = { listOf(it.originalUri, it.removedBgUri) }
+        )
 
     private fun sweepStickerCleanupCandidates() {
         val stillPending =
@@ -2066,7 +2090,8 @@ class DetailViewModel @Inject constructor(
                         .deleteOriginalIfUnreferenced(
                             context = context,
                             deletedUri = uri,
-                            remainingStickers = _photoStickers.value
+                            remainingStickers =
+                                _photoStickers.value + confirmedStickersBaseline
                         )
                 }
             }
@@ -4149,9 +4174,11 @@ class DetailViewModel @Inject constructor(
             stickerCleanupCandidates.remove(uri)
         }
 
+        // 120일차: 확정 기준선도 남는 쪽에 넣는다(isStickerFileReferenced와 같은 이유).
         val reachableStickers =
             (
                 remainingStickers +
+                        confirmedStickersBaseline +
                         stickerUndoStack.flatMap { it.stickers } +
                         stickerRedoStack.flatMap { it.stickers }
                 ).distinctBy { it.id }

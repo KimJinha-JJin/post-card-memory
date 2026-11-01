@@ -1,3 +1,23 @@
+# HANDOFF — 120일차: 확정 사진 스티커 파일 보호 · D 진단 정확도 개선 · PR 검증 / main 병합 미승인
+
+2026-11-01, 담당 Claude Code(피코), 수동 표준 모드(1~4차 읽기 전용 조사 → 5차 구현 승인). 내장 Task 도구가 없어 진행 안내로 대신했어. 작성 시점은 최종 commit 전이야. PR 번호·최종 SHA·CI 결과는 완료보고로 확인해.
+
+- **작성 시점 Git:** `fix/sticker-confirmed-asset-safety`(기준 `main` = `origin/main` = `a730159`). 1단계(브랜치·구현·검증·commit·push·PR·필수 CI)는 승인됐고, **main 병합·브랜치 정리·실기기 접근·기존 사용자 파일 정리는 미승인**이야.
+- **확인된 원인(4차 조사):** 저장 전 정리 `sweepStickerCleanupCandidates`의 참조 판정 `isStickerFileStillReferenced`가 현재 화면 + undo/redo만 보고 확정 기준선은 안 봤어. 확정 엽서에서 스티커를 지우면 `onDeleteSticker`가 그 누끼(`sticker_bgs/<엽서>/<id>.png`)·원본 정리를 요청하고, undo 기록이 상한(30)을 넘어 밀려나면 완료 저장 전에도 지워질 수 있었어. 그 뒤 "원래대로"·초안 폐기 시 확정 스티커가 누끼를 잃거나 원본이 깨지는 경로(코드 확인, 실제 발생은 미확인). 119일차 B(`ConfirmedStickerBackgroundCleanup`)는 상태 파일 저장 뒤에만 돌아 이 경로와 무관해.
+- **구현:**
+  - A: 순수 판정 `isStickerFileReferenced`(현재·확정 기준선·이력)를 두고 `isStickerFileStillReferenced`가 쓰게 했어. 원본 정리(`deleteStickerOriginalIfUnreferenced`, `awaitStickerCleanupSweep`)도 기준선을 남는 쪽에 넣었어. 진입 시 스티커 기준선을 화면 상태보다 먼저 채워. 기준선은 기존대로 완료 저장 6종 성공 때만 옮겨 가므로 저장 성공 뒤 정리는 그대로 돼. `STICKER_HISTORY_LIMIT`는 테스트용으로 `internal`.
+  - C(D 진단): 앱 복원 규칙대로 배경제거 켜진 줄의 누끼 URI가 `~`·없는 파일·`content://`이면 id 누끼를 참조로 침. 다른 실제 파일을 가리키는 경우, 배경제거를 끈 경우, 상태·초안을 읽지 못한 경우는 `pending`(판정 보류)으로 따로 보고. 새 범주 `unreferencedStickerOriginal`. 여전히 앱 화면·삭제와 연결하지 않았어.
+- **검증:** 로컬 `testDebugUnitTest` 1041/1041(XML 114, 실패·오류·skip 0, 신규 17건 — TEST-COVERAGE-MAP 120일차 절), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과, Room schema 19 무변경. instrumentation·실기기 미실행.
+- **실기기 조사 결과(2~3차, 읽기 전용, 승인된 실사용 기기 SM-S936N):** 잔여 후보 24개(초안 7·초안 누끼 6·캐시 11)는 그대로 있고 합계 약 28.5MB(119일차 기록의 20.9MB는 캐시 11개 합계와 일치). 확정 상태 9파일의 누끼 URI는 모두 실제 파일을 가리켜 D 오탐 실제 사례 0건. 초안 7개 중 **엽서 16·19는 미저장 도장 2개씩 — 보존 대상**, 나머지 5개는 확정과 같음. 미참조 원본 8개(14,431,284 B). 엽서 16·19가 갤러리 어디인지는 기기에 `sqlite3`가 없고 앱 실행 중·WAL 미반영이라 Room 조회를 STOP해 **미확인**.
+- **미검증·위험:**
+  - 새 보호의 실제 화면 경로(삭제·undo 버튼, 30회 초과, "원래대로")와 실제 파일 보존은 실기기 QA 대기. B 실행 여부 단독 입증 방법(초안 승격 뒤 삭제→완료, `sticker_bgs` 목록 비교)은 4차에서 제안만 했어.
+  - 같은 세션에서 확정 스티커를 지우고 30회 넘게 편집한 뒤 저장하지 않고 나가면, 이제 그 원본은 지워지지 않고 남아(누끼는 다음 완료 저장 때 B가 정리, 원본은 B 대상 아님) — 손실 대신 잔여를 택한 의도적 보수 처리.
+  - 6종 저장은 원자적이지 않아 부분 실패 후 재시도하면 빠진 스티커의 확정 누끼가 B 대상에서 빠져 잔여로 남을 수 있어(손실 아님).
+- **안전 상태:** 저장 형식·경로·Room·Migration 무변경, 사용자 데이터 삭제·정리 없음. 보호 미추적 5묶음 미접촉·미stage, `docs/day-117-closeout` 보존.
+- **다음 후보(승인 아님):** 실기기 QA(테스트 전용 엽서로 확정 누끼·원본 보존 확인, `adb install -r` 별도 승인), 엽서 16·19 식별, 잔여 파일 정리 계획.
+
+---
+
 # HANDOFF — 119일차: 사진 스티커 저장 생애주기 안정화(D·A·B·C) · 실기기 QA 통과 / main 병합 미승인
 
 2026-10-30, 담당 Claude Code(피코), 수동 표준 모드(119일차 1차 읽기 전용 조사 → 2차 작업 계획 D→A→B→C 승인). 내장 Task 도구가 없어 진행 안내로 대신했어. 작성 시점은 최종 commit 전이야. PR 번호·최종 SHA·CI 결과는 완료보고로 확인해.
