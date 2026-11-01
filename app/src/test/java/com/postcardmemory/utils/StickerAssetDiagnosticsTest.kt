@@ -226,4 +226,157 @@ class StickerAssetDiagnosticsTest {
         assertEquals(DraftDiagnosis.UNREADABLE, entry.diagnosis)
         assertTrue(draft.exists())
     }
+
+    // ---- 120일차: 앱 복원 규칙(id로 대신 찾는 누끼)·판정 보류·원본 진단 ----
+
+    /** 누끼 칸과 배경제거 여부를 직접 정하는 상태 줄(옛 형식·손상 재현용). */
+    private fun rawStickerLine(
+        id: String,
+        original: String,
+        cutoutUri: String,
+        isBackgroundRemoved: Boolean
+    ): String =
+        listOf(
+            id, original, original, cutoutUri, isBackgroundRemoved.toString(),
+            "10.0", "20.0", "1.0", "0.0", "false", "false", "default", "0"
+        ).joinToString("\t")
+
+    private fun category(result: StickerAssetScanResult, type: String) =
+        result.categories.first { it.type == type }
+
+    @Test
+    fun confirmedBackground_withTildeOrUnreadableCutoutUri_isReferencedById() {
+        val filesDir = tempFolder.newFolder("files")
+        val cacheDir = tempFolder.newFolder("cache")
+        val original = uri(fileIn(filesDir, "sticker_originals/1/a.jpg"))
+        val byTilde = fileIn(filesDir, "sticker_bgs/1/tilde.png")
+        val byMissing = fileIn(filesDir, "sticker_bgs/1/missing.png")
+        val byContent = fileIn(filesDir, "sticker_bgs/1/content.png")
+        fileIn(
+            filesDir,
+            "sticker_states/1.txt",
+            listOf(
+                rawStickerLine("tilde", original, "~", isBackgroundRemoved = true),
+                rawStickerLine(
+                    "missing", original,
+                    uri(File(cacheDir, "photo_stickers/gone.png")), isBackgroundRemoved = true
+                ),
+                rawStickerLine("content", original, "content://media/x/1", isBackgroundRemoved = true)
+            ).joinToString("\n")
+        )
+
+        val result = scan(filesDir, cacheDir, setOf(1L))
+
+        assertTrue(category(result, "unreferencedConfirmedStickerBackground").orphans.isEmpty())
+        assertTrue(result.pending.isEmpty())
+        listOf(byTilde, byMissing, byContent).forEach { assertTrue(it.exists()) }
+    }
+
+    @Test
+    fun confirmedBackground_whenCutoutUriPointsToOtherExistingFile_isPending() {
+        val filesDir = tempFolder.newFolder("files")
+        val cacheDir = tempFolder.newFolder("cache")
+        val original = uri(fileIn(filesDir, "sticker_originals/1/a.jpg"))
+        val liveCache = fileIn(cacheDir, "photo_stickers/live.png")
+        val idBackground = fileIn(filesDir, "sticker_bgs/1/s1.png")
+        fileIn(
+            filesDir,
+            "sticker_states/1.txt",
+            rawStickerLine("s1", original, uri(liveCache), isBackgroundRemoved = true)
+        )
+
+        val result = scan(filesDir, cacheDir, setOf(1L))
+
+        assertTrue(category(result, "unreferencedConfirmedStickerBackground").orphans.isEmpty())
+        assertEquals(listOf(idBackground.path), result.pending.map { it.path })
+        assertTrue(category(result, "unreferencedStickerCache").orphans.isEmpty())
+        assertTrue(idBackground.exists())
+    }
+
+    @Test
+    fun confirmedBackground_ofBackgroundRemovalOff_isPendingNotOrphan() {
+        val filesDir = tempFolder.newFolder("files")
+        val cacheDir = tempFolder.newFolder("cache")
+        val original = uri(fileIn(filesDir, "sticker_originals/1/a.jpg"))
+        val oldBackground = fileIn(filesDir, "sticker_bgs/1/s1.png")
+        fileIn(
+            filesDir,
+            "sticker_states/1.txt",
+            rawStickerLine("s1", original, "~", isBackgroundRemoved = false)
+        )
+
+        val result = scan(filesDir, cacheDir, setOf(1L))
+
+        assertTrue(category(result, "unreferencedConfirmedStickerBackground").orphans.isEmpty())
+        assertEquals(listOf(oldBackground.path), result.pending.map { it.path })
+        assertTrue(oldBackground.exists())
+    }
+
+    @Test
+    fun unreadableOrMalformedConfirmedState_keepsFilesPending_everywhereItCouldMatter() {
+        val filesDir = tempFolder.newFolder("files")
+        val cacheDir = tempFolder.newFolder("cache")
+        // 엽서 1: 상태 파일을 읽을 수 없음(디렉터리). 엽서 2: 앱이 읽지 못하는 줄.
+        File(filesDir, "sticker_states/1.txt").mkdirs()
+        fileIn(filesDir, "sticker_states/2.txt", "broken\tline")
+        val background1 = fileIn(filesDir, "sticker_bgs/1/x.png")
+        val background2 = fileIn(filesDir, "sticker_bgs/2/y.png")
+        val original3 = fileIn(filesDir, "sticker_originals/3/z.jpg")
+        val cache = fileIn(cacheDir, "photo_stickers/removed_background_1.png")
+
+        val result = scan(filesDir, cacheDir, setOf(1L, 2L, 3L))
+
+        result.categories.forEach { assertTrue("${it.type}: ${it.orphans}", it.orphans.isEmpty()) }
+        assertEquals(
+            listOf(background1, background2, original3, cache).map { it.path }.sorted(),
+            result.pending.map { it.path }.sorted()
+        )
+        listOf(background1, background2, original3, cache).forEach { assertTrue(it.exists()) }
+    }
+
+    @Test
+    fun unreadableDraft_keepsDraftBackgroundsPending() {
+        val filesDir = tempFolder.newFolder("files")
+        val cacheDir = tempFolder.newFolder("cache")
+        fileIn(filesDir, "drafts/edit_state/1.draft.txt", "garbage")
+        val draftBackground = fileIn(filesDir, "draft_sticker_bgs/1/s1.png")
+
+        val result = scan(filesDir, cacheDir, setOf(1L))
+
+        assertTrue(category(result, "unreferencedDraftStickerBackground").orphans.isEmpty())
+        assertEquals(listOf(draftBackground.path), result.pending.map { it.path })
+        assertTrue(draftBackground.exists())
+    }
+
+    @Test
+    fun stickerOriginal_referencedOrShared_isKept_unreferencedIsReported_missingPostcardLeftToOrphan() {
+        val filesDir = tempFolder.newFolder("files")
+        val cacheDir = tempFolder.newFolder("cache")
+        val shared = fileIn(filesDir, "sticker_originals/1/shared.jpg")
+        val usedByDraft = fileIn(filesDir, "sticker_originals/2/draft.jpg")
+        val unreferenced = fileIn(filesDir, "sticker_originals/2/left.jpg", "left-bytes")
+        val ofMissingPostcard = fileIn(filesDir, "sticker_originals/999/gone.jpg")
+        fileIn(
+            filesDir,
+            "sticker_states/1.txt",
+            listOf(
+                stickerLine("a", shared, null),
+                stickerLine("b", shared, null),
+                rawStickerLine("c", "content://media/picker/0/x", "~", isBackgroundRemoved = false)
+            ).joinToString("\n")
+        )
+        fileIn(
+            filesDir,
+            "drafts/edit_state/2.draft.txt",
+            draftText(2L, listOf(stickerLine("d", usedByDraft, null)))
+        )
+
+        val result = scan(filesDir, cacheDir, setOf(1L, 2L))
+
+        val originals = category(result, "unreferencedStickerOriginal")
+        assertEquals(listOf(unreferenced.path), originals.orphans.map { it.path })
+        assertEquals(unreferenced.length(), originals.totalSizeBytes)
+        assertTrue(result.pending.isEmpty())
+        listOf(shared, usedByDraft, unreferenced, ofMissingPostcard).forEach { assertTrue(it.exists()) }
+    }
 }

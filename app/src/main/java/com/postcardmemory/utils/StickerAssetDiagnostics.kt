@@ -25,9 +25,20 @@ data class DraftDiagnosisEntry(
     val sizeBytes: Long
 )
 
+/**
+ * 120일차: 참조가 있다고도 없다고도 단정할 수 없어 잔여 후보에서 뺀 파일. 앱이 다시 쓸 수
+ * 있는 길이 남아 있거나(예: 배경제거를 다시 켬), 상태·초안을 읽지 못해 판단 근거가 없는 경우다.
+ */
+data class PendingStickerAsset(
+    val path: String,
+    val sizeBytes: Long,
+    val reason: String
+)
+
 data class StickerAssetScanResult(
     val categories: List<OrphanCategoryResult>,
     val drafts: List<DraftDiagnosisEntry>,
+    val pending: List<PendingStickerAsset>,
     val unclassified: List<String>
 )
 
@@ -44,6 +55,12 @@ data class StickerAssetScanResult(
  * 상태 파일과 초안은 Uri 없이 원문 그대로 읽는다(순수 JVM에서 검증하기 위함). 줄 형식은
  * PhotoStickerItem.serialize(탭 구분: 0 id, 1 원본, 2 표시, 3 누끼, 4 배경제거 여부, ...)와
  * PostcardEditDraft.serialize(머리 줄, 메타 줄, 요소 줄)를 따른다.
+ *
+ * 120일차: 확정 누끼는 경로뿐 아니라 앱 복원 규칙(DetailViewModel.restorePersistedStickerBackground
+ * ·persistStickerBackground)도 따른다 — 배경제거가 켜진 줄의 누끼 URI가 없거나(`~`), file://이
+ * 아니거나, 그 파일을 읽을 수 없으면 앱은 `sticker_bgs/<엽서>/<스티커id>.png`를 대신 쓰므로 참조로
+ * 친다. 다시 쓰일 길이 남은 파일과 상태·초안을 읽지 못한 엽서의 파일은 [PendingStickerAsset]으로
+ * 따로 보고한다. 살아 있는 엽서의 `sticker_originals/<엽서>/` 원본도 같은 기준으로 진단한다.
  */
 object StickerAssetDiagnostics {
 
@@ -65,6 +82,7 @@ object StickerAssetDiagnostics {
     private const val STICKER_DISPLAYED_URI = 2
     private const val STICKER_REMOVED_BG_URI = 3
     private const val STICKER_IS_BACKGROUND_REMOVED = 4
+    private const val STICKER_MIN_FIELD_COUNT = 8
 
     fun scan(
         context: Context,
@@ -82,25 +100,36 @@ object StickerAssetDiagnostics {
         existingPostcardIds: Set<Long>
     ): StickerAssetScanResult {
         val unclassified = mutableListOf<String>()
+        val pending = mutableListOf<PendingStickerAsset>()
         val confirmedStickerFile = DecorationStateFile.PHOTO_STICKER
 
         // 엽서별로 확정 상태와 초안이 가리키는 파일 경로를 모은다.
-        val confirmedReferences = mutableMapOf<Long, Set<String>>()
+        val confirmedStates = mutableMapOf<Long, ConfirmedStickerReferences>()
         val draftReferences = mutableMapOf<Long, Set<String>>()
+        // 상태나 초안을 읽지 못해 참조를 다 알 수 없는 엽서.
+        val unclearPostcardIds = mutableSetOf<Long>()
         val drafts = mutableListOf<DraftDiagnosisEntry>()
 
         for (postcardId in existingPostcardIds.sorted()) {
-            val confirmedLines =
-                readNonBlankLines(confirmedStickerFile.file(rootDirectory, postcardId))
-            confirmedReferences[postcardId] =
-                stickerFileReferences(confirmedLines.orEmpty())
+            val confirmed =
+                confirmedStickerReferences(
+                    lines = readNonBlankLines(confirmedStickerFile.file(rootDirectory, postcardId)),
+                    backgroundDirectory =
+                        PostcardAssetDirectory.CONFIRMED_STICKER_BACKGROUNDS
+                            .directory(rootDirectory, postcardId)
+                )
+            confirmedStates[postcardId] = confirmed
+            if (confirmed.unclear) unclearPostcardIds += postcardId
 
             val draftFile = PostcardDraftStorage.draftFile(rootDirectory, postcardId)
             if (!draftFile.isFile) continue
 
             val draftSections = readDraftSections(draftFile)
-            draftReferences[postcardId] =
-                stickerFileReferences(draftSections?.stickers.orEmpty())
+            val draftStickers = draftSections?.stickers.orEmpty().filter { it.isNotBlank() }
+            draftReferences[postcardId] = stickerFileReferences(draftStickers)
+            if (draftSections == null || draftStickers.any { !isRestorableStickerLine(it) }) {
+                unclearPostcardIds += postcardId
+            }
             drafts += DraftDiagnosisEntry(
                 postcardId = postcardId,
                 path = draftFile.path,
@@ -113,7 +142,14 @@ object StickerAssetDiagnostics {
         }
 
         val allReferences =
-            (confirmedReferences.values + draftReferences.values).flatten().toSet()
+            (
+                confirmedStates.values.flatMap { it.references } +
+                    draftReferences.values.flatten()
+                ).toSet()
+        val unclearPostcardReason = "이 엽서의 사진 스티커 상태나 초안을 읽지 못해 참조를 판정할 수 없음"
+        val unclearAnywhereReason =
+            unclearPostcardIds.takeIf { it.isNotEmpty() }
+                ?.let { ids -> "사진 스티커 상태나 초안을 읽지 못한 엽서가 있어 판정할 수 없음(엽서 ${ids.sorted()})" }
 
         val categories = listOf(
             scanPerPostcardFiles(
@@ -121,30 +157,119 @@ object StickerAssetDiagnostics {
                 directory = PostcardAssetDirectory.CONFIRMED_STICKER_BACKGROUNDS.root(rootDirectory),
                 existingPostcardIds = existingPostcardIds,
                 referencesFor = { id ->
-                    confirmedReferences[id].orEmpty() + draftReferences[id].orEmpty()
+                    confirmedStates[id]?.references.orEmpty() + draftReferences[id].orEmpty()
+                },
+                pendingReasonFor = { id, canonicalPath ->
+                    confirmedStates[id]?.pendingReasons?.get(canonicalPath)
+                        ?: unclearPostcardReason.takeIf { id in unclearPostcardIds }
                 },
                 unclassified = unclassified,
-                reason = "엽서는 있지만 확정 상태·초안의 사진 스티커가 가리키지 않는 확정 누끼"
+                pending = pending,
+                reason = "엽서는 있지만 확정 상태(스티커 id로 대신 찾는 누끼 포함)·초안의 사진 스티커가 가리키지 않는 확정 누끼"
             ),
             scanPerPostcardFiles(
                 type = "unreferencedDraftStickerBackground",
                 directory = File(rootDirectory, PostcardDraftStorage.DRAFT_STICKER_BG_DIR_NAME),
                 existingPostcardIds = existingPostcardIds,
-                referencesFor = { id -> draftReferences[id].orEmpty() },
+                referencesFor = { id ->
+                    draftReferences[id].orEmpty() + confirmedStates[id]?.references.orEmpty()
+                },
+                pendingReasonFor = { id, _ ->
+                    unclearPostcardReason.takeIf { id in unclearPostcardIds }
+                },
                 unclassified = unclassified,
+                pending = pending,
                 reason = "엽서는 있지만 그 엽서의 초안이 가리키지 않는 초안 누끼(초안 파일 없음 포함)"
+            ),
+            scanPerPostcardFiles(
+                type = "unreferencedStickerOriginal",
+                directory = PostcardAssetDirectory.STICKER_ORIGINALS.root(rootDirectory),
+                existingPostcardIds = existingPostcardIds,
+                referencesFor = { allReferences },
+                pendingReasonFor = { _, _ -> unclearAnywhereReason },
+                unclassified = unclassified,
+                pending = pending,
+                reason = "엽서는 있지만 어느 엽서의 확정 상태·초안도 원본으로 가리키지 않는 스티커 원본" +
+                    "(편집 중인 화면·undo가 쓰거나, 고른 뒤 붙이기 전에 화면을 떠난 사진일 수 있음)"
             ),
             scanCacheFiles(
                 directory = File(cacheDirectory, STICKER_CACHE_DIR_NAME),
-                references = allReferences
+                references = allReferences,
+                pendingReason = unclearAnywhereReason,
+                pending = pending
             )
         )
 
         return StickerAssetScanResult(
             categories = categories,
             drafts = drafts.toList(),
+            pending = pending.toList(),
             unclassified = unclassified.toList()
         )
+    }
+
+    /**
+     * 확정 사진 스티커 상태 한 장이 가리키는 파일.
+     * [references]는 앱이 실제로 쓰는 파일(정규 경로), [pendingReasons]는 지금은 안 쓰지만
+     * 다시 쓰일 수 있는 id 누끼와 그 이유, [unclear]는 상태를 다 읽지 못했는지다.
+     */
+    private class ConfirmedStickerReferences(
+        val references: Set<String>,
+        val pendingReasons: Map<String, String>,
+        val unclear: Boolean
+    )
+
+    /** 앱(deserializePhotoStickerItem)이 읽을 수 있는 줄 형식인지(최소 8칸, id 있음). */
+    private fun isRestorableStickerLine(line: String): Boolean {
+        val fields = line.split("\t")
+        return fields.size >= STICKER_MIN_FIELD_COUNT && fields[0].isNotBlank()
+    }
+
+    private fun confirmedStickerReferences(
+        lines: List<String>?,
+        backgroundDirectory: File
+    ): ConfirmedStickerReferences {
+        if (lines == null) {
+            return ConfirmedStickerReferences(emptySet(), emptyMap(), unclear = true)
+        }
+
+        val references = stickerFileReferences(lines).toMutableSet()
+        val pendingReasons = mutableMapOf<String, String>()
+        var unclear = false
+
+        for (line in lines) {
+            if (!isRestorableStickerLine(line)) {
+                unclear = true
+                continue
+            }
+            val fields = line.split("\t")
+            val idBackground =
+                runCatching { File(backgroundDirectory, fields[0] + ".png").canonicalPath }
+                    .getOrNull()
+                    ?: continue
+
+            if (fields[STICKER_IS_BACKGROUND_REMOVED] != "true") {
+                pendingReasons[idBackground] =
+                    "배경제거를 끈 스티커의 확정 누끼 — 다시 켤 때 이 파일을 쓰는지 확인되지 않음"
+                continue
+            }
+
+            // 복원·저장은 누끼 URI의 파일을 먼저 쓰고, 그 파일이 없을 때만 id 누끼로 돌아간다.
+            val explicit =
+                fileOf(fields[STICKER_REMOVED_BG_URI])
+                    ?.takeIf { it.isFile && it.canRead() }
+            val explicitPath = explicit?.let { runCatching { it.canonicalPath }.getOrNull() }
+            when {
+                explicit == null -> references += idBackground
+                explicitPath != idBackground ->
+                    pendingReasons[idBackground] =
+                        "누끼 URI가 다른 파일을 가리켜 지금은 안 쓰지만, 그 파일이 사라지면 대신 쓰이고 " +
+                            "다음 완료 저장 때 덮어쓰일 확정 누끼"
+            }
+        }
+
+        references.forEach { pendingReasons.remove(it) }
+        return ConfirmedStickerReferences(references, pendingReasons, unclear)
     }
 
     private class DraftSections(
@@ -291,7 +416,9 @@ object StickerAssetDiagnostics {
         directory: File,
         existingPostcardIds: Set<Long>,
         referencesFor: (Long) -> Set<String>,
+        pendingReasonFor: (postcardId: Long, canonicalPath: String) -> String?,
         unclassified: MutableList<String>,
+        pending: MutableList<PendingStickerAsset>,
         reason: String
     ): OrphanCategoryResult {
         val orphans = mutableListOf<OrphanAsset>()
@@ -312,7 +439,12 @@ object StickerAssetDiagnostics {
                     continue
                 }
                 val canonical = runCatching { file.canonicalPath }.getOrNull()
-                if (canonical == null || canonical !in references) {
+                if (canonical != null && canonical in references) continue
+
+                val pendingReason = pendingReasonFor(postcardId, canonical ?: file.path)
+                if (pendingReason != null) {
+                    pending += PendingStickerAsset(path = file.path, sizeBytes = file.length(), reason = pendingReason)
+                } else {
                     orphans += OrphanAsset(path = file.path, isDirectory = false, sizeBytes = file.length())
                 }
             }
@@ -323,9 +455,11 @@ object StickerAssetDiagnostics {
 
     private fun scanCacheFiles(
         directory: File,
-        references: Set<String>
+        references: Set<String>,
+        pendingReason: String?,
+        pending: MutableList<PendingStickerAsset>
     ): OrphanCategoryResult {
-        val orphans =
+        val unreferenced =
             directory.listFiles()
                 ?.sortedBy { it.name }
                 .orEmpty()
@@ -334,7 +468,15 @@ object StickerAssetDiagnostics {
                     val canonical = runCatching { file.canonicalPath }.getOrNull()
                     canonical == null || canonical !in references
                 }
-                .map { OrphanAsset(path = it.path, isDirectory = false, sizeBytes = it.length()) }
+        val orphans =
+            if (pendingReason != null) {
+                unreferenced.forEach { file ->
+                    pending += PendingStickerAsset(path = file.path, sizeBytes = file.length(), reason = pendingReason)
+                }
+                emptyList()
+            } else {
+                unreferenced.map { OrphanAsset(path = it.path, isDirectory = false, sizeBytes = it.length()) }
+            }
 
         return OrphanCategoryResult(
             type = "unreferencedStickerCache",
