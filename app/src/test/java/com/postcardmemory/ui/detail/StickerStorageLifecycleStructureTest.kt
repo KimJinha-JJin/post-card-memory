@@ -112,7 +112,7 @@ class StickerStorageLifecycleStructureTest {
             body,
             "val confirmEditGeneration = draftEditGeneration.get()",
             "ConfirmedStickerBackgroundCleanup.readStickerIds(",
-            "persistStickerEditState(postcardId)",
+            "persistStickerEditState(postcardId, transaction)",
             "PostcardDraftStorage.deleteDraft(context, postcardId)",
             "confirmedStickersBaseline = _photoStickers.value",
             "draftPersistedGeneration.accumulateAndGet(confirmEditGeneration",

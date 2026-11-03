@@ -21,7 +21,7 @@ import com.postcardmemory.ui.components.BACK_POSTSCRIPT_MAX_LENGTH
 import com.postcardmemory.ui.components.withBackMessage
 import com.postcardmemory.ui.components.writingOffsetMinutes
 import com.postcardmemory.ui.components.BACK_RECIPIENT_MODIFIER_MAX_LENGTH
-import com.postcardmemory.utils.ConfirmedEditStateStorage
+import com.postcardmemory.utils.ConfirmedEditTransaction
 import com.postcardmemory.utils.ConfirmedStickerBackgroundCleanup
 import com.postcardmemory.utils.DecorationStateFile
 import com.postcardmemory.utils.DoodleStroke
@@ -45,6 +45,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
@@ -54,6 +55,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -777,8 +779,6 @@ class DetailViewModel @Inject constructor(
         postcardId: Long,
         stickers: List<PhotoStickerItem>
     ): List<PhotoStickerItem>? {
-        val stickerCacheDir =
-            File(context.cacheDir, "photo_stickers").canonicalFile
         val draftPersistDir =
             PostcardDraftStorage.draftStickerBackgroundDir(context, postcardId)
 
@@ -794,11 +794,9 @@ class DetailViewModel @Inject constructor(
             val persisted =
                 persistStickerBackground(
                     sticker = sticker,
-                    stickerCacheDir = stickerCacheDir,
-                    persistDir = draftPersistDir,
                     // undo/redo 스택이 아직 캐시 경로를 참조 중일 수 있으니
-                    // 초안 자동저장에서는 캐시 원본을 지우지 않는다.
-                    deleteCacheSourceAfterCopy = false
+                    // 초안 자동저장에서는 캐시 원본을 지우지 않는다(이 함수는 지우지 않음).
+                    persistDir = draftPersistDir
                 ) ?: return null
             promoted.add(persisted)
         }
@@ -927,8 +925,10 @@ class DetailViewModel @Inject constructor(
     /**
      * 확정 저장(완료 버튼)이 꾸미기 여섯 종 모두 실제로 성공한 뒤에만 초안을
      * 지운다. 하나라도 실패하면 초안을 유지해 사용자가 다시 시도할 수 있게
-     * 한다. 이미 저장이 진행 중이면 새 요청은 무시해 완료 버튼 연타로
-     * 같은 파일에 저장이 중복 실행되는 것을 막는다.
+     * 한다. 121일차부터 여섯 종과 확정 누끼는 모두 준비된 뒤에만 한 번에 교체되므로,
+     * 준비 단계 실패는 기존 확정 파일을 하나도 바꾸지 않는다. 이미 저장이 진행
+     * 중이면 새 요청은 무시해 완료 버튼 연타로 같은 파일에 저장이 중복 실행되는
+     * 것을 막는다.
      *
      * 초안 삭제 자체의 실패(드문 파일시스템 오류)는 정리 실패로만 취급하고
      * 전체 결과는 성공으로 본다 — 이 시점엔 여섯 종의 확정 상태가 이미
@@ -951,27 +951,64 @@ class DetailViewModel @Inject constructor(
                 ConfirmedStickerBackgroundCleanup.readStickerIds(
                     DecorationStateFile.PHOTO_STICKER.file(context.filesDir, postcardId)
                 )
-            val stickersSaved = persistStickerEditState(postcardId)
-            val sealsSaved = persistSealEditState(postcardId)
-            val doodlesSaved = persistDoodleEditState(postcardId)
-            val textStickersSaved = persistTextStickerEditState(postcardId)
-            val maskingTapesSaved = persistMaskingTapeEditState(postcardId)
-            val labelStickersSaved = persistLabelStickerEditState(postcardId)
+            // 121일차: 여섯 종과 확정 누끼를 먼저 모두 임시 파일로 준비하고(확정 파일은 그대로),
+            // 전부 준비된 뒤에만 한 번에 교체한다. 준비가 하나라도 실패하면 임시 파일만 버려
+            // 기존 확정본이 일부만 새 내용으로 바뀌는 일이 없다(ConfirmedEditTransaction 참고).
+            val transaction = ConfirmedEditTransaction()
+            var stagedStickers: StagedStickerSave? = null
+            val allStaged =
+                try {
+                    stagedStickers = persistStickerEditState(postcardId, transaction)
+                    val stickersSaved = stagedStickers != null
+                    val sealsSaved =
+                        stickersSaved && persistSealEditState(postcardId, transaction)
+                    val doodlesSaved =
+                        sealsSaved && persistDoodleEditState(postcardId, transaction)
+                    val textStickersSaved =
+                        doodlesSaved && persistTextStickerEditState(postcardId, transaction)
+                    val maskingTapesSaved =
+                        textStickersSaved && persistMaskingTapeEditState(postcardId, transaction)
+                    val labelStickersSaved =
+                        maskingTapesSaved && persistLabelStickerEditState(postcardId, transaction)
+                    shouldConfirmSaveSucceed(
+                        stickersSaved = stickersSaved,
+                        sealsSaved = sealsSaved,
+                        doodlesSaved = doodlesSaved,
+                        textStickersSaved = textStickersSaved,
+                        maskingTapesSaved = maskingTapesSaved,
+                        labelStickersSaved = labelStickersSaved
+                    )
+                } catch (exception: CancellationException) {
+                    transaction.discard()
+                    throw exception
+                } catch (exception: Exception) {
+                    Log.w(TAG, "완료 저장 준비 중 오류: postcardId=$postcardId", exception)
+                    false
+                }
+
+            val commitResult =
+                if (allStaged) {
+                    transaction.commit()
+                } else {
+                    transaction.discard()
+                    null
+                }
+            if (commitResult == ConfirmedEditTransaction.CommitResult.PARTIALLY_COMMITTED) {
+                // 드문 교체(rename) 실패. 성공으로 다루지 않아 초안·기준선을 그대로 둔다.
+                Log.w(TAG, "완료 저장 교체 일부 실패: postcardId=$postcardId")
+            }
             val allSaved =
-                shouldConfirmSaveSucceed(
-                    stickersSaved = stickersSaved,
-                    sealsSaved = sealsSaved,
-                    doodlesSaved = doodlesSaved,
-                    textStickersSaved = textStickersSaved,
-                    maskingTapesSaved = maskingTapesSaved,
-                    labelStickersSaved = labelStickersSaved
-                )
+                commitResult == ConfirmedEditTransaction.CommitResult.COMMITTED
 
             if (allSaved) {
-                draftSaveMutex.withLock {
-                    latestPersistedDraftRevision =
-                        draftRevisionCounter.incrementAndGet()
-                    PostcardDraftStorage.deleteDraft(context, postcardId)
+                // 확정 파일 교체가 끝났으므로 화면이 닫혀 scope가 취소돼도 초안 삭제까지는 끝낸다.
+                // 여기서 멈추면 다음 진입 때 확정본보다 오래된 초안이 그 위에 복원될 수 있다.
+                withContext(NonCancellable) {
+                    draftSaveMutex.withLock {
+                        latestPersistedDraftRevision =
+                            draftRevisionCounter.incrementAndGet()
+                        PostcardDraftStorage.deleteDraft(context, postcardId)
+                    }
                 }
             }
 
@@ -987,6 +1024,12 @@ class DetailViewModel @Inject constructor(
                 // 하나라도 빠지면 그 요소만 확정 저장 후에도 이전 상태로 undo돼
                 // 저장된 결과와 화면이 어긋난다.
                 if (allSaved) {
+                    // 121일차: 확정 누끼 경로로 바뀐 스티커 목록은 교체가 끝난 지금에야 화면에 반영한다.
+                    val committedStickers = stagedStickers?.stickers
+                    if (committedStickers != null && committedStickers != _photoStickers.value) {
+                        _photoStickers.value = committedStickers
+                    }
+
                     // 119일차: 방금 저장한 상태가 새 확정 상태다. "원래대로"가 이보다 오래된
                     // 상태(그 사이 정리된 누끼를 가리킬 수 있음)로 돌아가지 않게 기준선을 옮긴다.
                     confirmedStickersBaseline = _photoStickers.value
@@ -1002,6 +1045,11 @@ class DetailViewModel @Inject constructor(
                     val promotedCacheSources = promotedStickerCacheSources.toList()
                     promotedStickerCacheSources.removeAll(promotedCacheSources.toSet())
                     stickerCleanupCandidates.addAll(promotedCacheSources)
+                    // 121일차: 확정 누끼로 복사한 캐시 누끼도 교체 성공 뒤에야 같은 참조 확인을 거쳐
+                    // 지운다(예전에는 다른 종류 저장 결과를 보기 전에 바로 지웠다).
+                    stickerCleanupCandidates.addAll(
+                        stagedStickers?.releasedCacheSources.orEmpty()
+                    )
 
                     clearStickerHistory()
                     clearSealHistory()
@@ -1078,13 +1126,24 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 스티커 확정 상태를 저장한다. 누끼 파일 승격이나 상태 파일 쓰기 중
-     * 하나라도 실패하면 false를 반환하며, 이 경우 StateFlow와 undo/redo
-     * 이력, 기존 확정 파일 모두 건드리지 않아 재시도가 안전하다.
+     * 121일차: 완료 저장에서 준비까지 끝난 스티커 목록(확정 누끼 경로로 바뀐 상태)과, 교체가
+     * 성공하면 더 이상 화면이 가리키지 않게 될 캐시 누끼. 교체 성공 전에는 화면에도 캐시에도
+     * 반영하지 않는다.
+     */
+    private class StagedStickerSave(
+        val stickers: List<PhotoStickerItem>,
+        val releasedCacheSources: List<Uri>
+    )
+
+    /**
+     * 스티커 확정 상태를 [transaction]에 준비한다. 확정 누끼 복사와 상태 파일은 임시 파일로만
+     * 쓰고, 기존 확정 파일·StateFlow·undo/redo·캐시 누끼는 건드리지 않는다. 준비에 실패하면
+     * null을 반환한다(호출자가 [ConfirmedEditTransaction.discard]).
      */
     private fun persistStickerEditState(
-        postcardId: Long
-    ): Boolean {
+        postcardId: Long,
+        transaction: ConfirmedEditTransaction
+    ): StagedStickerSave? {
         val stickerCacheDir =
             File(
                 context.cacheDir,
@@ -1097,39 +1156,47 @@ class DetailViewModel @Inject constructor(
             !persistDir.exists() &&
             !persistDir.mkdirs()
         ) {
-            return false
+            return null
         }
 
+        val currentStickers = _photoStickers.value
         val updatedStickers = mutableListOf<PhotoStickerItem>()
-        for (sticker in _photoStickers.value) {
+        for (sticker in currentStickers) {
             val persisted =
                 persistStickerBackground(
                     sticker = sticker,
-                    stickerCacheDir = stickerCacheDir,
-                    persistDir = persistDir
-                ) ?: return false
+                    persistDir = persistDir,
+                    transaction = transaction
+                ) ?: return null
             updatedStickers.add(persisted)
         }
 
         val stateFile =
             DecorationStateFile.PHOTO_STICKER.file(context.filesDir, postcardId)
-        val saved =
-            ConfirmedEditStateStorage.writeTextAtomically(
+        val staged =
+            transaction.stageText(
                 targetFile = stateFile,
                 content = updatedStickers.joinToString("\n") {
                     it.serialize()
                 }
             )
 
-        if (!saved) {
-            return false
+        if (!staged) {
+            return null
         }
 
-        if (updatedStickers != _photoStickers.value) {
-            _photoStickers.value = updatedStickers
-        }
+        val releasedCacheSources =
+            currentStickers.zip(updatedStickers).mapNotNull { (before, after) ->
+                val source = before.removedBgUri ?: return@mapNotNull null
+                if (source == after.removedBgUri) return@mapNotNull null
+                val sourceFile = uriToLocalStickerFile(source) ?: return@mapNotNull null
+                source.takeIf { isInsideDirectory(stickerCacheDir, sourceFile.canonicalFile) }
+            }
 
-        return true
+        return StagedStickerSave(
+            stickers = updatedStickers,
+            releasedCacheSources = releasedCacheSources
+        )
     }
 
     /** 확정 저장된 스티커 상태만 읽어 반환한다(StateFlow는 건드리지 않음). */
@@ -1183,14 +1250,15 @@ class DetailViewModel @Inject constructor(
         _selectedSealId.value = id
     }
 
-    /** 도장 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
+    /** 도장 확정 상태를 [transaction]에 준비한다(121일차). 확정 파일은 교체 전까지 그대로다. */
     private fun persistSealEditState(
-        postcardId: Long
+        postcardId: Long,
+        transaction: ConfirmedEditTransaction
     ): Boolean {
         val stateFile =
             DecorationStateFile.SEAL.file(context.filesDir, postcardId)
 
-        return ConfirmedEditStateStorage.writeTextAtomically(
+        return transaction.stageText(
             targetFile = stateFile,
             content = _photoSeals.value.joinToString("\n") {
                 it.serialize()
@@ -1240,14 +1308,15 @@ class DetailViewModel @Inject constructor(
         _selectedTextStickerId.value = id
     }
 
-    /** 텍스트 스티커 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
+    /** 텍스트 스티커 확정 상태를 [transaction]에 준비한다(121일차). 확정 파일은 교체 전까지 그대로다. */
     private fun persistTextStickerEditState(
-        postcardId: Long
+        postcardId: Long,
+        transaction: ConfirmedEditTransaction
     ): Boolean {
         val stateFile =
             DecorationStateFile.TEXT_STICKER.file(context.filesDir, postcardId)
 
-        return ConfirmedEditStateStorage.writeTextAtomically(
+        return transaction.stageText(
             targetFile = stateFile,
             content = _textStickers.value.joinToString("\n") {
                 it.serialize()
@@ -1378,14 +1447,15 @@ class DetailViewModel @Inject constructor(
         scheduleDraftAutosave()
     }
 
-    /** 마스킹테이프 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
+    /** 마스킹테이프 확정 상태를 [transaction]에 준비한다(121일차). 확정 파일은 교체 전까지 그대로다. */
     private fun persistMaskingTapeEditState(
-        postcardId: Long
+        postcardId: Long,
+        transaction: ConfirmedEditTransaction
     ): Boolean {
         val stateFile =
             DecorationStateFile.MASKING_TAPE.file(context.filesDir, postcardId)
 
-        return ConfirmedEditStateStorage.writeTextAtomically(
+        return transaction.stageText(
             targetFile = stateFile,
             content = _photoMaskingTapes.value.joinToString("\n") {
                 it.serialize()
@@ -1435,14 +1505,15 @@ class DetailViewModel @Inject constructor(
         _selectedLabelStickerId.value = id
     }
 
-    /** 라벨 스티커 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
+    /** 라벨 스티커 확정 상태를 [transaction]에 준비한다(121일차). 확정 파일은 교체 전까지 그대로다. */
     private fun persistLabelStickerEditState(
-        postcardId: Long
+        postcardId: Long,
+        transaction: ConfirmedEditTransaction
     ): Boolean {
         val stateFile =
             DecorationStateFile.LABEL_STICKER.file(context.filesDir, postcardId)
 
-        return ConfirmedEditStateStorage.writeTextAtomically(
+        return transaction.stageText(
             targetFile = stateFile,
             content = _labelStickers.value.joinToString("\n") {
                 it.serialize()
@@ -1480,14 +1551,15 @@ class DetailViewModel @Inject constructor(
         scheduleDraftAutosave()
     }
 
-    /** 낙서 확정 상태를 원자적으로 저장한다. 실패 시 기존 확정 파일은 그대로 유지된다. */
+    /** 낙서 확정 상태를 [transaction]에 준비한다(121일차). 확정 파일은 교체 전까지 그대로다. */
     private fun persistDoodleEditState(
-        postcardId: Long
+        postcardId: Long,
+        transaction: ConfirmedEditTransaction
     ): Boolean {
         val stateFile =
             DecorationStateFile.DOODLE.file(context.filesDir, postcardId)
 
-        return ConfirmedEditStateStorage.writeTextAtomically(
+        return transaction.stageText(
             targetFile = stateFile,
             content = _doodleStrokes.value.joinToString("\n") {
                 it.serializeDoodleStroke()
@@ -2345,18 +2417,19 @@ class DetailViewModel @Inject constructor(
      * 이전에는 이 경우 조용히 isBackgroundRemoved=false로 격하시켜 사용자가
      * 모르는 새 누끼 편집 내용이 사라졌다.
      *
-     * deleteCacheSourceAfterCopy: 확정 저장(persistStickerEditState)은 성공
-     * 직후 clearStickerHistory()로 undo/redo를 비우므로 캐시 원본을 바로
-     * 지워도 안전하다(true, 기본값). 반면 초안 자동저장(persistDraftNow)은
-     * undo/redo 이력을 그대로 유지해야 하므로, 그 스택이 여전히 옛 캐시
-     * 경로를 참조 중일 수 있어 false로 호출해 캐시 원본을 지우지 않는다 —
-     * cacheDir는 OS가 회수 가능한 영역이라 남겨둬도 안전하다.
+     * transaction(121일차): 확정 저장은 [ConfirmedEditTransaction]을 넘겨 누끼를
+     * `<id>.png` 옆 임시 파일로만 준비한다. 같은 id의 기존 확정 누끼는 교체 전까지
+     * 그대로라, 뒤이은 다른 종류의 저장이 실패해도 기존 확정본이 바뀌지 않는다. 초안
+     * 자동저장은 null을 넘겨 초안 전용 폴더에 바로 복사한다.
+     *
+     * 이 함수는 캐시 원본을 지우지 않는다. 확정 저장은 교체가 성공한 뒤 정리 후보로
+     * 넘겨 참조 확인을 거쳐 지우고(saveEditsAndClearDraft), 초안 자동저장은 undo/redo가
+     * 아직 캐시 경로를 가리킬 수 있어 남겨 둔다 — cacheDir는 OS가 회수 가능한 영역이다.
      */
     private fun persistStickerBackground(
         sticker: PhotoStickerItem,
-        stickerCacheDir: File,
         persistDir: File,
-        deleteCacheSourceAfterCopy: Boolean = true
+        transaction: ConfirmedEditTransaction? = null
     ): PhotoStickerItem? {
         if (!sticker.isBackgroundRemoved) {
             return sticker
@@ -2410,28 +2483,35 @@ class DetailViewModel @Inject constructor(
                 srcFile.exists() &&
                 srcFile.canRead()
             ) {
-                srcFile.copyTo(
-                    destFile,
-                    overwrite = true
-                )
-                if (
-                    destFile.exists() &&
-                    destFile.canRead()
-                ) {
-                    // 캐시 원본만, 그것도 호출자가 안전하다고 표시했을 때만
-                    // 정리한다. 초안 전용 디렉터리 등 다른 영구 디렉터리에서
-                    // 승격해온 경우(예: 확정 저장이 초안이 이미 옮겨둔 파일을
-                    // 다시 sticker_bgs로 승격) 그 디렉터리는 별도 소유자(초안
-                    // 폐기/성공 시점)가 정리하므로 여기서 지우지 않는다.
-                    if (
-                        deleteCacheSourceAfterCopy &&
-                        isInsideDirectory(stickerCacheDir, srcFile)
-                    ) {
-                        srcFile.delete()
+                if (transaction != null) {
+                    // 교체(commit)가 끝나면 destFile이 생긴다. 준비 실패는 저장 실패다.
+                    if (!transaction.stageCopy(srcFile, destFile)) {
+                        return null
                     }
                     destFile
                 } else {
-                    srcFile
+                    val copied =
+                        try {
+                            srcFile.copyTo(
+                                destFile,
+                                overwrite = true
+                            )
+                            true
+                        } catch (_: IOException) {
+                            // 예전에는 잡지 않아 초안 자동저장 코루틴이 앱을 종료시켰다(121일차).
+                            false
+                        }
+                    if (!copied) {
+                        return null
+                    }
+                    if (
+                        destFile.exists() &&
+                        destFile.canRead()
+                    ) {
+                        destFile
+                    } else {
+                        srcFile
+                    }
                 }
             } else if (
                 destFile.exists() &&
