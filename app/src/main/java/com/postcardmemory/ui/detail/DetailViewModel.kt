@@ -72,12 +72,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "DetailViewModel"
-private const val SEAL_HISTORY_LIMIT = 50
+internal const val SEAL_HISTORY_LIMIT = 50
 internal const val STICKER_HISTORY_LIMIT = 30
-private const val DOODLE_HISTORY_LIMIT = 50
-private const val TEXT_STICKER_HISTORY_LIMIT = 50
-private const val MASKING_TAPE_HISTORY_LIMIT = 50
-private const val LABEL_STICKER_HISTORY_LIMIT = 50
+internal const val DOODLE_HISTORY_LIMIT = 50
+internal const val TEXT_STICKER_HISTORY_LIMIT = 50
+internal const val MASKING_TAPE_HISTORY_LIMIT = 50
+internal const val LABEL_STICKER_HISTORY_LIMIT = 50
 private const val PHOTO_TRANSFORM_HISTORY_LIMIT = 50
 private const val DRAFT_AUTOSAVE_DEBOUNCE_MS = 900L
 private const val PENDING_STYLE_SAVE_TIMEOUT_MS = 2_000L
@@ -1587,11 +1587,8 @@ class DetailViewModel @Inject constructor(
         val selectedSealId: String?
     )
 
-    private val sealUndoStack =
-        ArrayDeque<SealSnapshot>()
-
-    private val sealRedoStack =
-        ArrayDeque<SealSnapshot>()
+    private val sealHistory =
+        DecorationEditHistory<SealSnapshot>(SEAL_HISTORY_LIMIT)
 
     private val _canUndoSeal =
         MutableStateFlow(false)
@@ -1605,59 +1602,46 @@ class DetailViewModel @Inject constructor(
     val canRedoSeal: StateFlow<Boolean> =
         _canRedoSeal
 
+    private fun currentSealSnapshot() =
+        SealSnapshot(
+            seals = _photoSeals.value,
+            selectedSealId = _selectedSealId.value
+        )
+
+    private fun applySealSnapshot(snapshot: SealSnapshot) {
+        _photoSeals.value = snapshot.seals
+        _selectedSealId.value = snapshot.selectedSealId
+    }
+
     private fun updateSealHistoryAvailability() {
-        _canUndoSeal.value = sealUndoStack.isNotEmpty()
-        _canRedoSeal.value = sealRedoStack.isNotEmpty()
+        _canUndoSeal.value = sealHistory.canUndo
+        _canRedoSeal.value = sealHistory.canRedo
     }
 
     private fun clearSealHistory() {
-        sealUndoStack.clear()
-        sealRedoStack.clear()
+        sealHistory.clear()
         updateSealHistoryAvailability()
     }
 
     fun recordSealSnapshotForUndo() {
-        sealUndoStack.addLast(
-            SealSnapshot(
-                seals = _photoSeals.value,
-                selectedSealId = _selectedSealId.value
-            )
-        )
-        if (sealUndoStack.size > SEAL_HISTORY_LIMIT) {
-            sealUndoStack.removeFirst()
-        }
-        sealRedoStack.clear()
+        sealHistory.record(currentSealSnapshot())
         updateSealHistoryAvailability()
     }
 
     fun undoSealChange() {
         val previous =
-            sealUndoStack.removeLastOrNull() ?: return
+            sealHistory.undo(currentSealSnapshot()) ?: return
 
-        sealRedoStack.addLast(
-            SealSnapshot(
-                seals = _photoSeals.value,
-                selectedSealId = _selectedSealId.value
-            )
-        )
-        _photoSeals.value = previous.seals
-        _selectedSealId.value = previous.selectedSealId
+        applySealSnapshot(previous)
         updateSealHistoryAvailability()
         scheduleDraftAutosave()
     }
 
     fun redoSealChange() {
         val next =
-            sealRedoStack.removeLastOrNull() ?: return
+            sealHistory.redo(currentSealSnapshot()) ?: return
 
-        sealUndoStack.addLast(
-            SealSnapshot(
-                seals = _photoSeals.value,
-                selectedSealId = _selectedSealId.value
-            )
-        )
-        _photoSeals.value = next.seals
-        _selectedSealId.value = next.selectedSealId
+        applySealSnapshot(next)
         updateSealHistoryAvailability()
         scheduleDraftAutosave()
     }
@@ -1667,11 +1651,8 @@ class DetailViewModel @Inject constructor(
         val selectedTextStickerId: String?
     )
 
-    private val textStickerUndoStack =
-        ArrayDeque<TextStickerSnapshot>()
-
-    private val textStickerRedoStack =
-        ArrayDeque<TextStickerSnapshot>()
+    private val textStickerHistory =
+        DecorationEditHistory<TextStickerSnapshot>(TEXT_STICKER_HISTORY_LIMIT)
 
     private val _canUndoTextSticker =
         MutableStateFlow(false)
@@ -1685,59 +1666,46 @@ class DetailViewModel @Inject constructor(
     val canRedoTextSticker: StateFlow<Boolean> =
         _canRedoTextSticker
 
+    private fun currentTextStickerSnapshot() =
+        TextStickerSnapshot(
+            textStickers = _textStickers.value,
+            selectedTextStickerId = _selectedTextStickerId.value
+        )
+
+    private fun applyTextStickerSnapshot(snapshot: TextStickerSnapshot) {
+        _textStickers.value = snapshot.textStickers
+        _selectedTextStickerId.value = snapshot.selectedTextStickerId
+    }
+
     private fun updateTextStickerHistoryAvailability() {
-        _canUndoTextSticker.value = textStickerUndoStack.isNotEmpty()
-        _canRedoTextSticker.value = textStickerRedoStack.isNotEmpty()
+        _canUndoTextSticker.value = textStickerHistory.canUndo
+        _canRedoTextSticker.value = textStickerHistory.canRedo
     }
 
     private fun clearTextStickerHistory() {
-        textStickerUndoStack.clear()
-        textStickerRedoStack.clear()
+        textStickerHistory.clear()
         updateTextStickerHistoryAvailability()
     }
 
     fun recordTextStickerSnapshotForUndo() {
-        textStickerUndoStack.addLast(
-            TextStickerSnapshot(
-                textStickers = _textStickers.value,
-                selectedTextStickerId = _selectedTextStickerId.value
-            )
-        )
-        if (textStickerUndoStack.size > TEXT_STICKER_HISTORY_LIMIT) {
-            textStickerUndoStack.removeFirst()
-        }
-        textStickerRedoStack.clear()
+        textStickerHistory.record(currentTextStickerSnapshot())
         updateTextStickerHistoryAvailability()
     }
 
     fun undoTextStickerChange() {
         val previous =
-            textStickerUndoStack.removeLastOrNull() ?: return
+            textStickerHistory.undo(currentTextStickerSnapshot()) ?: return
 
-        textStickerRedoStack.addLast(
-            TextStickerSnapshot(
-                textStickers = _textStickers.value,
-                selectedTextStickerId = _selectedTextStickerId.value
-            )
-        )
-        _textStickers.value = previous.textStickers
-        _selectedTextStickerId.value = previous.selectedTextStickerId
+        applyTextStickerSnapshot(previous)
         updateTextStickerHistoryAvailability()
         scheduleDraftAutosave()
     }
 
     fun redoTextStickerChange() {
         val next =
-            textStickerRedoStack.removeLastOrNull() ?: return
+            textStickerHistory.redo(currentTextStickerSnapshot()) ?: return
 
-        textStickerUndoStack.addLast(
-            TextStickerSnapshot(
-                textStickers = _textStickers.value,
-                selectedTextStickerId = _selectedTextStickerId.value
-            )
-        )
-        _textStickers.value = next.textStickers
-        _selectedTextStickerId.value = next.selectedTextStickerId
+        applyTextStickerSnapshot(next)
         updateTextStickerHistoryAvailability()
         scheduleDraftAutosave()
     }
@@ -1747,11 +1715,8 @@ class DetailViewModel @Inject constructor(
         val selectedMaskingTapeId: String?
     )
 
-    private val maskingTapeUndoStack =
-        ArrayDeque<MaskingTapeSnapshot>()
-
-    private val maskingTapeRedoStack =
-        ArrayDeque<MaskingTapeSnapshot>()
+    private val maskingTapeHistory =
+        DecorationEditHistory<MaskingTapeSnapshot>(MASKING_TAPE_HISTORY_LIMIT)
 
     private val _canUndoMaskingTape =
         MutableStateFlow(false)
@@ -1765,9 +1730,20 @@ class DetailViewModel @Inject constructor(
     val canRedoMaskingTape: StateFlow<Boolean> =
         _canRedoMaskingTape
 
+    private fun currentMaskingTapeSnapshot() =
+        MaskingTapeSnapshot(
+            maskingTapes = _photoMaskingTapes.value,
+            selectedMaskingTapeId = _selectedMaskingTapeId.value
+        )
+
+    private fun applyMaskingTapeSnapshot(snapshot: MaskingTapeSnapshot) {
+        _photoMaskingTapes.value = snapshot.maskingTapes
+        _selectedMaskingTapeId.value = snapshot.selectedMaskingTapeId
+    }
+
     private fun updateMaskingTapeHistoryAvailability() {
-        _canUndoMaskingTape.value = maskingTapeUndoStack.isNotEmpty()
-        _canRedoMaskingTape.value = maskingTapeRedoStack.isNotEmpty()
+        _canUndoMaskingTape.value = maskingTapeHistory.canUndo
+        _canRedoMaskingTape.value = maskingTapeHistory.canRedo
     }
 
     /*
@@ -1783,8 +1759,7 @@ class DetailViewModel @Inject constructor(
     ): Boolean {
         val allReachableTapes =
             _photoMaskingTapes.value +
-                    maskingTapeUndoStack.flatMap { it.maskingTapes } +
-                    maskingTapeRedoStack.flatMap { it.maskingTapes }
+                    maskingTapeHistory.retainedSnapshots().flatMap { it.maskingTapes }
 
         return allReachableTapes.any {
             it.photoUri == uri
@@ -1848,8 +1823,7 @@ class DetailViewModel @Inject constructor(
         val reachableTapes =
             (
                 remainingTapes +
-                        maskingTapeUndoStack.flatMap { it.maskingTapes } +
-                        maskingTapeRedoStack.flatMap { it.maskingTapes }
+                        maskingTapeHistory.retainedSnapshots().flatMap { it.maskingTapes }
                 ).distinctBy { it.id }
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -1863,39 +1837,23 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun clearMaskingTapeHistory() {
-        maskingTapeUndoStack.clear()
-        maskingTapeRedoStack.clear()
+        maskingTapeHistory.clear()
         updateMaskingTapeHistoryAvailability()
         sweepMaskingTapePhotoCleanupCandidates()
     }
 
     fun recordMaskingTapeSnapshotForUndo() {
-        maskingTapeUndoStack.addLast(
-            MaskingTapeSnapshot(
-                maskingTapes = _photoMaskingTapes.value,
-                selectedMaskingTapeId = _selectedMaskingTapeId.value
-            )
-        )
-        if (maskingTapeUndoStack.size > MASKING_TAPE_HISTORY_LIMIT) {
-            maskingTapeUndoStack.removeFirst()
+        if (maskingTapeHistory.record(currentMaskingTapeSnapshot())) {
             sweepMaskingTapePhotoCleanupCandidates()
         }
-        maskingTapeRedoStack.clear()
         updateMaskingTapeHistoryAvailability()
     }
 
     fun undoMaskingTapeChange() {
         val previous =
-            maskingTapeUndoStack.removeLastOrNull() ?: return
+            maskingTapeHistory.undo(currentMaskingTapeSnapshot()) ?: return
 
-        maskingTapeRedoStack.addLast(
-            MaskingTapeSnapshot(
-                maskingTapes = _photoMaskingTapes.value,
-                selectedMaskingTapeId = _selectedMaskingTapeId.value
-            )
-        )
-        _photoMaskingTapes.value = previous.maskingTapes
-        _selectedMaskingTapeId.value = previous.selectedMaskingTapeId
+        applyMaskingTapeSnapshot(previous)
         updateMaskingTapeHistoryAvailability()
         sweepMaskingTapePhotoCleanupCandidates()
         scheduleDraftAutosave()
@@ -1903,16 +1861,9 @@ class DetailViewModel @Inject constructor(
 
     fun redoMaskingTapeChange() {
         val next =
-            maskingTapeRedoStack.removeLastOrNull() ?: return
+            maskingTapeHistory.redo(currentMaskingTapeSnapshot()) ?: return
 
-        maskingTapeUndoStack.addLast(
-            MaskingTapeSnapshot(
-                maskingTapes = _photoMaskingTapes.value,
-                selectedMaskingTapeId = _selectedMaskingTapeId.value
-            )
-        )
-        _photoMaskingTapes.value = next.maskingTapes
-        _selectedMaskingTapeId.value = next.selectedMaskingTapeId
+        applyMaskingTapeSnapshot(next)
         updateMaskingTapeHistoryAvailability()
         sweepMaskingTapePhotoCleanupCandidates()
         scheduleDraftAutosave()
@@ -1923,11 +1874,8 @@ class DetailViewModel @Inject constructor(
         val selectedLabelStickerId: String?
     )
 
-    private val labelStickerUndoStack =
-        ArrayDeque<LabelStickerSnapshot>()
-
-    private val labelStickerRedoStack =
-        ArrayDeque<LabelStickerSnapshot>()
+    private val labelStickerHistory =
+        DecorationEditHistory<LabelStickerSnapshot>(LABEL_STICKER_HISTORY_LIMIT)
 
     private val _canUndoLabelSticker =
         MutableStateFlow(false)
@@ -1941,59 +1889,46 @@ class DetailViewModel @Inject constructor(
     val canRedoLabelSticker: StateFlow<Boolean> =
         _canRedoLabelSticker
 
+    private fun currentLabelStickerSnapshot() =
+        LabelStickerSnapshot(
+            labelStickers = _labelStickers.value,
+            selectedLabelStickerId = _selectedLabelStickerId.value
+        )
+
+    private fun applyLabelStickerSnapshot(snapshot: LabelStickerSnapshot) {
+        _labelStickers.value = snapshot.labelStickers
+        _selectedLabelStickerId.value = snapshot.selectedLabelStickerId
+    }
+
     private fun updateLabelStickerHistoryAvailability() {
-        _canUndoLabelSticker.value = labelStickerUndoStack.isNotEmpty()
-        _canRedoLabelSticker.value = labelStickerRedoStack.isNotEmpty()
+        _canUndoLabelSticker.value = labelStickerHistory.canUndo
+        _canRedoLabelSticker.value = labelStickerHistory.canRedo
     }
 
     private fun clearLabelStickerHistory() {
-        labelStickerUndoStack.clear()
-        labelStickerRedoStack.clear()
+        labelStickerHistory.clear()
         updateLabelStickerHistoryAvailability()
     }
 
     fun recordLabelStickerSnapshotForUndo() {
-        labelStickerUndoStack.addLast(
-            LabelStickerSnapshot(
-                labelStickers = _labelStickers.value,
-                selectedLabelStickerId = _selectedLabelStickerId.value
-            )
-        )
-        if (labelStickerUndoStack.size > LABEL_STICKER_HISTORY_LIMIT) {
-            labelStickerUndoStack.removeFirst()
-        }
-        labelStickerRedoStack.clear()
+        labelStickerHistory.record(currentLabelStickerSnapshot())
         updateLabelStickerHistoryAvailability()
     }
 
     fun undoLabelStickerChange() {
         val previous =
-            labelStickerUndoStack.removeLastOrNull() ?: return
+            labelStickerHistory.undo(currentLabelStickerSnapshot()) ?: return
 
-        labelStickerRedoStack.addLast(
-            LabelStickerSnapshot(
-                labelStickers = _labelStickers.value,
-                selectedLabelStickerId = _selectedLabelStickerId.value
-            )
-        )
-        _labelStickers.value = previous.labelStickers
-        _selectedLabelStickerId.value = previous.selectedLabelStickerId
+        applyLabelStickerSnapshot(previous)
         updateLabelStickerHistoryAvailability()
         scheduleDraftAutosave()
     }
 
     fun redoLabelStickerChange() {
         val next =
-            labelStickerRedoStack.removeLastOrNull() ?: return
+            labelStickerHistory.redo(currentLabelStickerSnapshot()) ?: return
 
-        labelStickerUndoStack.addLast(
-            LabelStickerSnapshot(
-                labelStickers = _labelStickers.value,
-                selectedLabelStickerId = _selectedLabelStickerId.value
-            )
-        )
-        _labelStickers.value = next.labelStickers
-        _selectedLabelStickerId.value = next.selectedLabelStickerId
+        applyLabelStickerSnapshot(next)
         updateLabelStickerHistoryAvailability()
         scheduleDraftAutosave()
     }
@@ -2002,11 +1937,8 @@ class DetailViewModel @Inject constructor(
         val strokes: List<DoodleStroke>
     )
 
-    private val doodleUndoStack =
-        ArrayDeque<DoodleSnapshot>()
-
-    private val doodleRedoStack =
-        ArrayDeque<DoodleSnapshot>()
+    private val doodleHistory =
+        DecorationEditHistory<DoodleSnapshot>(DOODLE_HISTORY_LIMIT)
 
     private val _canUndoDoodle =
         MutableStateFlow(false)
@@ -2020,54 +1952,48 @@ class DetailViewModel @Inject constructor(
     val canRedoDoodle: StateFlow<Boolean> =
         _canRedoDoodle
 
+    private fun currentDoodleSnapshot() =
+        DoodleSnapshot(strokes = _doodleStrokes.value)
+
+    private fun applyDoodleSnapshot(snapshot: DoodleSnapshot) {
+        _doodleStrokes.value = snapshot.strokes
+    }
+
     private fun updateDoodleHistoryAvailability() {
-        _canUndoDoodle.value = doodleUndoStack.isNotEmpty()
-        _canRedoDoodle.value = doodleRedoStack.isNotEmpty()
+        _canUndoDoodle.value = doodleHistory.canUndo
+        _canRedoDoodle.value = doodleHistory.canRedo
     }
 
     private fun clearDoodleHistory() {
-        doodleUndoStack.clear()
-        doodleRedoStack.clear()
+        doodleHistory.clear()
         updateDoodleHistoryAvailability()
     }
 
     /**
      * 낙서 한 획(펜 확정, 지우개 동작, 전체 지우기)을 시작하기 직전에 호출한다.
-     * sealUndoStack/stickerUndoStack과 동일하게 변경 직전의 전체 목록을
+     * 도장·스티커 기록과 동일하게 변경 직전의 전체 목록을
      * 스냅샷으로 남기는 방식이라, 별도 재설계 없이 기존 Undo/Redo 체계에
      * 그대로 편입된다.
      */
     fun recordDoodleSnapshotForUndo() {
-        doodleUndoStack.addLast(
-            DoodleSnapshot(strokes = _doodleStrokes.value)
-        )
-        if (doodleUndoStack.size > DOODLE_HISTORY_LIMIT) {
-            doodleUndoStack.removeFirst()
-        }
-        doodleRedoStack.clear()
+        doodleHistory.record(currentDoodleSnapshot())
         updateDoodleHistoryAvailability()
     }
 
     fun undoDoodleChange() {
         val previous =
-            doodleUndoStack.removeLastOrNull() ?: return
+            doodleHistory.undo(currentDoodleSnapshot()) ?: return
 
-        doodleRedoStack.addLast(
-            DoodleSnapshot(strokes = _doodleStrokes.value)
-        )
-        _doodleStrokes.value = previous.strokes
+        applyDoodleSnapshot(previous)
         updateDoodleHistoryAvailability()
         scheduleDraftAutosave()
     }
 
     fun redoDoodleChange() {
         val next =
-            doodleRedoStack.removeLastOrNull() ?: return
+            doodleHistory.redo(currentDoodleSnapshot()) ?: return
 
-        doodleUndoStack.addLast(
-            DoodleSnapshot(strokes = _doodleStrokes.value)
-        )
-        _doodleStrokes.value = next.strokes
+        applyDoodleSnapshot(next)
         updateDoodleHistoryAvailability()
         scheduleDraftAutosave()
     }
