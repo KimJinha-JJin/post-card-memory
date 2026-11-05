@@ -4638,11 +4638,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun exportPostcardToGallery(
-        stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList(),
-        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList(),
-        textStickerOverlays: List<PostcardImageExporter.TextStickerOverlay> = emptyList(),
-        maskingTapeOverlays: List<PostcardImageExporter.MaskingTapeOverlay> = emptyList(),
-        labelStickerOverlays: List<PostcardImageExporter.LabelStickerOverlay> = emptyList()
+        overlays: PostcardImageExporter.FrontOverlays
     ) {
         val currentPostcard =
             _postcard.value
@@ -4665,12 +4661,8 @@ class DetailViewModel @Inject constructor(
                         .exportToGallery(
                             context = context,
                             postcard = currentPostcard,
-                            stickerOverlays = stickerOverlays,
-                            sealOverlays = sealOverlays,
-                            doodleStrokes = _doodleStrokes.value,
-                            textStickerOverlays = textStickerOverlays,
-                            maskingTapeOverlays = maskingTapeOverlays,
-                            labelStickerOverlays = labelStickerOverlays
+                            overlays = overlays,
+                            doodleStrokes = _doodleStrokes.value
                         )
                 }
 
@@ -4696,11 +4688,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun sharePostcard(
-        stickerOverlays: List<PostcardImageExporter.StickerOverlay> = emptyList(),
-        sealOverlays: List<PostcardImageExporter.SealOverlay> = emptyList(),
-        textStickerOverlays: List<PostcardImageExporter.TextStickerOverlay> = emptyList(),
-        maskingTapeOverlays: List<PostcardImageExporter.MaskingTapeOverlay> = emptyList(),
-        labelStickerOverlays: List<PostcardImageExporter.LabelStickerOverlay> = emptyList()
+        overlays: PostcardImageExporter.FrontOverlays
     ) {
         val currentPostcard =
             _postcard.value
@@ -4723,12 +4711,8 @@ class DetailViewModel @Inject constructor(
                         .exportForSharing(
                             context = context,
                             postcard = currentPostcard,
-                            stickerOverlays = stickerOverlays,
-                            sealOverlays = sealOverlays,
-                            doodleStrokes = _doodleStrokes.value,
-                            textStickerOverlays = textStickerOverlays,
-                            maskingTapeOverlays = maskingTapeOverlays,
-                            labelStickerOverlays = labelStickerOverlays
+                            overlays = overlays,
+                            doodleStrokes = _doodleStrokes.value
                         )
                 }
 

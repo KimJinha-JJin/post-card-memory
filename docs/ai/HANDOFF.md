@@ -1,3 +1,34 @@
+# HANDOFF — 123일차: 공유·갤러리 앞면 오버레이 조립 통합 / 실기기 QA·병합 대기
+
+2026-11-05, 담당 Claude Code(피코), 수동 표준 모드(장기 연속 작업 지시서 — 조사·구현·자동 검증·commit·push·PR·PR CI 확인 승인, 실기기 접근·APK 설치·병합·브랜치 정리 제외). 내장 Task 도구로 진행 단계를 표시했어. 작성 시점은 최종 commit 전이야. PR 번호·최종 SHA·CI 결과는 완료보고로 확인해.
+
+- **작성 시점 Git:** `refactor/export-overlay-assembly-day123`(기준 `main` = `origin/main` = `ac57558`). 지시서 기준 `99846a2`와의 차이는 `docs/ai/HANDOFF.md`뿐이야(PR #14). 122일차 HANDOFF는 PR #14로 이미 정정돼 있어 다시 고치지 않았어. 보호 미추적 5묶음·기존 브랜치 7개·`head-baseline-worktree`는 건드리지 않았어.
+- **확인된 사실(코드 조사):**
+  - 픽셀을 그리는 `createPostcardBitmap`은 원래 공유와 갤러리 저장이 함께 쓰는 하나였어. 지시서의 "꾸미기 이미지 합성 중복"은 픽셀 쪽이 아니라 그 앞단에 있었어.
+  - A(같은 책임, 통합): 화면의 오버레이 5종 조립(두 메뉴 처리 코드의 차이는 호출 함수와 뒷면 플래그뿐), ViewModel의 목록 전달, Exporter의 이미지 생성·실패 처리·해제.
+  - B(목적은 같고 구현이 다름, 유지): 파일 쓰기(`saveBitmapToGallery`는 MediaStore, `saveBitmapForSharing`은 캐시 파일). 포맷은 둘 다 PNG 100이지만 쓰는 곳과 실패 정리가 달라 합치지 않았어.
+  - C(의도적으로 다름, 유지): 갤러리의 파일명·`Pictures/PostcardMemory`·`IS_PENDING`, 공유의 `cache/shared_postcards`·고유 파일명·보관 정책(24시간·20개), ViewModel의 `ExportState`/`ShareState`·중복 실행 조건·오류 문구, 뒷면 내보내기 경로.
+  - 해상도(2048)와 레이어 순서(바탕 → 테이프 → 사진 스티커 → 도장 → 글 → 낙서 → 라벨)는 원래 두 경로가 같아.
+  - 기존 파라미터의 `= emptyList()` 기본값 때문에 한쪽에서 한 종류를 빠뜨려도 컴파일이 됐어(실제 누락은 없었어, 코드상 위험).
+- **구현:**
+  - `PostcardImageExporter`: `FrontOverlays`(5종 묶음, 기본값 없음)와 `renderFrontThenOutput`·`renderThenOutput`을 추가했어. `exportToGallery`·`exportForSharing`은 각자 출력 함수만 고르고 나머지는 공통이야.
+  - `DetailScreen.kt`: `createFrontOverlaysForExport`(순수 함수)와 현재 화면 값을 넘기는 람다 하나를 추가하고, 두 메뉴가 그걸 부르게 했어. 개별 조립 함수 5개와 종류별 규칙은 그대로야. 메뉴의 뒷면 분기·미측정 안내는 각 메뉴에 그대로 뒀어.
+  - `DetailViewModel`: `sharePostcard`·`exportPostcardToGallery`의 이름은 유지하고 **파라미터만 5개 목록 → `overlays` 하나로 바꿨어**(호출부는 `DetailScreen` 두 곳뿐). `PostcardImageExporter.exportToGallery`·`exportForSharing`의 파라미터도 같은 방식으로 바꿨고 기본값은 없앴어. 낙서는 지금처럼 IO 블록 안에서 읽어.
+  - `createPostcardBitmap`부터 파일 끝까지는 변경 전후 SHA-256이 같아(`draw*`·`saveBitmapToGallery` 포함). `saveBitmapForSharing`·`cleanupOldShareFiles`도 diff에 없어. Room 19·저장 형식·경로·이미지 자산·의존성·Gradle 무변경.
+  - 줄 수: `DetailScreen` 7265→7236, `DetailViewModel` 4990→4974, `PostcardImageExporter` 1977→1992, 합계 −30. 크게 줄진 않았고, 달라진 건 조립 진입점이 하나가 되고 한 종류를 빠뜨리면 컴파일 오류가 난다는 점이야.
+- **Bitmap·임시 파일:** 이미지 생성은 내보내기 1회당 1장으로 그대로이고 중간 복사를 추가하지 않았어. 해제 조건과 실패 시 공유 파일 삭제도 그대로야. 취소 예외를 `runCatching`이 실패로 돌려주는 기존 동작도 바꾸지 않았어.
+- **검증:** 로컬 `testDebugUnitTest` 1136/1136(XML 122, 실패·오류·skip 0, 신규 30 — TEST-COVERAGE-MAP 123일차 절), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 코드를 일부러 망가뜨린 15가지 변형 모두 테스트 실패로 잡힌 뒤 해시 일치로 원복. 첫 변형 실행은 새 테스트 입력값 오류로 모든 회차가 실패해 무효 처리했고, 입력값을 고친 뒤 변형 없는 상태 통과를 확인하고 다시 돌렸어. instrumentation 미실행.
+- **실기기 QA: 대기(필요).** 자동 검증은 그리기 직전 입력값과 소스 연결까지만 확인해. 실제 이미지 결과는 `SM-S936N`에서 사용자 승인 후 확인해야 해(`adb install -r`도 별도 승인). 제안 절차는 테스트 엽서로 변경 전 빌드와 변경 후 빌드의 내보내기 이미지를 받아 픽셀을 비교하는 거야. 현재 기기에 설치된 빌드는 미확인이라 다시 실측해야 해.
+- **미검증·남은 위험:**
+  - 실제 픽셀, 사진 스티커의 조립 결과값(JVM에서 Uri를 만들 수 없어 구조 테스트만), 메뉴 터치, 저장·공유 파일 결과, 실제 `recycle` 실행은 자동 검증하지 않았어.
+  - (낮음) 두 메뉴의 뒷면 분기·미측정 안내 코드는 여전히 두 벌이야. 역할을 합치지 말라는 지시에 따라 구조 테스트로만 고정했어.
+  - (낮음) `createFrontOverlaysForExport`는 같은 타입 파라미터가 많아 이름 붙은 인자와 테스트로만 뒤바뀜을 막아.
+  - 121일차 저장 무결성 잔여 위험, 테스트 엽서 31번 잔류는 그대로야(범위 밖).
+- **사용자 데이터:** 기기 접근 없음. 삭제·초기화·저장 형식 변경 없음. 보호 미추적 5묶음 미접촉·미stage.
+- **다음 후보(승인 아님):** 실기기 이미지 비교 QA, PR 병합 승인, 미리보기 꾸미기 층 분리(라벨부터), 스타일 저장 11쌍 공통화.
+
+---
+
 # HANDOFF — 122일차: 꾸미기 5종 되돌리기 기록 통합 / 실기기 QA 통과 · PR #13 병합 · main CI 성공
 
 2026-11-04, 담당 Claude Code(피코), 수동 표준 모드. 1차 지시서로 조사·구현·검증·commit·push·PR·CI 확인을, 2차 지시서로 실기기 QA(`adb install -r` 포함)·병합·main CI 확인·마감을 승인받았어. 내장 Task 도구로 진행 단계를 표시했어. 이 절은 병합 전에 작성한 뒤, 3차 지시로 최종 결과에 맞게 정정했어.

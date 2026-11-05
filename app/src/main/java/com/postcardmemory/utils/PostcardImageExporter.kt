@@ -168,78 +168,93 @@ object PostcardImageExporter {
         val customTapeColorArgb: Long? = null
     )
 
+    /**
+     * 공유와 갤러리 저장이 함께 쓰는 앞면 오버레이 묶음. 한쪽에서 한 종류를 빠뜨려
+     * 두 출력이 어긋나지 않도록 기본값을 두지 않는다. 낙서는 ViewModel이 내보내기
+     * 시점의 값을 읽어 따로 넘긴다.
+     */
+    data class FrontOverlays(
+        val stickers: List<StickerOverlay>,
+        val seals: List<SealOverlay>,
+        val textStickers: List<TextStickerOverlay>,
+        val maskingTapes: List<MaskingTapeOverlay>,
+        val labelStickers: List<LabelStickerOverlay>
+    )
+
     fun exportToGallery(
         context: Context,
         postcard: Postcard,
-        stickerOverlays: List<StickerOverlay> = emptyList(),
-        sealOverlays: List<SealOverlay> = emptyList(),
-        doodleStrokes: List<DoodleStroke> = emptyList(),
-        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
-        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
-        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
-    ): Result<Uri> {
-        return runCatching {
-            val outputBitmap =
-                createPostcardBitmap(
-                    context = context,
-                    postcard = postcard,
-                    stickerOverlays = stickerOverlays,
-                    sealOverlays = sealOverlays,
-                    doodleStrokes = doodleStrokes,
-                    textStickerOverlays = textStickerOverlays,
-                    maskingTapeOverlays = maskingTapeOverlays,
-                    labelStickerOverlays = labelStickerOverlays
-                )
-
-            try {
-                saveBitmapToGallery(
-                    context = context,
-                    bitmap = outputBitmap
-                )
-            } finally {
-                if (!outputBitmap.isRecycled) {
-                    outputBitmap.recycle()
-                }
-            }
+        overlays: FrontOverlays,
+        doodleStrokes: List<DoodleStroke>
+    ): Result<Uri> =
+        renderFrontThenOutput(context, postcard, overlays, doodleStrokes) { bitmap ->
+            saveBitmapToGallery(
+                context = context,
+                bitmap = bitmap
+            )
         }
-    }
 
     fun exportForSharing(
         context: Context,
         postcard: Postcard,
-        stickerOverlays: List<StickerOverlay> = emptyList(),
-        sealOverlays: List<SealOverlay> = emptyList(),
-        doodleStrokes: List<DoodleStroke> = emptyList(),
-        textStickerOverlays: List<TextStickerOverlay> = emptyList(),
-        maskingTapeOverlays: List<MaskingTapeOverlay> = emptyList(),
-        labelStickerOverlays: List<LabelStickerOverlay> = emptyList()
-    ): Result<File> {
-        return runCatching {
-            val outputBitmap =
+        overlays: FrontOverlays,
+        doodleStrokes: List<DoodleStroke>
+    ): Result<File> =
+        renderFrontThenOutput(context, postcard, overlays, doodleStrokes) { bitmap ->
+            saveBitmapForSharing(
+                context = context,
+                postcardId = postcard.id,
+                bitmap = bitmap
+            )
+        }
+
+    private fun <T> renderFrontThenOutput(
+        context: Context,
+        postcard: Postcard,
+        overlays: FrontOverlays,
+        doodleStrokes: List<DoodleStroke>,
+        output: (Bitmap) -> T
+    ): Result<T> =
+        renderThenOutput(
+            render = {
                 createPostcardBitmap(
                     context = context,
                     postcard = postcard,
-                    stickerOverlays = stickerOverlays,
-                    sealOverlays = sealOverlays,
+                    stickerOverlays = overlays.stickers,
+                    sealOverlays = overlays.seals,
                     doodleStrokes = doodleStrokes,
-                    textStickerOverlays = textStickerOverlays,
-                    maskingTapeOverlays = maskingTapeOverlays,
-                    labelStickerOverlays = labelStickerOverlays
+                    textStickerOverlays = overlays.textStickers,
+                    maskingTapeOverlays = overlays.maskingTapes,
+                    labelStickerOverlays = overlays.labelStickers
                 )
+            },
+            release = { bitmap ->
+                if (!bitmap.isRecycled) {
+                    bitmap.recycle()
+                }
+            },
+            output = output
+        )
+
+    /**
+     * 출력 결과와 관계없이 만든 이미지를 정확히 한 번 해제하고, 모든 실패를 Result로
+     * 돌려준다. Bitmap을 JVM 테스트에서 만들 수 없어 타입을 일반화했다.
+     * internal은 순수 JUnit 테스트를 위함.
+     */
+    internal fun <B, T> renderThenOutput(
+        render: () -> B,
+        release: (B) -> Unit,
+        output: (B) -> T
+    ): Result<T> =
+        runCatching {
+            val rendered = render()
 
             try {
-                saveBitmapForSharing(
-                    context = context,
-                    postcardId = postcard.id,
-                    bitmap = outputBitmap
-                )
+                output(rendered)
             } finally {
-                if (!outputBitmap.isRecycled) {
-                    outputBitmap.recycle()
-                }
+                release(rendered)
             }
         }
-    }
 
     /**
      * 초 단위 timestamp만 쓰면 같은 초에 두 번 공유할 때 파일명이 완전히
