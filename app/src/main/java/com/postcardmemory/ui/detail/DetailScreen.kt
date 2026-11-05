@@ -1067,6 +1067,72 @@ internal fun createMaskingTapeOverlaysForExport(
 }
 
 /**
+ * 공유와 갤러리 저장이 같은 앞면 오버레이를 쓰도록 5종 조립을 한 곳에 모은다.
+ * 종류별 규칙(도장 가장자리 걸침, 글·라벨의 미측정 건너뛰기 등)은 각 함수가 그대로 맡는다.
+ */
+internal fun createFrontOverlaysForExport(
+    postcardSize: IntSize,
+    photoStickers: List<PhotoStickerItem>,
+    stickerSizes: Map<String, IntSize>,
+    baseStickerPx: Float,
+    photoSeals: List<PostcardSealItem>,
+    sealSizes: Map<String, IntSize>,
+    baseSealPx: Float,
+    sealMinVisibleEdgePx: Float,
+    capturedAtMillis: Long?,
+    textStickers: List<TextStickerItem>,
+    textStickerSizes: Map<String, IntSize>,
+    baseTextStickerFontPx: Float,
+    maskingTapes: List<MaskingTapeItem>,
+    maskingTapeSizes: Map<String, IntSize>,
+    baseMaskingTapeWidthPx: Float,
+    baseMaskingTapeHeightPx: Float,
+    labelStickers: List<LabelStickerItem>,
+    labelStickerSizes: Map<String, IntSize>,
+    baseLabelStickerFontPx: Float
+): PostcardImageExporter.FrontOverlays =
+    PostcardImageExporter.FrontOverlays(
+        stickers =
+            createStickerOverlaysForExport(
+                photoStickers = photoStickers,
+                postcardSize = postcardSize,
+                stickerSizes = stickerSizes,
+                baseStickerPx = baseStickerPx
+            ),
+        seals =
+            createSealOverlaysForExport(
+                photoSeals = photoSeals,
+                postcardSize = postcardSize,
+                sealSizes = sealSizes,
+                baseSealPx = baseSealPx,
+                minimumVisibleEdgePx = sealMinVisibleEdgePx,
+                capturedAtMillis = capturedAtMillis
+            ),
+        textStickers =
+            createTextStickerOverlaysForExport(
+                textStickers = textStickers,
+                postcardSize = postcardSize,
+                textStickerSizes = textStickerSizes,
+                baseFontSizePx = baseTextStickerFontPx
+            ),
+        maskingTapes =
+            createMaskingTapeOverlaysForExport(
+                maskingTapes = maskingTapes,
+                postcardSize = postcardSize,
+                maskingTapeSizes = maskingTapeSizes,
+                baseMaskingTapeWidthPx = baseMaskingTapeWidthPx,
+                baseMaskingTapeHeightPx = baseMaskingTapeHeightPx
+            ),
+        labelStickers =
+            createLabelStickerOverlaysForExport(
+                labelStickers = labelStickers,
+                postcardSize = postcardSize,
+                labelStickerSizes = labelStickerSizes,
+                baseFontSizePx = baseLabelStickerFontPx
+            )
+    )
+
+/**
  * 편집 패널의 보조 행동(예: 사진에서 색 가져오기)에 쓰는 가벼운 외곽선
  * 버튼. 주요 선택지와 달리 검은 풀폭 버튼으로 강조하지 않고, 아이콘+라벨만
  * 얇은 테두리로 보여 준다.
@@ -1645,6 +1711,31 @@ fun DetailScreen(
 
     val sealMinVisibleEdgePx = with(LocalDensity.current) {
         SEAL_MIN_VISIBLE_EDGE.toPx()
+    }
+
+    // 메뉴를 누른 시점의 화면 상태를 읽는다. 공유와 파일 내보내기가 이 하나를 함께 쓴다.
+    val createCurrentFrontOverlaysForExport = { capturedAtMillis: Long? ->
+        createFrontOverlaysForExport(
+            postcardSize = postcardPreviewSize,
+            photoStickers = photoStickers,
+            stickerSizes = stickerSizes,
+            baseStickerPx = baseStickerPx,
+            photoSeals = photoSeals,
+            sealSizes = sealSizes,
+            baseSealPx = baseSealPx,
+            sealMinVisibleEdgePx = sealMinVisibleEdgePx,
+            capturedAtMillis = capturedAtMillis,
+            textStickers = textStickers,
+            textStickerSizes = textStickerSizes,
+            baseTextStickerFontPx = baseTextStickerFontPx,
+            maskingTapes = photoMaskingTapes,
+            maskingTapeSizes = maskingTapeSizes,
+            baseMaskingTapeWidthPx = baseMaskingTapeWidthPx,
+            baseMaskingTapeHeightPx = baseMaskingTapeHeightPx,
+            labelStickers = labelStickers,
+            labelStickerSizes = labelStickerSizes,
+            baseLabelStickerFontPx = baseLabelStickerFontPx
+        )
     }
     val stickerScaleHandleTouchSize = 44.dp
     val stickerScaleHandleVisibleSize = 24.dp
@@ -6263,67 +6354,7 @@ fun DetailScreen(
                                     }
 
                                     viewModel.sharePostcard(
-                                        labelStickerOverlays =
-                                            createLabelStickerOverlaysForExport(
-                                                labelStickers =
-                                                    labelStickers,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                labelStickerSizes =
-                                                    labelStickerSizes,
-                                                baseFontSizePx =
-                                                    baseLabelStickerFontPx
-                                            ),
-                                        stickerOverlays =
-                                            createStickerOverlaysForExport(
-                                                photoStickers =
-                                                    photoStickers,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                stickerSizes =
-                                                    stickerSizes,
-                                                baseStickerPx =
-                                                    baseStickerPx
-                                            ),
-                                        sealOverlays =
-                                            createSealOverlaysForExport(
-                                                photoSeals =
-                                                    photoSeals,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                sealSizes =
-                                                    sealSizes,
-                                                baseSealPx =
-                                                    baseSealPx,
-                                                minimumVisibleEdgePx =
-                                                    sealMinVisibleEdgePx,
-                                                capturedAtMillis =
-                                                    pc.capturedAt
-                                            ),
-                                        textStickerOverlays =
-                                            createTextStickerOverlaysForExport(
-                                                textStickers =
-                                                    textStickers,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                textStickerSizes =
-                                                    textStickerSizes,
-                                                baseFontSizePx =
-                                                    baseTextStickerFontPx
-                                            ),
-                                        maskingTapeOverlays =
-                                            createMaskingTapeOverlaysForExport(
-                                                maskingTapes =
-                                                    photoMaskingTapes,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                maskingTapeSizes =
-                                                    maskingTapeSizes,
-                                                baseMaskingTapeWidthPx =
-                                                    baseMaskingTapeWidthPx,
-                                                baseMaskingTapeHeightPx =
-                                                    baseMaskingTapeHeightPx
-                                            )
+                                        createCurrentFrontOverlaysForExport(pc.capturedAt)
                                     )
                                 }
                             }
@@ -6367,67 +6398,7 @@ fun DetailScreen(
                                     }
 
                                     viewModel.exportPostcardToGallery(
-                                        labelStickerOverlays =
-                                            createLabelStickerOverlaysForExport(
-                                                labelStickers =
-                                                    labelStickers,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                labelStickerSizes =
-                                                    labelStickerSizes,
-                                                baseFontSizePx =
-                                                    baseLabelStickerFontPx
-                                            ),
-                                        stickerOverlays =
-                                            createStickerOverlaysForExport(
-                                                photoStickers =
-                                                    photoStickers,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                stickerSizes =
-                                                    stickerSizes,
-                                                baseStickerPx =
-                                                    baseStickerPx
-                                            ),
-                                        sealOverlays =
-                                            createSealOverlaysForExport(
-                                                photoSeals =
-                                                    photoSeals,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                sealSizes =
-                                                    sealSizes,
-                                                baseSealPx =
-                                                    baseSealPx,
-                                                minimumVisibleEdgePx =
-                                                    sealMinVisibleEdgePx,
-                                                capturedAtMillis =
-                                                    pc.capturedAt
-                                            ),
-                                        textStickerOverlays =
-                                            createTextStickerOverlaysForExport(
-                                                textStickers =
-                                                    textStickers,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                textStickerSizes =
-                                                    textStickerSizes,
-                                                baseFontSizePx =
-                                                    baseTextStickerFontPx
-                                            ),
-                                        maskingTapeOverlays =
-                                            createMaskingTapeOverlaysForExport(
-                                                maskingTapes =
-                                                    photoMaskingTapes,
-                                                postcardSize =
-                                                    postcardPreviewSize,
-                                                maskingTapeSizes =
-                                                    maskingTapeSizes,
-                                                baseMaskingTapeWidthPx =
-                                                    baseMaskingTapeWidthPx,
-                                                baseMaskingTapeHeightPx =
-                                                    baseMaskingTapeHeightPx
-                                            )
+                                        createCurrentFrontOverlaysForExport(pc.capturedAt)
                                     )
                                 }
                             }
