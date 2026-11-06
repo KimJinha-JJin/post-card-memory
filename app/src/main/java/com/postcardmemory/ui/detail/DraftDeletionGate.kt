@@ -1,5 +1,9 @@
 package com.postcardmemory.ui.detail
 
+import com.postcardmemory.utils.PostcardDeletionResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -55,4 +59,53 @@ internal class DraftDeletionGate(
             }
             result
         }
+
+    /**
+     * 삭제를 끝까지 실행하고 결과에 맞게 초안을 처리한다.
+     *
+     * - 행 삭제 성공: 초안을 쓰지 않는다. 문은 닫힌 채로 남는다.
+     * - 행 삭제 실패: 엽서가 살아 있으므로 문을 연 뒤 [recoverDraft]로 편집을 바로 남긴다.
+     *   화면이 이미 닫혔을 수 있어 자동저장 예약에 맡기지 않는다.
+     * - 예상 밖 예외: 행이 지워졌는지 알 수 없으므로 초안을 쓰지 않고 문을 닫아 둔다.
+     *   DB 삭제와 파일 정리는 다시 실행해도 안전하므로 호출자는 재시도하게 둔다.
+     *
+     * 호출한 coroutine 자체가 취소되면 그대로 전파한다. 살아 있는 coroutine에서 내부
+     * 취소 예외만 올라온 경우는 불확실로 돌려줘 화면이 삭제 중 상태에 갇히지 않게 한다.
+     */
+    suspend fun deleteThenRecoverDraft(
+        postcardId: Long,
+        delete: suspend () -> PostcardDeletionResult,
+        recoverDraft: suspend () -> Unit
+    ): PostcardDeletionOutcome {
+        val result =
+            try {
+                runDeletion(postcardId, delete) { it.databaseDeleted }
+            } catch (cancellation: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                return PostcardDeletionOutcome.Uncertain(cancellation)
+            } catch (error: Exception) {
+                return PostcardDeletionOutcome.Uncertain(error)
+            }
+
+        if (result.databaseDeleted) {
+            return PostcardDeletionOutcome.RowDeleted(result)
+        }
+
+        return try {
+            recoverDraft()
+            PostcardDeletionOutcome.RowKept(recoveryFailure = null)
+        } catch (cancellation: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            PostcardDeletionOutcome.RowKept(recoveryFailure = cancellation)
+        } catch (error: Exception) {
+            PostcardDeletionOutcome.RowKept(recoveryFailure = error)
+        }
+    }
+}
+
+/** [DraftDeletionGate.deleteThenRecoverDraft]의 결과. 호출자가 화면 상태와 로그를 결정한다. */
+internal sealed interface PostcardDeletionOutcome {
+    data class RowDeleted(val result: PostcardDeletionResult) : PostcardDeletionOutcome
+    data class RowKept(val recoveryFailure: Exception?) : PostcardDeletionOutcome
+    data class Uncertain(val cause: Exception) : PostcardDeletionOutcome
 }

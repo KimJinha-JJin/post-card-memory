@@ -12,6 +12,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -321,6 +325,293 @@ class DraftDeletionGateTest {
         assertTrue(attemptWrite(id = OTHER_ID))
     }
 
+    // ---- 삭제 취소 회귀: 화면(ViewModel)이 닫혀도 DB 행과 초안이 어긋나면 안 된다 ----
+
+    /** 화면 범위와 앱 범위를 분리해 흉내낸다. 실제 ViewModel과 Android 생명주기는 아니다. */
+    private inner class DeletionScenario(
+        private val failDatabase: Boolean = false
+    ) {
+        val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val target = postcard()
+        var rowExists = true
+        var deleteAttempts = 0
+        var recoverCalls = 0
+        var outcome: PostcardDeletionOutcome? = null
+
+        suspend fun delete(): PostcardDeletionResult =
+            deletePostcardDatabaseFirst(
+                postcard = target,
+                deleteDatabaseRow = {
+                    deleteAttempts++
+                    if (failDatabase) throw IOException("injected delete failure")
+                    rowExists = false
+                },
+                cleanupOwnedAssets = { cleanupPostcardOwnedAssets(filesDir, it) }
+            )
+
+        /** 예약이 취소돼 디스크에 없던 마지막 편집(UNSAVED_REVISION)을 저장한다. */
+        suspend fun recoverLastEdit() {
+            recoverCalls++
+            attemptWrite(revision = UNSAVED_REVISION)
+        }
+
+        fun launchDeletionIn(scope: CoroutineScope): Job =
+            scope.launch {
+                outcome =
+                    gate.deleteThenRecoverDraft(
+                        postcardId = DELETED_ID,
+                        delete = { delete() },
+                        recoverDraft = { recoverLastEdit() }
+                    )
+            }
+
+        /** 앞선 저장이 잠금을 쥔 동안 삭제를 시작해, 화면이 닫힐 때 삭제가 잠금을 기다리게 한다. */
+        suspend fun closeScreenWhileDeletionWaitsForLock(scope: CoroutineScope): Job {
+            val lockHeld = CompletableDeferred<Unit>()
+            val releaseLock = CompletableDeferred<Unit>()
+            val earlierSave = appScope.launch {
+                gate.writeUnlessClosed(DELETED_ID, whenClosed = false) {
+                    lockHeld.complete(Unit)
+                    releaseLock.await()
+                    true
+                }
+            }
+            lockHeld.await()
+
+            gate.close(DELETED_ID)
+            val deletion = launchDeletionIn(scope)
+            repeat(5) { yield() }
+            viewModelScope.cancel()
+
+            releaseLock.complete(Unit)
+            earlierSave.join()
+            return deletion
+        }
+    }
+
+    @Test
+    fun oldArrangement_deletionInViewModelScope_keepsRow_butLosesLastEdit() = test {
+        // 회귀 재현: 삭제를 화면 범위에서 실행하던 907fd2f의 구조.
+        writeDraftFiles(revision = SAVED_REVISION)
+        val scenario = DeletionScenario()
+
+        scenario.closeScreenWhileDeletionWaitsForLock(scenario.viewModelScope).join()
+
+        assertEquals("삭제가 실행되지 않음", 0, scenario.deleteAttempts)
+        assertTrue("엽서는 남음", scenario.rowExists)
+        assertEquals(0, scenario.recoverCalls)
+        assertEquals(
+            "마지막 편집이 디스크에 없음(위험 기록)",
+            SAVED_REVISION,
+            PostcardDraftStorage.loadDraft(filesDir, DELETED_ID)?.revision
+        )
+    }
+
+    @Test
+    fun screenClosedBeforeDatabaseWrite_deletionStillFinishes_withNoDraftLeft() = test {
+        writeDraftFiles(revision = SAVED_REVISION)
+        val scenario = DeletionScenario()
+
+        scenario.closeScreenWhileDeletionWaitsForLock(scenario.appScope).join()
+
+        assertFalse("행이 지워짐", scenario.rowExists)
+        assertEquals(0, scenario.recoverCalls)
+        assertTrue(scenario.outcome is PostcardDeletionOutcome.RowDeleted)
+        assertNoDraftFiles()
+        assertFalse("삭제된 엽서에 늦은 저장은 쓰지 않음", attemptWrite(revision = 99L))
+        assertNoDraftFiles()
+    }
+
+    @Test
+    fun screenClosedThenDatabaseFails_lastEditIsRecovered_withRowKept() = test {
+        writeDraftFiles(revision = SAVED_REVISION)
+        val scenario = DeletionScenario(failDatabase = true)
+
+        scenario.closeScreenWhileDeletionWaitsForLock(scenario.appScope).join()
+
+        assertEquals(1, scenario.deleteAttempts)
+        assertTrue("엽서는 남음", scenario.rowExists)
+        assertEquals(1, scenario.recoverCalls)
+        assertEquals(
+            "화면이 닫혔어도 마지막 편집이 남음",
+            UNSAVED_REVISION,
+            PostcardDraftStorage.loadDraft(filesDir, DELETED_ID)?.revision
+        )
+        assertEquals(PostcardDeletionOutcome.RowKept(null), scenario.outcome)
+    }
+
+    @Test
+    fun rowDeleted_neverRunsRecovery_evenWithUnsavedEdits() = test {
+        val scenario = DeletionScenario()
+
+        gate.close(DELETED_ID)
+        scenario.launchDeletionIn(this).join()
+
+        assertEquals(0, scenario.recoverCalls)
+        assertNoDraftFiles()
+    }
+
+    @Test
+    fun unexpectedErrorAfterRowDelete_doesNotRewriteDraft_staysClosed() = test {
+        val scenario = DeletionScenario()
+        writeDraftFiles(revision = SAVED_REVISION)
+        var recoverCalls = 0
+
+        gate.close(DELETED_ID)
+        val outcome =
+            gate.deleteThenRecoverDraft(
+                postcardId = DELETED_ID,
+                delete = {
+                    deletePostcardDatabaseFirst(
+                        postcard = scenario.target,
+                        deleteDatabaseRow = {},
+                        cleanupOwnedAssets = { throw IOException("cleanup threw") }
+                    )
+                },
+                recoverDraft = { recoverCalls++ }
+            )
+
+        assertTrue(outcome is PostcardDeletionOutcome.Uncertain)
+        assertEquals("불확실하면 복구하지 않음", 0, recoverCalls)
+        assertFalse("불확실하면 문을 닫아 둠", attemptWrite(revision = UNSAVED_REVISION))
+        assertEquals(
+            SAVED_REVISION,
+            PostcardDraftStorage.loadDraft(filesDir, DELETED_ID)?.revision
+        )
+    }
+
+    @Test
+    fun retryAfterUncertainResult_finishesCleanup() = test {
+        val scenario = DeletionScenario()
+        writeDraftFiles(revision = SAVED_REVISION)
+
+        gate.close(DELETED_ID)
+        gate.deleteThenRecoverDraft(
+            postcardId = DELETED_ID,
+            delete = { throw IOException("cleanup threw") },
+            recoverDraft = {}
+        )
+
+        gate.close(DELETED_ID)
+        val retry =
+            gate.deleteThenRecoverDraft(
+                postcardId = DELETED_ID,
+                delete = { scenario.delete() },
+                recoverDraft = { fail("성공한 재시도에서 복구하면 안 됨") }
+            )
+
+        assertTrue(retry is PostcardDeletionOutcome.RowDeleted)
+        assertNoDraftFiles()
+    }
+
+    @Test
+    fun internalCancellationInLiveCoroutine_isUncertain_notStuckDeleting() = test {
+        val internal = CancellationException("internal")
+
+        gate.close(DELETED_ID)
+        val outcome =
+            gate.deleteThenRecoverDraft(
+                postcardId = DELETED_ID,
+                delete = { throw internal },
+                recoverDraft = { fail("불확실하면 복구하면 안 됨") }
+            )
+
+        assertEquals(PostcardDeletionOutcome.Uncertain(internal), outcome)
+        assertFalse(attemptWrite())
+    }
+
+    @Test
+    fun cancelledCallerDuringDeletion_propagates_withoutRecovery() = test {
+        val deleteEntered = CompletableDeferred<Unit>()
+        var recoverCalls = 0
+        var finished = false
+
+        gate.close(DELETED_ID)
+        val job = launch {
+            gate.deleteThenRecoverDraft(
+                postcardId = DELETED_ID,
+                delete = {
+                    deleteEntered.complete(Unit)
+                    CompletableDeferred<PostcardDeletionResult>().await()
+                },
+                recoverDraft = { recoverCalls++ }
+            )
+            finished = true
+        }
+        deleteEntered.await()
+        job.cancel()
+        job.join()
+
+        assertFalse("취소된 호출자는 이어서 실행되지 않음", finished)
+        assertEquals(0, recoverCalls)
+        assertFalse(attemptWrite())
+    }
+
+    @Test
+    fun recoveryFailure_isReported_releasesLock_andRetryStillWorks() = test {
+        val scenario = DeletionScenario()
+        val failure = IOException("disk full")
+
+        gate.close(DELETED_ID)
+        val outcome =
+            gate.deleteThenRecoverDraft(
+                postcardId = DELETED_ID,
+                delete = { failDatabaseDelete(scenario.target) },
+                recoverDraft = { throw failure }
+            )
+
+        assertEquals(PostcardDeletionOutcome.RowKept(failure), outcome)
+        assertTrue("실패 뒤 문이 열려 저장 가능", attemptWrite(revision = UNSAVED_REVISION))
+
+        gate.close(DELETED_ID)
+        val retry =
+            gate.deleteThenRecoverDraft(
+                postcardId = DELETED_ID,
+                delete = { scenario.delete() },
+                recoverDraft = {}
+            )
+        assertTrue(retry is PostcardDeletionOutcome.RowDeleted)
+        assertNoDraftFiles()
+    }
+
+    @Test
+    fun internalCancellationDuringRecovery_isReported_notStuckDeleting() = test {
+        val scenario = DeletionScenario(failDatabase = true)
+        val internal = CancellationException("internal")
+
+        gate.close(DELETED_ID)
+        val outcome =
+            gate.deleteThenRecoverDraft(
+                postcardId = DELETED_ID,
+                delete = { scenario.delete() },
+                recoverDraft = { throw internal }
+            )
+
+        assertEquals(PostcardDeletionOutcome.RowKept(internal), outcome)
+        assertTrue("엽서가 살아 있으므로 문은 열림", attemptWrite(revision = UNSAVED_REVISION))
+    }
+
+    @Test
+    fun recoveryRunsOutsideTheLock_andAfterReopen() = test {
+        val scenario = DeletionScenario(failDatabase = true)
+        var recoveredWrite: Boolean? = null
+
+        gate.close(DELETED_ID)
+        gate.deleteThenRecoverDraft(
+            postcardId = DELETED_ID,
+            delete = { scenario.delete() },
+            // persistDraftNow처럼 게이트로 다시 잠금을 얻는다. 잠금 안에서 부르면 여기서 멈춘다.
+            recoverDraft = { recoveredWrite = attemptWrite(revision = UNSAVED_REVISION) }
+        )
+
+        assertEquals(true, recoveredWrite)
+        assertEquals(
+            UNSAVED_REVISION,
+            PostcardDraftStorage.loadDraft(filesDir, DELETED_ID)?.revision
+        )
+    }
+
     // ---- 정상 저장 회귀: 삭제와 무관한 저장은 그대로다 ----
 
     @Test
@@ -401,30 +692,48 @@ class DraftDeletionGateTest {
     }
 
     @Test
-    fun structure_deletePostcard_closesBeforeDeleting_andRestoresAutosaveOnlyOnFailure() {
+    fun structure_deletePostcard_runsInAppScope_onMain_withGuardedRecovery() {
         val body = functionBody("fun deletePostcard()")
         val close = body.indexOf("draftDeletionGate.close(currentPostcard.id)")
         val cancel = body.indexOf("draftAutosaveJob?.cancel()")
-        val launch = body.indexOf("postcardDeleteJob = viewModelScope.launch")
-        val run = body.indexOf("draftDeletionGate.runDeletion(")
+        val launch =
+            body.indexOf("postcardDeleteJob = exitSaveScope.launch(Dispatchers.Main.immediate)")
+        val run = body.indexOf("draftDeletionGate.deleteThenRecoverDraft(")
         val manager = body.indexOf("deletionManager.deletePostcard(currentPostcard)")
-        val failure = body.indexOf("if (!result.databaseDeleted)")
-        val reschedule = body.indexOf("scheduleDraftAutosave()")
-        val failureEnd = body.indexOf("return@launch")
+        val recover = body.indexOf("recoverDraft = {")
+        val guard = body.indexOf("hasUnpersistedDraftEdits(")
+        val persist = body.indexOf("persistDraftNow()")
 
         assertTrue("닫기가 삭제 시작보다 먼저", close in 0 until launch)
         assertTrue("예약 취소가 삭제 시작보다 먼저", cancel in 0 until launch)
         assertTrue("삭제가 게이트 안에서 실행됨", run in (launch + 1) until manager)
-        assertTrue("다시 예약은 실패 분기 안에서만", reschedule in (failure + 1) until failureEnd)
-        assertTrue(
-            "디스크에 없는 편집이 있을 때만 다시 예약",
-            body.indexOf("hasUnpersistedDraftEdits(") in (failure + 1) until reschedule
-        )
+        assertTrue("복구는 디스크에 없는 편집이 있을 때만", guard in (recover + 1) until persist)
+        assertFalse("화면 범위에서 삭제하면 안 됨", body.contains("viewModelScope"))
+        assertFalse("복구를 화면 범위 예약에 맡기면 안 됨", body.contains("scheduleDraftAutosave()"))
+    }
+
+    @Test
+    fun structure_systemBack_isIgnoredWhileDeleting() {
+        val screenText =
+            readStructureTestSource(
+                listOf(
+                    "src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt",
+                    "app/src/main/java/com/postcardmemory/ui/detail/DetailScreen.kt"
+                )
+            )
+        val start = screenText.indexOf("val navigateBackAfterPendingStyleSaves: () -> Unit = {")
+        val guard = screenText.indexOf("if (deleteState !is PostcardDeleteState.Deleting)", start)
+        val exit = screenText.indexOf("exitScope.launch", start)
+
+        assertTrue(start >= 0)
+        assertTrue("대기와 복귀가 삭제 중 검사 안에 있어야 함", guard in (start + 1) until exit)
     }
 
     private companion object {
         const val DELETED_ID = 7L
         const val OTHER_ID = 8L
+        const val SAVED_REVISION = 1L
+        const val UNSAVED_REVISION = 2L
         const val TIMEOUT_MS = 10_000L
     }
 }
