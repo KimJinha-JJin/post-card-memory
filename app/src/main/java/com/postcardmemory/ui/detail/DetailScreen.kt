@@ -1883,10 +1883,14 @@ fun DetailScreen(
     // Saving 플래그)를 전혀 확인하지 않으므로, 저장이 실제 DAO 쓰기에 닿기 전에도
     // 화면을 나갈 수 있다. 나가기 전 아직 끝나지 않은 저장을 기다려야
     // ViewModelStore가 clear()되기 전에 마지막 값이 Room에 반영된다.
+    // 124일차: 삭제 중에는 나가지 않는다. 상단 뒤로 버튼처럼 막아, 삭제가 끝나기 전에 같은
+    // 엽서로 다시 들어오거나 삭제 완료 복귀와 겹쳐 화면이 두 번 닫히는 일을 막는다.
     val navigateBackAfterPendingStyleSaves: () -> Unit = {
-        exitScope.launch {
-            viewModel.awaitPendingStyleSaves()
-            onNavigateBack()
+        if (deleteState !is PostcardDeleteState.Deleting) {
+            exitScope.launch {
+                viewModel.awaitPendingStyleSaves()
+                onNavigateBack()
+            }
         }
     }
 
