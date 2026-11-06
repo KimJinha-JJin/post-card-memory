@@ -498,7 +498,9 @@ class DetailViewModel @Inject constructor(
     private val draftRevisionCounter = AtomicLong(0L)
     private var latestPersistedDraftRevision: Long = 0L
     private val draftSaveMutex = Mutex()
+    private val draftDeletionGate = DraftDeletionGate(draftSaveMutex)
     private var draftAutosaveJob: Job? = null
+    private var postcardDeleteJob: Job? = null
 
     // 119일차: 꾸미기 내용이 바뀔 때마다 오르는 편집 세대와, 그 세대가 초안 저장·완료
     // 저장으로 디스크에 반영된 마지막 값(hasUnpersistedDraftEdits 참고). 이탈 flush는
@@ -850,21 +852,26 @@ class DetailViewModel @Inject constructor(
         var promotedStickers: List<PhotoStickerItem>? = null
 
         val success = withContext(Dispatchers.IO) {
-            draftSaveMutex.withLock {
+            // 124일차: 삭제 중이거나 삭제된 엽서면 폴더도 만들지 않고 건너뛴다. 건너뛴 편집은
+            // 세대가 오르지 않아 남아 있으므로, 삭제가 실패하면 deletePostcard가 다시 예약한다.
+            draftDeletionGate.writeUnlessClosed(
+                postcardId = postcardId,
+                whenClosed = true
+            ) {
                 if (
                     !shouldPersistDraftRevision(
                         candidateRevision = candidateRevision,
                         latestPersistedRevision = latestPersistedDraftRevision
                     )
                 ) {
-                    return@withLock true
+                    return@writeUnlessClosed true
                 }
 
                 val promoted =
                     promoteDraftStickerBackgrounds(
                         postcardId = postcardId,
                         stickers = snapshotStickers
-                    ) ?: return@withLock false
+                    ) ?: return@writeUnlessClosed false
 
                 val draft = PostcardEditDraft(
                     postcardId = postcardId,
@@ -3864,6 +3871,7 @@ class DetailViewModel @Inject constructor(
                 stampPhotoZoomSaveJob,
                 polaroidPhotoZoomSaveJob,
                 tapedFilmPhotoZoomSaveJob,
+                postcardDeleteJob,
                 backgroundColorSaveJob,
                 backgroundPatternSaveJob,
                 layoutStyleSaveJob,
@@ -4743,6 +4751,10 @@ class DetailViewModel @Inject constructor(
      * Room 삭제 자체가 실패하면 화면을 종료하지 않고 재시도할 수 있게 두며,
      * Room은 삭제됐지만 일부 파일 정리만 실패했다면(고아 파일) 화면은
      * 정상 종료하되 그 사실을 로그로 남긴다.
+     *
+     * 124일차: 초안 저장을 먼저 닫아([DraftDeletionGate]) 삭제 뒤에 늦은 자동저장이나
+     * 화면 이탈 flush가 이 엽서의 초안을 다시 만들지 못하게 한다. 삭제가 실패하면 엽서가
+     * 살아 있으므로, 아직 디스크에 없는 편집이 있을 때 자동저장을 다시 예약해 잃지 않는다.
      */
     fun deletePostcard() {
         val currentPostcard =
@@ -4754,11 +4766,17 @@ class DetailViewModel @Inject constructor(
         }
 
         _deleteState.value = PostcardDeleteState.Deleting
+        draftDeletionGate.close(currentPostcard.id)
+        draftAutosaveJob?.cancel()
 
-        viewModelScope.launch {
+        postcardDeleteJob = viewModelScope.launch {
             val result =
                 withContext(Dispatchers.IO) {
-                    deletionManager.deletePostcard(currentPostcard)
+                    draftDeletionGate.runDeletion(
+                        postcardId = currentPostcard.id,
+                        delete = { deletionManager.deletePostcard(currentPostcard) },
+                        rowDeleted = { it.databaseDeleted }
+                    )
                 }
 
             if (!result.databaseDeleted) {
@@ -4766,6 +4784,14 @@ class DetailViewModel @Inject constructor(
                     PostcardDeleteState.Error(
                         "엽서를 삭제하지 못했어. 다시 시도해줘."
                     )
+                if (
+                    hasUnpersistedDraftEdits(
+                        editGeneration = draftEditGeneration.get(),
+                        persistedGeneration = draftPersistedGeneration.get()
+                    )
+                ) {
+                    scheduleDraftAutosave()
+                }
                 return@launch
             }
 

@@ -23,6 +23,18 @@ import com.postcardmemory.ui.theme.GraphiteAccent
 import kotlin.math.roundToInt
 
 /**
+ * 124일차: 손을 뗄 때 저장할 값. Material3 Slider는 썸 근처를 탭해 값이 그대로면
+ * onValueChange 없이 onValueChangeFinished만 부른다. 이때 지난 드래그 값을 저장하면
+ * 되돌리기로 바뀐 현재 값을 옛 값이 덮어쓰므로, 이번 조작에서 값이 바뀌었을 때만
+ * 드래그 값을 쓴다.
+ */
+internal fun resolveConfirmedPercent(
+    valueChanged: Boolean,
+    draggingPercent: Int,
+    currentPercent: Int
+): Int = if (valueChanged) draggingPercent else currentPercent
+
+/**
  * 사진·배경·텍스트 패널이 공유하는 퍼센트 조절 슬라이더.
  *
  * 라벨과 현재값을 한 줄에 두고 그 아래 얇은 EditorSlider만 둔다. 숫자
@@ -84,8 +96,14 @@ internal fun EditorPercentSlider(
                 onPreviewPercentChanged(snappedPercent)
             },
             onValueChangeFinished = {
+                val confirmedPercent =
+                    resolveConfirmedPercent(
+                        valueChanged = isDragging,
+                        draggingPercent = draggingPercent,
+                        currentPercent = percent
+                    )
                 isDragging = false
-                onPercentConfirmed(draggingPercent)
+                onPercentConfirmed(confirmedPercent)
             },
             valueRange =
                 minPercent.toFloat()..maxPercent.toFloat(),
