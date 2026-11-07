@@ -2555,8 +2555,10 @@ fun DetailScreen(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 125일차: 상단바 56dp + 구분선 1dp 아래에 기존과 같은 7dp 간격을 두도록
+            // 바가 8dp 얇아진 만큼 엽서도 72dp → 64dp로 함께 올린다.
             Spacer(
-                modifier = Modifier.height(72.dp)
+                modifier = Modifier.height(64.dp)
             )
 
             postcard?.let { pc ->
@@ -6141,6 +6143,7 @@ fun DetailScreen(
         Column {
             // 125일차: 화면에 보이는 제목은 없앴지만 접근성 서비스가 이 화면의 목적을
             // 알 수 있게 상단바에 같은 이름을 paneTitle로 남긴다.
+            // 높이 56dp = 버튼 터치 칸 48dp + 위아래 4dp(실기기 비교 후 64dp에서 축소).
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -6148,7 +6151,7 @@ fun DetailScreen(
                     .semantics { paneTitle = "엽서 꾸미기" }
                     .padding(
                         horizontal = 8.dp,
-                        vertical = 8.dp
+                        vertical = 4.dp
                     ),
                 verticalAlignment =
                     Alignment.CenterVertically
@@ -6848,13 +6851,13 @@ fun DetailScreen(
             }
         }
 
-        // 101일차: 하단 편집 메뉴를 가리지 않도록 상단 바(높이 64dp) 바로 아래에 띄운다.
+        // 101일차: 하단 편집 메뉴를 가리지 않도록 상단 바(125일차부터 높이 56dp) 바로 아래에 띄운다.
         // 알림창 색(종이 배경·잉크 글자·금갈색 버튼)은 테마의 inverse 색이 정한다.
         SnackbarHost(
             hostState = detailSnackbarHostState,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 64.dp)
+                .padding(top = 56.dp)
         )
 
         SnackbarHost(
