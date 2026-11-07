@@ -30,13 +30,36 @@ class PostcardFrontExportRoutingStructureTest {
     private fun count(text: String, pattern: String): Int =
         Regex(pattern).findAll(text).count()
 
-    /** 메뉴 항목의 onClick 본문. 다음 메뉴 항목 전까지 자른다. */
+    /**
+     * 상단바 버튼의 onClick·enabled·진행 표시 부분. 125일차에 공유·파일 내보내기를 케밥 메뉴에서
+     * 상단바 IconButton으로 옮겨, 그 버튼의 contentDescription 직전 IconButton( 부터 자른다.
+     */
     private fun menuHandler(label: String): String {
-        val start = detailScreen.indexOf("Text(text = \"$label\"")
-        assertTrue("[$label] 메뉴를 찾지 못했다", start >= 0)
-        val clickStart = detailScreen.indexOf("onClick = {", start)
-        val end = detailScreen.indexOf("DropdownMenuItem(", clickStart)
-        return detailScreen.substring(clickStart, end)
+        val description = detailScreen.indexOf("contentDescription = \"$label\"")
+        assertTrue("[$label] 상단바 버튼을 찾지 못했다", description >= 0)
+        assertEquals(
+            "[$label] 버튼은 한 곳에만 있어야 한다",
+            description,
+            detailScreen.lastIndexOf("contentDescription = \"$label\"")
+        )
+        val start = detailScreen.lastIndexOf("IconButton(", description)
+        assertTrue("[$label] IconButton 안에 있어야 한다", start >= 0)
+        return detailScreen.substring(start, description)
+    }
+
+    /** 옮긴 버튼도 메뉴 항목과 같은 조건으로 막히고, 준비 중에는 같은 상태로 진행 표시를 보여 준다. */
+    @Test
+    fun topBarButtonsKeepTheMenuGuardAndProgressState() {
+        mapOf(
+            "공유" to "if (shareState is ShareState.Preparing)",
+            "파일 내보내기" to "if (exportState is ExportState.Exporting)"
+        ).forEach { (label, progress) ->
+            val handler = menuHandler(label)
+            assertTrue("[$label] controlsEnabled로 막혀야 한다", handler.contains("enabled = controlsEnabled"))
+            assertTrue("[$label] 진행 표시가 기존 상태를 읽어야 한다", handler.contains(progress))
+            assertTrue("[$label] 진행 표시가 있어야 한다", handler.contains("CircularProgressIndicator("))
+            assertTrue("[$label] 진행 표시는 기존 18dp", handler.contains(".size(18.dp)"))
+        }
     }
 
     @Test
@@ -139,6 +162,26 @@ class PostcardFrontExportRoutingStructureTest {
     fun menusKeepTheirOwnBackFaceFlag() {
         assertTrue(menuHandler("공유").contains("backExportRequest = pc to true"))
         assertTrue(menuHandler("파일 내보내기").contains("backExportRequest = pc to false"))
+    }
+
+    /**
+     * 125일차: 상단바 버튼 연타가 완료 창이 그려지기 전 틈에 새 내보내기를 시작하지 않도록,
+     * 앞면·뒷면 내보내기 모두 대기 상태에서만 시작한다(공유는 원래 그랬다).
+     */
+    @Test
+    fun exportsStartOnlyFromIdle() {
+        fun head(function: String): String {
+            val start = viewModel.indexOf("fun $function(")
+            assertTrue("[$function] 찾지 못했다", start >= 0)
+            return viewModel.substring(start, viewModel.indexOf("viewModelScope.launch", start))
+        }
+
+        assertTrue(head("exportPostcardToGallery").contains("if (_exportState.value !is ExportState.Idle) {"))
+        assertTrue(
+            head("exportBackPostcard")
+                .contains("if (_exportState.value !is ExportState.Idle || _shareState.value !is ShareState.Idle) {")
+        )
+        assertTrue(head("sharePostcard").contains("ShareState.Idle"))
     }
 
     @Test

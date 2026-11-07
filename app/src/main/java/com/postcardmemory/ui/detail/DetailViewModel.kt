@@ -4618,7 +4618,8 @@ class DetailViewModel @Inject constructor(
 
     /** Takes ownership of the snapshot. Even a canceled launch releases it. */
     fun exportBackPostcard(postcardId: Long, bitmap: Bitmap, sharing: Boolean) {
-        if (_exportState.value is ExportState.Exporting || _shareState.value !is ShareState.Idle) {
+        // 125일차: 앞면 내보내기와 같이 결과 창을 닫은 대기 상태에서만 받는다.
+        if (_exportState.value !is ExportState.Idle || _shareState.value !is ShareState.Idle) {
             bitmap.recycle()
             return
         }
@@ -4652,10 +4653,9 @@ class DetailViewModel @Inject constructor(
             _postcard.value
                 ?: return
 
-        if (
-            _exportState.value is
-                    ExportState.Exporting
-        ) {
+        // 125일차: 공유처럼 대기 상태에서만 받는다. 완료·오류 창을 확인으로 닫기 전에는
+        // (창이 그려지기 직전의 틈에 들어온 연타 포함) 새 내보내기를 시작하지 않는다.
+        if (_exportState.value !is ExportState.Idle) {
             return
         }
 

@@ -551,13 +551,15 @@ fun GalleryScreen(
         topBar = {
             if (selectionMode) {
                 Column {
+                    // 125일차: 세부 편집 상단바와 같은 56dp(버튼 48dp + 위아래 4dp)로 맞춘다.
+                    // 기본 갤러리 상단바·검색 바는 별도 Row라 영향이 없다.
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(GalleryPaperWhite)
                             .padding(
                                 horizontal = 8.dp,
-                                vertical = 8.dp
+                                vertical = 4.dp
                             ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
