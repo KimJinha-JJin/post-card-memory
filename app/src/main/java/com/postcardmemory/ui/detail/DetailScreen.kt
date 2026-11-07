@@ -54,16 +54,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flip
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -142,6 +140,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1492,10 +1492,6 @@ fun DetailScreen(
         mutableStateOf(false)
     }
 
-    var isFocusPreviewMode by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     // 앞/뒤 어느 면을 보고 있는지는 일시적 UI 상태로만 취급한다 — DB에
     // 저장하지 않으며, 화면에 새로 진입하면 항상 앞면부터 시작한다.
     var isBackFace by remember {
@@ -1894,23 +1890,17 @@ fun DetailScreen(
         }
     }
 
-    BackHandler(enabled = isFocusPreviewMode) {
-        isFocusPreviewMode = false
-    }
-
-    BackHandler(enabled = !isFocusPreviewMode) {
+    BackHandler {
         navigateBackAfterPendingStyleSaves()
     }
 
-    // 도장 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 조준을 접는다(도장 생성 없음).
+    // 도장 탭을 벗어나거나 뒷면으로 바뀌면 조준을 접는다(도장 생성 없음).
     LaunchedEffect(
         customizationPagerState.currentPage,
-        isFocusPreviewMode,
         isBackFace
     ) {
         if (
             customizationPagerState.currentPage != SEAL_TAB_PAGE_INDEX ||
-            isFocusPreviewMode ||
             isBackFace
         ) {
             sealStampSession.cancelAiming()
@@ -2019,14 +2009,13 @@ fun DetailScreen(
 
     // 고른 사진(복사 완료 또는 SAF URI)으로 조준을 시작한다. 바로 붙이지 않고 조준부터 —
     // 실제 스티커는 핀셋이 종이에 닿는 순간 undo 한 건으로 만들어진다.
-    // 복사를 기다리는 사이 조준할 수 없는 상태(엽서 크기 미측정, 다른 탭, 크게보기·뒷면)가
+    // 복사를 기다리는 사이 조준할 수 없는 상태(엽서 크기 미측정, 다른 탭, 뒷면)가
     // 됐으면 고른 사진을 잃지 않도록 예전처럼 가운데에 바로 붙인다.
     fun startPhotoStickerAim(originalUri: Uri) {
         val canAim =
             postcardPreviewSize != IntSize.Zero &&
                     customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX &&
                     stickerSubTabIndex == 0 &&
-                    !isFocusPreviewMode &&
                     !isBackFace
         if (!canAim) {
             viewModel.addPlacedPhotoSticker(
@@ -2067,7 +2056,6 @@ fun DetailScreen(
             postcardPreviewSize != IntSize.Zero &&
                     customizationPagerState.currentPage == STICKER_TAB_PAGE_INDEX &&
                     stickerSubTabIndex == 0 &&
-                    !isFocusPreviewMode &&
                     !isBackFace
         if (!canAim) {
             viewModel.addPlacedPhotoSticker(
@@ -2101,17 +2089,15 @@ fun DetailScreen(
                 ?.let { aim -> stashed.shapeFor(aim.stickerId) }
     }
 
-    // 사진 스티커 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 조준을 접는다(스티커 생성 없음).
+    // 사진 스티커 탭을 벗어나거나 뒷면으로 바뀌면 조준을 접는다(스티커 생성 없음).
     LaunchedEffect(
         customizationPagerState.currentPage,
         stickerSubTabIndex,
-        isFocusPreviewMode,
         isBackFace
     ) {
         if (
             customizationPagerState.currentPage != STICKER_TAB_PAGE_INDEX ||
             stickerSubTabIndex != 0 ||
-            isFocusPreviewMode ||
             isBackFace
         ) {
             photoStickerPlaceSession.cancelAiming()
@@ -2119,17 +2105,15 @@ fun DetailScreen(
         }
     }
 
-    // 라벨 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 라벨 조준을 접는다(라벨 생성 없음).
+    // 라벨 탭을 벗어나거나 뒷면으로 바뀌면 라벨 조준을 접는다(라벨 생성 없음).
     LaunchedEffect(
         customizationPagerState.currentPage,
         stickerSubTabIndex,
-        isFocusPreviewMode,
         isBackFace
     ) {
         if (
             customizationPagerState.currentPage != STICKER_TAB_PAGE_INDEX ||
             stickerSubTabIndex != 2 ||
-            isFocusPreviewMode ||
             isBackFace
         ) {
             labelStickerPlaceSession.cancelAiming()
@@ -2142,17 +2126,15 @@ fun DetailScreen(
         labelStickerPlaceSession.cancelAiming()
     }
 
-    // 텍스트 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 텍스트 조준을 접는다(스티커 생성 없음).
+    // 텍스트 탭을 벗어나거나 뒷면으로 바뀌면 텍스트 조준을 접는다(스티커 생성 없음).
     LaunchedEffect(
         customizationPagerState.currentPage,
         stickerSubTabIndex,
-        isFocusPreviewMode,
         isBackFace
     ) {
         if (
             customizationPagerState.currentPage != STICKER_TAB_PAGE_INDEX ||
             stickerSubTabIndex != 1 ||
-            isFocusPreviewMode ||
             isBackFace
         ) {
             textStickerPlaceSession.cancelAiming()
@@ -2181,7 +2163,6 @@ fun DetailScreen(
         val canAim =
             postcardPreviewSize != IntSize.Zero &&
                     customizationPagerState.currentPage == MASKING_TAPE_TAB_PAGE_INDEX &&
-                    !isFocusPreviewMode &&
                     !isBackFace
         if (!canAim) {
             viewModel.addPlacedMaskingTape(draft)
@@ -2197,15 +2178,13 @@ fun DetailScreen(
             .forEach(::discardMaskingTapeAimDraft)
     }
 
-    // 테이프 탭을 벗어나거나 크게보기·뒷면으로 바뀌면 테이프 조준을 접는다(테이프 생성 없음).
+    // 테이프 탭을 벗어나거나 뒷면으로 바뀌면 테이프 조준을 접는다(테이프 생성 없음).
     LaunchedEffect(
         customizationPagerState.currentPage,
-        isFocusPreviewMode,
         isBackFace
     ) {
         if (
             customizationPagerState.currentPage != MASKING_TAPE_TAB_PAGE_INDEX ||
-            isFocusPreviewMode ||
             isBackFace
         ) {
             maskingTapePlaceSession.cancelAiming()
@@ -2573,23 +2552,15 @@ fun DetailScreen(
                 .padding(
                     horizontal = 20.dp
                 ),
-            verticalArrangement =
-                if (isFocusPreviewMode) {
-                    Arrangement.Center
-                } else {
-                    Arrangement.Top
-                },
+            verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (!isFocusPreviewMode) {
-                Spacer(
-                    modifier = Modifier.height(72.dp)
-                )
-            }
+            Spacer(
+                modifier = Modifier.height(72.dp)
+            )
 
             postcard?.let { pc ->
-                val postcardPreviewWidthFraction =
-                    if (isFocusPreviewMode) 0.96f else 0.8f
+                val postcardPreviewWidthFraction = 0.8f
 
                 // 앞↔뒤 page-turn: 카드를 회전시키는 대신, 오른쪽 아래 모서리에서
                 // 왼쪽 위로 이어지는 대각선을 따라 "이미 넘어간 삼각형"이
@@ -2654,13 +2625,8 @@ fun DetailScreen(
                                 postcardPositionInRoot = it.positionInRoot()
                             }
                             .pointerInput(
-                                selectedLayout,
-                                isFocusPreviewMode
+                                selectedLayout
                             ) {
-                                if (isFocusPreviewMode) {
-                                    return@pointerInput
-                                }
-
                                 val panSensitivity = 0.45f
                                 var tapedFilmDragArmed = true
                                 var photoTransformGestureSnapshotPending = true
@@ -2876,7 +2842,6 @@ fun DetailScreen(
                                 tape.id == selectedMaskingTapeId
                             val isMaskingTapeVisuallySelected =
                                 isMaskingTapeSelected &&
-                                        !isFocusPreviewMode &&
                                         latestCustomizationPage ==
                                         MASKING_TAPE_TAB_PAGE_INDEX
                             val currentMaskingTapeOffset =
@@ -2921,13 +2886,8 @@ fun DetailScreen(
                                         ) {
                                             Modifier.pointerInput(
                                         tape.id,
-                                        postcardPreviewSize,
-                                        isFocusPreviewMode
+                                        postcardPreviewSize
                                     ) {
-                                        if (isFocusPreviewMode) {
-                                            return@pointerInput
-                                        }
-
                                         var maskingTapeGestureSnapshotPending = true
 
                                         coroutineScope {
@@ -3037,7 +2997,6 @@ fun DetailScreen(
                                 sticker.id == selectedStickerId
                             val isVisuallySelected =
                                 isSelected &&
-                                        !isFocusPreviewMode &&
                                         latestCustomizationPage ==
                                         STICKER_TAB_PAGE_INDEX &&
                                         stickerSubTabIndex == 0
@@ -3172,13 +3131,8 @@ fun DetailScreen(
                                                 Modifier.pointerInput(
                                             sticker.id,
                                             postcardPreviewSize,
-                                            perStickerEditMode,
-                                            isFocusPreviewMode
+                                            perStickerEditMode
                                         ) {
-                                            if (isFocusPreviewMode) {
-                                                return@pointerInput
-                                            }
-
                                             var stickerGestureSnapshotPending = true
                                             var activeStickerPointerCount = 0
 
@@ -3472,13 +3426,8 @@ fun DetailScreen(
                                                     Modifier.pointerInput(
                                                 sticker.id,
                                                 postcardPreviewSize,
-                                                stickerScaleHandleTouchPx,
-                                                isFocusPreviewMode
+                                                stickerScaleHandleTouchPx
                                             ) {
-                                                if (isFocusPreviewMode) {
-                                                    return@pointerInput
-                                                }
-
                                                 var rotationGestureActive = false
                                                 var gestureStartRotation = 0f
                                                 var gestureStartCenter = Offset.Zero
@@ -3648,13 +3597,8 @@ fun DetailScreen(
                                                     Modifier.pointerInput(
                                                 sticker.id,
                                                 postcardPreviewSize,
-                                                stickerScaleHandleTouchPx,
-                                                isFocusPreviewMode
+                                                stickerScaleHandleTouchPx
                                             ) {
-                                                if (isFocusPreviewMode) {
-                                                    return@pointerInput
-                                                }
-
                                                 var scaleGestureActive = false
                                                 var gestureStartScale = 1f
                                                 var gestureStartCenter = Offset.Zero
@@ -3831,7 +3775,6 @@ fun DetailScreen(
                                 seal.id == selectedSealId
                             val isSealVisuallySelected =
                                 isSealSelected &&
-                                        !isFocusPreviewMode &&
                                         latestCustomizationPage ==
                                         SEAL_TAB_PAGE_INDEX
                             val currentSealOffset =
@@ -3883,13 +3826,8 @@ fun DetailScreen(
                                         ) {
                                             Modifier.pointerInput(
                                         seal.id,
-                                        postcardPreviewSize,
-                                        isFocusPreviewMode
+                                        postcardPreviewSize
                                     ) {
-                                        if (isFocusPreviewMode) {
-                                            return@pointerInput
-                                        }
-
                                         var sealGestureSnapshotPending = true
                                         var activeSealPointerCount = 0
 
@@ -4114,7 +4052,6 @@ fun DetailScreen(
                                 textSticker.id == selectedTextStickerId
                             val isTextStickerVisuallySelected =
                                 isTextStickerSelected &&
-                                        !isFocusPreviewMode &&
                                         latestCustomizationPage ==
                                         STICKER_TAB_PAGE_INDEX &&
                                         stickerSubTabIndex == 1
@@ -4158,13 +4095,8 @@ fun DetailScreen(
                                         ) {
                                             Modifier.pointerInput(
                                         textSticker.id,
-                                        postcardPreviewSize,
-                                        isFocusPreviewMode
+                                        postcardPreviewSize
                                     ) {
-                                        if (isFocusPreviewMode) {
-                                            return@pointerInput
-                                        }
-
                                         var textStickerGestureSnapshotPending = true
 
                                         coroutineScope {
@@ -4293,8 +4225,7 @@ fun DetailScreen(
                         // 않는다(Modifier.then으로 조건부 부착).
                         val isDoodleInputActive =
                             customizationPagerState.currentPage ==
-                            DOODLE_TAB_PAGE_INDEX &&
-                            !isFocusPreviewMode
+                            DOODLE_TAB_PAGE_INDEX
 
                         Canvas(
                             modifier = Modifier
@@ -4612,7 +4543,6 @@ fun DetailScreen(
                                 labelSticker.id == selectedLabelStickerId
                             val isLabelStickerVisuallySelected =
                                 isLabelStickerSelected &&
-                                        !isFocusPreviewMode &&
                                         latestCustomizationPage ==
                                         STICKER_TAB_PAGE_INDEX &&
                                         stickerSubTabIndex == 2
@@ -4656,13 +4586,8 @@ fun DetailScreen(
                                         ) {
                                             Modifier.pointerInput(
                                         labelSticker.id,
-                                        postcardPreviewSize,
-                                        isFocusPreviewMode
+                                        postcardPreviewSize
                                     ) {
-                                        if (isFocusPreviewMode) {
-                                            return@pointerInput
-                                        }
-
                                         var labelStickerGestureSnapshotPending = true
 
                                         coroutineScope {
@@ -4964,8 +4889,7 @@ fun DetailScreen(
                                 )
                             },
                             capturedAt = pc.capturedAt,
-                            enabled = controlsEnabled && !isFocusPreviewMode,
-                            readOnly = isFocusPreviewMode,
+                            enabled = controlsEnabled,
                             postscript = pc.backPostscript,
                             onPostscriptChanged = viewModel::updateBackPostscript,
                             writtenAt = pc.backWrittenAt,
@@ -4976,7 +4900,6 @@ fun DetailScreen(
                 }
             }
 
-            if (!isFocusPreviewMode) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -6213,15 +6136,16 @@ fun DetailScreen(
                 )
             }
             }
-            }
         }
 
-        if (!isFocusPreviewMode) {
         Column {
+            // 125일차: 화면에 보이는 제목은 없앴지만 접근성 서비스가 이 화면의 목적을
+            // 알 수 있게 상단바에 같은 이름을 paneTitle로 남긴다.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(GalleryPaperWhite)
+                    .semantics { paneTitle = "엽서 꾸미기" }
                     .padding(
                         horizontal = 8.dp,
                         vertical = 8.dp
@@ -6241,17 +6165,8 @@ fun DetailScreen(
                     )
                 }
 
-                Text(
-                    text = "엽서 꾸미기",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = BrutalBlack,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 8.dp)
-                )
+                // 뒤로가기와 오른쪽 기능 묶음을 양끝으로 나눈다.
+                Spacer(modifier = Modifier.weight(1f))
 
                 IconButton(
                     onClick = triggerFlip,
@@ -6271,20 +6186,6 @@ fun DetailScreen(
 
                 IconButton(
                     onClick = {
-                        backFocusManager.clearFocus()
-                        isFocusPreviewMode = true
-                    },
-                    enabled = controlsEnabled
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Fullscreen,
-                        contentDescription = "미리보기 크게 보기",
-                        tint = BrutalBlack
-                    )
-                }
-
-                IconButton(
-                    onClick = {
                         viewModel.saveEditsAndClearDraft(
                             postcardId
                         )
@@ -6292,10 +6193,96 @@ fun DetailScreen(
                     enabled = controlsEnabled
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = Icons.Default.Save,
                         contentDescription = "스티커·도장 꾸미기 완료 저장",
                         tint = SunsetGold
                     )
+                }
+
+                // 125일차: 공유·파일 내보내기는 케밥 메뉴에서 상단바로 옮겼다. 실행 블록은
+                // 메뉴에 있던 그대로다(뒷면 분기 → 크기 미측정 안내 → 공통 조립 진입점).
+                // 준비 중에는 controlsEnabled가 꺼져 다시 누를 수 없고, 아이콘 자리에
+                // 같은 크기의 진행 표시를 보여 준다(버튼 칸 48dp는 그대로).
+                IconButton(
+                    onClick = {
+                        postcard?.let { pc ->
+                            if (isBackFace) {
+                                backFocusManager.clearFocus()
+                                backExportRequest = pc to true
+                                return@let
+                            }
+                            if (postcardPreviewSize == IntSize.Zero) {
+                                Toast.makeText(
+                                    context,
+                                    "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@let
+                            }
+
+                            viewModel.sharePostcard(
+                                createCurrentFrontOverlaysForExport(pc.capturedAt)
+                            )
+                        }
+                    },
+                    enabled = controlsEnabled
+                ) {
+                    if (shareState is ShareState.Preparing) {
+                        CircularProgressIndicator(
+                            color = BrutalBlack,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .semantics { contentDescription = "공유 준비 중" }
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "공유",
+                            tint = BrutalBlack
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = {
+                        postcard?.let { pc ->
+                            if (isBackFace) {
+                                backFocusManager.clearFocus()
+                                backExportRequest = pc to false
+                                return@let
+                            }
+                            if (postcardPreviewSize == IntSize.Zero) {
+                                Toast.makeText(
+                                    context,
+                                    "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@let
+                            }
+
+                            viewModel.exportPostcardToGallery(
+                                createCurrentFrontOverlaysForExport(pc.capturedAt)
+                            )
+                        }
+                    },
+                    enabled = controlsEnabled
+                ) {
+                    if (exportState is ExportState.Exporting) {
+                        CircularProgressIndicator(
+                            color = BrutalBlack,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .semantics { contentDescription = "파일 내보내는 중" }
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "파일 내보내기",
+                            tint = BrutalBlack
+                        )
+                    }
                 }
 
                 Box {
@@ -6322,95 +6309,7 @@ fun DetailScreen(
                     ) {
                         DropdownMenuItem(
                             text = {
-                                Text(text = "공유", color = BrutalBlack)
-                            },
-                            leadingIcon = {
-                                if (shareState is ShareState.Preparing) {
-                                    CircularProgressIndicator(
-                                        color = BrutalBlack,
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = null,
-                                        tint = BrutalBlack
-                                    )
-                                }
-                            },
-                            enabled = controlsEnabled,
-                            onClick = {
-                                moreMenuExpanded = false
-                                postcard?.let { pc ->
-                                    if (isBackFace) {
-                                        backFocusManager.clearFocus()
-                                        backExportRequest = pc to true
-                                        return@let
-                                    }
-                                    if (postcardPreviewSize == IntSize.Zero) {
-                                        Toast.makeText(
-                                            context,
-                                            "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@let
-                                    }
-
-                                    viewModel.sharePostcard(
-                                        createCurrentFrontOverlaysForExport(pc.capturedAt)
-                                    )
-                                }
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(text = "파일 내보내기", color = BrutalBlack)
-                            },
-                            leadingIcon = {
-                                if (exportState is ExportState.Exporting) {
-                                    CircularProgressIndicator(
-                                        color = BrutalBlack,
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = null,
-                                        tint = BrutalBlack
-                                    )
-                                }
-                            },
-                            enabled = controlsEnabled,
-                            onClick = {
-                                moreMenuExpanded = false
-                                postcard?.let { pc ->
-                                    if (isBackFace) {
-                                        backFocusManager.clearFocus()
-                                        backExportRequest = pc to false
-                                        return@let
-                                    }
-                                    if (postcardPreviewSize == IntSize.Zero) {
-                                        Toast.makeText(
-                                            context,
-                                            "엽서를 준비하는 중이야. 잠시 후 다시 시도해줘.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@let
-                                    }
-
-                                    viewModel.exportPostcardToGallery(
-                                        createCurrentFrontOverlaysForExport(pc.capturedAt)
-                                    )
-                                }
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(text = "미래의 나에게 보내기", color = BrutalBlack)
+                                Text(text = "미래편지", color = BrutalBlack)
                             },
                             leadingIcon = {
                                 Icon(
@@ -6451,7 +6350,6 @@ fun DetailScreen(
 
             HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
         }
-        }
     }
 
     backExportRequest?.let { (snapshot, sharing) ->
@@ -6465,33 +6363,6 @@ fun DetailScreen(
             backExportRequest = null
         }
     }
-    if (isFocusPreviewMode) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            IconButton(
-                onClick = {
-                    isFocusPreviewMode = false
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(48.dp)
-                    .background(
-                        color = PaperSurface.copy(alpha = 0.92f),
-                        shape = CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FullscreenExit,
-                    contentDescription = "집중 미리보기 종료",
-                    tint = InkPrimary
-                )
-            }
-        }
-    }
-
     if (showMessageDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -6848,7 +6719,9 @@ fun DetailScreen(
             title = "저장 완료!",
             titleColor = BrutalBlack,
             body = "1:1 포스트카드 이미지를 휴대폰 갤러리에 저장했어.\n\nPictures/PostcardMemory 앨범에서 확인할 수 있어.",
-            onAcknowledge = { viewModel.resetExportState() }
+            onAcknowledge = { viewModel.resetExportState() },
+            // 상단 내보내기 버튼 연타가 창을 닫고 새 내보내기로 이어지지 않게 한다.
+            dismissOnClickOutside = false
         )
     }
 
@@ -6889,7 +6762,7 @@ fun DetailScreen(
             )
         }
 
-        if (postcard != null && !isFocusPreviewMode) {
+        if (postcard != null) {
             // 102일차: 하단 편집 메뉴 바닥에도 엽서 바깥과 같은 종이를 깐다. 무늬 기준점을 화면
             // 종이와 맞춰(이 영역의 위치만큼 옮김) 경계에서 섬유가 끊겨 보이지 않게 한다.
             var editorDockOffsetInRoot by remember { mutableStateOf(Offset.Zero) }

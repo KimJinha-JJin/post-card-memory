@@ -41,7 +41,8 @@ class SaveErrorDialogStructureTest {
             "backgroundError" to "as? BackgroundUpdateState.Error",
             "layoutError" to "as? LayoutUpdateState.Error"
         )
-        private const val TERMINAL_ANCHOR = "if (postcard != null && !isFocusPreviewMode)"
+        // 125일차 크게 보기 제거로 조건이 줄었다. 마지막 다이얼로그 뒤의 하단 편집 도크 시작점.
+        private const val TERMINAL_ANCHOR = "if (postcard != null) {"
 
         val blocks: Map<String, String> by lazy { sliceBlocks() }
 
@@ -205,10 +206,34 @@ class SaveErrorDialogStructureTest {
             "SaveResultAlertDialog에 dismissButton(취소 버튼)이 없어야 함",
             text.contains("dismissButton")
         )
-        assertFalse(
-            "SaveResultAlertDialog에 DialogProperties 오버라이드가 없어야 함(기본 back/외부탭 dismiss 유지)",
-            text.contains("properties =")
+        // 125일차: 바깥 탭 dismiss만 호출부가 끌 수 있다. 기본값은 기존과 같고 뒤로가기는 건드리지 않는다.
+        assertTrue(
+            "바깥 탭 dismiss 기본값은 기존처럼 켜져 있어야 함",
+            text.contains("dismissOnClickOutside: Boolean = true")
         )
+        assertTrue(
+            "DialogProperties는 바깥 탭 설정만 넘겨야 함",
+            text.contains("properties = DialogProperties(dismissOnClickOutside = dismissOnClickOutside)")
+        )
+        assertFalse(
+            "뒤로가기 dismiss는 바꾸지 않아야 함",
+            text.contains("dismissOnBackPress")
+        )
+    }
+
+    /** 125일차: 상단 내보내기 버튼 연타 방지. 내보내기 완료 창만 바깥 탭으로 닫히지 않는다. */
+    @Test
+    fun onlyExportSuccessDialogIgnoresOutsideTap() {
+        assertTrue(
+            "내보내기 완료 창은 바깥 탭 dismiss를 꺼야 함",
+            CallSiteSource.blocks.getValue("exportSuccess").contains("dismissOnClickOutside = false")
+        )
+        listOf("exportError", "backgroundError", "layoutError").forEach { label ->
+            assertFalse(
+                "[$label] 오류 창은 기존처럼 바깥 탭으로 닫혀야 함",
+                CallSiteSource.blocks.getValue(label).contains("dismissOnClickOutside")
+            )
+        }
     }
 
     @Test
