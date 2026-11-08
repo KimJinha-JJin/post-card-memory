@@ -86,7 +86,7 @@ internal fun PhotoStickerEdgeStyleRow(
         Spacer(modifier = Modifier.height(6.dp))
 
         EditorQuietHint(
-            text = "배경제거 중에는 오림을 쉬어. 원본복원하면 다시 보여."
+            text = "배경 제거 중에는 오림을 쉬어. 원본 복원하면 다시 보여."
         )
     }
 }

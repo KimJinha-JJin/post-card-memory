@@ -260,9 +260,9 @@ fun PhotoStickerPickerPanel(
                 EditorTextAction(
                     text =
                         when {
-                            isRemovingAimBackground -> "처리중..."
-                            placeAimBackgroundState?.isRemoved == true -> "원본복원"
-                            else -> "배경제거"
+                            isRemovingAimBackground -> "처리 중..."
+                            placeAimBackgroundState?.isRemoved == true -> "원본 복원"
+                            else -> "배경 제거"
                         },
                     onClick = onTogglePlaceAimBackground,
                     enabled = enabled && !isRemovingAimBackground
