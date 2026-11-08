@@ -168,4 +168,39 @@ class GalleryMemoryDensityTest {
     fun gelPenBar_emptyBarDrawsNothing() {
         assertTrue(memoryDensityGelPenBarStrokes(4f, 30f, 14f, 0f, seed = 1).isEmpty())
     }
+
+    @Test
+    fun paperMatrices_matchApprovedMockupAlphaAndInkIncludingBothClamps() {
+        val (inner, outer) = memoryDensityPaperColorMatrices(0xFF1A1324.toInt())
+        fun apply(matrix: FloatArray, color: FloatArray): FloatArray = FloatArray(4) { row ->
+            (matrix[row * 5 + 4] + (0..3).sumOf { column ->
+                (matrix[row * 5 + column] * color[column]).toDouble()
+            }.toFloat()).coerceIn(0f, 255f)
+        }
+        // HTML C안에서 직접 읽은 표본: 어두운 섬유 상한, 종이 중간톤, 밝은 섬유 하한.
+        listOf(0f to .52f, 200f to .52f, 220f to .3575f, 235f to .17f, 255f to .06f).forEach { (gray, alpha) ->
+            val result = apply(outer, apply(inner, floatArrayOf(gray, gray, gray, 255f)))
+            assertEquals(26f, result[0], .001f)
+            assertEquals(19f, result[1], .001f)
+            assertEquals(36f, result[2], .001f)
+            assertEquals("gray=$gray", alpha, result[3] / 255f, .00001f)
+        }
+    }
+
+    @Test
+    fun paperBar_keepsOutlineAndOverflowDistinctFromFaintInteriorAtSmallHeights() {
+        listOf(6f, 12f, 30f, 60f, 120f).forEach { height ->
+            val strokes = memoryDensityGelPenBarStrokes(4f, 134f - height, 12.2f, height, seed = 50_501)
+            assertEquals(3, strokes.count { it.isOutline })
+            assertTrue(strokes.takeLast(3).all { it.isOutline })
+            assertTrue(strokes.dropLast(3).all { !it.isOutline })
+            strokes.flatMap { it.points }.forEach { point ->
+                assertTrue(point.x in 2.5f..17.7f)
+                assertTrue(point.y in (134f - height - 1.5f)..135.5f)
+            }
+        }
+        val plus = memoryDensityGelPenPlusStrokes(androidx.compose.ui.geometry.Offset(6f, 7f), 3f, 50_501)
+        assertEquals(2, plus.size)
+        assertTrue("초과 표시는 내부 사선과 함께 흐려지면 안 됨", plus.all { it.isOutline })
+    }
 }

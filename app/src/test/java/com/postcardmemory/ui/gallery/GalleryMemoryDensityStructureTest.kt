@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * 기억밀도가 "한 해 동안 어느 달에 기억을 많이 남겼는지 조용히 바라보는"
  * 1월→12월 그래프라는 구조를 고정한다 — dashboard·통계 카드가 아니어야 한다.
- * 지금 구조는 달마다 엽서 수에 비례한 중성펜 막대, 12개월을 잇는 전체 폭
+ * 지금 구조는 달마다 엽서 수에 비례한 종이 질감·중성펜 윤곽 막대, 12개월을 잇는 전체 폭
  * 구분선 하나, 월 숫자뿐이다. 이미 걷어낸 요소(표정 카오모지, 고정 얼굴, 하트,
  * 물뿌리개 아이콘, 달마다 끊기던 구분선, 연도를 이어붙인 스크롤)가 다시
  * 들어오지 않도록 막는다.
@@ -95,6 +95,16 @@ class GalleryMemoryDensityStructureTest {
         assertTrue("비례형 높이 계산을 써야 함", body.contains("memoryDensityHeightFraction("))
         assertTrue(body.contains("memoryDensityHasOverflow("))
         assertTrue("막대는 중성펜 획으로 그려야 함", body.contains("memoryDensityGelPenBarStrokes("))
+        assertTrue("기존 이미지의 반복 shader를 써야 함", body.contains("ImageShader(paperTile, TileMode.Repeated, TileMode.Repeated)"))
+        assertTrue("질감은 캐시에서만 준비해야 함", body.indexOf("val paperPaint = if (barHeightDp > 0f)") in 0 until body.indexOf("onDrawBehind"))
+        assertTrue("막대 높이와 무관한 동일 배율이어야 함", body.contains("setScale(scale, scale)"))
+        assertTrue("종이 결 크기는 막대 높이가 아닌 360dp 타일 기준이어야 함", body.contains("val scale = GALLERY_PAPER_TILE_SIZE.toPx() / paperTile.width"))
+        assertTrue("C안 명도 합성을 써야 함", body.contains("memoryDensityPaperColorMatrices(InkPrimary.toArgb())"))
+        assertTrue("펜보다 종이가 먼저 그려져야 함", body.indexOf("nativeCanvas.drawRect(") in 0 until body.indexOf("strokes.forEach { (path, style, color)"))
+        assertTrue("alpha 하한은 막대 내부에만 적용해야 함", body.contains("nativeCanvas.clipRect(barLeft, barTop, right, size.height)"))
+        assertTrue("그리기 상태를 복원해야 함", body.contains("nativeCanvas.restoreToCount(saved)"))
+        assertTrue("목업처럼 내부 사선만 22%로 낮춰야 함", body.contains("if (stroke.isOutline) 1f else 0.22f"))
+        assertFalse("막대마다 별도 bitmap을 만들면 안 됨", body.contains("Bitmap.createBitmap") || body.contains("paperTile.copy("))
         assertTrue("20장 초과 표시도 같은 펜으로 그려야 함", body.contains("memoryDensityGelPenPlusStrokes("))
         assertFalse("막대 위 하트는 93일차에 제거됨", body.contains("♥"))
         assertFalse("하트 진하기 계산은 93일차에 제거됨", sourceText.contains("memoryDensityHeartAlpha("))
@@ -120,7 +130,7 @@ class GalleryMemoryDensityStructureTest {
     }
 
     @Test
-    fun densityPagerBranch_passesOnlyPostcardsAndPadding() {
+    fun densityPagerBranch_passesPostcardsPaddingAndSharedPaperWithoutInteractions() {
         val start = sourceText.indexOf("GalleryPageFormat.DENSITY ->")
         assertTrue("DENSITY pager 분기를 찾지 못함", start >= 0)
         val end = sourceText.indexOf("GalleryPageFormat.MONTHLY", start)
@@ -129,6 +139,7 @@ class GalleryMemoryDensityStructureTest {
 
         assertTrue(body.contains("GalleryDensityPage("))
         assertTrue(body.contains("postcards = displayedPostcards"))
+        assertTrue(body.contains("paperTile = paperTile"))
         assertFalse(
             "76일차부터 기억밀도는 선택 상태나 클릭 콜백을 받지 않아야 함",
             body.contains("selectedIds") || body.contains("onItemClick") || body.contains("onItemLongClick")
