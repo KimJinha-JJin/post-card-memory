@@ -103,6 +103,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
@@ -917,6 +920,8 @@ fun GalleryScreen(
                 }
             }
         } else {
+            // 배경과 12개월 막대가 같은 디코딩 결과를 공유한다.
+            val paperTile = rememberGalleryPaperTile()
             // 갤러리는 HorizontalPager 페이지로 묶여, 월별 보기(MONTHLY)와
             // 기억 밀도 보기(DENSITY) 두 페이지가 고정 순서로 있다(위
             // activePageFormats). 연못 모드는 별도 화면이 아니라 월별 grid
@@ -1022,6 +1027,7 @@ fun GalleryScreen(
                 // 89일차: 종이는 pager 밖 한 레이어라 스크롤·보기 전환에 따라
                 // 움직이지 않는다. 페이지들은 배경을 칠하지 않는다.
                 GalleryPaperBackground(
+                    tile = paperTile,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = paddingValues.calculateTopPadding())
@@ -1037,7 +1043,8 @@ fun GalleryScreen(
                         GalleryPageFormat.DENSITY ->
                             GalleryDensityPage(
                                 postcards = displayedPostcards,
-                                paddingValues = pageContentPaddingValues
+                                paddingValues = pageContentPaddingValues,
+                                paperTile = paperTile
                             )
 
                         GalleryPageFormat.MONTHLY, null ->
@@ -1507,6 +1514,11 @@ private val GALLERY_PAPER_TILE_SIZE = 360.dp
 /** 헤더와 같은 단색 위에 겹치는 종이 타일의 농도. 실기기 QA로 맞추는 값이다. */
 private const val GALLERY_PAPER_TILE_ALPHA = 1f
 
+/** 배경과 기억 밀도에 전달할 종이 이미지를 같은 composition에서 한 번 읽는다. */
+@Composable
+private fun rememberGalleryPaperTile(): ImageBitmap =
+    ImageBitmap.imageResource(R.drawable.gallery_paper_tile)
+
 /**
  * 89일차: 구분선 아래 갤러리 본문에 까는 카드보드 종이. 사용자 제공 seamless
  * 타일(drawable-nodpi/gallery_paper_tile.png)을 가로·세로 같은 배율로만 줄여
@@ -1514,8 +1526,10 @@ private const val GALLERY_PAPER_TILE_ALPHA = 1f
  * 헤더 단색을 먼저 칠하고 그 위에 [GALLERY_PAPER_TILE_ALPHA]로 겹친다.
  */
 @Composable
-private fun GalleryPaperBackground(modifier: Modifier = Modifier) {
-    val tile = ImageBitmap.imageResource(R.drawable.gallery_paper_tile)
+private fun GalleryPaperBackground(
+    modifier: Modifier = Modifier,
+    tile: ImageBitmap = rememberGalleryPaperTile()
+) {
 
     Spacer(
         modifier = modifier.drawWithCache {
@@ -1657,7 +1671,8 @@ private const val MEMORY_DENSITY_PEN_SEED = 50_500
 internal class MemoryDensityPenStroke(
     val points: List<Offset>,
     val widthDp: Float,
-    val alpha: Float
+    val alpha: Float,
+    val isOutline: Boolean = false
 )
 
 /**
@@ -1670,7 +1685,8 @@ private fun memoryDensityRulerStroke(
     widthDp: Float,
     alpha: Float,
     wobble: Float,
-    random: kotlin.random.Random
+    random: kotlin.random.Random,
+    isOutline: Boolean = false
 ): MemoryDensityPenStroke {
     val length = (to - from).getDistance()
     val dir = if (length > 0f) (to - from) / length else Offset.Zero
@@ -1685,7 +1701,7 @@ private fun memoryDensityRulerStroke(
         val offset = wobble * (0.7f * kotlin.math.sin(d * freq1 + phase1) + 0.3f * kotlin.math.sin(d * freq2 + phase2))
         from + dir * d + normal * offset
     }
-    return MemoryDensityPenStroke(points, widthDp, alpha * (0.9f + random.nextFloat() * 0.1f))
+    return MemoryDensityPenStroke(points, widthDp, alpha * (0.9f + random.nextFloat() * 0.1f), isOutline)
 }
 
 /**
@@ -1754,7 +1770,7 @@ internal fun memoryDensityGelPenBarStrokes(
         Offset(right, top - cornerOver()) to Offset(right, bottom)
     ).forEach { (a, b) ->
         val (from, to) = if (random.nextBoolean()) a to b else b to a
-        strokes += memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.1f, random = random)
+        strokes += memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.1f, random = random, isOutline = true)
     }
     return strokes
 }
@@ -1770,8 +1786,31 @@ internal fun memoryDensityGelPenPlusStrokes(
         Offset(center.x - armDp, center.y) to Offset(center.x + armDp, center.y),
         Offset(center.x, center.y - armDp) to Offset(center.x, center.y + armDp)
     ).map { (from, to) ->
-        memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.08f, random = random)
+        memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.08f, random = random, isOutline = true)
     }
+}
+
+/** 목업 C: alpha = clamp(.17 + (235 - luma) / 100 * 1.25, .06, .52).
+ * 두 행렬 사이의 0..255 clamp를 이용해 범위를 맞춘다. 첫 필터로 shader를 그리고,
+ * 막대 내부로 제한한 임시 레이어를 두 번째 필터로 합성한다. 별도 Bitmap은 만들지 않는다.
+ * 반환 순서는 안쪽(명도→정규화 alpha), 바깥쪽(alpha 범위 .06~.52)이다. */
+internal fun memoryDensityPaperColorMatrices(inkArgb: Int): Pair<FloatArray, FloatArray> {
+    val alphaRange = 0.52f - 0.06f
+    val slope = -1.25f / 100f * 255f / alphaRange
+    val offset = (0.17f + 235f / 100f * 1.25f - 0.06f) * 255f / alphaRange
+    val inner = floatArrayOf(
+        0f, 0f, 0f, 0f, ((inkArgb ushr 16) and 255).toFloat(),
+        0f, 0f, 0f, 0f, ((inkArgb ushr 8) and 255).toFloat(),
+        0f, 0f, 0f, 0f, (inkArgb and 255).toFloat(),
+        slope * 0.299f, slope * 0.587f, slope * 0.114f, 0f, offset
+    )
+    val outer = floatArrayOf(
+        0f, 0f, 0f, 0f, ((inkArgb ushr 16) and 255).toFloat(),
+        0f, 0f, 0f, 0f, ((inkArgb ushr 8) and 255).toFloat(),
+        0f, 0f, 0f, 0f, (inkArgb and 255).toFloat(),
+        0f, 0f, 0f, alphaRange, 0.06f * 255f
+    )
+    return inner to outer
 }
 
 /**
@@ -1783,7 +1822,8 @@ internal fun memoryDensityGelPenPlusStrokes(
 @Composable
 private fun GalleryDensityPage(
     postcards: List<Postcard>,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    paperTile: ImageBitmap
 ) {
     // 이 화면에는 연도 선택 UI가 없다 — year는 "사용자가 고른 연도"가 아니라 순수하게
     // "지금 몇 년인가"다. 그래서 앱을 켜 둔 채 연말 자정을 넘기면 제목과 12칸이 지난해에
@@ -1823,6 +1863,7 @@ private fun GalleryDensityPage(
             months.forEach { month ->
                 GalleryMemoryDensityBar(
                     month = month,
+                    paperTile = paperTile,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1851,14 +1892,14 @@ private fun GalleryDensityPage(
 }
 
 /**
- * 93일차: 월 하나의 위쪽 — 엽서 수에 비례한 중성펜 막대와, 20장을 넘으면
- * 그 위의 작은 "+". 얼굴·하트 같은 감정 장식 없이 손으로 그은 선의 흔적만으로
- * 양을 보여준다. 접근성 설명(월·기억 개수)은 이 composable에만 붙이고 아래
+ * 126일차 C안: 비례형 종이 질감 막대에 기존 중성펜 윤곽과 작은 "+"를 유지한다.
+ * 내부 사선만 목업처럼 22%로 낮춘다. 접근성 설명(월·기억 개수)은 여기에만 붙이고 아래
  * [GalleryMemoryDensityFoot]는 별도로 읽히지 않게 한다.
  */
 @Composable
 private fun GalleryMemoryDensityBar(
     month: GalleryMemoryDensityMonth,
+    paperTile: ImageBitmap,
     modifier: Modifier = Modifier
 ) {
     val heightFraction = memoryDensityHeightFraction(month.count)
@@ -1878,6 +1919,31 @@ private fun GalleryMemoryDensityBar(
                 val markDp = MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT.value
                 val barWidthDp = widthDp * MEMORY_DENSITY_BAR_WIDTH_RATIO
                 val barHeightDp = (heightDp - markDp) * heightFraction
+                val barLeft = (size.width - barWidthDp * density) / 2f
+                val barTop = size.height - barHeightDp * density
+                val paperPaint = if (barHeightDp > 0f) {
+                    val monthIndex = month.yearMonth.monthValue - 1
+                    val shader = ImageShader(paperTile, TileMode.Repeated, TileMode.Repeated)
+                    val scale = GALLERY_PAPER_TILE_SIZE.toPx() / paperTile.width
+                    shader.setLocalMatrix(android.graphics.Matrix().apply {
+                        setScale(scale, scale)
+                        // HTML의 전체 그래프 좌표를 각 월의 로컬 좌표에 맞춘다.
+                        postTranslate(
+                            ((monthIndex * 37) % 110).dp.toPx() - monthIndex * (size.width + 2.dp.toPx()),
+                            ((monthIndex * 23) % 90).dp.toPx()
+                        )
+                    })
+                    val (inner, outer) = memoryDensityPaperColorMatrices(InkPrimary.toArgb())
+                    val texturePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                        isFilterBitmap = true
+                        this.shader = shader
+                        colorFilter = android.graphics.ColorMatrixColorFilter(inner)
+                    }
+                    val rangePaint = android.graphics.Paint().apply {
+                        colorFilter = android.graphics.ColorMatrixColorFilter(outer)
+                    }
+                    texturePaint to rangePaint
+                } else null
                 val strokes = buildList {
                     if (heightFraction > 0f) {
                         addAll(
@@ -1908,10 +1974,27 @@ private fun GalleryMemoryDensityBar(
                             }
                         },
                         Stroke(width = stroke.widthDp * density, cap = StrokeCap.Round),
-                        InkPrimary.copy(alpha = stroke.alpha * MEMORY_DENSITY_PEN_OPACITY)
+                        InkPrimary.copy(alpha = stroke.alpha * MEMORY_DENSITY_PEN_OPACITY *
+                            if (stroke.isOutline) 1f else 0.22f)
                     )
                 }
                 onDrawBehind {
+                    if (paperPaint != null) {
+                        drawIntoCanvas { canvas ->
+                            val right = barLeft + barWidthDp * density
+                            val nativeCanvas = canvas.nativeCanvas
+                            val saved = nativeCanvas.save()
+                            try {
+                                // alpha 하한이 빈 영역을 칠하지 않도록 종이 영역 안에서만 합성한다.
+                                nativeCanvas.clipRect(barLeft, barTop, right, size.height)
+                                val layer = nativeCanvas.saveLayer(barLeft, barTop, right, size.height, paperPaint.second)
+                                nativeCanvas.drawRect(barLeft, barTop, right, size.height, paperPaint.first)
+                                nativeCanvas.restoreToCount(layer)
+                            } finally {
+                                nativeCanvas.restoreToCount(saved)
+                            }
+                        }
+                    }
                     strokes.forEach { (path, style, color) -> drawPath(path, color = color, style = style) }
                 }
             }

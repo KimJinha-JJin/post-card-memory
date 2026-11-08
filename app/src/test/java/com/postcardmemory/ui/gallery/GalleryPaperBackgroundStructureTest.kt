@@ -38,16 +38,20 @@ class GalleryPaperBackgroundStructureTest {
     }
 
     @Test
-    fun paperTile_isLoadedOnlyInsideGalleryPaperBackground() {
+    fun paperTile_isLoadedOnceAndSharedByBackgroundAndDensity() {
         assertEquals(
             "종이 타일 drawable은 GalleryScreen.kt에서 한 번만 참조해야 함(목록 item마다 decode 금지)",
             1,
             Regex("""R\.drawable\.gallery_paper_tile""").findAll(sourceText).count()
         )
         assertTrue(
-            "종이 타일은 GalleryPaperBackground 안에서만 불러와야 함",
-            functionBody("GalleryPaperBackground").contains("R.drawable.gallery_paper_tile")
+            "종이 타일은 공통 로더 한 곳에서만 불러와야 함",
+            functionBody("rememberGalleryPaperTile").contains("R.drawable.gallery_paper_tile")
         )
+        assertTrue(sourceText.contains("val paperTile = rememberGalleryPaperTile()"))
+        assertTrue(sourceText.contains("GalleryPaperBackground(\n                    tile = paperTile,"))
+        val densityCall = sourceText.substring(sourceText.indexOf("GalleryDensityPage(\n"), sourceText.indexOf("GalleryPageFormat.MONTHLY, null ->"))
+        assertTrue("기억 밀도도 배경과 같은 이미지를 받아야 함", densityCall.contains("paperTile = paperTile"))
     }
 
     @Test
