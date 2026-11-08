@@ -92,7 +92,7 @@ internal fun StickerStashPickerPanel(
 
         if (stashedStickers.isEmpty()) {
             EditorQuietHint(
-                text = "아직 스티커 통이 비어 있어. 사진 칸에서 스티커를 고르고 '통에 넣기'를 누르면 여기 모여."
+                text = "아직 스티커 통이 비어 있어. 스티커 › 사진에서 스티커를 고르고 '통에 넣기'를 누르면 여기 모여."
             )
         } else {
             Row(

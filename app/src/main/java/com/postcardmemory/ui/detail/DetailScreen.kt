@@ -2421,7 +2421,7 @@ fun DetailScreen(
             is ConfirmSaveState.Failed -> {
                 Toast.makeText(
                     context,
-                    "스티커·도장 꾸미기를 저장하지 못했어. 다시 시도해줘.",
+                    "꾸미기를 저장하지 못했어. 다시 시도해줘.",
                     Toast.LENGTH_SHORT
                 ).show()
                 viewModel.acknowledgeConfirmSaveResult()
@@ -6197,7 +6197,7 @@ fun DetailScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Save,
-                        contentDescription = "스티커·도장 꾸미기 완료 저장",
+                        contentDescription = "꾸미기 완료 저장",
                         tint = SunsetGold
                     )
                 }
@@ -6312,7 +6312,7 @@ fun DetailScreen(
                     ) {
                         DropdownMenuItem(
                             text = {
-                                Text(text = "미래편지", color = BrutalBlack)
+                                Text(text = "미래 우체통", color = BrutalBlack)
                             },
                             leadingIcon = {
                                 Icon(
@@ -6554,7 +6554,7 @@ fun DetailScreen(
             text = {
                 Text(
                     text =
-                        "이 우표를 삭제하면 복구할 수 없어요."
+                        "이 엽서를 삭제하면 복구할 수 없어요."
                 )
             },
             confirmButton = {

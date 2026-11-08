@@ -43,9 +43,9 @@ internal fun StickerEditModeToolbar(
         EditorTextAction(
             text =
                 when {
-                    isRemovingBackground -> "처리중..."
-                    sticker.isBackgroundRemoved -> "원본복원"
-                    else -> "배경제거"
+                    isRemovingBackground -> "처리 중..."
+                    sticker.isBackgroundRemoved -> "원본 복원"
+                    else -> "배경 제거"
                 },
             enabled = enabled && !isRemovingBackground,
             onClick = onToggleBackgroundRemoval

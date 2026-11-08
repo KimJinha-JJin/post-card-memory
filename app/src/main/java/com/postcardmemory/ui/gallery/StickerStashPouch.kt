@@ -472,7 +472,7 @@ private fun StickerStashEmptySheet() {
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "아직 담은 조각이 없어.\n엽서 편집 › 스티커에서 조각을 고르고\n'통에 넣기'를 누르면 여기 모여.",
+            text = "아직 담은 조각이 없어.\n엽서 편집 › 스티커 › 사진에서 조각을 고르고\n'통에 넣기'를 누르면 여기 모여.",
             color = InkSecondary,
             fontSize = 10.sp,
             lineHeight = 15.sp,

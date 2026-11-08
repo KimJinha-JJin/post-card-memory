@@ -628,7 +628,7 @@ fun GalleryScreen(
                             },
                             placeholder = {
                                 Text(
-                                    text = "문구, 장소, 날짜로 검색",
+                                    text = "글귀, 장소, 날짜로 검색",
                                     color = InkSecondary
                                 )
                             },
@@ -996,6 +996,16 @@ fun GalleryScreen(
                 }
             }
 
+            // 선택한 엽서가 보이는 월별 페이지에서만 선택 관리를 한다. 진행 중인
+            // 스와이프나 프로그램 이동으로 다른 페이지가 잡혀도 선택 ID는 유지한다.
+            LaunchedEffect(selectionMode, pagerState.currentPage) {
+                if (!selectionMode) return@LaunchedEffect
+                val monthlyIndex = orderedActiveFormats.indexOf(GalleryPageFormat.MONTHLY)
+                if (monthlyIndex >= 0 && pagerState.currentPage != monthlyIndex) {
+                    pagerState.scrollToPage(monthlyIndex)
+                }
+            }
+
             val showPageIndicator = orderedActiveFormats.size > 1
 
             val pageContentPaddingValues = if (showPageIndicator) {
@@ -1017,11 +1027,10 @@ fun GalleryScreen(
                         .padding(top = paddingValues.calculateTopPadding())
                 )
 
-                // 108일차: 연못은 월별 페이지 안에서만 그려지므로, 켜져 있는 동안은 좌우
-                // 스와이프로 기억 밀도 페이지에 넘어가지 못하게 잠근다(끄면 그대로 복원).
+                // 연못과 선택 관리는 월별 페이지에서만 한다. 둘 다 종료하면 스와이프를 복원한다.
                 HorizontalPager(
                     state = pagerState,
-                    userScrollEnabled = !isPondModeOn,
+                    userScrollEnabled = !isPondModeOn && !selectionMode,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     when (orderedActiveFormats.getOrNull(page)) {
@@ -1047,9 +1056,8 @@ fun GalleryScreen(
                     }
                 }
 
-                // 연못 중에는 넘길 페이지가 없으니 점만 감춘다. 자리(상단 여백)는 그대로 둬
-                // 연못을 켜고 끌 때 grid가 위아래로 튀지 않게 한다.
-                if (showPageIndicator && !isPondModeOn) {
+                // 페이지가 잠긴 동안 점만 감춘다. 예약 여백은 그대로 유지한다.
+                if (showPageIndicator && !isPondModeOn && !selectionMode) {
                     GalleryPageIndicator(
                         pageCount = orderedActiveFormats.size,
                         currentPage = pagerState.currentPage,
@@ -1151,7 +1159,7 @@ fun GalleryScreen(
             },
             text = {
                 Text(
-                    text = "선택한 사진은 삭제 후 복구할 수 없어요."
+                    text = "선택한 엽서는 삭제 후 복구할 수 없어요."
                 )
             },
             confirmButton = {
