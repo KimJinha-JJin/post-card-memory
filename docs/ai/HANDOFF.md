@@ -1,3 +1,21 @@
+# HANDOFF — 127일차: 기억 밀도 아래 미래 우체통 종이 B안 / 구현 및 자동 검증 완료 · 실기기 QA 대기 · 병합 보류
+
+2026-11-09, 담당 Claude Code, 수동 표준 모드. 1단계 읽기 전용 조사 → 2단계 A/B 목업(`docs/mockups/future-mailbox-diorama-day127.html`, 미추적·커밋 제외) → 사용자가 B안 구현과 작업 브랜치 commit·push를 직접 승인. **PR 생성·main 병합·실기기 설치/QA는 오늘 금지**라 하지 않았어. 사용자 지시로 QA 전에 작업 브랜치에만 commit·push하며(AGENTS 9절 "QA 남으면 commit 안 함"보다 사용자 직접 지시 우선), 병합은 128일차 사용자 실기기 QA·최종 승인 뒤에만 해.
+
+- **기준·Git:** 시작 `main = origin/main = 7fe28a3`(PR #19 병합). 작업 브랜치 `feat/day127-future-mail-diorama`. 이 문서는 최종 commit 전 작성이며 commit SHA·push 결과는 완료보고로 확인해. PR 없음 → 현행 CI 정책상 작업 브랜치 push에는 CI가 돌지 않아(미실행).
+- **화면 변화:** 기억 밀도 페이지의 월 숫자 아래 남은 칸에 방문 달력 장과 같은 종이(cover-crop `visit_calendar_paper`, 가위 가장자리, 접촉 그림자, 아이보리 테이프; 전용 seed 127_000/127_200) 한 장. 왼쪽에 달력 연월 봉투(`visit_calendar_envelope_base`) + 원형 소인(`SealPreviewContent` CIRCLE_POSTMARK, 44dp, −12°), 오른쪽에 "미래 우체통" 라벨·본문·보조 문구, 끝에 ›. 숫자 현황판·A안 대형 디오라마는 없어.
+- **상태(기존 데이터만):** 여행 중 = 민트 봉인·흐린 소인(α .5, 도착일)·"M월 d일에 도착해"·민트 D-N(+"외 N통"). 도착 = 진한 소인(α .9, 가장 최근 도착일)·봉투 뒤 엽서 한 장·"편지가 도착했어"·"눌러서 열어보기". 도착+여행 중 = 도착이 우선, 보조 줄에 "N통은 아직 여행 중". 비어 있음 = 흐린 봉투(α .45)·빈 소인(α .3, 날짜 없음)·"미래의 나에게 보내 볼까?"·"엽서 편집 ⋮ › 미래 우체통". 진행률(%)은 읽지도 보여주지도 않아.
+- **데이터 흐름:** `GalleryViewModel.futureMailGroups`(읽기 전용) = 우체통 화면과 같은 `getFutureMailPostcards()` + `dayBoundaryTicks()` → `buildFutureMailGroups`. 첫 값 전 null이면 종이를 그리지 않아 빈 우체통이 잠깐 비치지 않게 했어. 발송·저장·도착·개봉 로직, Room 19, Entity/DAO/Repository 무변경.
+- **조작:** 종이 전체가 하나의 버튼 → 기존 `onNavigateToFutureMailbox`(새 내비게이션 없음). 접근성: 상태별 설명 + Role.Button + "미래 우체통 열기". 눌림 시 1dp 내려가며 98.8%로 살짝 줄어듦. 퀵셀렉트 입구는 그대로.
+- **짧은 화면:** 남은 칸 높이를 BoxWithConstraints로 재서 `틈 24dp + 종이(기본 92dp, 큰 글꼴이면 글 높이만큼 커짐) + 닫힌 손잡이 여유(실제 퀵셀렉트 배치 함수, 최대 펼침 간격 기준 ≈74dp)`가 안 되면 종이를 구성하지 않아(축소·스크롤·그래프 변경 없음). 목업 계산상 832/760dp 높이는 표시, 640dp는 숨김 예상 — 실기기 미확인.
+- **변경 파일:** 신규 `GalleryFutureMailDiorama.kt`, `GalleryScreen.kt`(수집·전달·weight 칸, 손잡이 높이 internal), `GalleryViewModel.kt`(읽기 전용 Flow), `VisitCalendarDrawer.kt`(그림자 색·층·테이프 path/draw 4개 private→internal, 값 무변경), 신규 테스트 2개, 이 문서, `TEST-COVERAGE-MAP.md`.
+- **자동 검증:** JVM 1192/1192(XML 127, 실패·오류·skip 0; 신규 순수 11 + 구조 6), `assembleDebug`·`assembleDebugAndroidTest` 성공, `git diff --check` 통과. 기존 기억 밀도·종이 배경·달력 종이·우체통 진입 구조 검사 무수정 통과. instrumentation·emulator·실기기 실행 없음. 첫 컴파일 실패는 `SealType` 패키지 import 오타(ui.detail) 1건, 수정 후 성공.
+- **위험·미검증:** ① 달력 종이 1122×1402가 서랍용과 별개로 한 번 더 decode돼 기억 밀도 페이지가 구성된 동안 약 6MiB 추가 가능(미측정, meminfo QA 후보). ② 실제 기기 높이별 표시/숨김, 큰 글꼴 줄바꿈. ③ 소인·봉투·엽서 겹침과 질감 조화. ④ 기존 진행률 기준(capturedAt) 결함은 범위 밖이라 그대로. ⑤ CI 미실행(PR 없음).
+- **128일차 QA 항목:** 기억 밀도 페이지에서 종이 표시·그래프 무손상·손잡이와 겹침 없음 / 여행 중·도착·비어 있음(가능한 상태만, 테스트 편지 생성·삭제 금지) 그림·문구 / 탭 → 우체통 이동·복귀 / 눌림 느낌 / 큰 글꼴·짧은 화면 숨김 / 페이지 전환·자정 갱신 / 메모리 관찰. QA 통과 뒤 PR·필수 CI·병합 승인 순서.
+- **보존:** 보호 미추적 파일(`.codex-config.candidate.toml`, `.kotlin/`, PNG 3개)·기존 목업 3개·127일차 목업은 stage하지 않아. 사용자 엽서·미래편지 데이터 접근·변경 없음.
+
+---
+
 # HANDOFF — 126일차 추가: 기억 밀도 종이 질감 C안 / 자동 검증·실기기 QA 통과 · Git 마감 준비
 
 2026-11-08, 담당 Codex(패코), 수동 표준 모드. 사용자가 목업 C안(중간 종이 섬유 + 기존 펜 윤곽)을 확정하고 실제 앱 적용을 직접 승인했어. 새로운 디자인 선택이나 집계 변경은 없어. 이 절은 최종 commit 전 상태이며 Git 마감 결과는 완료보고로 확인해.

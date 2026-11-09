@@ -1258,8 +1258,9 @@ private const val VISIT_CALENDAR_PAPER_EDGE_STEP_DP = 4f
 private const val VISIT_CALENDAR_PAPER_EDGE_SEED = 96_000
 
 // 종이 밑에 깔리는 접촉 그림자. 장 아래·오른쪽으로 1dp 남짓만 비쳐 거의 느껴지지 않게 둔다.
-private val VisitCalendarPaperShadowColor = Color(0xFF3B3226)
-private val VISIT_CALENDAR_PAPER_SHADOW_LAYERS = listOf(
+// 127일차: 기억 밀도 아래 미래 우체통 종이([GalleryFutureMailDiorama])도 같은 장 문법을 쓰도록 internal.
+internal val VisitCalendarPaperShadowColor = Color(0xFF3B3226)
+internal val VISIT_CALENDAR_PAPER_SHADOW_LAYERS = listOf(
     Triple(0.3f, 0.8f, 0.06f), // dx dp, dy dp, alpha
     Triple(0.5f, 1.4f, 0.03f)
 )
@@ -1396,7 +1397,7 @@ internal fun visitCalendarTapePiece(seed: Int): VisitCalendarTapePiece {
 }
 
 /** [visitCalendarTapePiece]를 px path로. drawWithCache에서 장 크기가 정해질 때만 만든다. */
-private fun visitCalendarTapePath(tape: VisitCalendarTapePiece, density: Float): Path = Path().apply {
+internal fun visitCalendarTapePath(tape: VisitCalendarTapePiece, density: Float): Path = Path().apply {
     tape.outline.forEachIndexed { index, point ->
         if (index == 0) moveTo(point.x * density, point.y * density)
         else lineTo(point.x * density, point.y * density)
@@ -1405,7 +1406,7 @@ private fun visitCalendarTapePath(tape: VisitCalendarTapePiece, density: Float):
 }
 
 /** 장 윗변 가운데에 테이프를 붙인다. 장 위쪽 틈까지 걸쳐 그리며, 장과 함께 넘어간다. */
-private fun DrawScope.drawVisitCalendarTape(tape: VisitCalendarTapePiece, tapePath: Path) {
+internal fun DrawScope.drawVisitCalendarTape(tape: VisitCalendarTapePiece, tapePath: Path) {
     val centerX = size.width / 2f + tape.centerOffsetXDp * density
     val centerY = VISIT_CALENDAR_TAPE_CENTER_Y_DP * density
     withTransform({
