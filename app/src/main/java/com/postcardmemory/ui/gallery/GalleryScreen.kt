@@ -145,6 +145,7 @@ import androidx.compose.ui.res.imageResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.postcardmemory.ui.futuremail.FutureMailGroup
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.components.StampCardContent
@@ -367,6 +368,7 @@ fun GalleryScreen(
     viewModel: GalleryViewModel = hiltViewModel()
 ) {
     val postcards by viewModel.postcards.collectAsState()
+    val futureMailGroups by viewModel.futureMailGroups.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -1044,7 +1046,9 @@ fun GalleryScreen(
                             GalleryDensityPage(
                                 postcards = displayedPostcards,
                                 paddingValues = pageContentPaddingValues,
-                                paperTile = paperTile
+                                paperTile = paperTile,
+                                futureMailGroups = futureMailGroups,
+                                onOpenFutureMailbox = onNavigateToFutureMailbox
                             )
 
                         GalleryPageFormat.MONTHLY, null ->
@@ -1241,7 +1245,8 @@ private fun vibrateGalleryFab(context: Context, durationMillis: Long, amplitude:
 private val GalleryQuickSelectActiveColor = SunsetGold
 // 닫힌 묶음이 오른쪽 끝에 삐져나온 자리의 손잡이 터치 영역.
 private val GalleryQuickSelectHandleWidth = 60.dp
-private val GalleryQuickSelectHandleHeight = 64.dp
+// 127일차: 기억 밀도 아래 미래 우체통 종이가 닫힌 손잡이를 피하는 계산에도 쓴다.
+internal val GalleryQuickSelectHandleHeight = 64.dp
 
 private fun GalleryQuickSelectItem.handResId(): Int =
     when (this) {
@@ -1818,12 +1823,18 @@ internal fun memoryDensityPaperColorMatrices(inkArgb: Int): Pair<FloatArray, Flo
  * 조용히 바라보는 화면". dashboard·통계판이 아니라 1월→12월로 흐르는 작은
  * 화단이다. 사진을 보여주거나 탭해서 상세로 들어가는 상호작용은 두지
  * 않는다 — 순수 조회 화면.
+ *
+ * 127일차: 그래프 아래 남는 자리에 미래 우체통 종이 한 장([GalleryFutureMailDioramaSlot])을
+ * 둔다. 그래프 자체는 여전히 조회만 하고, 종이 전체가 기존 우체통 화면으로 가는 입구다.
+ * 남은 높이가 모자란 짧은 화면에서는 종이를 그리지 않는다(그래프는 줄이지 않는다).
  */
 @Composable
 private fun GalleryDensityPage(
     postcards: List<Postcard>,
     paddingValues: PaddingValues,
-    paperTile: ImageBitmap
+    paperTile: ImageBitmap,
+    futureMailGroups: List<FutureMailGroup>?,
+    onOpenFutureMailbox: () -> Unit
 ) {
     // 이 화면에는 연도 선택 UI가 없다 — year는 "사용자가 고른 연도"가 아니라 순수하게
     // "지금 몇 년인가"다. 그래서 앱을 켜 둔 채 연말 자정을 넘기면 제목과 12칸이 지난해에
@@ -1887,6 +1898,17 @@ private fun GalleryDensityPage(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+
+        // 첫 묶음이 오기 전(null)에는 자리만 둔다 — 빈 우체통이 잠깐 비치지 않게.
+        if (futureMailGroups != null) {
+            GalleryFutureMailDioramaSlot(
+                groups = futureMailGroups,
+                onOpenFutureMailbox = onOpenFutureMailbox,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            )
         }
     }
 }
