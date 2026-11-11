@@ -503,11 +503,16 @@ object PostcardImageExporter {
         canvas: Canvas,
         stickerOverlay: StickerOverlay
     ) {
+        val stickerSide =
+            (stickerOverlay.sizeRatio * OUTPUT_SIZE)
+                .coerceIn(1f, OUTPUT_SIZE.toFloat())
         val decodedStickerBitmap =
             runCatching {
                 decodeStickerBitmap(
                     context = context,
-                    stickerUri = stickerOverlay.uri
+                    stickerUri = stickerOverlay.uri,
+                    stickerSide = stickerSide,
+                    fitInside = stickerOverlay.isBackgroundRemoved
                 )
             }.getOrNull()
         val decodedOriginalBitmap =
@@ -520,7 +525,10 @@ object PostcardImageExporter {
                     decodeStickerBitmap(
                         context = context,
                         stickerUri =
-                            stickerOverlay.originalUri
+                            stickerOverlay.originalUri,
+                        stickerSide = stickerSide,
+                        // 누끼 읽기 실패 시 원본은 기존처럼 Crop으로 그린다.
+                        fitInside = false
                     )
                 }.getOrNull()
             } else {
@@ -540,12 +548,6 @@ object PostcardImageExporter {
             )
 
         try {
-            val stickerSide =
-                (stickerOverlay.sizeRatio * OUTPUT_SIZE)
-                    .coerceIn(
-                        1f,
-                        OUTPUT_SIZE.toFloat()
-                    )
             // 누끼 스티커는 투명 여백이 엽서 밖으로 나갈 수 있어 칸을 캔버스 안으로 당기지
             // 않는다(화면과 같은 자리 — 밖으로 나간 부분은 캔버스 경계에서 잘린다).
             val allowsOverhang = stickerOverlay.isBackgroundRemoved
@@ -1767,7 +1769,9 @@ object PostcardImageExporter {
 
     private fun decodeStickerBitmap(
         context: Context,
-        stickerUri: Uri
+        stickerUri: Uri,
+        stickerSide: Float,
+        fitInside: Boolean
     ): Bitmap {
         val resolver =
             context.contentResolver
@@ -1795,25 +1799,52 @@ object PostcardImageExporter {
 
             ImageDecoder.decodeBitmap(
                 source
-            ) { decoder, _, _ ->
+            ) { decoder, info, _ ->
                 decoder.allocator =
                     ImageDecoder.ALLOCATOR_SOFTWARE
+                decoder.setTargetSampleSize(
+                    exportStickerSampleSize(
+                        sourceWidth = info.size.width,
+                        sourceHeight = info.size.height,
+                        stickerSide = stickerSide,
+                        fitInside = fitInside
+                    )
+                )
             }
         } else {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            if (stickerUri.scheme == "file") {
+                BitmapFactory.decodeFile(stickerUri.path, bounds)
+            } else {
+                resolver.openInputStream(stickerUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, bounds)
+                }
+            }
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = exportStickerSampleSize(
+                    sourceWidth = bounds.outWidth,
+                    sourceHeight = bounds.outHeight,
+                    stickerSide = stickerSide,
+                    fitInside = fitInside
+                )
+            }
             val decodedBitmap =
                 if (stickerUri.scheme == "file") {
                     BitmapFactory.decodeFile(
                         stickerUri.path
                             ?: throw IOException(
                                 "스티커 파일 경로를 찾지 못했습니다."
-                            )
+                            ),
+                        options
                     )
                 } else {
                     resolver
                         .openInputStream(stickerUri)
                         ?.use { inputStream ->
                             BitmapFactory.decodeStream(
-                                inputStream
+                                inputStream,
+                                null,
+                                options
                             )
                         }
                 }
