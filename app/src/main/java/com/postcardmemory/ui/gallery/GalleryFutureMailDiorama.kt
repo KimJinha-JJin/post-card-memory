@@ -462,9 +462,12 @@ private fun DioramaArt(
     }
 }
 
-/** 봉투 뒤로 고개를 내민 엽서 한 장 — "열 수 있어"의 그림 신호. 사진은 실제 엽서가 아니다. */
+/**
+ * 봉투 뒤로 고개를 내민 엽서 한 장 — "열 수 있어"의 그림 신호. 사진은 실제 엽서가 아니다.
+ * 129일차: 미래 우체통 화면의 도착 줄도 같은 그림을 쓴다.
+ */
 @Composable
-private fun PeekingPostcard(modifier: Modifier = Modifier) {
+internal fun PeekingPostcard(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         drawRect(PaperSurface)
         drawRect(InkPrimary.copy(alpha = 0.35f), style = Stroke(width = 0.6.dp.toPx()))
@@ -483,9 +486,14 @@ private fun PeekingPostcard(modifier: Modifier = Modifier) {
 
 /**
  * 방문 달력 장([VisitCalendarMonthPage])과 같은 종이 한 장: cover-crop 종이, 가위 가장자리,
- * 아주 옅은 접촉 그림자, 윗변 가운데 아이보리 테이프. seed는 이 종이 전용으로 고정한다.
+ * 아주 옅은 접촉 그림자, 윗변 가운데 아이보리 테이프. seed는 종이마다 고정한다
+ * (기본값은 이 디오라마 종이 전용, 129일차 미래 우체통 화면은 장마다 자기 seed를 넘긴다).
  */
-private fun Modifier.calendarPaperSheet(paper: ImageBitmap): Modifier = drawWithCache {
+internal fun Modifier.calendarPaperSheet(
+    paper: ImageBitmap,
+    edgeSeed: Int = FUTURE_MAIL_DIORAMA_PAPER_EDGE_SEED,
+    tapeSeed: Int = FUTURE_MAIL_DIORAMA_TAPE_SEED
+): Modifier = drawWithCache {
     val dstWidth = size.width.toInt().coerceAtLeast(1)
     val dstHeight = size.height.toInt().coerceAtLeast(1)
     val scale = maxOf(dstWidth.toFloat() / paper.width, dstHeight.toFloat() / paper.height)
@@ -506,14 +514,14 @@ private fun Modifier.calendarPaperSheet(paper: ImageBitmap): Modifier = drawWith
         visitCalendarPaperEdgeOutline(
             widthDp = size.width / density,
             heightDp = size.height / density,
-            seed = FUTURE_MAIL_DIORAMA_PAPER_EDGE_SEED
+            seed = edgeSeed
         ).forEachIndexed { index, point ->
             if (index == 0) moveTo(point.x * density, point.y * density)
             else lineTo(point.x * density, point.y * density)
         }
         close()
     }
-    val tape = visitCalendarTapePiece(FUTURE_MAIL_DIORAMA_TAPE_SEED)
+    val tape = visitCalendarTapePiece(tapeSeed)
     val tapePath = visitCalendarTapePath(tape, density)
     onDrawBehind {
         VISIT_CALENDAR_PAPER_SHADOW_LAYERS.forEach { (dx, dy, alpha) ->
