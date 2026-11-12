@@ -1,3 +1,35 @@
+# HANDOFF — 130일차 A 마감: 출력 스티커 디코딩 최적화 후보 C(적용 보류) · 보관 태그 보존
+
+2026-11-12, 마감 정리 Claude Code(피코), 수동 표준 모드. 129일차 패코(Codex)의 출력 스티커 디코딩 최적화 후보를 130일차 실기기 격리 검증 뒤 **C — 적용 보류**로 판정했어. **main은 기존 디코딩을 그대로 유지하고 후보 production 코드는 병합하지 않아.** 이 절은 그 결론과 보존 위치만 main에 남기는 문서 마감이야. 최적화 코드 추가 수정·재검증은 하지 않았어.
+
+## 보존 위치
+
+- 보관 태그 `archive/day129-export-sticker-decode-hold`(annotated) → commit `6c927e35c1bfa688b373df15ba44e8418c72e40d`. 원격 조회·새 저장소로 태그만 받아 파일 확인까지 했어.
+- 태그 안에 있는 것: 후보 production `ExportStickerDecodeSizing.kt`(신규)·`PostcardImageExporter.kt`(수정), JVM 테스트 `ExportStickerDecodeSizingTest` 12건, 129일차 QA(`docs/qa/day129/` 16파일), 130일차 QA(`docs/qa/day130/` 16파일: README·CSV 3종·로그·비교 PNG 7장·격리 검증 앱 소스/빌드 스크립트), 후보 브랜치 기준 HANDOFF와 archive 2개(128·129일차 원문), 후보 기준 TEST-COVERAGE-MAP(JVM 1204건).
+- 상세 근거: [130일차 A 결과 README](https://github.com/KimJinha-JJin/post-card-memory/blob/archive/day129-export-sticker-decode-hold/docs/qa/day130/README.md), [129일차 A README](https://github.com/KimJinha-JJin/post-card-memory/blob/archive/day129-export-sticker-decode-hold/docs/qa/day129/README.md). QA 이미지·검증 소스는 태그에만 두고 main에는 넣지 않았어(main에 없는 함수를 호출하는 검증 소스라서).
+- **main의 TEST-COVERAGE-MAP은 변경 없음**: main 테스트는 그대로(129일차 B-2 기준 JVM 1203건)이고, 후보의 12건은 태그 쪽 지도에만 있어.
+
+## 판정 근거 (130일차 실기기 격리 검증, SM-S936N·API 37 한 대)
+
+- 사용자 승인받은 별도 package 검증 앱에서 실제 decoder·renderer 전후 사본을 호출해 34조건(합성 21 + 실제 사진 13)·반복 decode 98회(측정 표본 70회)를 비교했어. 사용자 앱은 실행·업데이트하지 않았고 사용자 DB·파일·갤러리 쓰기 경로도 실행하지 않았어.
+- **메모리**: 실제 인물 사진 스티커 Bitmap 26.77→6.69MiB(일반 배치 .25), 26.77→1.67MiB(작은 배치 .10). 합성 2992²는 34.15→8.54MiB. 스티커 한 장의 Bitmap 실측이고 사용자 앱 전체 peak/PSS는 아니야.
+- **속도**: 인물 decode 중앙값 일반 배치 20.78→28.64ms(**느려짐**), 작은 배치 21.05→11.52ms(빨라짐).
+- **품질 저하**: 실제 인물 사진의 머리카락·옷 미세 질감이 후보 쪽에서 더 부드러워졌고, 촘촘한 합성 사선에서 출력 1:1로도 보이는 **모아레·선 표현 차이**를 확인했어('주의' 등급). 34쌍 중 13쌍만 PNG가 완전히 같았어.
+- 판단: 메모리 절감은 분명하지만 질감 저하·모아레·일반 배치 속도 저하가 있고, 이 후보가 실제 앱의 OOM/peak 문제를 해결한다는 근거가 없어 적용 보류.
+
+## 미검증과 재검토 조건
+
+- 미검증: 실제 머리카락 누끼·반투명 외곽, 고해상도 풍경·털·반복 무늬, `content://` 입력, API 26~27, 원래 앱 공유·갤러리 내보내기 전체 경로와 실패 보존, 여러 스티커 동시 peak, 사람이 폰 화면 크기로 보는 감각 QA.
+- 재검토는 **실제 메모리 문제(내보내기 OOM·peak 과다)가 확인됐을 때** 후보로 꺼내. 순서는 ① 실제 고해상도 누끼·질감 입력 확보 → ② sampling 여유 확대·배율 제한·필터 비교 같은 품질 보완안 검토 → ③ 최신 main에 후보 2파일을 얹은 격리 빌드(package·FileProvider·DB·출력 목적지까지 분리 확인) → ④ 사용자 승인 후 설치·QA. 태그에서 시작하되 main과의 조합·충돌은 미검증이야.
+- 설치·공유 cache·갤러리 쓰기·기기 검증 자료 정리는 대상·효과를 보고하고 별도 승인 후에만 해. 기기에는 day129·day130 격리 검증 앱과 그 전용 자료가 남아 있어(삭제 안 함).
+
+## 상태
+
+- 구현: 앱 변경 없음(문서 마감만). 자동 검증: `git diff --check`·링크 확인, 문서 전용이라 JVM/assemble 불필요. 실기기 QA: 불필요(문서 전용). Room·저장 형식·미래 우체통 A안·보호 미추적 파일 무변경.
+- Git(작성 시점): 문서 브랜치 `docs/day130-export-decode-hold-closeout`(base main `65839cc`). 후보 브랜치 `perf/day129-export-sticker-decode`는 태그와 같은 `6c927e3`이며, 병합 후 사용자 최종 승인 시에만 정리해. PR·CI·병합 결과는 대화 완료보고에 남겨.
+
+---
+
 # HANDOFF — 129일차 작업 B-2: 미래 우체통 내부 A안(우편 서류함) 구현·자동 검증·실기기 QA 완료 / PR·병합 승인 대기
 
 2026-11-11, 담당 Claude Code(피코), 수동 표준 모드. 사용자가 A/B/C 목업 비교 뒤 **A안을 최종 선택**했고, A안 구현·자동 검증·안전한 실기기 QA를 지시했어. 혼합안(C)·B안 장식은 적용하지 않았어. 사용자 QA 완료 뒤 사용자가 진행을 승인해 작업 브랜치 commit·push·PR까지 진행해. **main 병합은 별도 최종 승인 전 하지 않아.** 아래 "미커밋 변경" 표현은 이 절을 처음 쓴 시점 기준이야.
