@@ -1,3 +1,29 @@
+# HANDOFF — 130일차 B: 종이 손맛(갤러리 엽서 누르기 · 사진 스티커 집기 B안) 구현·자동 검증·실기기 QA 완료 / PR·병합 승인 대기
+
+2026-11-12, 담당 Claude Code(피코), 수동 표준 모드. 사용자가 목업 `docs/mockups/paper-touch-feel-day130.html`(미추적, 이 PR에 넣지 않음)을 폰에서 직접 만져 보고 **두 항목 모두 B안**을 골랐고, 구현 계획 1~7(브랜치·구현·검증·실기기 QA·HANDOFF·commit·push·PR·CI)을 승인했어. 설치는 따로 승인받았어. **main 병합은 별도 최종 승인 전에 하지 않아.**
+
+## 바뀐 것 (UI 그리기만)
+
+- **갤러리** 3열 그리드 엽서(`GalleryCardPressFeel.kt` 신규, `GalleryScreen.kt` 연결): 누르면 0.97배·2dp 눌림 + 누른 쪽으로 최대 2.5° 기울기. 탭하면 1.03배·4dp 들림·그림자 뒤 120ms 후 상세로 이동. 선택 모드에서는 집어 들지 않고 바로 선택 전환. 길게 누르기·연못 모드·Page Curl 그대로. 클릭은 기존과 같은 `combinedClickable`.
+- **사진 스티커**(편집 탭, `PhotoStickerLiftFeel.kt` 신규, `DetailScreen.kt` 연결): 잡으면 1.05배·4dp 들림·그림자, 끄는 가로 속도만큼 최대 ±3° 기울기, 놓으면 한 번 눌리며 내려앉음. 누끼 스티커는 실루엣을 흐린 그림자(Android 12 미만은 그림자 생략, 들림만). 들림은 그리기 변환(`graphicsLayer` 아님)이라 제스처 좌표·저장되는 위치·크기·회전·Undo/Redo·공유/내보내기에 영향 없음. 추적기는 터치를 소비하지 않아.
+- **애니메이션 감소 설정**: 움직임 없이 상태 표시(그림자·흐림)만 남겨.
+- Room·저장 형식·ViewModel·exporter 무변경. 새 이미지 자산 없음.
+
+## 검증 상태
+
+- 로컬 자동검증(Gradle 9.8.2 + Zulu 17): `testDebugUnitTest` **1223/1223, XML 131개, 실패·오류·skip 0**, `assembleDebug`·`assembleDebugAndroidTest` 성공. 신규 20건(계산 15 + 구조 5). TEST-COVERAGE-MAP 갱신 완료(구조 검사 254→259). instrumentation 미실행(21개/8파일 그대로).
+- 실기기 설치(SM-S936N·API 37, 승인된 실사용 기기 1대): 설치 전 기존 설치본은 129일차 APK(`bd1e1e…63d6c5`), 새 debug APK `f64f9fbe…0f9233`, 서명 인증서 같음(Android Debug `cec335…c875b9`). 사용자 "설치 승인" 뒤 `adb install -r` 1회 **Success**(lastUpdateTime 2026-11-12 22:29:46, firstInstallTime 유지).
+- **전원 종료 복구**: 설치 Success 직후 노트북 배터리 방전으로 PC가 꺼졌어. 재시작 뒤 읽기 전용으로 확인: 기기 설치본 SHA-256 = 새 APK와 일치, 앱 미실행, `files`·`databases`·`shared_prefs` 136개 해시가 설치 전 기준선과 **차이 0건**, 소스 파일은 모두 마지막 성공 빌드 이전 시각. 재설치·재빌드·재테스트는 하지 않았어.
+- **사용자 실기기 QA: 완료** — 갤러리(누르기·탭·길게 누르기·선택 모드·스크롤), 사진 스티커(사진·종이·누끼 잡기/끌기/놓기, 탭, 두 손가락 크기), 스티커 이동 뒤 Undo/Redo를 보고 "전부 괜찮아". 이 확인은 main 병합 승인이 아니야. QA 뒤 데이터 해시는 다시 재지 않았어(사용자가 직접 앱을 써서 방문 기록 등이 바뀔 수 있음).
+- **미검증:** 애니메이션 끄기 설정의 실기기 표시(기기 설정 변경 필요), Android 12 미만 기기, 큰 글꼴.
+
+## 남은 위험·재개 조건
+
+- 목업 `paper-touch-feel-day130.html`과 기존 미추적 목업·PNG 3개(`postcard_paper_fiber_tile`·`round_head`·`sheep_ranch_sheep`)·`.codex-config.candidate.toml`은 보호 파일로 그대로 두고 stage하지 않아.
+- Git(작성 시점): 브랜치 `feat/day130-paper-touch-feel`(base main `471c6e7`), 이 HANDOFF 포함 commit·push·PR·CI 진행 예정. PR 번호·SHA·CI 결과는 대화 완료보고에 남겨. main 병합과 브랜치 정리는 2단계 승인 후.
+
+---
+
 # HANDOFF — 130일차 A 마감: 출력 스티커 디코딩 최적화 후보 C(적용 보류) · 보관 태그 보존
 
 2026-11-12, 마감 정리 Claude Code(피코), 수동 표준 모드. 129일차 패코(Codex)의 출력 스티커 디코딩 최적화 후보를 130일차 실기기 격리 검증 뒤 **C — 적용 보류**로 판정했어. **main은 기존 디코딩을 그대로 유지하고 후보 production 코드는 병합하지 않아.** 이 절은 그 결론과 보존 위치만 main에 남기는 문서 마감이야. 최적화 코드 추가 수정·재검증은 하지 않았어.
