@@ -2253,7 +2253,8 @@ private fun GalleryMonthlyGridPage(
                         },
                         onLongClick = {
                             onItemLongClick(postcard.id)
-                        }
+                        },
+                        liftOnOpen = selectedIds.isEmpty()
                     )
                 }
             }
@@ -2278,7 +2279,9 @@ private fun GalleryMonthlyGridItem(
     pondController: PondController,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    pondLeaf: ImageBitmap? = null
+    pondLeaf: ImageBitmap? = null,
+    // 선택 모드가 아니라 탭이 상세로 가는 경우에만 집어 드는 움직임을 보여준다.
+    liftOnOpen: Boolean = false
 ) {
     val dayLabel = remember(postcard.capturedAt) {
         Instant.ofEpochMilli(postcard.capturedAt)
@@ -2304,9 +2307,9 @@ private fun GalleryMonthlyGridItem(
             postcard = postcard,
             isSelected = isSelected,
             dateLabelOverride = dayLabel,
-            modifier = Modifier.combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
+            // 130일차 B: 눌림·누른 쪽 기울기·집어 듦(그리기만, 클릭 처리는 기존과 같은 combinedClickable).
+            modifier = galleryCardPressFeel(
+                liftOnOpen = liftOnOpen,
                 onClick = onClick,
                 onLongClick = onLongClick
             )

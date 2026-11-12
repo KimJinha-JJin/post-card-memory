@@ -3098,13 +3098,36 @@ fun DetailScreen(
                                             .clip(RoundedCornerShape(16.dp))
                                 }
 
+                            // 130일차 B: 잡으면 들리고 놓으면 내려앉는 그리기 전용 효과.
+                            val stickerLift =
+                                rememberPhotoStickerLiftState(sticker.id)
+
                             Box(
                                 modifier = stickerPositionModifier
                                     .size(STICKER_BASE_SIZE * sticker.scale)
                                     .onSizeChanged { size ->
                                         stickerSizes += (sticker.id to size)
                                     }
+                                    .photoStickerLiftTransform(stickerLift)
                             ) {
+                                PhotoStickerLiftShadow(
+                                    state = stickerLift,
+                                    model = sticker.displayedUri,
+                                    isCutout =
+                                        paperSpec == null &&
+                                                sticker.isBackgroundRemoved,
+                                    cornerRadius =
+                                        if (paperSpec == null) {
+                                            16.dp
+                                        } else {
+                                            STICKER_BASE_SIZE * sticker.scale *
+                                                    paperSpec.paperCornerRadius
+                                        },
+                                    rotationDegrees = sticker.rotationDegrees,
+                                    flipHorizontal = sticker.flipHorizontal,
+                                    flipVertical = sticker.flipVertical
+                                )
+
                                 AsyncImage(
                                     model = sticker.displayedUri,
                                     contentDescription =
@@ -3133,12 +3156,28 @@ fun DetailScreen(
                                                 Modifier.pointerInput(
                                             sticker.id,
                                             postcardPreviewSize,
-                                            perStickerEditMode
+                                            perStickerEditMode,
+                                            stickerLift
                                         ) {
                                             var stickerGestureSnapshotPending = true
                                             var activeStickerPointerCount = 0
 
                                             coroutineScope {
+                                            launch {
+                                                // 130일차 B: 닿음·이동·뗌만 지켜본다(소비 없음).
+                                                trackPhotoStickerLift(stickerLift) { localDelta ->
+                                                    val current =
+                                                        latestPhotoStickers.find {
+                                                            it.id == sticker.id
+                                                        } ?: sticker
+                                                    localStickerDeltaToParent(
+                                                        localDelta = localDelta,
+                                                        rotationDegrees = current.rotationDegrees,
+                                                        flipHorizontal = current.flipHorizontal,
+                                                        flipVertical = current.flipVertical
+                                                    ).x
+                                                }
+                                            }
                                             launch {
                                                 awaitEachGesture {
                                                     awaitFirstDown(
