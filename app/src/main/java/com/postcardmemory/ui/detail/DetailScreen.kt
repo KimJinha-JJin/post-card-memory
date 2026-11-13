@@ -2869,12 +2869,17 @@ fun DetailScreen(
                                         }
                                 }
 
+                            // 131일차: 붙은 테이프를 잡으면 낮게 들리고 놓으면 밀착(그리기 전용).
+                            val tapeLift =
+                                rememberDecorationLiftState(tape.id, MaskingTapeLiftSpec)
+
                             Box(
                                 modifier = maskingTapePositionModifier
                                     .size(
                                         width = MASKING_TAPE_BASE_WIDTH * tape.scale * tape.lengthScale,
                                         height = MASKING_TAPE_BASE_HEIGHT * tape.scale * tape.thicknessScale
                                     )
+                                    .decorationLiftTransform(tapeLift)
                                     .graphicsLayer {
                                         rotationZ = tape.rotationDegrees
                                     }
@@ -2888,11 +2893,27 @@ fun DetailScreen(
                                         ) {
                                             Modifier.pointerInput(
                                         tape.id,
-                                        postcardPreviewSize
+                                        postcardPreviewSize,
+                                        tapeLift
                                     ) {
                                         var maskingTapeGestureSnapshotPending = true
 
                                         coroutineScope {
+                                            launch {
+                                                // 131일차: 닿음·이동·뗌만 지켜본다(소비 없음).
+                                                trackDecorationLift(tapeLift) { localDelta ->
+                                                    val current =
+                                                        latestPhotoMaskingTapes.find {
+                                                            it.id == tape.id
+                                                        } ?: tape
+                                                    localStickerDeltaToParent(
+                                                        localDelta = localDelta,
+                                                        rotationDegrees = current.rotationDegrees,
+                                                        flipHorizontal = false,
+                                                        flipVertical = false
+                                                    ).x
+                                                }
+                                            }
                                             launch {
                                                 awaitEachGesture {
                                                     awaitFirstDown(
@@ -2989,7 +3010,12 @@ fun DetailScreen(
                             ) {
                                 MaskingTapeContent(
                                     tape = tape,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .decorationLiftShadow(
+                                            tapeLift,
+                                            tape.rotationDegrees
+                                        )
                                 )
                             }
                         }
@@ -4119,8 +4145,13 @@ fun DetailScreen(
                                         }
                                 }
 
+                            // 131일차: 잡으면 가볍게 들리고 놓으면 복귀(그리기 전용).
+                            val textStickerLift =
+                                rememberDecorationLiftState(textSticker.id, TextStickerLiftSpec)
+
                             Box(
                                 modifier = textStickerPositionModifier
+                                    .decorationLiftTransform(textStickerLift)
                                     .graphicsLayer {
                                         rotationZ =
                                             textSticker.rotationDegrees
@@ -4136,11 +4167,27 @@ fun DetailScreen(
                                         ) {
                                             Modifier.pointerInput(
                                         textSticker.id,
-                                        postcardPreviewSize
+                                        postcardPreviewSize,
+                                        textStickerLift
                                     ) {
                                         var textStickerGestureSnapshotPending = true
 
                                         coroutineScope {
+                                            launch {
+                                                // 131일차: 닿음·이동·뗌만 지켜본다(소비 없음).
+                                                trackDecorationLift(textStickerLift) { localDelta ->
+                                                    val current =
+                                                        latestTextStickers.find {
+                                                            it.id == textSticker.id
+                                                        } ?: textSticker
+                                                    localStickerDeltaToParent(
+                                                        localDelta = localDelta,
+                                                        rotationDegrees = current.rotationDegrees,
+                                                        flipHorizontal = false,
+                                                        flipVertical = false
+                                                    ).x
+                                                }
+                                            }
                                             launch {
                                                 awaitEachGesture {
                                                     awaitFirstDown(
@@ -4251,7 +4298,11 @@ fun DetailScreen(
                                     fontSizeSp =
                                         TEXT_STICKER_BASE_FONT_SIZE_SP *
                                                 textSticker.scale,
-                                    outlineColorArgb = textSticker.outlineColorArgb
+                                    outlineColorArgb = textSticker.outlineColorArgb,
+                                    modifier = Modifier.decorationLiftShadow(
+                                        textStickerLift,
+                                        textSticker.rotationDegrees
+                                    )
                                 )
                             }
                         }
@@ -4610,8 +4661,13 @@ fun DetailScreen(
                                         }
                                 }
 
+                            // 131일차: 라벨 한 덩어리로 들리고 놓으면 짧게 밀착(그리기 전용).
+                            val labelStickerLift =
+                                rememberDecorationLiftState(labelSticker.id, LabelStickerLiftSpec)
+
                             Box(
                                 modifier = labelStickerPositionModifier
+                                    .decorationLiftTransform(labelStickerLift)
                                     .graphicsLayer {
                                         rotationZ =
                                             labelSticker.rotationDegrees
@@ -4627,11 +4683,27 @@ fun DetailScreen(
                                         ) {
                                             Modifier.pointerInput(
                                         labelSticker.id,
-                                        postcardPreviewSize
+                                        postcardPreviewSize,
+                                        labelStickerLift
                                     ) {
                                         var labelStickerGestureSnapshotPending = true
 
                                         coroutineScope {
+                                            launch {
+                                                // 131일차: 닿음·이동·뗌만 지켜본다(소비 없음).
+                                                trackDecorationLift(labelStickerLift) { localDelta ->
+                                                    val current =
+                                                        latestLabelStickers.find {
+                                                            it.id == labelSticker.id
+                                                        } ?: labelSticker
+                                                    localStickerDeltaToParent(
+                                                        localDelta = localDelta,
+                                                        rotationDegrees = current.rotationDegrees,
+                                                        flipHorizontal = false,
+                                                        flipVertical = false
+                                                    ).x
+                                                }
+                                            }
                                             launch {
                                                 awaitEachGesture {
                                                     awaitFirstDown(
@@ -4741,7 +4813,11 @@ fun DetailScreen(
                                         LABEL_STICKER_BASE_FONT_SIZE_SP *
                                                 labelSticker.scale,
                                     customTapeColorArgb =
-                                        labelSticker.customTapeColorArgb
+                                        labelSticker.customTapeColorArgb,
+                                    modifier = Modifier.decorationLiftShadow(
+                                        labelStickerLift,
+                                        labelSticker.rotationDegrees
+                                    )
                                 )
                             }
                         }
