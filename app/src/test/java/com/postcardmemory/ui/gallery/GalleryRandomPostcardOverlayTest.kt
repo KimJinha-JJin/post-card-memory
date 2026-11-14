@@ -88,22 +88,14 @@ class GalleryRandomPostcardOverlayTest {
     }
 
     @Test
-    fun layout_handReachesScreenBottom_onTypicalPhone_andStaysBelowCap() {
+    fun layout_resultRetainsApprovedSizeAndCenterWithoutAHand() {
         val density = 2.75f
         val w = 392f * density
         val h = 760f * density
         val layout = randomOverlayLayout(w, h, density)
 
-        // 잘린 손목이 공중에 뜨지 않도록 손 그림 아랫변이 화면 아래에 닿는다.
-        val handBottom =
-            layout.cardBottomPx + (1f - RANDOM_OVERLAY_HAND_ANCHOR_Y) * layout.handSidePx
-        assertTrue("handBottom=$handBottom h=$h", handBottom >= h)
-
-        // 손은 엽서 왼쪽 아래 귀퉁이를 집는다(가운데가 아니라 왼쪽 1/5 안).
-        assertTrue(layout.handAnchorXPx >= layout.cardLeftPx)
-        assertTrue(layout.handAnchorXPx <= layout.cardLeftPx + layout.cardSizePx * 0.2f)
-
-        // 손은 엽서의 1.6배를 넘지 않는다.
-        assertTrue(layout.handSidePx <= layout.cardSizePx * 1.6f + 0.01f)
+        assertEquals(w * .62f, layout.cardSizePx, .01f)
+        assertEquals(w / 2f, layout.cardLeftPx + layout.cardSizePx / 2f, .01f)
+        assertEquals(h * .46f, layout.cardTopPx + layout.cardSizePx / 2f, .01f)
     }
 }

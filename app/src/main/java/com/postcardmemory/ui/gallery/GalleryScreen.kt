@@ -26,6 +26,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -91,6 +92,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -123,6 +125,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -461,8 +464,20 @@ fun GalleryScreen(
 
     // 84일차 후속: 흔들어서 뽑은 엽서. null이 아니면 갤러리 위에
     // [GalleryRandomPostcardOverlay]가 떠 있고, 그동안 흔들기는 꺼진다.
-    var shakePickedPostcardId by remember {
-        mutableStateOf<Long?>(null)
+    val randomReveal = remember { GalleryRandomRevealState() }
+    val randomCards = remember { GalleryRandomCardRegistry() }
+    val randomReducedMotion = rememberRandomRevealReducedMotion()
+    val shakePickedPostcardId = randomReveal.session?.postcardId
+    val galleryLifecycle = LocalLifecycleOwner.current
+    DisposableEffect(galleryLifecycle, randomReveal) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) randomReveal.clear()
+        }
+        galleryLifecycle.lifecycle.addObserver(observer)
+        onDispose {
+            galleryLifecycle.lifecycle.removeObserver(observer)
+            randomReveal.clear()
+        }
     }
     val shakePickedPostcard = shakePickedPostcardId?.let { id ->
         postcards.firstOrNull { it.id == id }
@@ -472,7 +487,7 @@ fun GalleryScreen(
     // 그대로 두면 아무것도 안 보이는데 흔들기만 꺼진 상태가 된다.
     LaunchedEffect(shakePickedPostcardId, shakePickedPostcard == null) {
         if (shakePickedPostcardId != null && shakePickedPostcard == null) {
-            shakePickedPostcardId = null
+            randomReveal.clear()
         }
     }
 
@@ -501,7 +516,12 @@ fun GalleryScreen(
             GalleryShakeHapticAmplitude
         )
         fabMenuExpanded = false
-        shakePickedPostcardId = id
+        randomReveal.start(
+            id,
+            if (!randomReducedMotion && currentPageFormat == GalleryPageFormat.MONTHLY) {
+                randomCards.source(id, monthlyGridState.layoutInfo.visibleItemsInfo.any { it.key == id })
+            } else null
+        )
     }
 
     fun toggleSelection(id: Long) {
@@ -514,6 +534,7 @@ fun GalleryScreen(
     }
 
     fun handleItemClick(id: Long) {
+        if (randomReveal.session != null) return
         if (selectedIds.isNotEmpty()) {
             toggleSelection(id)
         } else {
@@ -523,6 +544,7 @@ fun GalleryScreen(
     }
 
     fun handleItemLongClick(id: Long) {
+        if (randomReveal.session != null) return
         toggleSelection(id)
     }
 
@@ -551,6 +573,7 @@ fun GalleryScreen(
     VisitCalendarDrawer(visitDrawerState, visitedEpochDays, totalVisitDays) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
+        modifier = if (shakePickedPostcardId != null) Modifier.clearAndSetSemantics { } else Modifier,
         containerColor = GalleryPaperWhite,
 
         topBar = {
@@ -1061,6 +1084,9 @@ fun GalleryScreen(
                                 paddingValues = pageContentPaddingValues,
                                 searchQuery = searchQuery,
                                 gridState = monthlyGridState,
+                                randomReveal = randomReveal,
+                                randomCards = randomCards,
+                                randomReducedMotion = randomReducedMotion,
                                 onItemClick = ::handleItemClick,
                                 onItemLongClick = ::handleItemLongClick
                             )
@@ -1132,20 +1158,37 @@ fun GalleryScreen(
                 }
             },
             // 손은 화면 오른쪽 끝 밖에서 들어오므로 가장자리 여백을 두지 않는다.
-            modifier = Modifier.navigationBarsPadding()
+            modifier = Modifier.navigationBarsPadding().then(
+                if (shakePickedPostcardId != null) Modifier.clearAndSetSemantics { } else Modifier
+            )
         )
 
         shakePickedPostcard?.let { picked ->
+            val generation = randomReveal.session?.generation
             // key: 다른 엽서가 뽑히면 등장 연출을 처음부터 다시 한다.
-            key(picked.id) {
+            key(generation) {
                 GalleryRandomPostcardOverlay(
                     postcard = picked,
+                    state = randomReveal,
+                    reducedMotion = randomReducedMotion,
+                    prepareSource = {
+                        if (monthlyGridState.isScrollInProgress) {
+                            monthlyGridState.stopScroll()
+                            // Let the cancelled fling's last layout settle before taking its window coordinates.
+                            repeat(2) { withFrameNanos { } }
+                        }
+                        if (!randomReducedMotion && currentPageFormat == GalleryPageFormat.MONTHLY) {
+                            randomCards.source(picked.id, monthlyGridState.layoutInfo.visibleItemsInfo.any { it.key == picked.id })
+                        } else null
+                    },
                     onOpen = {
-                        shakePickedPostcardId = null
-                        onNavigateToDetail(picked.id)
+                        if (randomReveal.session?.generation == generation) {
+                            randomReveal.clear(generation)
+                            onNavigateToDetail(picked.id)
+                        }
                     },
                     onDismissed = {
-                        shakePickedPostcardId = null
+                        randomReveal.clear(generation)
                     }
                 )
             }
@@ -2073,6 +2116,9 @@ private fun GalleryMonthlyGridPage(
     paddingValues: PaddingValues,
     searchQuery: String,
     gridState: LazyGridState,
+    randomReveal: GalleryRandomRevealState,
+    randomCards: GalleryRandomCardRegistry,
+    randomReducedMotion: Boolean,
     onItemClick: (Long) -> Unit,
     onItemLongClick: (Long) -> Unit
 ) {
@@ -2089,6 +2135,7 @@ private fun GalleryMonthlyGridPage(
     }
 
     val pondGridState = rememberLazyGridState()
+    val randomDensity = LocalDensity.current
 
     var originInWindow by remember { mutableStateOf(Offset.Zero) }
 
@@ -2202,7 +2249,16 @@ private fun GalleryMonthlyGridPage(
             ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
+            userScrollEnabled = randomReveal.session == null,
+            modifier = Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+                val position = coordinates.positionInWindow()
+                randomCards.viewport = androidx.compose.ui.geometry.Rect(
+                    position.x,
+                    position.y + with(randomDensity) { paddingValues.calculateTopPadding().toPx() },
+                    position.x + coordinates.size.width,
+                    position.y + coordinates.size.height
+                )
+            }
         ) {
             if (isPondModeOn) {
                 lazyGridItems(
@@ -2254,7 +2310,10 @@ private fun GalleryMonthlyGridPage(
                         onLongClick = {
                             onItemLongClick(postcard.id)
                         },
-                        liftOnOpen = selectedIds.isEmpty()
+                        liftOnOpen = selectedIds.isEmpty(),
+                        randomReveal = randomReveal,
+                        randomCards = randomCards,
+                        randomReducedMotion = randomReducedMotion
                     )
                 }
             }
@@ -2281,7 +2340,10 @@ private fun GalleryMonthlyGridItem(
     onLongClick: () -> Unit,
     pondLeaf: ImageBitmap? = null,
     // 선택 모드가 아니라 탭이 상세로 가는 경우에만 집어 드는 움직임을 보여준다.
-    liftOnOpen: Boolean = false
+    liftOnOpen: Boolean = false,
+    randomReveal: GalleryRandomRevealState? = null,
+    randomCards: GalleryRandomCardRegistry? = null,
+    randomReducedMotion: Boolean = false
 ) {
     val dayLabel = remember(postcard.capturedAt) {
         Instant.ofEpochMilli(postcard.capturedAt)
@@ -2303,17 +2365,28 @@ private fun GalleryMonthlyGridItem(
             onLongClick = onLongClick
         )
     } else {
+        DisposableEffect(postcard.id, randomCards) {
+            onDispose { randomCards?.remove(postcard.id) }
+        }
+        Box(Modifier.onGloballyPositioned { coordinates ->
+            val position = coordinates.positionInWindow()
+            randomCards?.update(postcard.id, androidx.compose.ui.geometry.Rect(
+                position.x, position.y, position.x + coordinates.size.width, position.y + coordinates.size.width
+            ))
+        }) {
         StampCardContent(
             postcard = postcard,
             isSelected = isSelected,
             dateLabelOverride = dayLabel,
             // 130일차 B: 눌림·누른 쪽 기울기·집어 듦(그리기만, 클릭 처리는 기존과 같은 combinedClickable).
-            modifier = galleryCardPressFeel(
+            modifier = Modifier.randomPostcardShake(postcard.id, randomReveal, randomReducedMotion).then(galleryCardPressFeel(
                 liftOnOpen = liftOnOpen,
+                enabled = randomReveal?.session == null,
                 onClick = onClick,
                 onLongClick = onLongClick
-            )
+            ))
         )
+        }
     }
 }
 

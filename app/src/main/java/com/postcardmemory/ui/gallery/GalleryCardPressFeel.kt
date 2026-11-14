@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -44,7 +45,8 @@ import kotlinx.coroutines.launch
 internal fun galleryCardPressFeel(
     liftOnOpen: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    enabled: Boolean = true
 ): Modifier {
     val reduceMotion = rememberSystemReducedMotion()
     val interactionSource = remember { MutableInteractionSource() }
@@ -66,6 +68,15 @@ internal fun galleryCardPressFeel(
     val pick = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var opening by remember { mutableStateOf(false) }
+    var openingJob by remember { mutableStateOf<Job?>(null) }
+    val latestEnabled by rememberUpdatedState(enabled)
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            openingJob?.cancel()
+            pick.snapTo(0f)
+            opening = false
+        }
+    }
     val latestOnClick by rememberUpdatedState(onClick)
     val latestLiftOnOpen by rememberUpdatedState(liftOnOpen)
 
@@ -77,7 +88,11 @@ internal fun galleryCardPressFeel(
                 width = size.width,
                 height = size.height
             )
-            val visual = galleryCardPressVisual(press = press.value, pick = pick.value, nx = nx, ny = ny)
+            val visual = galleryCardPressVisual(
+                press = if (enabled) press.value else 0f,
+                pick = if (enabled) pick.value else 0f,
+                nx = nx, ny = ny
+            )
             scaleX = visual.scale
             scaleY = visual.scale
             translationY = visual.translationYDp.dp.toPx()
@@ -91,6 +106,7 @@ internal fun galleryCardPressFeel(
             alpha = if (reduceMotion && pressed) GALLERY_CARD_REDUCED_PRESS_ALPHA else 1f
         }
         .combinedClickable(
+            enabled = enabled,
             interactionSource = interactionSource,
             indication = null,
             onClick = {
@@ -98,10 +114,11 @@ internal fun galleryCardPressFeel(
                     latestOnClick()
                 } else if (!opening) {
                     opening = true
-                    scope.launch {
+                    openingJob = scope.launch {
                         try {
                             launch { pick.animateTo(1f, tween(GALLERY_CARD_PICK_MS, easing = PaperEaseOutCubic)) }
                             delay(GALLERY_CARD_OPEN_DELAY_MS)
+                            if (!latestEnabled) return@launch
                             latestOnClick()
                             pick.animateTo(0f, tween(GALLERY_CARD_PICK_MS, easing = PaperEaseOutCubic))
                         } finally {
