@@ -1,3 +1,46 @@
+# HANDOFF — 132일차: 랜덤 엽서 B안 구현·자동 검증·설치·사용자 QA 완료 / 승인된 Git 마감
+
+2026-11-14, 패코(Codex), 수동 표준 모드. 사용자 132일차 4차 작업지시서 범위로 구현했어. 사용자의 “응! 허용” 설치 승인 후 지정 SM-S936N에 `adb install -r` 1회 성공, 설치본 해시 일치까지 확인했어. 사용자가 직접 앱을 확인하고 **“완전 만족스러워 기능 모두 정상적으로 작동해”**라고 QA 완료를 보고하며 이 상태의 commit·push·병합까지 명시 승인했어. 이 문서는 commit 전 기록이고, 최종 PR·SHA·CI·병합·동기화 결과는 대화 완료보고에 남겨.
+
+## 현재 Git과 보호 상태
+
+- 브랜치 `feat/day132-random-postcard-ui`, base/HEAD `a1e6be01a7521eb6d71952f0bf1e9a6d78abe896`. 시작 시 local main/origin/main 일치, GitHub connector로 실제 remote main도 같은 SHA 확인. 아래 131일차 승인 대기 제목은 당시 기록이고 PR #24는 이미 병합됐어.
+- 작업 파일 8개(production 4·test 2·문서 2), 모두 미커밋, staged 없음. 새 Kotlin 2개는 untracked. main 직접 수정 없음.
+- 기존 보호 `.claude/`·`.codex-config.candidate.toml`·`.kotlin/`, PNG 3개, 목업 6개와 132일차 목업 폴더 3개 보존. 기존 미추적 PNG는 기존 resource 입력으로 APK에 포함될 수 있으나 stage/삭제하지 않아. 앱 자산·dependency·Gradle·CI 변경 없음.
+
+## 구현
+
+- 신규 `ui/gallery/GalleryRandomRevealMotion.kt`: ID 기반 B안 계산, 실제 배치 registry, 단일 session/clock, generation 방어. 카드의 그리기만 변환하고 900ms 이후 정확한 identity로 복귀. LazyGrid 실제 visible key와 viewport 교차를 함께 확인해 지연 보관/precompose 좌표를 출발점으로 쓰지 않아.
+- `GalleryScreen.kt`: 기존 센서 callback·검색 후보·균등 선택 유지. 변환 전 카드의 window 좌표 기록. 화면 안 선택은 실제 위치, 화면 밖/밀도 보기 선택은 아래에서 등장. 진행 중 월별 fling만 멈추고 최대 두 frame의 layout 정착 뒤 출발점 확정(강제 scroll 없음). ON_PAUSE/dispose/선택 엽서 소멸/닫기/상세 진입에서 임시 상태 해제. 결과 중 배경 Scaffold/바로가기 접근성 노출 차단.
+- `GalleryRandomPostcardOverlay.kt`: 단일 2200ms 시계, 520ms 분리·1900ms 정착·2200ms 날짜 완료. 부분 노출 viewport clip을 520~700ms에 해제. 손 Canvas·손 배치 상수 제거, `gallery_pick_hand.png` 파일은 보존(현재 production 참조 없음). 기존 상세 사용. 연출 중 카드 탭은 열지 않으며 바깥 탭/Back은 즉시 종료, 정착 후 닫기는 220ms fade. 최종 크기로 이미지를 layout/load하고 scale로 출발 크기를 재현해 thumbnail 확대만으로 생기는 흐림을 피했어.
+- `GalleryCardPressFeel.kt`: 평상시 눌림 수치 유지. 랜덤 연출 중만 enabled=false로 겹치는 변환과 pending 상세 진입 job을 취소하고 해제 후 기존 combinedClickable로 복귀.
+- 감소 모드: Android animator 배율 0을 시작/resume 때 읽고 grid 변환 없이 결과 시점으로 이동. 실제 설정 변경 QA는 아직 안 했어.
+- Room Entity/DAO/Migration/schema 19·Repository·ViewModel·센서 알고리즘·랜덤 알고리즘·정렬/검색·저장·export 무변경. 사용자 데이터 생성·수정·삭제·본문 조회 없음.
+
+## 목업 차이와 남은 시각 확인
+
+- HTML sample index 대신 stable ID 위상, CSS px 강도를 dp로 이식. 결과 .62W/.40H·중심 .46H와 핵심 시간 유지.
+- CSS drop-shadow 대신 Compose 톱니 shape의 native elevation 0→10dp. 날짜는 실제 높이+14dp 간격, 큰 글꼴/짧은 화면은 카드 크기 추가 축소. 경계선·톱니 보간, cold image 로딩, 그림자·미세한 부상 차이는 실기기 비교 필요.
+- HTML 닫기 복귀 모션 대신 기존 앱 성격의 짧은 fade, 연출 중 취소는 즉시 복구. 가상 상세·손·핀셋·상자·새 버튼은 앱에 넣지 않았어.
+
+## 검증
+
+- 로컬 자동검증 **실행:** 최종 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` 성공. JVM **1254/1254**, XML 134개, 실패·오류·skip 0. source @Test 1254/test 파일 133/helper 1. 신규 17건은 계산·상태·registry 실행 검사, 구조 검사 신규 없음(265 유지). 기존 overlay 7·센서 11·눌림 7 회귀 통과. TEST-COVERAGE-MAP 갱신.
+- 중간 실패: offline Foojay cache 미발견(환경), 빌드 도중 source 보완으로 app/test compile 입력 시점 불일치(진행 문제). 수정 종료 후 전체 검증으로 해소. 기존 AGP 옵션/LocalLifecycleOwner deprecation 경고는 버전 변경으로 숨기지 않았어.
+- 실사용 기기 instrumentation **미실행**(21건/8파일 무변경, CONDITIONAL/FORBIDDEN은 격리 환경 없어 실행 불가). connected*·emulator 실행 없음. 승인된 APK 업데이트 설치만 1회 실행했어.
+- GitHub Actions CI **미실행**(작성 시점 push/PR 전). 실기기 감각 QA **실행·사용자 확인 완료**: 안내한 흔들림·부상·날짜/상세·Back/바깥 닫기·재흔들기·기존 눌림 확인 요청에 사용자가 위와 같이 전체 정상·만족을 보고했어. 개별 화면 밖 선택의 확정 재현, 정량 프레임 성능·최대 카드 수·큰 글꼴·TalkBack·감소 설정은 별도 수행 근거가 없어 미검증으로 유지해.
+
+## 승인된 설치 결과 / 재개 조건
+
+- 새 APK `app/build/outputs/apk/debug/app-debug.apk`, **53,945,277 bytes**.
+- APK SHA-256 `CFA66E21C60E660D4897190C9428C0B4793CFA810AACF53EEC83C7482565E87E`.
+- package `com.postcardmemory`, versionCode 1/versionName 1.0. APK 검증 성공. Android Debug 서명 SHA-256 `cec335400357d8165cc91246adfaa38a9342db90c7ef3f0369da3b73c7c875b9`.
+- 대상 SM-S936N, serial `R3KYB00HAYY` 한 대. 기존 설치 APK만 TEMP로 읽어 서명을 직접 비교했고 동일해. 기존 APK SHA-256 `E0CC8C51D7B745D167F27CD655F43626097967848F2BCAA3A27F9C66CFE34BEE`, lastUpdateTime 2026-11-13 20:14:59, firstInstallTime 2026-10-05 14:19:35.
+- 이전 조회 때 연결이 없었지만 설치 승인 뒤 지정 serial/model 한 대의 정상 연결을 확인했어. 설치 직전 로컬 APK hash·기존 package/APK hash/서명을 다시 대조한 뒤 `adb -s R3KYB00HAYY install -r <APK>` **1회 Success**. 설치 후 기기 APK의 sha256sum이 승인 APK `CFA66E21…2565E87E`와 일치. lastUpdateTime **2026-11-14 19:57:50**, 기존 firstInstallTime **2026-10-05 14:19:35 유지**. 설치 뒤 process 조회에서 앱 PID는 없었고 자동 실행하지 않았어. 사용자 DB/filesDir/엽서에 접근하지 않았으며, 설치 성공·설치일 유지를 사용자 데이터 전체의 별도 무결성 검증으로 확대하지 않아. 백업/복원 검증은 하지 않았어.
+- 사용자 QA와 Git·병합 승인을 받았으므로 승인된 8파일만 명시 stage→commit/push→PR/필수 CI를 이어가. 보호 규칙과 PR의 실제 head/base·필수 CI를 확인한 뒤 Merge commit 병합, main CI, 안전한 main 동기화와 조건부 해당 작업 브랜치 정리를 마감해. scope/head/base가 예상과 다르거나 CI가 실패하면 원인을 확인하고 현재 승인 범위 안에서 처리하되 검증을 우회하지 않아. 기존 미추적 파일과 다른 브랜치·과거 worktree는 그대로 보존해.
+
+---
+
 # HANDOFF — 131일차: 텍스트·라벨·테이프 손맛 구현·자동 검증·실기기 QA 완료 / PR·병합 승인 대기
 
 2026-11-13, 담당 Claude Code(피코), 수동 표준 모드. 131일차 1단계 구조 조사는 패코(Codex)가 읽기 전용으로 했고, 피코가 실제 코드로 재확인한 뒤 사용자 작업지시서 범위(낮은 위험 UI 확장)에서 구현했어. 브랜치 `feat/day131-decoration-touch-feel`(base `73a4b41` = PR #23 병합, main CI success). **설치는 별도 승인, main 병합은 별도 최종 승인 전에 하지 않아.**

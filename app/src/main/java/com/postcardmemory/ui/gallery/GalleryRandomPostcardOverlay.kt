@@ -1,11 +1,10 @@
-package com.postcardmemory.ui.gallery
+﻿package com.postcardmemory.ui.gallery
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -14,30 +13,43 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.postcardmemory.R
 import com.postcardmemory.data.Postcard
+import com.postcardmemory.ui.components.PinkingPhotoShape
 import com.postcardmemory.ui.components.StampPhoto
 import com.postcardmemory.ui.theme.PaperSurface
 import java.time.Instant
@@ -46,248 +58,178 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlinx.coroutines.launch
 
-/**
- * 84일차 후속: "흔들어서 한 장"이 뽑은 엽서를 갤러리 위에 꺼내 보여주는 overlay.
- *
- * 별도의 팝업 상자 없이 엽서 자체가 떠 있는 물체다. 레이어는 아래부터
- * dim → 날짜 문구 → 엽서 → 신문 오림 손. 손과 엽서는 같은 진행값 하나로
- * 함께 아래에서 올라와, 손이 엽서 아랫변을 집어 끌어올리는 것처럼 보인다.
- *
- * - 엽서 탭 → [onOpen] (기존 상세 화면 navigation은 호출자가 한다)
- * - dim(엽서 바깥) 탭·뒤로가기 → 짧게 내려가며 사라진 뒤 [onDismissed]
- * - 손은 pointer input이 없는 장식이라 탭을 가로채지 않는다.
- */
+/** Approved day-132 B: one clock drives the grid, its detached photo, dim and date. */
 @Composable
 internal fun GalleryRandomPostcardOverlay(
     postcard: Postcard,
+    state: GalleryRandomRevealState,
+    reducedMotion: Boolean,
+    prepareSource: suspend () -> RandomRevealSource?,
     onOpen: () -> Unit,
     onDismissed: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hand: ImageBitmap = ImageBitmap.imageResource(R.drawable.gallery_pick_hand)
+    val session = state.session ?: return
+    val settled by remember(state, session.generation) {
+        derivedStateOf { state.elapsedMs >= RANDOM_REVEAL_SETTLED_MS }
+    }
     val currentOnDismissed by rememberUpdatedState(onDismissed)
     val scope = rememberCoroutineScope()
+    val exit = remember(session.generation) { Animatable(1f) }
+    var dismissing by remember(session.generation) { mutableStateOf(false) }
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    var labelHeight by remember { mutableIntStateOf(0) }
 
-    // 0 = 손·엽서가 화면 아래로 숨음(dim 없음), 1 = 제자리.
-    val rise = remember { Animatable(0f) }
-    val labelAlpha = remember { Animatable(0f) }
-    var dismissing by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        // 쑤욱 — 통: 빠르게 올라와 제자리 근처에서 길게 감속, 넘침·반동 없음.
-        rise.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(RANDOM_OVERLAY_ENTER_MS, easing = RandomOverlayEnterEasing)
-        )
-        labelAlpha.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(RANDOM_OVERLAY_LABEL_FADE_MS, easing = LinearEasing)
-        )
+    LaunchedEffect(session.generation, reducedMotion, dismissing) {
+        if (!dismissing) {
+            if (state.elapsedMs == 0f) state.updateSource(session.generation, prepareSource())
+            if (reducedMotion) state.advance(session.generation, RANDOM_REVEAL_TOTAL_MS)
+            else animate(
+                initialValue = state.elapsedMs,
+                targetValue = RANDOM_REVEAL_TOTAL_MS,
+                animationSpec = tween(
+                    (RANDOM_REVEAL_TOTAL_MS - state.elapsedMs).roundToInt(),
+                    easing = LinearEasing
+                )
+            ) { value, _ -> state.advance(session.generation, value) }
+        }
     }
 
     fun dismiss() {
         if (dismissing) return
         dismissing = true
-        scope.launch {
-            launch { labelAlpha.snapTo(0f) }
-            rise.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(RANDOM_OVERLAY_EXIT_MS, easing = RandomOverlayExitEasing)
-            )
+        if (reducedMotion || state.elapsedMs < RANDOM_REVEAL_SETTLED_MS) {
+            currentOnDismissed()
+        } else scope.launch {
+            exit.animateTo(0f, tween(220))
             currentOnDismissed()
         }
     }
-
     BackHandler { dismiss() }
+    val label = remember(postcard.capturedAt) { randomPostcardStoryLabel(postcard.capturedAt) }
 
-    val label = remember(postcard.capturedAt) {
-        randomPostcardStoryLabel(postcard.capturedAt)
-    }
-
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize()
+            .onGloballyPositioned { origin = it.positionInWindow() }
+            .semantics { paneTitle = "랜덤 엽서" }
+    ) {
         val density = LocalDensity.current
-        val layout = remember(constraints.maxWidth, constraints.maxHeight, density) {
-            randomOverlayLayout(
-                widthPx = constraints.maxWidth.toFloat(),
-                heightPx = constraints.maxHeight.toFloat(),
-                density = density.density
-            )
-        }
-        val cardSizeDp = with(density) { layout.cardSizePx.toDp() }
+        val width = constraints.maxWidth.toFloat()
+        val height = constraints.maxHeight.toFloat()
+        val layout = randomOverlayLayout(width, height, density.density, labelHeight.toFloat())
+        val source = if (reducedMotion) null else session.source?.card?.translate(-origin)
+        val viewport = session.source?.viewport?.translate(-origin)
+        // Measure/load at the final size, then scale down for the handoff. A thumbnail-sized
+        // AsyncImage enlarged only by graphicsLayer would remain unnecessarily soft at the result.
+        val baseSide = layout.cardSizePx.coerceAtLeast(density.density)
+        fun frame() = randomCardFlight(
+            postcard.id, source, layout, width, height, density.density,
+            if (reducedMotion) RANDOM_REVEAL_TOTAL_MS else state.elapsedMs
+        )
 
-        // dim: 갤러리가 무엇인지는 알아볼 수 있을 정도로만 어둡게.
+        // Transparent from the first frame: all input belongs to this result, never the grid beneath it.
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = rise.value }
-                .background(Color.Black.copy(alpha = RANDOM_OVERLAY_DIM_ALPHA))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = ::dismiss
-                )
+            Modifier.fillMaxSize()
+                .graphicsLayer {
+                    alpha = .45f * randomRevealProgress(state.elapsedMs, RANDOM_REVEAL_DETACH_MS, 1120f) * exit.value
+                }
+                .background(Color.Black)
+                .semantics { contentDescription = "랜덤 엽서 닫기" }
+                .clickable(remember { MutableInteractionSource() }, indication = null, onClick = ::dismiss)
         )
 
         Text(
             text = label,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
-            color = PaperSurface.copy(alpha = RANDOM_OVERLAY_LABEL_ALPHA),
+            color = PaperSurface.copy(alpha = .88f),
             textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset {
-                    IntOffset(0, (layout.cardTopPx - layout.labelGapPx).roundToInt())
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                .onSizeChanged { labelHeight = it.height }
+                .then(if (!settled) Modifier.clearAndSetSemantics { } else Modifier.semantics {
+                    liveRegion = LiveRegionMode.Polite
+                })
+                .offset { IntOffset(0, (layout.cardTopPx - labelHeight - layout.labelGapPx).roundToInt()) }
+                .graphicsLayer {
+                    alpha = randomRevealProgress(state.elapsedMs, RANDOM_REVEAL_SETTLED_MS, RANDOM_REVEAL_TOTAL_MS) * exit.value
                 }
-                .graphicsLayer { alpha = labelAlpha.value }
         )
 
-        Box(
-            modifier = Modifier
-                .offset {
-                    IntOffset(
-                        layout.cardLeftPx.roundToInt(),
-                        (layout.cardTopPx + layout.hiddenTravelPx * (1f - rise.value))
-                            .roundToInt()
+        // A partly clipped source is revealed gradually as it leaves the grid viewport.
+        Box(Modifier.fillMaxSize().drawWithContent {
+            val reveal = randomRevealProgress(state.elapsedMs, RANDOM_REVEAL_DETACH_MS, 700f)
+            if (viewport != null && reveal < 1f && !reducedMotion) {
+                val top = viewport.top.coerceAtLeast(0f) * (1f - reveal)
+                val bottom = viewport.bottom.coerceAtMost(size.height) +
+                    (size.height - viewport.bottom.coerceAtMost(size.height)) * reveal
+                clipRect(top = top, bottom = bottom) { this@drawWithContent.drawContent() }
+            } else drawContent()
+        }) {
+            Box(
+                Modifier.size(with(density) { baseSide.toDp() })
+                    .graphicsLayer {
+                        val pose = frame()
+                        translationX = pose.centerX - baseSide / 2f
+                        translationY = pose.centerY - baseSide / 2f
+                        rotationZ = pose.rotation
+                        scaleX = pose.side / baseSide
+                        scaleY = pose.side / baseSide
+                        alpha = if (reducedMotion || state.elapsedMs >= RANDOM_REVEAL_DETACH_MS) exit.value else 0f
+                        shadowElevation = 10f * pose.progress * density.density
+                        shape = PinkingPhotoShape
+                        clip = false
+                    }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = settled && !dismissing,
+                        onClick = {
+                            if (state.elapsedMs >= RANDOM_REVEAL_SETTLED_MS && !dismissing) onOpen()
+                        }
                     )
-                }
-                .size(cardSizeDp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    enabled = !dismissing,
-                    onClick = onOpen
+            ) {
+                StampPhoto(
+                    imagePath = postcard.imagePath,
+                    contentDescription = postcard.title,
+                    modifier = Modifier.fillMaxSize(),
+                    outlineColor = Color.White,
+                    outlineWidth = 3f
                 )
-        ) {
-            StampPhoto(
-                imagePath = postcard.imagePath,
-                contentDescription = postcard.title,
-                modifier = Modifier.fillMaxSize(),
-                outlineColor = Color.White,
-                outlineWidth = 3f
-            )
-        }
-
-        // 손: 엽서와 같은 이동량으로 움직여 엽서 아랫변을 집고 있는 것처럼 보인다.
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val side = layout.handSidePx
-            val travel = layout.hiddenTravelPx * (1f - rise.value)
-            val left = layout.handAnchorXPx - RANDOM_OVERLAY_HAND_ANCHOR_X * side
-            val top = layout.cardBottomPx + travel - RANDOM_OVERLAY_HAND_ANCHOR_Y * side
-
-            drawImage(
-                image = hand,
-                dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
-                dstSize = IntSize(side.roundToInt(), side.roundToInt()),
-                filterQuality = FilterQuality.Medium
-            )
+            }
         }
     }
 }
 
-/** overlay 한 화면의 배치(px). 화면 크기에서만 계산되는 순수 값. */
 internal data class RandomOverlayLayout(
     val cardSizePx: Float,
     val cardLeftPx: Float,
     val cardTopPx: Float,
-    val handSidePx: Float,
-    val handAnchorXPx: Float,
     val labelGapPx: Float,
     val hiddenTravelPx: Float
 ) {
     val cardBottomPx: Float get() = cardTopPx + cardSizePx
 }
 
-/**
- * 엽서는 가로 폭과 세로 높이 중 좁은 쪽 기준으로 크기를 정하고, 중앙보다
- * 살짝 위에 둔다(위 날짜 문구·아래 손 공간).
- *
- * 손 이미지는 손목이 그림 아래 가장자리에서 잘려 있어, 화면 아래까지 닿지
- * 않으면 잘린 팔이 공중에 뜬다 — 그래서 손 크기는 "집는 지점이 엽서 아랫변에
- * 오고 손목이 화면 아래 밖으로 나가는" 크기로 정하되, 엽서보다 과하게
- * 커지지 않게 상한을 둔다.
- */
+/** Keep the approved .62 width/.40 height/.46 center, reserving measured space for large text. */
 internal fun randomOverlayLayout(
     widthPx: Float,
     heightPx: Float,
-    density: Float
+    density: Float,
+    labelHeightPx: Float = 18f * density
 ): RandomOverlayLayout {
-    val cardSize = minOf(
-        widthPx * RANDOM_OVERLAY_CARD_WIDTH_FRACTION,
-        heightPx * RANDOM_OVERLAY_CARD_HEIGHT_FRACTION
-    )
-    val cardCenterY = heightPx * RANDOM_OVERLAY_CARD_CENTER_Y_FRACTION
-    val cardTop = cardCenterY - cardSize / 2f
-    val cardBottom = cardTop + cardSize
-
-    val handToScreenBottom = heightPx - cardBottom + RANDOM_OVERLAY_HAND_BOTTOM_BLEED_DP * density
-    val handSide = (handToScreenBottom / (1f - RANDOM_OVERLAY_HAND_ANCHOR_Y))
-        .coerceIn(
-            cardSize * RANDOM_OVERLAY_HAND_MIN_SCALE,
-            cardSize * RANDOM_OVERLAY_HAND_MAX_SCALE
-        )
-
-    // 실기기 QA: 가운데 아래를 집으면 어색해서 왼쪽 아래 귀퉁이를 집는다.
-    // 손 몸통은 이미지 안에서 집는 지점보다 오른쪽 아래에 있어, 팔이 귀퉁이에서
-    // 화면 아래로 비스듬히 내려가는 모양이 된다(일부가 화면 밖으로 나가도 된다).
-    val cardLeft = (widthPx - cardSize) / 2f
-    val handAnchorX = cardLeft + RANDOM_OVERLAY_HAND_CORNER_INSET * cardSize
-
-    // 숨은 위치: 엽서 윗변까지 화면 아래로 완전히 내려간 거리.
-    val hiddenTravel = heightPx - cardTop + RANDOM_OVERLAY_OFFSCREEN_MARGIN_DP * density
-
-    return RandomOverlayLayout(
-        cardSizePx = cardSize,
-        cardLeftPx = cardLeft,
-        cardTopPx = cardTop,
-        handSidePx = handSide,
-        handAnchorXPx = handAnchorX,
-        labelGapPx = RANDOM_OVERLAY_LABEL_GAP_DP * density,
-        hiddenTravelPx = hiddenTravel
-    )
+    val labelGap = 14f * density
+    val labelRoom = labelHeightPx + labelGap + 8f * density
+    val side = minOf(widthPx * .62f, heightPx * .40f, (heightPx - labelRoom - 16f * density).coerceAtLeast(0f))
+    val top = (heightPx * .46f - side / 2f)
+        .coerceIn(labelRoom.coerceAtMost(heightPx - side), (heightPx - side).coerceAtLeast(0f))
+    return RandomOverlayLayout(side, (widthPx - side) / 2f, top, labelGap, heightPx - top + 24f * density)
 }
 
-/** "9월 25일의 이야기예요~!" — 갤러리 날짜 표기와 같은 [Postcard.capturedAt] 기준. */
-internal fun randomPostcardStoryLabel(
-    capturedAt: Long,
-    zoneId: ZoneId = ZoneId.systemDefault()
-): String {
+internal fun randomPostcardStoryLabel(capturedAt: Long, zoneId: ZoneId = ZoneId.systemDefault()): String {
     val date = Instant.ofEpochMilli(capturedAt).atZone(zoneId).toLocalDate()
     return "${date.monthValue}월 ${date.dayOfMonth}일의 이야기예요~!"
 }
 
-/**
- * 흔들기가 인정됐을 때 overlay에 띄울 엽서 id. overlay가 이미 열려 있으면
- * 그 엽서를 그대로 유지한다(흔들 때마다 교체·중첩 금지). 후보가 없으면 null.
- */
 internal fun nextShakeOverlayPostcardId(
-    currentOverlayPostcardId: Long?,
-    candidateIds: List<Long>,
-    random: Random = Random.Default
+    currentOverlayPostcardId: Long?, candidateIds: List<Long>, random: Random = Random.Default
 ): Long? = currentOverlayPostcardId ?: pickRandomPostcardId(candidateIds, random)
-
-// gallery_pick_hand.png(1254×1254)에서 검지 끝과 엄지 끝 사이, 엽서 아랫변이
-// 끼워질 지점(445, 190)을 한 변 기준으로 정규화(105일차 자산 실측).
-internal const val RANDOM_OVERLAY_HAND_ANCHOR_X = 0.355f
-internal const val RANDOM_OVERLAY_HAND_ANCHOR_Y = 0.152f
-// 집는 지점이 엽서 왼쪽 모서리에서 안쪽으로 들어간 정도(엽서 한 변 기준).
-private const val RANDOM_OVERLAY_HAND_CORNER_INSET = 0.08f
-
-private const val RANDOM_OVERLAY_CARD_WIDTH_FRACTION = 0.62f
-private const val RANDOM_OVERLAY_CARD_HEIGHT_FRACTION = 0.40f
-private const val RANDOM_OVERLAY_CARD_CENTER_Y_FRACTION = 0.46f
-private const val RANDOM_OVERLAY_HAND_MIN_SCALE = 1.0f
-private const val RANDOM_OVERLAY_HAND_MAX_SCALE = 1.6f
-private const val RANDOM_OVERLAY_HAND_BOTTOM_BLEED_DP = 8f
-private const val RANDOM_OVERLAY_OFFSCREEN_MARGIN_DP = 24f
-private const val RANDOM_OVERLAY_LABEL_GAP_DP = 40f
-
-private const val RANDOM_OVERLAY_DIM_ALPHA = 0.45f
-private const val RANDOM_OVERLAY_LABEL_ALPHA = 0.88f
-
-private const val RANDOM_OVERLAY_ENTER_MS = 480
-private const val RANDOM_OVERLAY_LABEL_FADE_MS = 180
-private const val RANDOM_OVERLAY_EXIT_MS = 220
-
-private val RandomOverlayEnterEasing = CubicBezierEasing(0.2f, 0.75f, 0.25f, 1f)
-private val RandomOverlayExitEasing = CubicBezierEasing(0.55f, 0f, 0.85f, 0.4f)
