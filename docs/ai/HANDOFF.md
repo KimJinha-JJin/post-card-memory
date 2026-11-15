@@ -1,3 +1,36 @@
+# HANDOFF — 2026-11-15 133일차 연장: 이메일 메타데이터 차단·Clone 조사 / Git 마감 재개
+
+패코(Codex), 수동 표준 모드. 기존 PR #27은 실제로 병합됐고, 이번 시작 기준 local main·origin/main·GitHub main은 `fd2b4a4d8dca8764c29d6e1c8a9242ba48050659`였어. 아래 이전 HANDOFF의 병합 대기는 당시 기록이야. main CI run `43709744497`에서 JVM·APK·instrumentation APK compile 실제 실행 성공을 확인했어.
+
+## 이번 승인과 작성 시점 상태
+
+- 브랜치 `chore/day133-security-followup`, HEAD는 위 기준 SHA. 이 기록은 commit 전 상태야. 검사 스크립트 2개·[상세 보안 보고서](DAY-133-SECURITY-FOLLOWUP.md)·이 HANDOFF 총 4파일만 Git 마감 대상이야.
+- 사용자가 GitHub 이메일 비공개·개인 이메일 push 차단 두 설정을 모두 ON으로 바꿨다고 확인했고, 로컬 이메일 설정·commit·push·PR·CI 진행을 명시 승인했어. main 병합·과거 이력 재작성·force push·Ruleset 변경·옛 Clone 삭제는 승인하지 않았어.
+- 기존 GitHub commit의 noreply를 읽어 현재 인증 계정 id·login·GitHub Author 연결과 대조한 뒤 프로젝트 로컬 `user.email`에만 설정했어. 기존 값과 같았어. 실제 Author·Committer 모두 그 주소와 같고 이메일 환경 변수 override는 없어. 전역 설정·계정 설정을 작업자가 변경하지 않았어. 웹 설정 ON은 사용자 확인이고 새 웹 병합을 만들어 시험하지 않았어.
+
+## 완료·검증
+
+- 기존 검사기에 Git Author·Committer 보호를 추가했어. staged는 실제 identity(`--author`·환경 변수 포함), push·PR 범위는 빈 commit·merge·중간 commit도 확인해. 기존 파일 검사는 유지하고 실제 값은 출력하지 않아.
+- 가상 데이터·임시 로컬 원격 테스트 **50/50 통과(exit 0)**. 기존 41개+메타데이터 9개. 재개 후 로직이 같아 결과를 재사용했고 설명 주석만 정정했어. 앱 코드·Room·자산·Gradle·CI workflow는 변경하지 않았어.
+- 공용 작업 폴더의 Git 훅 실제 실행 확인. 앱 로컬 재빌드·실사용 기기 instrumentation·감각 QA는 앱 무변경이라 불필요야. TEST-COVERAGE-MAP 앱 테스트 수·보호 범위 무변경.
+- 기존 미추적 보호 항목·사용자 데이터·원본 Clone·이력 보존. 작업 루틴 원본·캐시 각각 19파일 상대경로·SHA-256 일치, 미수정.
+
+## 조사 결과와 남은 위험
+
+- 옛 Clone A는 독립 문서 commit `4a0f184` 1개가 있어 보존 필요(약 3.53 MiB). B는 고유 변경 미발견으로 조건부 정리 후보(약 1.79 MiB). 둘 다 훅 없음. 사용 의존성 완전 배제·삭제·이동·최신화·push는 하지 않았어. 정확한 위치·역할은 상세 보고서에 있어.
+- 로컬 도달 이력 458개 중 Gmail commit 42개, 별도 공개 PR #1 commit 1개까지 **확인된 공개 합집합 최소 43개**. serial이 남은 commit 트리 136개. 개인 경로 추가 이력은 이번 집계 11곳(이전 10곳과 구분). 현재 main 추적 파일은 대상 값 검출 없음.
+- 공개 PR #25·#26 patch에 serial이 남아 있어. PR 27개 본문·저장소 댓글에서는 대상 값 재인용 미발견. 일부 파일 patch·PR #1 전용 트리 전체·과거 Actions 산출물·GitHub 내부 캐시·외부 clone은 완전 조사하지 못했어.
+- 격리 시뮬레이션: 개인정보를 메모리에서 치환한 뒤 새 TEMP bare에 기록. 458개 부모 연결·84,416개 파일 비교·73,369개 앱 파일 원본 일치·fsck 통과. 별도 익명화 mirror 복원도 refs 일치·fsck 통과. 원격 없음. 민감 원본 백업은 만들지 않았어.
+- 최초 commit부터 이메일이 있어 이 범위를 실제 정리하면 SHA 458개·tag가 바뀌고 서명 28개를 유지할 수 없어. 이는 filter-repo 실제 배포 절차 검증이나 PR #1·Clone A 고유 이력까지 포함한 재작성 완료가 아니야.
+
+## 재개·Git 종료 조건
+
+- 4파일만 명시 stage → 훅 통과·staged diff 검토 → commit의 Author·Committer를 값 비출력으로 검증 → 일반 작업 브랜치 push → PR·필수 CI 확인. 최종 PR·head/base·CI는 대화 완료보고에 남겨. 이번 `.github` 변경은 전체 CI 대상이고 main 병합은 사용자 최종 승인 대기야.
+- PR CI는 기준 main의 이전 검사기를 쓰므로 새 메타데이터 검사는 로컬 훅·가상 테스트로 먼저 검증해. 병합 뒤 후속 PR의 기준 검사기에서도 적용돼.
+- 실제 이력 정리는 정확한 전체 refs·독립 작업 보존·사용자 승인 백업 위치와 보호 방법·별도 복원 시험·원격 갱신과 보호 복원·Clone 재유입 방지 계획을 확정하고 별도 승인받아야 해. 지원 요청 초안만 준비했고 외부 발송하지 않았어. 완전 삭제는 보장할 수 없어.
+
+---
+
 # HANDOFF — 2026-11-15 워크플로우 안전성: 민감정보 자동 차단(commit·push·PR CI) / PR CI·병합 승인 대기
 
 2026-11-15, 담당 Claude Code(피코), 수동 표준 모드. 작업지시서 "공통 워크플로우 안전성 개선 — 개인정보 노출 방지"를 1단계 작업 범위 승인으로 수행. 앱 production 코드·Room 19·자산·Gradle·실기기는 건드리지 않았어.
