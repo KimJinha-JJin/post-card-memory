@@ -56,7 +56,13 @@ data class VisitRecord(
  */
 data class TodayVisit(
     val record: VisitRecord?,
-    val isFirstVisitToday: Boolean
+    val isFirstVisitToday: Boolean,
+    /**
+     * 133일차: 이번 기록 **직전**에 저장돼 있던 마지막 방문일(로컬 epochDay). 필름 인트로가
+     * 며칠 만에 왔는지 보여주는 데만 쓴다. 이미 읽은 값을 넘길 뿐 파일에 새로 저장하지 않으며
+     * (저장 형식 불변), 기록이 없거나 손상·읽기 실패면 null이다.
+     */
+    val previousVisitEpochDay: Long? = null
 )
 
 /** 저장 형식 버전. 파싱 실패 시 기록이 초기화되므로 형식은 쉽게 바꾸지 않는다. */

@@ -1,3 +1,45 @@
+# HANDOFF — 133일차: 인트로 날짜 필름 구현·자동 검증·설치·실기기 QA 완료 / 병합 승인 대기
+
+2026-11-15, 담당 Claude Code(피코), 수동 표준 모드. 사용자가 확정한 디자인(A 부드러운 이동 0.72s, 날짜는 왼쪽=과거→오른쪽=오늘·빈 미래 칸, 하루에 한 칸 왼쪽 이동, 여러 날 공백은 지나간 날을 모두 통과, 그날 첫 방문은 기존 손 도장, 같은 날 재실행은 이동 없이 약 0.86초)과 구현 승인 범위로 구현했어. 이어 슈슈 요청으로 지난 칸 소인을 실제 방문 기록으로만 정하게 고쳤어. **설치는 별도 승인, commit·push·PR은 실기기 QA 뒤, main 병합은 최종 승인 뒤**에 해.
+
+## 현재 Git과 보호 상태
+
+- 브랜치 `feat/day133-film-intro`, base/HEAD `380a683`(PR #25 병합 = 시작 시 origin/main). 아무것도 commit·stage하지 않았어.
+- 작업 파일: 수정 production 5(`MainActivity.kt`, `ui/intro/AppIntroScreen.kt`, `utils/VisitRecord.kt`, `utils/VisitRecordStorage.kt`, `utils/VisitHistoryStorage.kt`), 신규 production 1(`ui/intro/IntroFilmPlan.kt`), 수정 test 1(`AppIntroVisitPostmarkStructureTest.kt`), 신규 test 3(`IntroFilmPlanTest.kt`, `utils/VisitPreviousDayTest.kt`, `utils/VisitHistoryLoadDaysTest.kt`), 문서 2(`HANDOFF.md`, `TEST-COVERAGE-MAP.md`).
+- 목업 `docs/mockups/day133-film-intro/`는 디자인 확인용 untracked(commit 대상 아님). 미리보기 서버(포트 8767)는 이 세션에서 실행 중.
+- 기존 보호 `.codex-config.candidate.toml`·`.kotlin/`, PNG 3개, 기존 목업들 보존. dependency·Gradle·CI·앱 자산 변경 없음. Android Studio·SDK·JDK·환경 변수 변경 없음.
+
+## serial 마스킹
+
+- 이 문서의 132일차 절에 있던 실사용 기기 serial 2곳을 `[승인된 실사용 기기 식별자 비공개]`와 `<serial>`로 바꿨어. 현재 추적 파일 전체에서 그 값의 노출 0건(값은 출력하지 않고 검색만 했어).
+- 과거 commit 이력에는 그 값이 남아 있어. 지우려면 history 재작성이 필요하고 저장소가 PUBLIC이라 별도 승인 사항이야. 하지 않았어. `emulator-5554`는 개인 식별자가 아니라 그대로 뒀어.
+
+## 구현
+
+- 로딩바·퍼센트·작은 봉투를 날짜 종이 필름 + 출석 소인으로 교체. 필름은 `graphicsLayer` translation만 바꿔(레이아웃 재계산 없음), 칸 폭은 화면 40%를 112~170dp로 제한.
+- 타임라인(기록 도착 후): 첫 방문 280 대기 + 720 이동 + 140 + 손 720 + 260 + crossfade 180 = **2300ms**, 같은 날 650 + 180 = **830ms**. 여러 칸 이동은 `720 × min(1 + 0.45(N−1), 2.6)`ms(상한 1872ms), 표시 칸은 최대 60칸(안전 상한). 기록은 최대 700ms 기다리고 못 오면 날짜·소인 없는 필름으로 넘어가. 동작 줄이기(animator 배율 0)는 이동 없이 소인 찍힌 상태 800ms. 기기 날짜가 과거로 가면 필름은 멈춘 채 소인 찍힌 상태.
+- 보존: 상단 문구·33일차 회전·기념일 문구·방문 횟수·손 도장(`SealStampHandOverlay`)·진동(24ms/175)·소인 모양 상수·`Crossfade` 180ms.
+- **지난 칸 소인 근거(읽기 전용):** ① 달력과 같은 `filesDir/visits/history/<epochDay>.visit` 표식을 신규 `VisitHistoryStorage.loadDays`로 필요한 날짜만 존재 확인(파일·폴더를 만들지 않음, 일반 파일만 인정), ② `visit_record.txt`의 직전 방문일(오늘 방문을 기록하기 전 값, `TodayVisit.previousVisitEpochDay` 메모리 전달). 둘 중 하나가 확인된 날만 VISITED, 확인됐지만 없는 날은 NOT_VISITED(빈 종이, 날짜 흐리게), 기록 미도착·읽기 실패(history 경로가 폴더가 아님·보안 예외)·오늘 이후는 UNKNOWN(소인 없음). 첫 실행은 지난 칸 소인이 없어. 목업 데이터는 쓰지 않아.
+- 저장 형식(`visit_record.txt` 한 줄, history 표식 파일)·방문 판정 1회·Room schema 19 무변경. 새 기록 생성이나 기존 기록 수정 없음(오늘 방문 기록은 기존 경로 그대로).
+
+## 검증
+
+- 로컬 자동검증 **실행:** 최종 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` 성공(Gradle 9.8.2/Zulu 17). JVM **1289/1289**, XML 137개, 실패·오류·skip 0. source @Test 1289/test 파일 136/helper 1. +35(행동 32, 구조 +3 → 268). `git diff --check` 통과. TEST-COVERAGE-MAP 갱신 완료.
+- 요청 케이스 자동 확인: 연속 방문, 중간 건너뛴 날, 5·10·30일 공백(순서·이동 칸 수·시간), 첫 실행, 같은 날 재실행, 기록 지연·실패, 기기 날짜 과거 이동, 첫 방문 2300ms·같은 날 830ms 계산, 무작위 300경우 "실제 기록 없는 지난 칸 소인 0".
+- 중간 실패: 30일 이동 시간 1871ms(float 버림, production) → `roundToInt()`로 수정 후 통과. 그 필터 실행이 1시간 27분 걸린 건 환경 지연으로 보이고 원인은 미확인.
+- 실사용 기기 instrumentation **미실행**(21건/8파일 무변경). connected*·emulator 실행 없음. GitHub Actions CI **미실행**(push 전).
+- 실기기 감각 QA **완료:** 사용자가 안내 항목을 확인하고 "QA 다 해봤는데 전부 정상이야"라고 보고하며 commit 진행을 승인했어. 확인 요청 항목: 실제 앱에서 첫 방문 약 2.33초·같은 날 약 0.86초 체감, 필름 이동·손 도장 접촉·진동, 지난 칸 소인이 달력 방문일과 일치하는지. 30일 공백은 실기기에서 자연 재현이 어려워 자동 검증으로만 확인했어(기기 날짜·데이터 조작은 하지 않아).
+
+## 승인된 설치 결과
+
+- 새 APK `app/build/outputs/apk/debug/app-debug.apk`, **52,763,627 bytes**, SHA-256 `9AF21D9FDA2910B8655BD17DB5E62C945121A0BD8878F64E6A65195DD1B0CD07`.
+- package `com.postcardmemory`, versionCode 1/versionName 1.0, Android Debug 서명 SHA-256 `cec335…c875b9`(기존 설치본과 같은 인증서 기록).
+- 사용자 "설치 승인, 진행해 줘" 뒤 SM-S936N 한 대만 연결된 것을 확인(serial 비공개). 설치 전 기존 설치본은 132일차 APK `CFA66E21…2565E87E`, 서명 인증서 동일, 앱 미실행을 읽기 전용으로 확인했어(설치와 분리된 명령).
+- 설치 직전 로컬 APK 해시를 다시 대조하고 `adb -s <serial> install -r <APK>` **1회 Success**. 설치본 해시 = 새 APK `9AF21D9F…D1B0CD07`, lastUpdateTime 2026-11-15 19:15:49, firstInstallTime 2026-10-05 14:19:35 유지. 설치 뒤 앱 자동 실행 안 함. 사용자 DB/filesDir/엽서에 접근하지 않았고, 설치 성공을 사용자 데이터 무결성 검증으로 확대하지 않아.
+- 재개 조건: QA 통과로 승인된 12파일만 명시 stage → commit·push·PR·필수 CI 확인. main 병합은 사용자의 별도 최종 승인 뒤 Merge commit으로만 해. 이 문서는 commit 전 기록이고 PR 번호·SHA·CI 결과는 대화 완료보고에 남겨.
+
+---
+
 # HANDOFF — 132일차: 랜덤 엽서 B안 구현·자동 검증·설치·사용자 QA 완료 / 승인된 Git 마감
 
 2026-11-14, 패코(Codex), 수동 표준 모드. 사용자 132일차 4차 작업지시서 범위로 구현했어. 사용자의 “응! 허용” 설치 승인 후 지정 SM-S936N에 `adb install -r` 1회 성공, 설치본 해시 일치까지 확인했어. 사용자가 직접 앱을 확인하고 **“완전 만족스러워 기능 모두 정상적으로 작동해”**라고 QA 완료를 보고하며 이 상태의 commit·push·병합까지 명시 승인했어. 이 문서는 commit 전 기록이고, 최종 PR·SHA·CI·병합·동기화 결과는 대화 완료보고에 남겨.
@@ -35,8 +77,8 @@
 - 새 APK `app/build/outputs/apk/debug/app-debug.apk`, **53,945,277 bytes**.
 - APK SHA-256 `CFA66E21C60E660D4897190C9428C0B4793CFA810AACF53EEC83C7482565E87E`.
 - package `com.postcardmemory`, versionCode 1/versionName 1.0. APK 검증 성공. Android Debug 서명 SHA-256 `cec335400357d8165cc91246adfaa38a9342db90c7ef3f0369da3b73c7c875b9`.
-- 대상 SM-S936N, serial `R3KYB00HAYY` 한 대. 기존 설치 APK만 TEMP로 읽어 서명을 직접 비교했고 동일해. 기존 APK SHA-256 `E0CC8C51D7B745D167F27CD655F43626097967848F2BCAA3A27F9C66CFE34BEE`, lastUpdateTime 2026-11-13 20:14:59, firstInstallTime 2026-10-05 14:19:35.
-- 이전 조회 때 연결이 없었지만 설치 승인 뒤 지정 serial/model 한 대의 정상 연결을 확인했어. 설치 직전 로컬 APK hash·기존 package/APK hash/서명을 다시 대조한 뒤 `adb -s R3KYB00HAYY install -r <APK>` **1회 Success**. 설치 후 기기 APK의 sha256sum이 승인 APK `CFA66E21…2565E87E`와 일치. lastUpdateTime **2026-11-14 19:57:50**, 기존 firstInstallTime **2026-10-05 14:19:35 유지**. 설치 뒤 process 조회에서 앱 PID는 없었고 자동 실행하지 않았어. 사용자 DB/filesDir/엽서에 접근하지 않았으며, 설치 성공·설치일 유지를 사용자 데이터 전체의 별도 무결성 검증으로 확대하지 않아. 백업/복원 검증은 하지 않았어.
+- 대상 SM-S936N, serial `[승인된 실사용 기기 식별자 비공개]` 한 대. 기존 설치 APK만 TEMP로 읽어 서명을 직접 비교했고 동일해. 기존 APK SHA-256 `E0CC8C51D7B745D167F27CD655F43626097967848F2BCAA3A27F9C66CFE34BEE`, lastUpdateTime 2026-11-13 20:14:59, firstInstallTime 2026-10-05 14:19:35.
+- 이전 조회 때 연결이 없었지만 설치 승인 뒤 지정 serial/model 한 대의 정상 연결을 확인했어. 설치 직전 로컬 APK hash·기존 package/APK hash/서명을 다시 대조한 뒤 `adb -s <serial> install -r <APK>` **1회 Success**. 설치 후 기기 APK의 sha256sum이 승인 APK `CFA66E21…2565E87E`와 일치. lastUpdateTime **2026-11-14 19:57:50**, 기존 firstInstallTime **2026-10-05 14:19:35 유지**. 설치 뒤 process 조회에서 앱 PID는 없었고 자동 실행하지 않았어. 사용자 DB/filesDir/엽서에 접근하지 않았으며, 설치 성공·설치일 유지를 사용자 데이터 전체의 별도 무결성 검증으로 확대하지 않아. 백업/복원 검증은 하지 않았어.
 - 사용자 QA와 Git·병합 승인을 받았으므로 승인된 8파일만 명시 stage→commit/push→PR/필수 CI를 이어가. 보호 규칙과 PR의 실제 head/base·필수 CI를 확인한 뒤 Merge commit 병합, main CI, 안전한 main 동기화와 조건부 해당 작업 브랜치 정리를 마감해. scope/head/base가 예상과 다르거나 CI가 실패하면 원인을 확인하고 현재 승인 범위 안에서 처리하되 검증을 우회하지 않아. 기존 미추적 파일과 다른 브랜치·과거 worktree는 그대로 보존해.
 
 ---

@@ -24,6 +24,7 @@ import com.postcardmemory.ui.detail.DetailScreen
 import com.postcardmemory.ui.futuremail.FutureMailboxScreen
 import com.postcardmemory.ui.gallery.GalleryScreen
 import com.postcardmemory.ui.intro.AppIntroScreen
+import com.postcardmemory.ui.intro.introFilmLookupEpochDays
 import com.postcardmemory.ui.theme.BrutalWhite
 import com.postcardmemory.ui.theme.PostCardMemoryTheme
 import com.postcardmemory.utils.TodayVisit
@@ -51,6 +52,8 @@ private object AppIntroState {
     var hasShownIntro = false
     var todayVisit: TodayVisit? = null
     var observedVisitDate: LocalDate? = null
+    /** 필름 지난 칸 날짜 중 달력 방문 표식이 확인된 날(읽기 전용). null = 판별 불가. */
+    var filmVisitedDays: Set<Long>? = null
     var visitedEpochDays: Set<Long> = emptySet()
 }
 
@@ -83,13 +86,26 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         if (AppIntroState.todayVisit == null) {
                             val nowMillis = System.currentTimeMillis()
-                            val recorded = withContext(Dispatchers.IO) {
-                                VisitRecordStorage.recordTodayVisit(
+                            val (recorded, filmDays) = withContext(Dispatchers.IO) {
+                                val visit = VisitRecordStorage.recordTodayVisit(
                                     applicationContext,
                                     nowMillis = nowMillis
                                 )
+                                // 필름 지난 칸의 소인은 달력과 같은 방문 표식으로만 정한다(읽기 전용).
+                                // 읽지 못하면 null — 그 칸들은 판별 불가로 소인을 찍지 않는다.
+                                val days = visit.record?.let { record ->
+                                    VisitHistoryStorage.loadDays(
+                                        applicationContext.filesDir,
+                                        introFilmLookupEpochDays(
+                                            record.lastVisitEpochDay,
+                                            visit.previousVisitEpochDay
+                                        )
+                                    )
+                                }
+                                visit to days
                             }
 
+                            AppIntroState.filmVisitedDays = filmDays
                             AppIntroState.todayVisit = recorded
                             AppIntroState.observedVisitDate =
                                 LocalDate.ofEpochDay(visitEpochDay(nowMillis))
@@ -125,6 +141,10 @@ class MainActivity : ComponentActivity() {
                                 visitRecord = todayVisit?.record,
                                 isFirstVisitToday =
                                     todayVisit?.isFirstVisitToday == true,
+                                visitArrived = todayVisit != null,
+                                previousVisitEpochDay = todayVisit?.previousVisitEpochDay,
+                                todayEpochDay = AppIntroState.observedVisitDate?.toEpochDay(),
+                                pastVisitedDays = AppIntroState.filmVisitedDays,
                                 onFinished = {
                                     AppIntroState.hasShownIntro = true
                                     showIntro = false

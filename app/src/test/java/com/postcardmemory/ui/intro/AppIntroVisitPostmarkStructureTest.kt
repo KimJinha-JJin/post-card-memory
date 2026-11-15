@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * 70일차 방문 소인의 최소 구조와, 출석 UI로 변해버리지 않게 하는 금지선을
- * 고정한다. 인트로 자체(진행선/봉투/퍼센트)의 69일차 구조도 함께 지킨다.
+ * 고정한다. 133일차부터는 69일차 진행선/봉투/퍼센트 대신 날짜별 필름 구조를 지킨다.
  */
 class AppIntroVisitPostmarkStructureTest {
 
@@ -313,12 +313,65 @@ class AppIntroVisitPostmarkStructureTest {
         )
     }
 
+    // ---- 133일차: 진행선·퍼센트·봉투 대신 날짜별 필름 ----
+
     @Test
-    fun intro_keepsProgressAnimationUntouched() {
-        assertTrue(introSource.contains("INTRO_FILL_DURATION_MS = 1800"))
-        assertTrue(introSource.contains("INTRO_SETTLE_DELAY_MS = 150L"))
-        assertTrue("봉투 실제 너비 측정 보정 유지", introSource.contains("onGloballyPositioned"))
-        assertTrue("진행선/퍼센트 구조 유지", introSource.contains("AppIntroProgress(progress = progress.value)"))
+    fun intro_replacesProgressBarWithDateFilm() {
+        assertFalse("69일차 진행선 구조는 제거됨", introSource.contains("AppIntroProgress"))
+        assertFalse("퍼센트 숫자를 보여주지 않음", introSource.contains("\$percent%"))
+        assertFalse("작은 봉투 문자를 쓰지 않음", introSource.contains("✉"))
+        assertTrue(
+            "필름 모습은 순수 계산(planIntroFilm)으로 정해야 함",
+            introSource.contains("val chosen = planIntroFilm(")
+        )
+        assertTrue(
+            "A안 이송 곡선을 써야 함",
+            introSource.contains("IntroFilmMoveEasing = CubicBezierEasing(0.40f, 0f, 0.12f, 1f)")
+        )
+    }
+
+    @Test
+    fun intro_filmTravelIsReadOnlyInsideGraphicsLayer() {
+        val reads = Regex("progress\\.value").findAll(introSource).toList()
+        assertTrue(reads.isNotEmpty())
+        reads.forEach { read ->
+            val lookBehind = introSource.substring(maxOf(0, read.range.first - 400), read.range.first)
+            assertTrue("필름 이송 값은 graphicsLayer 안에서만 읽어야 함", lookBehind.contains(".graphicsLayer {"))
+        }
+        assertTrue(introSource.contains("translationX = windowWidth.toPx() / 2f - frame * (position + 0.5f)"))
+    }
+
+    @Test
+    fun intro_stillEndsOnlyThroughItsOwnTimelineAndTheSameCrossfade() {
+        assertEquals(
+            "인트로 종료 호출은 시간표 끝 한 곳뿐",
+            1,
+            Regex("currentOnFinished\\(\\)").findAll(introSource).count()
+        )
+        assertTrue(
+            "기록을 무한히 기다리지 않고 대기 한도를 둬야 함",
+            introSource.contains("withTimeoutOrNull(INTRO_FILM_RECORD_WAIT_MS)")
+        )
+        assertTrue(
+            "손이 시작되지 못해도 멈추지 않는 상한",
+            introSource.contains("withTimeoutOrNull(INTRO_FILM_HAND_TOTAL_MS * 2)")
+        )
+        assertTrue("갤러리 전환 Crossfade 180ms 유지", mainActivitySource.contains("animationSpec = tween(180)"))
+        assertTrue(
+            "직전 방문일은 메모리 결과로만 넘김",
+            mainActivitySource.contains("previousVisitEpochDay = todayVisit?.previousVisitEpochDay")
+        )
+    }
+
+    @Test
+    fun intro_handOnlyStampsOnAMovingFirstVisitFilm() {
+        assertTrue(introSource.contains("val handOnFilm = playStampHand && stampMode == IntroFilmStamp.HAND"))
+        assertTrue(introSource.contains("waitsForStampHand = handOnFilm"))
+        assertTrue(
+            "같은 날·감소 모드는 움직임 없이 찍힌 모습",
+            introSource.contains("if (stampMode == IntroFilmStamp.INKED) {") &&
+                introSource.contains("stampPress.snapTo(1f)")
+        )
     }
 
     // ---- 출석 UI 문법 금지선 ----

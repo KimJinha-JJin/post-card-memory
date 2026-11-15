@@ -60,7 +60,8 @@ object VisitRecordStorage {
 
         return TodayVisit(
             record = updated,
-            isFirstVisitToday = isFirstVisitToday
+            isFirstVisitToday = isFirstVisitToday,
+            previousVisitEpochDay = previous?.lastVisitEpochDay
         )
     }
 

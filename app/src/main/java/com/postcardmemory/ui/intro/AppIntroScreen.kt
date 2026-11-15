@@ -3,48 +3,54 @@ package com.postcardmemory.ui.intro
 import android.content.Context
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.Settings
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.postcardmemory.ui.components.PostcardDateFormat
 import com.postcardmemory.ui.components.SEAL_POSTMARK_DATE_TEXT_RATIO
 import com.postcardmemory.ui.components.SealPreviewContent
 import com.postcardmemory.ui.detail.SealStampHandOverlay
@@ -52,16 +58,16 @@ import com.postcardmemory.ui.detail.SealType
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.InkSecondary
 import com.postcardmemory.ui.theme.PaperDivider
+import com.postcardmemory.ui.theme.PaperField
+import com.postcardmemory.ui.theme.PaperSurface
+import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.utils.VisitRecord
 import com.postcardmemory.utils.visitDayStartMillis
-import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-
-private const val INTRO_FILL_DURATION_MS = 1800
-private const val INTRO_SETTLE_DELAY_MS = 150L
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 인트로 상단에 평소 보이는 조용한 문구 풀. */
 internal val INTRO_GENERAL_MESSAGES = listOf(
@@ -127,9 +133,6 @@ internal fun shouldPlayIntroStampHand(
     isFirstVisitToday: Boolean
 ): Boolean = visitRecord != null && isFirstVisitToday
 
-/** 인트로가 먼저 보인 뒤 손이 들어오도록 잠깐 기다린다. 손 연출(≈0.72초)이 인트로 안에 끝난다. */
-private const val INTRO_STAMP_HAND_START_DELAY_MS = 250L
-
 /** [roll]이 이스터에그 확률 구간(기본 3%) 안에 들어오는지. */
 internal fun isSecretRoll(roll: Float): Boolean = roll < INTRO_SECRET_PROBABILITY
 
@@ -150,9 +153,6 @@ internal fun selectIntroMessage(random: Random = Random, totalVisitDays: Int? = 
         INTRO_GENERAL_MESSAGES.random(random)
     }
 }
-
-/** 인트로 아래쪽 방문 소인의 지름. 엽서 위 도장(90.dp)보다 작게 둬 인트로에서 튀지 않게 한다. */
-private val INTRO_POSTMARK_SIZE = 76.dp
 
 /** 손으로 찍은 듯한 기울기. 도장이 내려앉으면서 이 각도까지 돌아간다. */
 private const val INTRO_POSTMARK_TILT_DEGREES = -7f
@@ -222,28 +222,67 @@ private fun vibrateIntroPostmark(context: Context) {
     )
 }
 
+/** A안 필름 이송 곡선: 짧게 출발해 끝에서 길게 감속한다(목업 cubic-bezier(.40,0,.12,1)). */
+private val IntroFilmMoveEasing = CubicBezierEasing(0.40f, 0f, 0.12f, 1f)
+
+/** 필름 한 칸 폭 = 화면 폭의 40%(112~170dp). 칸 높이는 폭의 1.18배, 위아래 구멍 띠 14dp. */
+private const val INTRO_FILM_FRAME_WIDTH_RATIO = 0.40f
+private val INTRO_FILM_FRAME_MIN_WIDTH = 112.dp
+private val INTRO_FILM_FRAME_MAX_WIDTH = 170.dp
+private const val INTRO_FILM_CELL_ASPECT = 1.18f
+private val INTRO_FILM_BAND = 14.dp
+private val INTRO_FILM_HOLE_SPACING = 14.dp
+private val INTRO_FILM_HOLE_RADIUS = 2.4.dp
+private val INTRO_FILM_CELL_INSET = 4.dp
+
+/** 칸 아래 정중앙 소인 지름 = 칸 폭의 44%, 최대 66dp. */
+private const val INTRO_FILM_STAMP_RATIO = 0.44f
+private val INTRO_FILM_STAMP_MAX = 66.dp
+
+/** 필름이 처음 나타날 때의 짧은 fade. */
+private const val INTRO_FILM_APPEAR_MS = 150
+
+/** 지난 방문 칸에 이미 찍혀 있는 소인의 옅기. */
+private const val INTRO_FILM_PAST_STAMP_ALPHA = 0.9f
+
+/** 아직 오지 않은 날·기록 이전 빈 칸의 종이색(조금 더 밝은 미사용 종이). */
+private val IntroFilmBlankPaper = Color(0xFFFCF8F0)
+
+/** 시스템 애니메이션 배율이 0이면 필름 이송·도장 탄성 없이 찍힌 모습만 보여준다(시작 시 1회 읽음). */
+private fun readIntroReducedMotion(context: Context): Boolean = runCatching {
+    Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+}.getOrDefault(false)
+
 /**
- * 앱 시작 직후 아주 짧게 보이는 인트로. 실제 갤러리 데이터 로딩과 연결된
- * 진행률이 아니라(Room Flow 초기 방출이 거의 즉시 끝나 의미 있는 진행률을
- * 만들 수 없다), 고정 길이의 짧은 시각 애니메이션이다.
+ * 앱 시작 직후 보이는 인트로. 133일차부터 69일차의 진행선·퍼센트·봉투 대신 **날짜별 종이 필름**을
+ * 보여준다. 진행선은 실제 로딩과 연결되지 않은 고정 길이 연출이었고(Room Flow 초기 방출이 거의 즉시
+ * 끝나 의미 있는 진행률을 만들 수 없다), 필름도 로딩 진행률이 아니라 **하루의 경과**만 표현한다.
+ * 인트로 종료는 예전처럼 이 화면의 시간표가 끝나면 [onFinished]를 부르는 것뿐이고, 갤러리 데이터
+ * 로딩은 인트로와 별개로 진행된다.
  *
- * [visitRecord]는 오늘 방문 기록이며, 아직 읽히지 않았으면 null이다. 인트로는
- * 이 값을 **기다리지 않는다** — null이어도 진행선은 그대로 흐르고, 값이
- * 도착하면 아래쪽 소인과 위쪽 문구가 조용히 나타난다(저장소 I/O 때문에
- * 인트로가 느려지거나 멈추지 않는다). 상단 문구는 누적 방문일이 정확히 33일
- * 때만 막스 베르스타펜 이스터에그를 확정으로 보여준다.
+ * [visitRecord]는 오늘 방문 기록이며, 아직 읽히지 않았으면 null이다. [visitArrived]는 기록 판정이
+ * 끝났는지(읽기 실패로 record가 null인 경우 포함)다. 필름은 판정 결과를 최대
+ * [INTRO_FILM_RECORD_WAIT_MS]까지만 기다리고, 넘으면 날짜·소인 없이 짧게 지나간다(저장소 I/O 때문에
+ * 인트로가 멈추지 않는다). 상단 문구는 누적 방문일이 정확히 33일 때만 막스 베르스타펜 이스터에그를
+ * 확정으로 보여준다.
  *
- * [isFirstVisitToday]는 이번 실행이 오늘의 첫 방문인지다. 소인은 앱을 열
- * 때마다 찍히지만 도장이 닿는 진동은 이때만 울린다 — 같은 날 여러 번 열
- * 때마다 진동하면 과하다는 실기기 판단.
+ * [isFirstVisitToday]는 이번 실행이 오늘의 첫 방문인지다. 그날 첫 방문이면 직전 방문 칸에서 오늘 칸까지
+ * 필름이 이송되고([previousVisitEpochDay]부터 쉰 날 수만큼), 기존 손 도장이 들어와 오늘 칸에 꾹 찍는다.
+ * 도장이 닿는 진동도 이때만 울린다. 같은 날 다시 열면 이동·도장 연출 없이 찍힌 모습만 짧게 보여준다.
  */
 @Composable
 fun AppIntroScreen(
     visitRecord: VisitRecord? = null,
     isFirstVisitToday: Boolean = false,
+    visitArrived: Boolean = visitRecord != null,
+    previousVisitEpochDay: Long? = null,
+    todayEpochDay: Long? = null,
+    /** 지난 날짜 칸 중 달력 방문 표식이 확인된 날. null이면 판별 불가로 지난 칸에 소인을 찍지 않는다. */
+    pastVisitedDays: Set<Long>? = null,
     onFinished: () -> Unit
 ) {
-    val progress = remember { Animatable(0f) }
+    val context = LocalContext.current
+    val reducedMotion = remember(context) { readIntroReducedMotion(context) }
 
     // 방문 기록이 도착하기 전엔(null) 33번째 milestone 여부를 알 수 없다.
     // 즉시 아무 문구나 골랐다가 데이터가 도착한 뒤 다시 고르면 "문구 A→B"로
@@ -266,21 +305,67 @@ fun AppIntroScreen(
     var stampHandFinished by remember { mutableStateOf(false) }
     var introRootOrigin by remember { mutableStateOf(Offset.Zero) }
     var postmarkCenterInRoot by remember { mutableStateOf<Offset?>(null) }
+    var filmCenterXInRoot by remember { mutableStateOf<Float?>(null) }
 
-    LaunchedEffect(playStampHand) {
-        if (!playStampHand) return@LaunchedEffect
-        delay(INTRO_STAMP_HAND_START_DELAY_MS)
-        stampHandStarted = true
-    }
+    // 기록 판정 결과로 한 번 정한 필름. 정해지기 전(최대 0.7초)엔 필름 자리만 비워 둔다.
+    var plan by remember { mutableStateOf<IntroFilmPlan?>(null) }
+    val filmProgress = remember { Animatable(0f) }
+    val filmAlpha = remember { Animatable(0f) }
+
+    val currentArrived by rememberUpdatedState(visitArrived)
+    val currentRecord by rememberUpdatedState(visitRecord)
+    val currentFirstVisit by rememberUpdatedState(isFirstVisitToday)
+    val currentPrevious by rememberUpdatedState(previousVisitEpochDay)
+    val currentToday by rememberUpdatedState(todayEpochDay)
+    val currentPastVisited by rememberUpdatedState(pastVisitedDays)
+    val currentOnFinished by rememberUpdatedState(onFinished)
 
     LaunchedEffect(Unit) {
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(INTRO_FILL_DURATION_MS, easing = LinearEasing)
+        val arrived = withTimeoutOrNull(INTRO_FILM_RECORD_WAIT_MS) {
+            snapshotFlow { currentArrived }.first { it }
+        } != null
+
+        val chosen = planIntroFilm(
+            record = if (arrived) currentRecord else null,
+            isFirstVisitToday = arrived && currentFirstVisit,
+            previousVisitEpochDay = if (arrived) currentPrevious else null,
+            reducedMotion = reducedMotion,
+            todayEpochDay = currentToday,
+            pastVisitedDays = if (arrived) currentPastVisited else null
         )
-        delay(INTRO_SETTLE_DELAY_MS)
-        onFinished()
+        plan = chosen
+        launch { filmAlpha.animateTo(1f, tween(INTRO_FILM_APPEAR_MS)) }
+
+        if (chosen.stamp == IntroFilmStamp.HAND) {
+            if (chosen.moves) {
+                delay(INTRO_FILM_MOVE_START_DELAY_MS)
+                filmProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(chosen.moveDurationMs, easing = IntroFilmMoveEasing)
+                )
+            } else {
+                filmProgress.snapTo(1f)
+            }
+            delay(INTRO_FILM_STAMP_DELAY_MS)
+            stampHandStarted = true
+            // 손이 어떤 이유로 시작되지 못해도 인트로가 멈추지 않도록 상한을 둔다.
+            withTimeoutOrNull(INTRO_FILM_HAND_TOTAL_MS * 2) {
+                snapshotFlow { stampHandFinished }.first { it }
+            }
+            delay(INTRO_FILM_AFTER_HAND_HOLD_MS)
+        } else {
+            filmProgress.snapTo(1f)
+            delay(chosen.holdMs)
+        }
+        currentOnFinished()
     }
+
+    val currentPlan = plan
+    val stampMode = currentPlan?.stamp ?: IntroFilmStamp.NONE
+    // 날짜를 되돌린 기기처럼 기록은 첫 방문이어도 필름은 정지하는 경우, 손은 오지 않는다.
+    val handOnFilm = playStampHand && stampMode == IntroFilmStamp.HAND
+    val showVisit = currentPlan != null && stampMode != IntroFilmStamp.NONE
+    val showCount = showVisit && (stampMode != IntroFilmStamp.HAND || stampHandContacted)
 
     Box(
         modifier = Modifier
@@ -294,24 +379,51 @@ fun AppIntroScreen(
                 text = introMessage.orEmpty(),
                 fontSize = 12.sp,
                 color = InkSecondary,
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier
+                    .padding(bottom = 12.dp)
+                    .alpha(if (showVisit) 1f else 0f)
             )
 
-            AppIntroProgress(progress = progress.value)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            AppIntroVisitPostmark(
+            IntroFilmStrip(
+                plan = currentPlan,
+                progress = filmProgress,
+                appearAlpha = filmAlpha,
                 visitRecord = visitRecord,
-                isFirstVisitToday = isFirstVisitToday,
-                waitsForStampHand = playStampHand,
-                stampHandContacted = stampHandContacted,
-                onPostmarkCenterInRoot = { postmarkCenterInRoot = it }
+                onFilmCenterXInRoot = { filmCenterXInRoot = it }
+            ) { stampSize ->
+                AppIntroVisitPostmark(
+                    visitRecord = visitRecord,
+                    isFirstVisitToday = isFirstVisitToday,
+                    stampMode = stampMode,
+                    stampSize = stampSize,
+                    waitsForStampHand = handOnFilm,
+                    stampHandContacted = stampHandContacted,
+                    onPostmarkCenterInRoot = { postmarkCenterInRoot = it }
+                )
+            }
+
+            Text(
+                // 연속 방문일은 일부러 보여주지 않는다 - 끊겼다는 표현은 압박이
+                // 되므로, 절대 줄지 않는 총 방문일만 조용히 적는다.
+                text = visitRecord?.let { "${it.totalVisitDays}번째 방문" }.orEmpty(),
+                fontSize = 11.sp,
+                color = InkSecondary,
+                modifier = Modifier
+                    .padding(top = 14.dp)
+                    .alpha(if (showCount) 1f else 0f)
             )
         }
 
-        val stampTarget = postmarkCenterInRoot
-        if (playStampHand && stampHandStarted && !stampHandFinished && stampTarget != null) {
+        // 손이 오는 시점엔 오늘 칸이 필름 가운데에 정착해 있다. 칸 좌표는 이송(graphicsLayer) 전
+        // 배치 기준일 수 있어 가로는 필름 가운데, 세로는 소인 중심을 쓴다.
+        val postmarkCenter = postmarkCenterInRoot
+        val filmCenterX = filmCenterXInRoot
+        val stampTarget = if (postmarkCenter != null && filmCenterX != null) {
+            Offset(filmCenterX, postmarkCenter.y)
+        } else {
+            null
+        }
+        if (handOnFilm && stampHandStarted && !stampHandFinished && stampTarget != null) {
             SealStampHandOverlay(
                 target = stampTarget - introRootOrigin,
                 onContact = { stampHandContacted = true },
@@ -322,30 +434,177 @@ fun AppIntroScreen(
 }
 
 /**
+ * 날짜별 종이 필름. 칸은 시간 순서로 왼쪽(지난 날)부터 오른쪽(아직 오지 않은 날)까지 놓이고,
+ * [progress] 0→1 동안 시작 칸에서 오늘 칸이 가운데 기준 위치로 오도록 필름 전체를 왼쪽으로 옮긴다.
+ * 이동은 [graphicsLayer] 안에서만 읽어 프레임마다 recomposition이 일어나지 않는다. 칸은 사각형·원과
+ * 기존 원형 소인 렌더러만 그린다(새 이미지·엽서 사진 디코딩 없음).
+ */
+@Composable
+private fun IntroFilmStrip(
+    plan: IntroFilmPlan?,
+    progress: Animatable<Float, AnimationVector1D>,
+    appearAlpha: Animatable<Float, AnimationVector1D>,
+    visitRecord: VisitRecord?,
+    onFilmCenterXInRoot: (Float) -> Unit,
+    todayStamp: @Composable (Dp) -> Unit
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val frameWidth = (maxWidth * INTRO_FILM_FRAME_WIDTH_RATIO)
+            .coerceIn(INTRO_FILM_FRAME_MIN_WIDTH, INTRO_FILM_FRAME_MAX_WIDTH)
+        val cellHeight = frameWidth * INTRO_FILM_CELL_ASPECT
+        val stripHeight = cellHeight + INTRO_FILM_BAND * 2
+        val stampSize = minOf(frameWidth * INTRO_FILM_STAMP_RATIO, INTRO_FILM_STAMP_MAX)
+        val windowWidth = maxWidth
+
+        val description = if (plan != null && plan.stamp != IntroFilmStamp.NONE && visitRecord != null) {
+            "오늘 방문 소인, " + PostcardDateFormat.formatIso(visitDayStartMillis(visitRecord.lastVisitEpochDay))
+        } else {
+            "엽서함을 여는 중"
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(stripHeight)
+                .clipToBounds()
+                .onGloballyPositioned { coordinates ->
+                    onFilmCenterXInRoot(coordinates.positionInRoot().x + coordinates.size.width / 2f)
+                }
+                .graphicsLayer { alpha = appearAlpha.value }
+                .clearAndSetSemantics { contentDescription = description }
+        ) {
+            if (plan != null) {
+                Row(
+                    modifier = Modifier
+                        .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                        .height(stripHeight)
+                        .graphicsLayer {
+                            val frame = frameWidth.toPx()
+                            val position = plan.startIndex +
+                                (plan.todayIndex - plan.startIndex) * progress.value
+                            translationX = windowWidth.toPx() / 2f - frame * (position + 0.5f)
+                        }
+                        .drawBehind {
+                            val line = 1.dp.toPx()
+                            drawRect(PaperDivider, size = size.copy(height = line))
+                            drawRect(
+                                PaperDivider,
+                                topLeft = Offset(0f, size.height - line),
+                                size = size.copy(height = line)
+                            )
+                        }
+                ) {
+                    plan.frames.forEach { frame ->
+                        IntroFilmFrameCell(
+                            frame = frame,
+                            frameWidth = frameWidth,
+                            stampSize = stampSize,
+                            todayStamp = todayStamp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IntroFilmFrameCell(
+    frame: IntroFilmFrame,
+    frameWidth: Dp,
+    stampSize: Dp,
+    todayStamp: @Composable (Dp) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .width(frameWidth)
+            .fillMaxHeight()
+            .background(PaperSurface)
+            .drawBehind {
+                // 위아래 띠에 같은 간격으로 뚫린 둥근 구멍.
+                val spacing = INTRO_FILM_HOLE_SPACING.toPx()
+                val radius = INTRO_FILM_HOLE_RADIUS.toPx()
+                val bandCenter = INTRO_FILM_BAND.toPx() / 2f
+                var x = spacing / 2f
+                while (x < size.width) {
+                    drawCircle(PaperTray, radius, Offset(x, bandCenter))
+                    drawCircle(PaperTray, radius, Offset(x, size.height - bandCenter))
+                    x += spacing
+                }
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = INTRO_FILM_CELL_INSET, vertical = INTRO_FILM_BAND)
+                .background(
+                    if (frame.epochDay == null) IntroFilmBlankPaper else PaperField,
+                    RoundedCornerShape(2.dp)
+                )
+                .border(1.dp, PaperDivider, RoundedCornerShape(2.dp))
+        ) {
+            val epochDay = frame.epochDay
+            if (epochDay != null) {
+                Text(
+                    text = PostcardDateFormat.formatIso(visitDayStartMillis(epochDay)),
+                    fontSize = 9.5.sp,
+                    color = InkSecondary,
+                    // 쉰 날(도장 없는 지난 날짜)은 한 톤 옅게.
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 7.dp, top = 6.dp)
+                        .alpha(if (frame.isToday || frame.hasPastStamp) 1f else 0.5f)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 9.dp)
+                    .size(stampSize)
+            ) {
+                when {
+                    frame.isToday -> todayStamp(stampSize)
+                    frame.hasPastStamp && epochDay != null -> SealPreviewContent(
+                        type = SealType.CIRCLE_POSTMARK,
+                        color = InkSecondary,
+                        capturedAtMillis = visitDayStartMillis(epochDay),
+                        dateTextRatio = INTRO_POSTMARK_DATE_TEXT_RATIO,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                rotationZ = INTRO_POSTMARK_TILT_DEGREES
+                                alpha = INTRO_FILM_PAST_STAMP_ALPHA
+                            }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * 오늘 들렀다는 흔적 하나. 엽서에 쓰는 원형 소인 렌더러
  * ([SealPreviewContent] + [SealType.CIRCLE_POSTMARK])를 그대로 재사용해
  * 날짜까지 앱 공통 서식(yyyy-MM-dd)으로 찍는다 — 인트로용 소인을 따로
  * 그리지 않는다. 잉크색만 도장 콘텐츠 색(sealInkColors)이 아니라 인트로
- * 다른 요소와 같은 UI 색 [InkSecondary]를 쓴다.
+ * 다른 요소와 같은 UI 색 [InkSecondary]를 쓴다. 133일차부터는 필름의 오늘 칸 아래 가운데에 놓인다.
  *
- * 방문 기록이 도착하면 도장이 한 번 "통" 하고 내려앉는다: 크게 들려 있던
- * 상태에서 잉크가 배어들며 내려와, 목표 크기를 살짝 지나 눌렸다가 제자리에
- * 앉고 동시에 손으로 찍은 듯한 각도까지 돌아간다. 반복되지 않는 일회성
- * 움직임이고, 값을 [graphicsLayer] 안에서 읽으므로 프레임마다 recomposition이
- * 일어나지 않는다. [INTRO_MAX_MILESTONE_VISIT_DAY]번째 방문이면 착지 직전
- * 한 바퀴 더 돌고 같은 자리에 앉는다 — 다른 방문일에는 이 회전이 붙지 않는다.
+ * 그날 첫 방문([stampMode] == [IntroFilmStamp.HAND])에는 손 도장이 닿을 때까지 비워 뒀다가, 닿은
+ * 자리에서 잉크가 묻고 "통" 하고 한 번 눌렸다 앉으며 손으로 찍은 듯한 각도까지 돌아간다. 반복되지
+ * 않는 일회성 움직임이고, 값을 [graphicsLayer] 안에서 읽으므로 프레임마다 recomposition이 일어나지
+ * 않는다. [INTRO_MAX_MILESTONE_VISIT_DAY]번째 방문이면 착지하며 마지막 회전을 더하고 같은 자리에
+ * 앉는다 — 다른 방문일에는 이 회전이 붙지 않는다.
  *
- * 이 움직임은 앱을 열 때마다 보이지만, 닿는 순간의 진동은
- * [isFirstVisitToday]일 때만 울린다. 100일차부터 그날 첫 방문([waitsForStampHand])에는
- * 위에서 떨어지는 대신 손 도장이 닿을 때까지 비워 뒀다가 그 자리에서 찍힌다.
- *
- * 기록이 아직 없어도(null) 자리는 항상 잡아둔다 — 값이 늦게 도착해도 위쪽
- * 진행선이 다시 가운데로 밀려 흔들리지 않게 하려는 것이다.
+ * 같은 날 재실행·애니메이션 감소([IntroFilmStamp.INKED])에는 움직임 없이 이미 찍힌 모습이다.
+ * 닿는 순간의 진동은 [isFirstVisitToday]일 때만 울린다.
  */
 @Composable
 private fun AppIntroVisitPostmark(
     visitRecord: VisitRecord?,
     isFirstVisitToday: Boolean,
+    stampMode: IntroFilmStamp,
+    stampSize: Dp,
     waitsForStampHand: Boolean = false,
     stampHandContacted: Boolean = false,
     onPostmarkCenterInRoot: (Offset) -> Unit = {}
@@ -358,6 +617,7 @@ private fun AppIntroVisitPostmark(
 
     LaunchedEffect(hasVisitRecord, isFirstVisitToday, stampHandContacted) {
         if (!hasVisitRecord) return@LaunchedEffect
+        if (stampMode == IntroFilmStamp.NONE) return@LaunchedEffect
         // 손이 찍어 줄 날에는 손 도장이 종이에 닿을 때까지 소인을 비워 둔다.
         if (waitsForStampHand && !stampHandContacted) return@LaunchedEffect
 
@@ -371,6 +631,12 @@ private fun AppIntroVisitPostmark(
 
                 vibrateIntroPostmark(context)
             }
+        }
+
+        // 같은 날 재실행·감소 모드: 움직임 없이 이미 찍힌 모습.
+        if (stampMode == IntroFilmStamp.INKED) {
+            stampPress.snapTo(1f)
+            return@LaunchedEffect
         }
 
         // 손이 찍은 소인은 위에서 떨어지지 않는다 — 닿은 자리에서 잉크가 바로 묻고
@@ -388,120 +654,46 @@ private fun AppIntroVisitPostmark(
         )
     }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
         modifier = Modifier
+            .size(stampSize)
+            .onGloballyPositioned { coordinates ->
+                val origin = coordinates.positionInRoot()
+                onPostmarkCenterInRoot(
+                    Offset(
+                        origin.x + coordinates.size.width / 2f,
+                        origin.y + coordinates.size.height / 2f
+                    )
+                )
+            }
             .graphicsLayer {
                 alpha = (stampPress.value * INTRO_POSTMARK_INK_RAMP)
                     .coerceIn(0f, 1f)
             }
-            .clearAndSetSemantics {
-                contentDescription = "오늘 방문 소인"
-            }
-    ) {
-        Box(
-            modifier = Modifier
-                .size(INTRO_POSTMARK_SIZE)
-                .onGloballyPositioned { onPostmarkCenterInRoot(it.boundsInRoot().center) }
-                .graphicsLayer {
-                    val press = stampPress.value
-                    val pressScale =
-                        1f + INTRO_POSTMARK_DROP_SCALE * (1f - press)
+            .graphicsLayer {
+                val press = stampPress.value
+                val pressScale =
+                    1f + INTRO_POSTMARK_DROP_SCALE * (1f - press)
 
-                    scaleX = pressScale
-                    scaleY = pressScale
-                    rotationZ = INTRO_POSTMARK_TILT_DEGREES * press +
-                        if (isMaxMilestone) {
-                            INTRO_POSTMARK_MILESTONE_SPIN_DEGREES * (1f - press)
-                        } else {
-                            0f
-                        }
-                }
-        ) {
-            if (visitRecord != null) {
-                SealPreviewContent(
-                    type = SealType.CIRCLE_POSTMARK,
-                    color = InkSecondary,
-                    capturedAtMillis =
-                        visitDayStartMillis(visitRecord.lastVisitEpochDay),
-                    dateTextRatio = INTRO_POSTMARK_DATE_TEXT_RATIO,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        Text(
-            // 연속 방문일은 일부러 보여주지 않는다 - 끊겼다는 표현은 압박이
-            // 되므로, 절대 줄지 않는 총 방문일만 조용히 적는다.
-            text = visitRecord?.let { "${it.totalVisitDays}번째 방문" }.orEmpty(),
-            fontSize = 11.sp,
-            color = InkSecondary,
-            modifier = Modifier.padding(top = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun AppIntroProgress(progress: Float) {
-    val percent = (progress * 100f).roundToInt().coerceIn(0, 100)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth(0.62f)
-            .clearAndSetSemantics {
-                contentDescription = "엽서함을 여는 중"
-            },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .height(32.dp)
-        ) {
-            val density = LocalDensity.current
-            var envelopeWidth by remember { mutableStateOf(0.dp) }
-            val travel = (maxWidth - envelopeWidth).coerceAtLeast(0.dp)
-            val envelopeOffset = travel * progress
-
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val centerY = size.height * 0.82f
-                val strokeWidthPx = 1.4.dp.toPx()
-                drawLine(
-                    color = PaperDivider,
-                    start = Offset(0f, centerY),
-                    end = Offset(size.width, centerY),
-                    strokeWidth = strokeWidthPx,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = InkSecondary,
-                    start = Offset(0f, centerY),
-                    end = Offset(size.width * progress, centerY),
-                    strokeWidth = strokeWidthPx,
-                    cap = StrokeCap.Round
-                )
-            }
-
-            Text(
-                text = "✉︎",
-                fontSize = 14.sp,
-                color = InkSecondary,
-                modifier = Modifier
-                    .offset(x = envelopeOffset)
-                    .onGloballyPositioned {
-                        envelopeWidth = with(density) { it.size.width.toDp() }
+                scaleX = pressScale
+                scaleY = pressScale
+                rotationZ = INTRO_POSTMARK_TILT_DEGREES * press +
+                    if (isMaxMilestone) {
+                        INTRO_POSTMARK_MILESTONE_SPIN_DEGREES * (1f - press)
+                    } else {
+                        0f
                     }
+            }
+    ) {
+        if (visitRecord != null) {
+            SealPreviewContent(
+                type = SealType.CIRCLE_POSTMARK,
+                color = InkSecondary,
+                capturedAtMillis =
+                    visitDayStartMillis(visitRecord.lastVisitEpochDay),
+                dateTextRatio = INTRO_POSTMARK_DATE_TEXT_RATIO,
+                modifier = Modifier.fillMaxSize()
             )
         }
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        Text(
-            text = "$percent%",
-            fontSize = 13.sp,
-            color = InkSecondary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.width(30.dp)
-        )
     }
 }
