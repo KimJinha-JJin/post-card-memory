@@ -47,6 +47,29 @@ object VisitHistoryStorage {
         false
     }
 
+    /**
+     * 133일차 필름 인트로용 **읽기 전용** 조회: [days] 중 정규 marker가 있는 날짜만 돌려준다.
+     * 디렉터리를 만들거나 marker를 쓰지 않는다. 기록 폴더가 아예 없으면 빈 집합(관측된 방문 없음)이고,
+     * 권한·저장소 오류로 확인하지 못하면 null(판별 불가)이다 — [loadMonth]와 달리 둘을 구분한다.
+     * IO dispatcher에서 호출한다.
+     */
+    fun loadDays(filesDir: File, days: Collection<Long>): Set<Long>? = try {
+        if (!Files.exists(directory(filesDir).toPath(), NOFOLLOW_LINKS)) {
+            emptySet()
+        } else if (!Files.isDirectory(directory(filesDir).toPath(), NOFOLLOW_LINKS)) {
+            null
+        } else {
+            days.filterTo(mutableSetOf()) { day ->
+                Files.isRegularFile(
+                    marker(filesDir, LocalDate.ofEpochDay(day)).toPath(),
+                    NOFOLLOW_LINKS
+                )
+            }
+        }
+    } catch (_: SecurityException) {
+        null
+    }
+
     /** 해당 월의 정규 marker만 확인한다. lastVisit/streak에서 날짜를 만들지 않는다. */
     fun loadMonth(filesDir: File, month: YearMonth): Set<Long> = try {
         if (!Files.isDirectory(directory(filesDir).toPath(), NOFOLLOW_LINKS)) {
