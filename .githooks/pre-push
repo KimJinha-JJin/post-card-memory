@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# push 직전: 원격 어디에도 없는 새 commit의 추가 줄에 민감정보가 있으면 push를 막는다.
+# 공개 저장소는 PR 없이 작업 브랜치 push만으로도 내용이 공개되므로 CI보다 먼저 막는다.
+root=$(git rev-parse --show-toplevel) || exit 1
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue   # 브랜치 삭제 push
+  bash "$root/.github/scripts/sensitive-info-scan.sh" --unpushed "$local_sha" || status=1
+done
+exit $status

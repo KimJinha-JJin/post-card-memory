@@ -88,6 +88,7 @@ ChatGPT가 상세 작업지시서 작성
 7. 공용 작업판 모드일 때 `STATUS.md`의 현재 단계와 사용자 확인 대기 항목
 8. 이전 작업을 잇는 경우 모드와 무관하게 최근 완료보고 또는 최신 `HANDOFF.md`의 현재 상태·미검증·남은 위험을 확인한다. 접근 가능한 현재 기록을 읽고, 부족한 재개 조건은 명시한다. archive 전체를 매번 읽지 않고 관련 이력만 찾아본다
 9. 관련 결정이 있으면 `DECISIONS.md`
+10. 이 작업 폴더에서 민감정보 훅이 실제로 실행되는지 `bash .github/scripts/git-hooks-check.sh --fix`로 확인한다(PowerShell은 `& "$env:ProgramFiles\Git\bin\bash.exe" .github/scripts/git-hooks-check.sh --fix`). 이미 활성이면 아무것도 바꾸지 않고, 이 프로젝트 clone의 로컬 설정이 비어 있을 때만 켠다. 비활성 원인이 남으면 보고하고 11절의 직접 검사로 대신한다.
 
 기존 미커밋 변경은 사용자 작업으로 보고 덮어쓰거나 되돌리지 않는다. 현재 작업과 겹치면 수정 전에 충돌 가능성을 보고한다.
 
@@ -246,7 +247,7 @@ STOP은 현재 승인에 포함되지 않은 새로운 위험·범위·제품 �
 - 테스트 실패는 최소한 `test infrastructure`, `device / OS environment`, `fixture`, `timing / race`, `DB / migration`, `assertion`, `production`으로 분류한 뒤 수정 대상을 정한다. stack trace의 발생 위치와 timeout 값, production 코드의 timeout 값을 대조해 테스트 자체가 본문이나 assertion에 진입했는지도 확인한다.
 - Compose BOM·Compose UI test·`androidx.test`·Espresso처럼 함께 동작하는 테스트 dependency 일부를 변경할 때는 현재 해석된 dependency, 최신 안정 버전, 대상 OS/API 호환성, 실제 resolved classpath를 함께 확인한다. 특정 버전 숫자를 영구 규칙으로 고정하지 않는다.
 - 실제 Room 동작을 유지하면서 특정 DAO 실패만 재현해야 하면 `Room.inMemoryDatabaseBuilder`와 `object : Dao by realDao { override ... throw ... }` 위임 패턴을 권장 후보로 검토한다. 모든 테스트에 강제하거나 production 구조를 테스트 편의 때문에 바꾸지 않는다.
-- 승인된 Git 단계에서 CI가 실행되면 현재 `.github/workflows/android-ci.yml`의 실제 step과 해당 revision의 결과를 확인한다. CI는 PR과 `main` push, 수동 실행(`workflow_dispatch`)에서 실행하고 작업 브랜치 push에는 별도 실행하지 않는다. 필수 `build-and-test` job은 항상 실행되고, 첫 단계의 범위 판정(`.github/scripts/ci-verification-scope.sh`)이 명시적으로 생략을 결정한 경우에만 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 건너뛴다. 생략은 ① 빌드에 참여하지 않는 Markdown(`README.md`·`AGENTS.md`·`CLAUDE.md`·`docs/**/*.md`)만 바뀐 경우(`docs-only`), ② main 병합 commit의 파일 상태가 이미 전체 빌드에 성공한 PR head와 같고 PR·체크·job·run 연결과 main Gradle 캐시 존재가 모두 확인되며 빌드·CI 설정 변경이 없는 경우(`verified-merge`)뿐이다. 판정 실패·불확실은 전체 검증이며, 수동 실행은 항상 전체 검증이다. 같은 PR의 이전 실행은 새 push에서 취소되고 main push·수동 실행은 취소되지 않는다. 워크플로 전체를 건너뛰는 `paths`/`paths-ignore`는 필수 체크를 Pending으로 남기므로 쓰지 않는다. instrumentation은 컴파일만 하며 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.
+- 승인된 Git 단계에서 CI가 실행되면 현재 `.github/workflows/android-ci.yml`의 실제 step과 해당 revision의 결과를 확인한다. CI는 PR과 `main` push, 수동 실행(`workflow_dispatch`)에서 실행하고 작업 브랜치 push에는 별도 실행하지 않는다. 필수 `build-and-test` job은 항상 실행되고, PR에서는 빌드 범위와 무관하게 먼저 PR commit의 추가 줄을 민감정보 검사(11절)로 확인해 감지되면 실패한다. 범위 판정(`.github/scripts/ci-verification-scope.sh`)이 명시적으로 생략을 결정한 경우에만 `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`를 건너뛴다. 생략은 ① 빌드에 참여하지 않는 Markdown(`README.md`·`AGENTS.md`·`CLAUDE.md`·`docs/**/*.md`)만 바뀐 경우(`docs-only`), ② main 병합 commit의 파일 상태가 이미 전체 빌드에 성공한 PR head와 같고 PR·체크·job·run 연결과 main Gradle 캐시 존재가 모두 확인되며 빌드·CI 설정 변경이 없는 경우(`verified-merge`)뿐이다. 판정 실패·불확실은 전체 검증이며, 수동 실행은 항상 전체 검증이다. 같은 PR의 이전 실행은 새 push에서 취소되고 main push·수동 실행은 취소되지 않는다. 워크플로 전체를 건너뛰는 `paths`/`paths-ignore`는 필수 체크를 Pending으로 남기므로 쓰지 않는다. instrumentation은 컴파일만 하며 실제 구동한다고 과장하지 않는다. CI 실패는 YAML, Java, Gradle, SDK, runner, test infrastructure, production으로 먼저 분류하고 `test skip`, `continue-on-error`, 실패 step 제거로 숨기지 않는다.
 - 자동 테스트 결과와 사용자의 실기기 결과를 분리한다.
 - 자동 테스트 통과를 실기기 만족이나 버그가 전혀 없다는 뜻으로 과장하지 않는다.
 - commit 분리나 임시 편집을 수행했다면 최종 diff와 기존 검증 근거의 대상·범위·환경이 최종 상태에도 유효한지 확인한다. 확인은 무조건 재실행을 뜻하지 않는다. 결과를 무효화하는 변경·환경 차이·실패가 있을 때 영향받은 검증만 다시 수행한다.
@@ -387,6 +388,7 @@ HANDOFF는 가능한 한 작업 브랜치의 최종 commit 전에 작성해 같�
 - 공용 작업판 모드의 `CURRENT_TASK.md`는 새 승인 작업을 시작할 때 교체한다. 수동 모드의 비활성 작업판 파일은 현재 지시로 읽지 않는다.
 - `HANDOFF.md`를 갱신할 때는 현재 사실·8절의 독립 상태·남은 위험·재개 조건·다음 후보를 앞에 둔다. 완료 이력은 `docs/ai/archive/`에 보존하고 날짜·주제 링크를 남긴다. 사고·실패·폐기 접근 원문을 삭제·축약하거나 현재 복구 사실과 섞지 않는다. archive는 역사 자료이지 현재 상태나 실행 승인이 아니다.
 - 저장소의 모든 추적 문서(HANDOFF, archive, 감사 문서 포함)에 기기 serial·IMEI, 개인 이메일, 사용자 이름이 포함된 PC 절대경로, 개인 계정 식별자, 토큰·비밀키를 기록하지 않는다. 기기는 모델명과 승인된 실사용 기기로 표기하고, 식별자는 완전히 마스킹한다. 사용자 경로는 `%USERPROFILE%` 또는 `~`를 이용해 개인 식별정보를 제거한다. 실제 실행 대상은 문서 기록이 아니라 실행 시점의 실측으로 확인한다. 과거 문서의 개인정보 마스킹은 기록의 의미를 보존하는 최소 범위에서 수행하며, Git 이력 재작성과 저장소 공개 범위 변경은 별도 승인 없이는 수행하지 않는다.
+- 위 기록 금지는 기억이 아니라 자동 검사로 지킨다. `.github/scripts/sensitive-info-scan.sh`가 새로 추가되는 줄만 commit(`.githooks/pre-commit`)·push(`.githooks/pre-push`)·PR CI(`build-and-test`) 세 단계에서 검사하고, 감지하면 값을 출력하지 않은 채 종류·파일·줄만 알리고 막는다. 훅 활성은 작업 시작 때 3절 10번 점검으로 확인하고, 훅이 실행된다고 확인되지 않은 폴더에서는 commit 직전 `sensitive-info-scan.sh --staged`, push 직전 `--unpushed HEAD`를 직접 실행해 통과를 확인한다(활성 폴더에서는 중복 실행하지 않는다). 공개 저장소라 브랜치 push 순간 공개되므로 PR CI는 마지막 확인일 뿐 push 전 검사를 대신하지 않는다. 감지되면 값을 마스킹하고, 이미 commit된 값이면 force push·이력 재작성 없이 STOP한다. 훅 우회(`--no-verify`), 검사 규칙 완화·예외 추가는 사용자 승인 없이 하지 않는다. 검사 결과나 조사 명령으로 식별값을 터미널·보고·PR 본문에 다시 출력하지 않는다(개수·위치만 보고).
 
 ## 12. 대화 방식
 
