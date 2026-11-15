@@ -178,5 +178,40 @@ git config --local --unset core.hooksPath
 bash "$check" --fix >/dev/null 2>&1; rc=$?
 [ $rc -eq 1 ] && [ -z "$(git config --local --get core.hooksPath)" ] && ok "14 다른 저장소(origin 불일치)는 설정을 바꾸지 않음" || bad "14 다른 저장소 보호(rc=$rc)"
 
+echo "[15] 메타데이터 보호(가상 이메일·로컬 원격만 사용)"
+new_repo
+mkdir -p .githooks
+cp "$src_root/.githooks/pre-commit" "$src_root/.githooks/pre-push" .githooks/
+cp "$scan" .github/scripts/
+git config core.hooksPath .githooks
+base=$(git rev-parse HEAD)
+metadata_case() {
+  local desc=$1 want=$2; shift 2
+  out=$("$@" 2>&1); rc=$?
+  if printf '%s' "$out" | grep -qF "$FAKE_MAIL"; then bad "$desc — 가상 이메일 출력"; return; fi
+  if [ "$want" = block ]; then
+    [ $rc -ne 0 ] && printf '%s' "$out" | grep -q '커밋 메타데이터 이메일' && ok "$desc" || bad "$desc (rc=$rc)"
+  else [ $rc -eq 0 ] && ok "$desc" || bad "$desc (rc=$rc)"; fi
+}
+metadata_case "15 빈 변경에서도 Author 차단" block env GIT_AUTHOR_EMAIL="$FAKE_MAIL" bash "$scan" --staged
+metadata_case "15b 환경 변수 Committer 차단" block env GIT_COMMITTER_EMAIL="$FAKE_MAIL" bash "$scan" --staged
+metadata_case "15c 실제 commit --author 차단" block git -c user.email=t@example.com commit --allow-empty -m metadata --author="t <$FAKE_MAIL>"
+metadata_case "15d noreply·가상 example identity 허용" pass env GIT_AUTHOR_EMAIL=t@users.noreply.github.com bash "$scan" --staged
+# 파일명 예외로 개인 이메일을 우회하지 못한다.
+metadata_case "15e identity에 파일 확장자 예외 미적용" block env GIT_AUTHOR_EMAIL="$FAKE_MAIL.kt" bash "$scan" --staged
+env GIT_AUTHOR_EMAIL="$FAKE_MAIL" git commit -q --no-verify --allow-empty -m metadata
+git commit -q --no-verify --allow-empty -m safe-tip
+metadata_case "15f 안전한 tip 뒤 중간 Author를 CI 범위에서 차단" block bash "$scan" --range "$base" HEAD
+git init -q --bare "$work/remote.git"; git remote add origin "$work/remote.git"
+metadata_case "15g 실제 pre-push가 중간 metadata 차단" block git push origin HEAD:refs/heads/metadata
+if git --git-dir="$work/remote.git" rev-parse -q --verify refs/heads/metadata >/dev/null; then bad "15h 차단 후 원격 ref가 생김"; else ok "15h 차단 후 원격 ref 없음"; fi
+# 정상 부모 둘을 합친 merge에만 개인 Committer를 넣어 검사한다.
+new_repo
+base=$(git rev-parse HEAD)
+git checkout -q -b side; git commit -q --allow-empty -m side
+git checkout -q -b trunk "$base"; git commit -q --allow-empty -m trunk
+env GIT_COMMITTER_EMAIL="$FAKE_MAIL" git merge -q --no-ff side -m merge
+metadata_case "15i merge Committer도 범위 검사에서 차단" block bash "$scan" --range "$base" HEAD
+
 echo "결과: 통과 $pass / 실패 $fail"
 [ $fail -eq 0 ]
