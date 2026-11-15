@@ -124,5 +124,59 @@ echo "[10] 검사 실패 시 fail-closed"
 bash "$scan" --range does-not-exist HEAD >/dev/null 2>&1; rc=$?
 [ $rc -eq 2 ] && ok "10 잘못된 기준 → 종료 코드 2(차단)" || bad "10 fail-closed(rc=$rc)"
 
+echo "[11-14] 새 clone·worktree에서의 훅 적용과 git-hooks-check.sh"
+check="$src_root/.github/scripts/git-hooks-check.sh"
+GH_URL="https://github.com/KimJinha-JJin/post-card-memory.git"
+bare="$work/remote.git"
+# 씨앗 저장소: 훅 도입 전 commit(old) → 훅 도입 commit. 원격은 로컬 bare 저장소뿐이다.
+new_repo
+old_base=$(git rev-parse HEAD)
+mkdir -p .githooks
+cp "$src_root/.githooks/pre-commit" "$src_root/.githooks/pre-push" .githooks/
+cp "$scan" "$check" .github/scripts/
+git add .githooks .github/scripts && git commit -q -m hooks
+git init -q --bare "$bare"; git push -q "$bare" HEAD:refs/heads/main
+cd "$work" && rm -rf c1 && git clone -q -b main "$bare" c1 && cd c1 || exit 2
+git config user.name t; git config user.email t@example.com; git config core.autocrlf false
+# 판별용 fetch 주소는 이 프로젝트, push 주소는 로컬 bare. GitHub로는 절대 보내지 않는다.
+git remote set-url origin "$GH_URL"; git remote set-url --push origin "$bare"
+# (Windows Git Bash는 경로 표기를 바꿔 저장하므로) 네트워크 주소가 아니고 임시 bare 저장소인지로 확인한다.
+case "$(git remote get-url --push origin)" in *://*|*@*:*|*github*) echo "push 주소가 원격 서버 — 중단"; exit 2 ;; */remote.git) ;; *) echo "push 주소 확인 실패 — 중단"; exit 2 ;; esac
+
+printf 'serial `%s`\n' "$FAKE_SERIAL" > docs/leak.md; git add docs/leak.md
+if git commit -q -m leak >/dev/null 2>&1; then ok "11 새 clone은 훅이 꺼져 있어 commit이 통과함(누락 재현)"; else bad "11 새 clone 기본 동작 예상과 다름"; fi
+git reset -q --soft HEAD~1
+out=$(bash "$check" 2>&1); rc=$?
+[ $rc -eq 1 ] && printf '%s' "$out" | grep -q '로컬 core.hooksPath가 비어' && ok "11b 점검 스크립트가 미설정 원인을 보고" || bad "11b 미설정 진단(rc=$rc)"
+out=$(bash "$check" --fix 2>&1); rc=$?
+[ $rc -eq 0 ] && [ "$(git config --local --get core.hooksPath)" = .githooks ] && ok "11c --fix가 이 clone 로컬에만 설정 후 실행 확인" || bad "11c --fix(rc=$rc)"
+printf '%s' "$out" | grep -qF "$FAKE_SERIAL" && bad "11c 점검 출력에 가상 값 노출" || ok "11d 점검 출력에 stage된 가상 값 미노출"
+if git commit -q -m leak >/dev/null 2>&1; then bad "11e 활성화 후에도 commit 통과"; else ok "11e 활성화 후 commit 차단"; fi
+git commit -q --no-verify -m "leak via --no-verify"
+out=$(git push origin HEAD:refs/heads/w1 2>&1); rc=$?
+if [ $rc -ne 0 ] && ! git --git-dir="$bare" rev-parse -q --verify refs/heads/w1 >/dev/null; then ok "11f push 차단, 원격에 브랜치 미생성"; else bad "11f push 차단(rc=$rc)"; fi
+printf '%s' "$out" | grep -qF "$FAKE_SERIAL" && bad "11g push 차단 로그에 가상 값 노출" || ok "11g push 차단 로그에 가상 값 미노출"
+
+cfg_before=$(git config --list --local | sort)
+bash "$check" --fix >/dev/null 2>&1
+[ "$cfg_before" = "$(git config --list --local | sort)" ] && ok "12 이미 활성이면 설정을 다시 쓰지 않음" || bad "12 활성 상태에서 설정 변경됨"
+
+git reset -q --hard HEAD~1
+git worktree add -q -b wt-new "$work/wt-new" HEAD >/dev/null 2>&1
+cd "$work/wt-new" || exit 2
+bash "$check" >/dev/null 2>&1 && ok "13 새 worktree는 공용 설정을 이어받아 활성" || bad "13 새 worktree 활성 확인"
+printf 'adb -s %s shell\n' "$FAKE_SERIAL" > docs/leak.md; git add docs/leak.md
+if git commit -q -m leak >/dev/null 2>&1; then bad "13b worktree commit 통과"; else ok "13b worktree에서 commit 차단"; fi
+git reset -q docs/leak.md; rm -f docs/leak.md
+cd "$work/c1" && git worktree add -q --detach "$work/wt-old" "$old_base" >/dev/null 2>&1 && cd "$work/wt-old" || exit 2
+out=$(bash "$check" --fix 2>&1); rc=$?
+[ $rc -eq 1 ] && printf '%s' "$out" | grep -q '검사 도입 이전' && ok "13c 훅 도입 전 commit의 worktree는 비활성 원인 보고" || bad "13c 옛 base worktree(rc=$rc)"
+
+cd "$work/c1" && git remote set-url origin "https://github.com/someone/other-repo.git"
+cfg_before=$(git config --list --local | sort)
+git config --local --unset core.hooksPath
+bash "$check" --fix >/dev/null 2>&1; rc=$?
+[ $rc -eq 1 ] && [ -z "$(git config --local --get core.hooksPath)" ] && ok "14 다른 저장소(origin 불일치)는 설정을 바꾸지 않음" || bad "14 다른 저장소 보호(rc=$rc)"
+
 echo "결과: 통과 $pass / 실패 $fail"
 [ $fail -eq 0 ]

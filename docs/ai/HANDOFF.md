@@ -8,6 +8,21 @@
 - 브랜치 `chore/sensitive-info-guard`(base `889997b`). 이 HANDOFF 작성 시점에는 commit 전. commit·push·PR·CI 결과와 PR 번호는 완료보고에 남겨.
 - 저장소 로컬 설정 `core.hooksPath=.githooks`를 이 작업 폴더에 켰어(전역 Git 설정·환경 변수·설치 프로그램 변경 없음). 되돌리려면 `git config --unset core.hooksPath`. main에 병합되기 전에는 main 체크아웃에 `.githooks`가 없어 훅이 조용히 비활성이야.
 
+## 환경별 훅 적용 실측(추가 점검)
+
+| 환경 | 훅 파일 | core.hooksPath | Git이 실제 실행 |
+|---|---|---|---|
+| 피코·패코 공용 작업 폴더 `%USERPROFILE%/StudioProjects/post-card-memory`(Codex 프로젝트 등록 경로도 같음) | 있음(PR 브랜치) | local `.githooks` | **실행 확인**(`git hook run`, 실제 commit·push 때 검사 출력) |
+| 등록된 worktree(이전 Claude 세션 임시 폴더, prunable — 폴더 없음) | — | — | 해당 없음(정리 안 함) |
+| Codex 옛 clone 2개(`%USERPROFILE%/.codex/.chatgpt-projects/…/post-card-memory-workflow`, `%USERPROFILE%/Documents/Codex/2026-08-15/…/post-card-memory-source`, 7~8월 기준, push 가능한 origin) | 없음 | 없음 | **미실행** — 사용자 승인 없이 손대지 않음 |
+| 그 밖의 clone | 홈 폴더 탐색에서 추가 발견 없음 | — | 접근 못 한 위치는 미확인 |
+
+- 패코의 실제 push 경로: Codex 세션 기록상 PowerShell → `C:\Program Files\Git\cmd\git.exe`. 이 경로에서도 임시 저장소로 훅이 commit·push를 막는 걸 확인했어. PowerShell에는 `bash`가 PATH에 없어서, 점검·직접 검사 명령은 `& "$env:ProgramFiles\Git\bin\bash.exe" …`로 실행해야 해(AGENTS 3절 10번에 명시).
+- worktree: `core.hooksPath`는 공용 `.git/config`라 새 worktree가 이어받고, 상대 경로라 각 worktree 체크아웃의 `.githooks`를 써. 그래서 검사 도입 전 commit 기준 worktree는 훅 파일이 없어 비활성 → 점검 스크립트가 원인을 보고해.
+- 새 clone은 설정이 없어 훅이 꺼진 채 commit이 통과해(재현). 점검 스크립트 `--fix`가 그 clone 로컬에만 켜.
+- 서버 쪽: 저장소의 GitHub secret scanning push protection이 이미 켜져 있어 알려진 토큰 형식은 push 단계에서 서버가 거부해(로컬 훅과 독립). serial·경로·이메일은 대상이 아니라 로컬 훅이 유일한 push 전 장치야.
+- 추가 보호: `.github/scripts/git-hooks-check.sh` — origin이 이 프로젝트일 때만, 로컬 설정이 비어 있을 때만 켜고, Git이 훅을 실제로 실행하는지 `git hook run`으로 확인. 이미 활성이면 설정을 다시 쓰지 않음. AGENTS 3절(시작 절차 10번)·11절(비활성 폴더는 commit·push 직전 직접 검사, 활성 폴더는 중복 실행 안 함)에 연결. 패코 플러그인 규칙은 시작·Git 절차를 AGENTS.md에 위임하므로 플러그인 원본·캐시는 수정하지 않았어.
+
 ## 사고 원인(132일차 serial 재노출)
 
 - 확인: 기록 금지 규칙은 `42eb6ce`(2026-10-24)에서 AGENTS.md 11절에 들어갔고, 같은 commit에서 그때까지의 노출을 마스킹했어. 132일차 commit `b023ca1`(Claude Code 세션 작성)이 HANDOFF 설치 기록 2줄에 serial을 다시 적었고, PR #25 본문에는 없었어. 당시 commit·push·PR·CI 어디에도 산출물 검사가 없었어(로컬 훅 0개, CI는 빌드만).
@@ -29,13 +44,13 @@
 
 ## 검증
 
-- `.github/scripts/sensitive-info-scan-test.sh`(임시 저장소·가상 값만, 끝나면 삭제): **29/29 통과** — 가상 serial·adb -s·adb 목록·IMEI 탐지, 모델명·serial 절차 문장·해상도·serialization 허용, 마스킹 허용, 사용자 경로 3형식 탐지, `%USERPROFILE%`·`~`·`<user>`·`/home/runner` 허용, 토큰·비밀 대입·개인키·개인 메일 탐지, CI 토큰 참조·noreply·`@2x`·Kotlin 라벨·코드 대입 허용, 마스킹·삭제 변경 통과, 3파일 동시 stage 중 해당 파일만 탐지, **실제 pre-commit 훅이 commit 차단·pre-push 훅이 push 차단**, 두 훅을 `--no-verify`로 우회해도 CI 범위 검사가 탐지, 뒤 commit에서 고쳐도 중간 commit 노출 탐지, 잘못된 기준은 종료 코드 2. 모든 사례에서 출력에 가상 값 미노출 확인.
+- `.github/scripts/sensitive-info-scan-test.sh`(임시 저장소·로컬 bare 원격·가상 값만, GitHub push 없음, 끝나면 삭제): **41/41 통과**. 추가 12건: 새 clone 누락 재현·원인 보고·`--fix` 후 commit·push 차단(원격에 브랜치 미생성)·이미 활성이면 설정 불변·새 worktree 활성·worktree commit 차단·옛 base worktree 원인 보고·다른 저장소 설정 불변·점검/차단 로그에 가상 값 미노출. 기존 29건: — 가상 serial·adb -s·adb 목록·IMEI 탐지, 모델명·serial 절차 문장·해상도·serialization 허용, 마스킹 허용, 사용자 경로 3형식 탐지, `%USERPROFILE%`·`~`·`<user>`·`/home/runner` 허용, 토큰·비밀 대입·개인키·개인 메일 탐지, CI 토큰 참조·noreply·`@2x`·Kotlin 라벨·코드 대입 허용, 마스킹·삭제 변경 통과, 3파일 동시 stage 중 해당 파일만 탐지, **실제 pre-commit 훅이 commit 차단·pre-push 훅이 push 차단**, 두 훅을 `--no-verify`로 우회해도 CI 범위 검사가 탐지, 뒤 commit에서 고쳐도 중간 commit 노출 탐지, 잘못된 기준은 종료 코드 2. 모든 사례에서 출력에 가상 값 미노출 확인.
 - 실제 이력 회귀(값 비출력): `42eb6ce..889997b` 범위에서 **PR #25의 serial 2줄만 정확히 탐지**, 앱 코드 오탐 0(조정 전 Kotlin `this@` 7곳·`token = ++…` 1곳 오탐을 규칙 보정으로 제거). `244009b^..889997b` 전체에서도 코드 오탐 0, 문서 탐지는 모두 실제 노출. blob 없는 GitHub clone에서 CI 방식 재현: PR #25 범위 차단(rc=1), PR #26 범위 통과(rc=0).
 - 로컬 Android 빌드·JVM 테스트 **불필요**(앱·Gradle 무변경, CI가 이 PR에서 `.github` 변경으로 전체 빌드). 실사용 기기 instrumentation **불필요**, 실기기 QA **불필요**(앱 동작 무변경). TEST-COVERAGE-MAP **변경 없음**(앱 JVM·instrumentation 테스트 수·범위 무변경, 셸 검사 테스트는 여기 기록).
 
 ## 남은 위험·검출 한계
 
-- 로컬 훅은 `core.hooksPath`가 꺼진 새 clone·worktree, `--no-verify`, GitHub 웹 편집에서는 돌지 않아. 이때도 PR CI가 막지만, **브랜치 push 자체는 이미 공개**라 pre-push가 꺼진 환경의 push는 막지 못해.
+- 로컬 훅은 점검을 건너뛴 새 clone, `--no-verify`, GitHub 웹 편집, Codex 옛 clone 2개에서는 돌지 않아. 이때도 PR CI가 막지만, **브랜치 push 자체는 이미 공개**라 그런 환경의 push는 막지 못해(토큰 형식만 GitHub push protection이 서버에서 막음). 시작 점검은 규칙에 연결된 절차라서 작업자가 빠뜨리면 효과가 없어.
 - 형식 기반이라 못 잡는 것: 문맥 단어 없이 홀로 적힌 serial, 이름이 없는 경로 외 개인 식별(실명·전화번호·주소), 새 형식의 토큰, 이미지·바이너리 속 정보, 병합 commit의 충돌 해결 중 추가된 줄. 오탐 가능: serial 문맥 근처의 영문2+숫자 8~20자 값, 16자 이상 영문+숫자 비밀 대입 형태.
 - PR이 기준 스크립트를 쓰므로 검사 규칙 변경 PR은 병합 후부터 적용돼.
 - 감지된 값이 이미 commit돼 있으면 force push 없이는 지울 수 없어서 STOP·사용자 결정이 필요해.
@@ -47,6 +62,7 @@
 ## 다음 행동
 
 - PR CI 확인 → 사용자 2단계 병합 승인 → Merge commit·main CI·브랜치 정리.
+- Codex 옛 clone 2개는 쓰지 않거나, 사용자 승인 후 점검 스크립트로 켜거나 정리(결정 대기).
 - 병합 후 다른 clone·worktree·패코 작업 폴더에서 `git config core.hooksPath .githooks` 한 번 실행.
 
 ---
