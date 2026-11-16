@@ -62,3 +62,23 @@ internal fun rotateBitmapForExifOrientation(
         true
     )
 }
+
+/**
+ * 디코딩만 하고 아직 아무도 쓰지 않는 비트맵용: EXIF 방향대로 세우고, 새 비트맵이 만들어졌으면
+ * 디코딩한 원본은 recycle한다. API 28 미만 사진 렌더링([PostcardRenderSpec.decodeSourceBitmap])과
+ * 스티커 내보내기([PostcardImageExporter])가 같은 규칙을 각자 복사해 두던 것을 134일차에 모았다.
+ * 원본을 계속 쓰는 호출부(촬영 사진 자르기)는 [rotateBitmapForExifOrientation]을 직접 쓴다.
+ */
+internal fun rotateDecodedBitmapForExifOrientation(
+    bitmap: Bitmap,
+    orientation: Int
+): Bitmap {
+    val rotatedBitmap =
+        rotateBitmapForExifOrientation(bitmap, orientation)
+
+    if (rotatedBitmap != bitmap) {
+        bitmap.recycle()
+    }
+
+    return rotatedBitmap
+}

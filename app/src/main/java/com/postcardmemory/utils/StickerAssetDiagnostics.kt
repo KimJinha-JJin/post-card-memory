@@ -67,7 +67,6 @@ object StickerAssetDiagnostics {
     internal const val STICKER_CACHE_DIR_NAME = "photo_stickers"
 
     private const val DRAFT_HEADER = "POSTCARD_DRAFT_V1"
-    private const val DRAFT_FILE_SUFFIX = ".draft.txt"
 
     // 메타 줄에서 요소 개수 자리(PostcardEditDraft.serialize 순서). 없는 자리는 0개(구버전 초안).
     private const val META_STICKER_COUNT = 7

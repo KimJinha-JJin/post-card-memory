@@ -1,3 +1,43 @@
+# HANDOFF — 2026-11-16 134일차: 코드 클린·구조 점검 / PR CI·병합 승인 대기
+
+2026-11-16, 담당 Claude Code(피코), 수동 표준 모드. 작업지시서 "코드 클린 및 프로젝트 구조 점검"의 1단계 승인 범위(조사·저위험 리팩터링·검증·commit·push·PR)로 수행했어. main 병합은 사용자 최종 승인 대기야.
+
+## 작성 시점 상태
+
+- 작업 폴더 `%USERPROFILE%/StudioProjects/post-card-memory-next`(별도 worktree, detached HEAD로 인계). 기준 `33d17c8` = origin/main 확인 후 `refactor/day134-code-cleanup` 생성. 이 기록은 commit 전 상태야.
+- 원래 프로젝트 폴더(`docs/privacy-rewrite-final-plan` 브랜치, 미커밋 HANDOFF·개인정보 이력 정리 자료)·옛 Codex Clone·미추적 보호 파일은 읽기 외에 손대지 않았어. 개인정보 이력 정리 자료는 이 PR에 넣지 않아.
+- 이 worktree도 `core.hooksPath=.githooks`가 공용 설정으로 이어져 훅 실제 실행 확인(`git-hooks-check.sh --fix` → 이미 활성, 설정 변경 없음). 로컬 Author 이메일은 noreply.
+
+## 바꾼 것(A등급 3건, 동작 무변경)
+
+1. **안 쓰는 코드 제거**: `PostcardImageExporter.decodeBitmap`(7월 `688dd5b`에서 사진 디코딩이 `PostcardRenderSpec.decodeSourceBitmap`으로 옮겨진 뒤 호출 0. API 28 미만에서 EXIF 회전을 하지 않는 옛 버전이라 다시 쓰면 회전 버그를 부를 수 있었음), `StickerAssetDiagnostics.DRAFT_FILE_SUFFIX`(119일차부터 미사용, 실제 초안 파일 이름 규칙은 `PostcardDraftStorage.draftFileNameFor` 한 곳).
+2. **갤러리 톱니 테두리 계산 단일화**: `ui/components/StampPhoto.kt`의 Compose용 `createPinkingPath`(약 185줄 복사본)를 `PostcardRenderSpec.createPinkingPath(RectF(0,0,w,h), inset).asComposePath()` 위임으로 바꿨어. 저장·공유 이미지와 갤러리 카드·카메라 가이드·흔들기 카드가 같은 톱니 계산을 쓰게 됨(13절 공통 렌더러 원칙). 계산식·연산 순서가 같았어.
+3. **EXIF 회전+원본 recycle 규칙 단일화**: `PostcardImageExporter`·`PostcardRenderSpec`에 똑같이 있던 private `rotateBitmapUsingExif`를 `ExifOrientation.kt`의 `rotateDecodedBitmapForExifOrientation` 하나로 모음. 촬영 사진 자르기(원본 recycle 안 함)는 기존 `rotateBitmapForExifOrientation` 그대로.
+
+변경 5파일 production(+이 HANDOFF), 약 +36/−242줄. Room·저장 형식·문구·dependency·Gradle·CI 무변경.
+
+## 검증
+
+- 로컬 자동검증(Zulu 17 + Gradle 9.8.2 CLI): 수정 전 기준 `compileDebugKotlin testDebugUnitTest` 성공, JVM 1289/1289 통과. 수정 후 `compileDebugKotlin testDebugUnitTest assembleDebug assembleDebugAndroidTest` 성공, JVM **1289/1289 통과**(실패·skip 0), 변경 파일에서 새 경고 0.
+- 실사용 기기 instrumentation: **불필요**(SAFE 대상 테스트 영역 무변경, connected* 미사용).
+- 실기기 감각 QA: **완료**(사용자 요청). 승인된 실사용 기기(SM-S936N, 식별자 비공개)에서 설치 전 갤러리를 PC로만 캡처 → 앱 종료 확인(별도 단계) → 사용자 승인 `adb install -r` 성공(firstInstallTime 보존 = 데이터 유지 덮어쓰기) → 같은 화면 재캡처. 톱니 우표 카드 6장 영역 픽셀 비교 **차이 0픽셀**. 사용자 육안 확인: 갤러리 카드·카메라 톱니 가이드선·흔들기 랜덤 카드 모두 평소와 같음. 기기에 파일 쓰기 없음.
+- 자동 테스트는 Android Path를 JVM에서 실행 못 해 톱니 동일성은 위 실기기 비교가 근거야. EXIF 회전 래퍼(API 28 미만 경로)는 기기가 API 28 이상이라 실행 경로를 직접 확인하지 못함 — 코드가 기존 복사본과 글자 그대로 같은 것이 근거.
+- TEST-COVERAGE-MAP: **변경 없음**(테스트 추가·삭제·보호 범위 변화 없음).
+
+## 조사 결과 — 보류·유지 후보
+
+- B(후속): `PostcardImageExporter`의 private `drawCenterCroppedBitmap`(스티커용)과 `PostcardRenderSpec.drawCenterCroppedBitmap`(사진용, zoom/offset 포함)이 같은 중앙 자르기를 두 벌 갖고 있음. 정수 반올림이 달라 합치면 내보내기 픽셀이 바뀔 수 있어 픽셀 비교 검증이 필요. / `LocalLifecycleOwner` deprecated 경고 6곳은 `lifecycle-runtime-compose` dependency 추가가 필요해 이번 범위 밖. / `DetailScreen.kt`(7,231줄)·`DetailViewModel.kt`(5,020줄)·`GalleryScreen.kt`(2,637줄) 크기는 크지만 1~10차 감사로 안정화된 저장·초안·Undo 경로라 분리는 별도 계획과 실기기 QA가 필요.
+- C(유지): `ConfirmedEditTransaction`·`PostcardDeletionManager`·`DraftDeletionGate`·초안 원자 저장·`OrphanFileDiagnostics`/`StickerAssetDiagnostics`의 보수적 판정 — 보호 목적이 문서화된 복잡성.
+- D(제외): 두 화면의 `lumaRow` 4줄 색 필터 중복, 진단 2곳의 `directorySize` 3줄 중복, Migration 파라미터 이름 경고(Room 영역), import 정리.
+- 기능 오류 의심 신규 발견 없음. 개인정보 신규 발견 없음.
+
+## 재개·다음 행동
+
+- 이 HANDOFF 포함 6파일만 명시 stage → 훅 통과 → commit·push → PR·필수 CI 확인 → 사용자 2단계 병합 승인.
+- 다음 후보: 위 B의 중앙 자르기 단일화(픽셀 비교 테스트 먼저).
+
+---
+
 # HANDOFF — 2026-11-15 133일차 연장: 이메일 메타데이터 차단·Clone 조사 / Git 마감 재개
 
 패코(Codex), 수동 표준 모드. 기존 PR #27은 실제로 병합됐고, 이번 시작 기준 local main·origin/main·GitHub main은 `fd2b4a4d8dca8764c29d6e1c8a9242ba48050659`였어. 아래 이전 HANDOFF의 병합 대기는 당시 기록이야. main CI run `43709744497`에서 JVM·APK·instrumentation APK compile 실제 실행 성공을 확인했어.

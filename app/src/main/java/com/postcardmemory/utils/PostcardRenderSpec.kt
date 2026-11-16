@@ -502,7 +502,7 @@ object PostcardRenderSpec {
                         ExifInterface.ORIENTATION_NORMAL
                     )
 
-            rotateBitmapUsingExif(
+            rotateDecodedBitmapForExifOrientation(
                 bitmap = decodedBitmap,
                 orientation = orientation
             )
@@ -1822,20 +1822,5 @@ object PostcardRenderSpec {
                 }
             }
         }
-    }
-
-    /** EXIF 방향대로 세운 비트맵을 돌려주고, 새 비트맵이 만들어졌으면 디코딩한 원본은 recycle한다. */
-    private fun rotateBitmapUsingExif(
-        bitmap: Bitmap,
-        orientation: Int
-    ): Bitmap {
-        val rotatedBitmap =
-            rotateBitmapForExifOrientation(bitmap, orientation)
-
-        if (rotatedBitmap != bitmap) {
-            bitmap.recycle()
-        }
-
-        return rotatedBitmap
     }
 }

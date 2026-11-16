@@ -1738,33 +1738,6 @@ object PostcardImageExporter {
         )
     }
 
-    private fun decodeBitmap(
-        sourceFile: File
-    ): Bitmap {
-        return if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.P
-        ) {
-            val source =
-                ImageDecoder.createSource(
-                    sourceFile
-                )
-
-            ImageDecoder.decodeBitmap(
-                source
-            ) { decoder, _, _ ->
-                decoder.allocator =
-                    ImageDecoder.ALLOCATOR_SOFTWARE
-            }
-        } else {
-            BitmapFactory.decodeFile(
-                sourceFile.absolutePath
-            ) ?: throw IOException(
-                "사진을 불러오지 못했습니다."
-            )
-        }
-    }
-
     private fun decodeStickerBitmap(
         context: Context,
         stickerUri: Uri
@@ -1848,26 +1821,11 @@ object PostcardImageExporter {
                 }
                     ?: ExifInterface.ORIENTATION_NORMAL
 
-            rotateBitmapUsingExif(
+            rotateDecodedBitmapForExifOrientation(
                 bitmap = decodedBitmap,
                 orientation = orientation
             )
         }
-    }
-
-    /** EXIF 방향대로 세운 비트맵을 돌려주고, 새 비트맵이 만들어졌으면 디코딩한 원본은 recycle한다. */
-    private fun rotateBitmapUsingExif(
-        bitmap: Bitmap,
-        orientation: Int
-    ): Bitmap {
-        val rotatedBitmap =
-            rotateBitmapForExifOrientation(bitmap, orientation)
-
-        if (rotatedBitmap != bitmap) {
-            bitmap.recycle()
-        }
-
-        return rotatedBitmap
     }
 
     private fun saveBitmapToGallery(
