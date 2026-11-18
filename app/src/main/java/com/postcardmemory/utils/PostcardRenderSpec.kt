@@ -781,55 +781,41 @@ object PostcardRenderSpec {
         val top = bounds.top + inset
         val right = bounds.right - inset
         val bottom = bounds.bottom - inset
-        val width = (right - left).coerceAtLeast(1f)
-        val height = (bottom - top).coerceAtLeast(1f)
-        val shortestSide = min(width, height)
-        val toothDepth = (shortestSide * 0.032f).coerceAtLeast(2f)
-        val cornerCut = toothDepth * 1.5f
-        val horizontalLength = (width - cornerCut * 2f).coerceAtLeast(1f)
-        val verticalLength = (height - cornerCut * 2f).coerceAtLeast(1f)
-        val horizontalTeeth =
-            max(8, (horizontalLength / (toothDepth * 2.3f)).toInt())
-        val verticalTeeth =
-            max(8, (verticalLength / (toothDepth * 2.3f)).toInt())
-        val horizontalStep = horizontalLength / horizontalTeeth
-        val verticalStep = verticalLength / verticalTeeth
-
-        return Path().apply {
-            moveTo(left + cornerCut, top)
-
-            repeat(horizontalTeeth) { index ->
-                val startX = left + cornerCut + index * horizontalStep
-                lineTo(startX + horizontalStep / 2f, top + toothDepth)
-                lineTo(startX + horizontalStep, top)
-            }
-
-            lineTo(right, top + cornerCut)
-
-            repeat(verticalTeeth) { index ->
-                val startY = top + cornerCut + index * verticalStep
-                lineTo(right - toothDepth, startY + verticalStep / 2f)
-                lineTo(right, startY + verticalStep)
-            }
-
-            lineTo(right - cornerCut, bottom)
-
-            repeat(horizontalTeeth) { index ->
-                val startX = right - cornerCut - index * horizontalStep
-                lineTo(startX - horizontalStep / 2f, bottom - toothDepth)
-                lineTo(startX - horizontalStep, bottom)
-            }
-
-            lineTo(left, bottom - cornerCut)
-
-            repeat(verticalTeeth) { index ->
-                val startY = bottom - cornerCut - index * verticalStep
-                lineTo(left + toothDepth, startY - verticalStep / 2f)
-                lineTo(left, startY - verticalStep)
-            }
-
-            close()
+        val width = right - left
+        val height = bottom - top
+        val path = Path()
+        if (!width.isFinite() || !height.isFinite() || width <= 0f || height <= 0f) {
+            return path
         }
+
+        // Current stamp/photo/guide callers use square bounds. Keep the public RectF adapter
+        // for other bounds, scaling the same unit contour without introducing another design.
+        val arcBounds = RectF()
+        traceStampPerforation(object : StampPerforationSink {
+            override fun moveTo(x: Double, y: Double) =
+                path.moveTo((left + x * width).toFloat(), (top + y * height).toFloat())
+
+            override fun lineTo(x: Double, y: Double) =
+                path.lineTo((left + x * width).toFloat(), (top + y * height).toFloat())
+
+            override fun arcTo(
+                centerX: Double, centerY: Double, radius: Double, start: Double, sweep: Double
+            ) {
+                arcBounds.set(
+                    (left + (centerX - radius) * width).toFloat(),
+                    (top + (centerY - radius) * height).toFloat(),
+                    (left + (centerX + radius) * width).toFloat(),
+                    (top + (centerY + radius) * height).toFloat()
+                )
+                path.arcTo(
+                    arcBounds,
+                    start.toFloat(), sweep.toFloat(), false
+                )
+            }
+
+            override fun close() = path.close()
+        })
+        return path
     }
 
     private fun drawBackground(
@@ -1133,15 +1119,14 @@ object PostcardRenderSpec {
     ) {
         val stampPath =
             createPinkingPath(
-                bounds = stampBounds,
-                inset = STAMP_BORDER_WIDTH / 2f
+                bounds = stampBounds
             )
         val shadowBounds =
             RectF(
-                stampBounds.left + 22f,
-                stampBounds.top + 26f,
-                stampBounds.right + 22f,
-                stampBounds.bottom + 26f
+                stampBounds.left + 11f,
+                stampBounds.top + 13f,
+                stampBounds.right + 11f,
+                stampBounds.bottom + 13f
             )
         val shadowPath =
             createPinkingPath(
@@ -1150,7 +1135,8 @@ object PostcardRenderSpec {
             )
         val shadowPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(85, 18, 12, 28)
+                // User-selected micro relief: a short, faint contact shadow, without blur.
+                color = Color.argb(18, 18, 12, 28)
                 style = Paint.Style.FILL
             }
 
@@ -1166,18 +1152,18 @@ object PostcardRenderSpec {
             offsetY = offsetY,
             zoom = zoom
         )
-        canvas.restore()
-
         val whiteBorderPaint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
                 style = Paint.Style.STROKE
-                strokeWidth = STAMP_BORDER_WIDTH
+                // Clip a doubled centred stroke to leave the existing width inside C2.
+                strokeWidth = STAMP_BORDER_WIDTH * 2f
                 strokeJoin = Paint.Join.ROUND
                 strokeCap = Paint.Cap.ROUND
             }
 
         canvas.drawPath(stampPath, whiteBorderPaint)
+        canvas.restore()
     }
 
     private fun drawPolaroidPhoto(
