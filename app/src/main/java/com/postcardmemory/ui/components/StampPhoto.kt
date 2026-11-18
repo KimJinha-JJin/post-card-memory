@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -26,7 +27,7 @@ import java.io.File
 import kotlin.math.max
 
 /**
- * 갤러리 우표 사진의 톱니 테두리. 톱니 계산은 저장·공유 exporter가 쓰는
+ * 갤러리 우표 사진의 C2 얕은 천공 테두리. 계산은 저장·공유 exporter가 쓰는
  * [PostcardRenderSpec.createPinkingPath] 한 곳에만 두고, 여기서는 그 경로를
  * Compose Path로 감싸기만 한다 — 화면과 내보내기 이미지의 톱니 모양이 갈라지지 않게.
  */
@@ -93,22 +94,23 @@ fun StampPhoto(
 
             val borderPath =
                 createPinkingPath(
-                    size = size,
-                    inset =
-                        strokeWidthPx / 2f
+                    size = size
                 )
 
-            drawPath(
-                path = borderPath,
-                color =
-                    whiteOutlineColor,
-                style = Stroke(
-                    width =
-                        strokeWidthPx,
-                    join =
-                        StrokeJoin.Round
+            // Same contour for photo and paper: a clipped double stroke leaves an inner rim.
+            clipPath(borderPath) {
+                drawPath(
+                    path = borderPath,
+                    color =
+                        whiteOutlineColor,
+                    style = Stroke(
+                        width =
+                            strokeWidthPx * 2f,
+                        join =
+                            StrokeJoin.Round
+                    )
                 )
-            )
+            }
         }
     }
 }
