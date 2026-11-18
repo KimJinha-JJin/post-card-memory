@@ -1,3 +1,19 @@
+# 136일차 최종 병합 승인·의존 관계 마감 — 2026-11-18
+
+사용자가 PR #30·#31을 **Merge commit**으로 main에 병합하도록 명시 승인했어. 아래 구현 완료 당시의 "main 미승인"·"PR 생성 예정" 문장은 그 작성 시점의 역사 기록이고 현재 승인이 아니야.
+
+- 승인 시 실제 원격 검증: #30 Open, main←design/day135-stamp-edge-study, head `860bc728e478c0ad63b519ce30e55793742a08e9`, 조사·목업·기록6파일만 변경. #31 Open, design/day135-stamp-edge-study←feat/day136-c2-stamp-perforation, head `e91e2c3118a0548c3c730d4515d97db31d286f90`, 승인된12파일. 추가 커밋·범위 밖 변경·충돌 없음. 각 build-and-test 실제 전체 단계 성공(run164·165)을 재확인했어.
+- **PR #30 병합 완료:** Merge SHA `3cabbbe52c9f35dcf8e244c1129a73ab6db7400b`. origin/main fetch와 병합 tree=승인 조사 head tree 일치를 확인했어. [main CI run44304058153](https://github.com/KimJinha-JJin/post-card-memory/actions/runs/44304058153) 성공. `verified-merge` 판정으로 이미 성공한 PR 전체 빌드와 같은 tree임을 검증해 빌드3단계는 생략했어. 전체 빌드를 다시 실행한 성공으로 표현하지 않아.
+- **PR #31 의존 관계 처리:** 사용자가 승인한 순서에 따라 Base를 main으로 변경했어. 승인된 앱 코드/리소스는 그대로이며 strict 규칙 때문에 #30의 main 병합 commit을 구현 브랜치에 일반 Merge로 연결했어. 충돌 없고, 이 기록을 쓰기 전 integration tree가 승인 head `e91e2c3`와 완전히 같았어. 추가 파일 변경은 이 HANDOFF의 승인/병합 기록뿐이야. 이력 재작성·force push·main 직접 commit/push는 하지 않아.
+- **최종 #31 병합/CI 근거 위치:** 이 문서는 #31 최종 commit 전 작성이므로 그 뒤 생성되는 Head·Merge SHA·최종 main SHA·CI·로컬 동기화/정리 결과는 최종 대화 완료보고와 실제 [PR #31](https://github.com/KimJinha-JJin/post-card-memory/pull/31), main Git 이력을 기준으로 확인해. 성공 결과만 기록하기 위한 추가 HANDOFF commit/PR을 만들지 않는 저장소 마감 정책을 따라. 미병합으로 추측하거나 오래된 아래 Git 출발점으로 되돌리지 않아.
+- 재검증할 내용: 수정된 Head에서 main 포함·승인 앱 tree 유지·main 기준 Diff·필수 build-and-test 성공을 확인한 뒤 승인된 #31 Merge commit을 수행해. 병합 후 main CI와 안전한 main fast-forward 동기화·대상2브랜치의 조건부 정리까지 현재 승인의 범위야. 예상 밖 diff/커밋·실패/충돌이면 해당 단계에서 멈춰.
+- 구현/QA 근거는 아래 기록을 유지해: JVM **1295/1295**, 앱 빌드와 instrumentation 컴파일 성공, 사용자 실기기 주요 기능 및 최종 그림자 상세·공유/내보내기 정상. C2 **16분할·입구48%·깊이15%·연결부52%**, 그림자 **알파18/255·이동11/13·inset9·blur0**. 사진 내부0픽셀은 **PC Java2D 대체 비교의 가장자리12dp 제외 영역**이며 Android pixel 보증이 아니야.
+- SAFE 보호 기준38파일 SHA-256 일치를 병합 시작 시 재확인했어. 이번 마감은 Git/CI/문서 작업만 수행하고 앱 설치·기기 조작·사용자 데이터 변경을 하지 않아. 38/60dp 별도 Android pixel 계측·성능 측정은 계속 미실행이며 승인된 병합을 지연시키는 조건으로 추가하지 않아. 사용 중인 worktree·원본 보호 파일은 정리 대상이 아니야.
+
+---
+
+## 아래는 136일차 구현 완료 당시 기록이야
+
 # HANDOFF — 2026-11-18 136일차: C2 실제 앱 이식·미세 그림자 / PR·병합 마감
 
 패코(Codex), 수동 표준 모드. 사용자 136일차 구현 지시와 C2 최종 확정, 후속 상세 우표 그림자 조정 요청을 수행했어. [상세 검증·시각 비교](../qa/day136/README.md), [직전 135일차 HANDOFF 원문](archive/HANDOFF-before-day136-2026-11-18.md)을 확인해. 이전 원문은 바이트 그대로 보존했어.
