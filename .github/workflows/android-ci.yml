@@ -95,7 +95,7 @@ jobs:
         if: steps.scope.outputs.full != 'false'
         uses: gradle/actions/setup-gradle@v6.4.0
         with:
-          gradle-version: "9.8.2"
+          gradle-version: "9.9.1"
           cache-provider: basic
 
       - name: Run JVM unit tests
