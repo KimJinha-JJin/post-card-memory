@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>138일차 · 우표 펀칭 모션 A/B/C</title>
+<style>
+:root{color-scheme:light;--desk:#e8e4db;--card:#f6f2ea;--ink:#2e2923;--sub:#675d52;--line:#d2c9bb;--accent:#6c5a44;--cut:#a2553f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:Arial,'Malgun Gothic',sans-serif}
+main{max-width:1180px;margin:0 auto;padding:28px 16px 56px}
+.eyebrow{font-size:11px;letter-spacing:1.5px;color:var(--sub)}
+h1{font-size:24px;font-weight:500;letter-spacing:-.5px;margin:6px 0 10px}
+h2{font-size:15px;font-weight:600;margin:0}
+p{font-size:13px;line-height:1.75;color:var(--sub);margin:0 0 10px;max-width:820px}
+button,select{font:inherit;color:inherit}
+button{background:var(--card);border:1px solid #b9ae9f;border-radius:4px;padding:6px 11px;cursor:pointer;font-size:12px;min-height:32px}
+button:hover{background:#fffdf8}
+button[aria-pressed=true]{background:var(--ink);color:#f6f2ea;border-color:var(--ink)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select{background:var(--card);border:1px solid #b9ae9f;border-radius:4px;padding:5px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin:16px 0 6px;font-size:12px;color:var(--sub)}
+.group{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.group>span{margin-right:2px}
+label{display:flex;gap:6px;align-items:center}
+.scrub{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--sub);padding:8px 0 14px}
+.scrub input{flex:1;min-width:0;accent-color:var(--accent)}
+.scrub output{font-variant-numeric:tabular-nums;width:92px;text-align:right}
+.note-rm{font-size:12px;color:var(--cut);min-height:18px;margin:0 0 6px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+@media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.cand{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;min-width:0}
+.cand header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.cand header small{font-size:11px;color:var(--sub)}
+.cand .desc{font-size:12px;line-height:1.6;margin:0 0 10px;min-height:38px}
+.stage{position:relative;width:100%;aspect-ratio:140/104;overflow:hidden;border-radius:4px;background:#5f6a5c}
+.plane{position:absolute;left:0;width:100%;aspect-ratio:140/110;transform-style:preserve-3d}
+.layer{position:absolute;inset:0;transform-style:flat;backface-visibility:hidden;pointer-events:none}
+.layer svg{display:block;width:100%;height:100%;overflow:visible}
+.hud{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px;font-size:12px}
+.phase{color:var(--ink);font-weight:600}
+.time{color:var(--sub);font-variant-numeric:tabular-nums}
+.track{position:relative;height:18px;margin:6px 0 8px}
+.track .rail{position:absolute;left:0;right:0;top:8px;height:2px;background:#d8cfc1}
+.track .fill{position:absolute;left:0;top:8px;height:2px;background:var(--ink)}
+.track .mk{position:absolute;top:3px;width:1px;height:12px;background:#9a8c79}
+.track .mk.cut{background:var(--cut);width:2px}
+.track .mk span{position:absolute;top:-1px;left:3px;font-size:9px;color:var(--sub);white-space:nowrap}
+.ctrl{display:flex;gap:6px}
+table{border-collapse:collapse;font-size:12px;width:100%;min-width:640px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th{font-weight:600}
+.tablewrap{overflow-x:auto;margin-top:22px}
+details{font-size:12px;line-height:1.75;color:var(--sub);margin-top:18px;max-width:880px}
+summary{cursor:pointer;color:var(--ink)}
+code{font-size:11.5px}
+</style>
+</head>
+<body>
+<main>
+<div class="eyebrow">POST-CARD-MEMORY · DAY 138 · STAMP PUNCH MOTION</div>
+<h1>우표 펀칭 — 같은 절단, 세 가지 시간 배분</h1>
+<p>세 시안 모두 같은 종이·같은 C2 천공 윤곽·같은 카메라야. 다른 건 <strong>펀칭기 하강·눌림·상승과 우표 들림의 시간 배분</strong>뿐이야. 아래 장면 버튼으로 정확한 순간에 멈춰서 비교할 수 있어.</p>
+
+<p><strong>138일차 결정:</strong> C안 채택. 앱에서는 저장 후 대기 화면 자리에 넣고, 끝나면 지금처럼 갤러리로 돌아가. A/B는 비교 기록으로 남겨 둔 거야.</p>
+<div class="bar" role="group" aria-label="전체 조작">
+  <div class="group"><button id="playAll">전체 동시 재생</button><button id="pauseAll">일시정지</button><button id="restartAll">처음부터</button></div>
+  <div class="group"><label><input type="checkbox" id="loop" checked>반복</label>
+    <label>속도 <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
+    <label><input type="checkbox" id="rm">움직임 줄이기</label></div>
+  <div class="group" id="scenes"><span>장면 정지</span>
+    <button data-scene="before">펀칭 전</button>
+    <button data-scene="cut">절단 순간</button>
+    <button data-scene="after">절단 직후</button>
+    <button data-scene="lift">우표 상승</button>
+    <button data-scene="end">종료</button></div>
+</div>
+<div class="scrub"><span>시간축</span><input type="range" id="scrub" min="0" max="3000" step="10" value="0" aria-label="전체 시간축(ms)"><output id="scrubOut">0 ms</output></div>
+<p class="note-rm" id="rmNote" aria-live="polite"></p>
+
+<div class="grid" id="grid"></div>
+
+<div class="tablewrap"><table id="timing"><thead><tr><th>시안</th><th>전체</th><th>하강 시작</th><th>접촉</th><th>절단</th><th>펀칭기 상승</th><th>분리 확인</th><th>우표 들림</th><th>들림 높이</th></tr></thead><tbody></tbody></table></div>
+
+<details>
+<summary>무엇이 같고, 무엇을 검증했는지</summary>
+<ul>
+<li><strong>윤곽 원본:</strong> 앱 <code>utils/StampPerforation.kt traceStampPerforation</code>(C2, 16구간·입구 48%·깊이 15%)를 같은 연산 순서로 옮긴 <code>traceC2</code>가 만든 경로 문자열 <code>STAMP_D</code> 하나만 써. 종이 구멍(<code>시트 사각형 + STAMP_D</code>, evenodd), 잘린 조각, 펀칭날, 펀칭기 창, 그림자, 절단선이 모두 이 문자열을 그대로 써. 페이지 하단 점검 결과에서 일치 여부를 확인할 수 있어.</li>
+<li><strong>흰 테두리:</strong> 앱 exporter처럼 같은 윤곽을 두 배 굵기로 긋고 윤곽 안쪽으로 잘라 남겨. 굵기는 <code>STAMP_BORDER_WIDTH 18 / 우표 1000</code> = 한 변의 1.8%야.</li>
+<li><strong>절단 전:</strong> 종이는 사각형 한 장(구멍 없음)이고 조각 레이어는 존재하지 않아. 절단 시각에 같은 장면이 "구멍 난 종이 + 같은 경계의 조각"으로 바뀌어. 조각은 들리기 전까지 움직이지도, 그림자를 갖지도 않아.</li>
+<li><strong>고정:</strong> 바닥판과 종이는 처음부터 끝까지 같은 좌표야. 움직이는 건 펀칭기와 잘린 조각뿐이야. 종료는 우표가 들린 채 멈추는 장면이야. 화면 어두워짐 같은 이동 암시는 없어. 앱에서는 이 뒤에 지금처럼 갤러리로 돌아가(138일차 결정 (가)).</li>
+<li><strong>한계:</strong> 브라우저 CSS 3D 근사야. 종이 두께·그림자 방향·카메라 기울기는 연출값이고 Android Compose 렌더링과 픽셀 일치를 뜻하지 않아. 우표 그림은 HTML 안에서 그린 평면 풍경이며 사용자 사진이 아니야.</li>
+</ul>
+<p id="selfcheck"></p>
+</details>
+</main>
+<script>
+'use strict';
+/* ---------- C2 윤곽: StampPerforation.kt traceStampPerforation의 직역 ---------- */
+function traceC2(sink){
+  const halfMouthRatio=0.48/2.0, depthRatio=0.15;
+  const radiusRatio=(halfMouthRatio*halfMouthRatio+depthRatio*depthRatio)/(2.0*depthRatio);
+  const outsideRatio=radiusRatio-depthRatio;
+  const pitch=1.0/(16-2.0*outsideRatio);
+  const halfMouth=halfMouthRatio*pitch, radius=radiusRatio*pitch, outside=outsideRatio*pitch;
+  const corner=halfMouth-outside;
+  const halfSweep=Math.acos(outside/radius)*180/Math.PI;
+  const X=(e,x,y)=>e===0?x:e===1?1.0-y:e===2?1.0-x:y;
+  const Y=(e,x,y)=>e===0?y:e===1?x:e===2?1.0-y:1.0-x;
+  sink.moveTo(corner,0.0);
+  for(let edge=0;edge<4;edge++){
+    const line=(lx,ly)=>sink.lineTo(X(edge,lx,ly),Y(edge,lx,ly));
+    const arc=(cx,cy,sweep)=>sink.arcTo(X(edge,cx,cy),Y(edge,cx,cy),radius,90.0+halfSweep+edge*90.0,sweep);
+    for(let index=1;index<16;index++){
+      const center=index*pitch-outside;
+      line(center-halfMouth,0.0);
+      arc(center,-outside,-2.0*halfSweep);
+    }
+    line(1.0-corner,0.0);
+    arc(1.0+outside,-outside,90.0-2.0*halfSweep);
+  }
+  sink.close();
+}
+/* Android Path.arcTo(oval,start,sweep,false)와 같은 의미의 SVG 경로로 변환 (y 아래 방향, 도 단위) */
+function c2PathD(x0,y0,s){
+  const f=v=>(+v.toFixed(4)).toString();
+  const out=[];let cur=null;
+  traceC2({
+    moveTo(x,y){cur=[x,y];out.push('M'+f(x0+x*s)+' '+f(y0+y*s));},
+    lineTo(x,y){cur=[x,y];out.push('L'+f(x0+x*s)+' '+f(y0+y*s));},
+    arcTo(cx,cy,r,start,sweep){
+      const a0=start*Math.PI/180,a1=(start+sweep)*Math.PI/180;
+      const sx=cx+r*Math.cos(a0),sy=cy+r*Math.sin(a0),ex=cx+r*Math.cos(a1),ey=cy+r*Math.sin(a1);
+      out.push('L'+f(x0+sx*s)+' '+f(y0+sy*s));
+      out.push('A'+f(r*s)+' '+f(r*s)+' 0 '+(Math.abs(sweep)>180?1:0)+' '+(sweep>0?1:0)+' '+f(x0+ex*s)+' '+f(y0+ey*s));
+      cur=[ex,ey];
+    },
+    close(){out.push('Z');}
+  });
+  return out.join('');
+}
+
+/* ---------- 공통 기하: 모든 시안·모든 레이어가 아래 문자열만 공유 ---------- */
+const VB='0 0 140 110';
+const SHEET={x:20,y:19,w:100,h:72};
+const STAMP={x:50,y:35,s:40};
+const STAMP_D=c2PathD(STAMP.x,STAMP.y,STAMP.s);
+const SHEET_D=`M${SHEET.x} ${SHEET.y}H${SHEET.x+SHEET.w}V${SHEET.y+SHEET.h}H${SHEET.x}Z`;
+const SHEET_HOLE_D=SHEET_D+STAMP_D;           /* evenodd: 시트 - 우표 */
+const PLATE_PAD=7;
+const PLATE_D=`M${STAMP.x-PLATE_PAD} ${STAMP.y-PLATE_PAD}h${STAMP.s+2*PLATE_PAD}v${STAMP.s+2*PLATE_PAD}h${-(STAMP.s+2*PLATE_PAD)}Z`+STAMP_D;
+const RIM=STAMP.s*18/1000;                    /* STAMP_BORDER_WIDTH 18 / 1000 */
+const PAPER_TOP=0.9;                          /* 종이 두께(연출값, 뷰박스 단위) */
+const COLORS={paper:'#f3eee3',paperWall:'#d3c9b6',paperWall2:'#c5baa5',mat:'#6d7869',matLine:'#626d5f',matMinor:'#687365'};
+
+/* ---------- 시안별 시간 배분(ms) ---------- */
+const CANDS=[
+ {id:'a',name:'A · 정석형',desc:'일정한 하강, 닿자마자 절단. 차분히 올라가고 우표는 조금만 들려 안정적으로 멈춰.',
+  total:2600,descentStart:300,contact:900,cut:900,pressEnd:980,riseEnd:1480,liftStart:1780,liftEnd:2280,settleEnd:2600,
+  z0:60,bite:0.15,lift:8,eDesc:'inSine',eRise:'outCubic',eLift:'inOutSine',score:false},
+ {id:'b',name:'B · 분리 강조형',desc:'가속하며 내려와 잠깐 눌러 자르고, 천천히 올라가 구멍을 충분히 보여준 뒤 우표가 분명히 떠.',
+  total:3000,descentStart:300,contact:1000,cut:1220,pressEnd:1260,riseEnd:1860,liftStart:2200,liftEnd:2700,settleEnd:3000,
+  z0:60,bite:0.45,lift:14,eDesc:'inCubic',eRise:'inOutCubic',eLift:'outCubic',score:true},
+ {id:'c',name:'C · 경쾌한 손맛형',desc:'짧고 빠르게 탁. 절단 순간은 남기되 바로 빠지고, 우표는 살짝만 들려 짧게 정착해.',
+  total:1900,descentStart:250,contact:540,cut:560,pressEnd:600,riseEnd:860,liftStart:1060,liftEnd:1360,settleEnd:1660,
+  z0:60,bite:0.25,lift:5,eDesc:'inQuad',eRise:'outQuart',eLift:'outCubic',score:false}
+];
+const DIE_EXIT=170;  /* 상승 끝 높이: 화면 위로 완전히 빠짐 */
+const EASE={
+ linear:p=>p,inSine:p=>1-Math.cos(p*Math.PI/2),inOutSine:p=>-(Math.cos(Math.PI*p)-1)/2,
+ inQuad:p=>p*p,inCubic:p=>p*p*p,outCubic:p=>1-Math.pow(1-p,3),outQuart:p=>1-Math.pow(1-p,4),
+ inOutCubic:p=>p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2
+};
+const clamp01=v=>v<0?0:v>1?1:v;
+const prog=(t,a,b)=>clamp01((t-a)/(b-a));
+const lerp=(a,b,p)=>a+(b-a)*p;
+const SCENES={
+ before:c=>0,
+ cut:c=>c.cut+1,
+ after:c=>c.riseEnd,
+ lift:c=>c.liftEnd,
+ end:c=>c.total
+};
+
+/* 한 시각 t의 물리 상태(순수 함수) */
+function stateAt(c,t){
+  let dieBottom;
+  if(t<c.descentStart) dieBottom=c.z0;
+  else if(t<c.contact) dieBottom=lerp(c.z0,PAPER_TOP,EASE[c.eDesc](prog(t,c.descentStart,c.contact)));
+  else if(t<c.pressEnd) dieBottom=PAPER_TOP-c.bite*EASE.outCubic(prog(t,c.contact,Math.max(c.cut,c.contact+40)));
+  else dieBottom=lerp(PAPER_TOP-c.bite,DIE_EXIT,EASE[c.eRise](prog(t,c.pressEnd,c.riseEnd)));
+  const cut=t>=c.cut;
+  const lift=cut?c.lift*EASE[c.eLift](prog(t,c.liftStart,c.liftEnd)):0;
+  const score=c.score&&!cut&&t>=c.contact?0.45*prog(t,c.contact,c.cut):0;
+  const seam=cut?1-prog(t,c.liftStart,c.liftStart+(c.liftEnd-c.liftStart)*0.35):0;
+  let phase;
+  if(t<c.descentStart) phase='대기 — 고정된 종이';
+  else if(t<c.contact) phase='펀칭기 하강';
+  else if(t<c.pressEnd) phase=cut?'접촉 · 절단':'접촉 · 누름';
+  else if(t<c.riseEnd) phase='펀칭기 상승';
+  else if(t<c.liftStart) phase='분리 확인';
+  else if(t<c.liftEnd) phase='우표 들림';
+  else if(t<c.settleEnd) phase='정착';
+  else phase='종료';
+  return {dieBottom,cut,lift,score,seam,phase};
+}
+
+/* ---------- 장면 생성 ---------- */
+function svg(inner,defs){return `<svg viewBox="${VB}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${defs?'<defs>'+defs+'</defs>':''}${inner}</svg>`;}
+function stampArt(p){
+  /* 우표 인쇄면: C2로 클립 → 같은 윤곽의 2배 굵기 선을 안쪽만 남겨 흰 테두리 */
+  const {x,y,s}=STAMP;
+  return `<g clip-path="url(#${p}-clip)">
+    <rect x="${x}" y="${y}" width="${s}" height="${s}" fill="#c8d4cf"/>
+    <circle cx="${x+s*.72}" cy="${y+s*.3}" r="${s*.09}" fill="#e3c89a"/>
+    <path d="M${x} ${y+s*.66} Q${x+s*.3} ${y+s*.46} ${x+s*.62} ${y+s*.6} T${x+s} ${y+s*.55} V${y+s} H${x}Z" fill="#a9b99f"/>
+    <path d="M${x} ${y+s*.8} Q${x+s*.4} ${y+s*.62} ${x+s} ${y+s*.78} V${y+s} H${x}Z" fill="#879c80"/>
+    <rect x="${x+s*.18}" y="${y+s*.6}" width="${s*.12}" height="${s*.1}" fill="#b98f78"/>
+    <path d="M${x+s*.16} ${y+s*.6} L${x+s*.24} ${y+s*.53} L${x+s*.32} ${y+s*.6}Z" fill="#8d6a58"/>
+    <path d="${STAMP_D}" fill="none" stroke="${COLORS.paper}" stroke-width="${RIM*2}" stroke-linejoin="round"/>
+  </g>`;
+}
+function grainDefs(p){
+  return `<filter id="${p}-grain" filterUnits="userSpaceOnUse" x="0" y="0" width="140" height="110">
+    <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7"/>
+    <feColorMatrix values="0 0 0 0 .35  0 0 0 0 .29  0 0 0 0 .22  0 0 0 .09 0"/><feComposite in2="SourceGraphic" operator="in"/></filter>`;
+}
+function blurDef(id){return `<filter id="${id}" filterUnits="userSpaceOnUse" x="-20" y="-20" width="180" height="150"><feGaussianBlur stdDeviation="1"/></filter>`;}
+
+function buildScene(c){
+  const p='pc'+c.id;
+  const plane=document.createElement('div');plane.className='plane';
+  const L=[];
+  const add=(z,html,key)=>{const d=document.createElement('div');d.className='layer';d.innerHTML=html;plane.appendChild(d);L.push({el:d,z,key});return d;};
+  /* 바닥판(커팅 매트) */
+  let grid='';for(let i=0;i<=140;i+=5)grid+=`<line x1="${i}" y1="0" x2="${i}" y2="110" stroke="${i%10?COLORS.matMinor:COLORS.matLine}" stroke-width="${i%10?.18:.3}"/>`;
+  for(let j=0;j<=110;j+=5)grid+=`<line x1="0" y1="${j}" x2="140" y2="${j}" stroke="${j%10?COLORS.matMinor:COLORS.matLine}" stroke-width="${j%10?.18:.3}"/>`;
+  add(0,svg(`<rect width="140" height="110" fill="${COLORS.mat}"/>${grid}
+    <g clip-path="url(#${p}-hclip)"><path d="${STAMP_D}" fill="none" stroke="rgba(20,22,18,.42)" stroke-width="2.2" transform="translate(.5 .7)" filter="url(#${p}-hblur)"/></g>`,
+    `<clipPath id="${p}-hclip"><path d="${STAMP_D}"/></clipPath><filter id="${p}-hblur"><feGaussianBlur stdDeviation=".6"/></filter>`),'mat');
+  /* 들린 우표의 그림자 — 구멍 속 바닥면에 떨어지는 부분 */
+  const sMat=add(0.05,svg(`<path id="${p}-smat" d="${STAMP_D}" fill="#141611" opacity="0" filter="url(#${p}-bm)"/>`,blurDef(p+'-bm')),'smat');
+  /* 종이: 벽 2장 + 윗면. 절단 전엔 사각형 한 장, 절단 후엔 같은 STAMP_D 구멍 */
+  const paperPaths=[];
+  [[PAPER_TOP*.33,COLORS.paperWall2],[PAPER_TOP*.66,COLORS.paperWall]].forEach(([z,col],i)=>{
+    const d=add(z,svg(`<path d="${SHEET_D}" fill="${col}" fill-rule="evenodd"/>`),'wall'+i);
+    paperPaths.push(d.querySelector('path'));
+  });
+  const top=add(PAPER_TOP,svg(`
+    <path class="sheet" d="${SHEET_D}" fill="${COLORS.paper}" fill-rule="evenodd"/>
+    <g class="art">${stampArt(p+'s')}</g>
+    <path class="grain" d="${SHEET_D}" fill-rule="evenodd" fill="#000" filter="url(#${p}-sg)" />`,
+    `<clipPath id="${p}s-clip"><path d="${STAMP_D}"/></clipPath>${grainDefs(p+'-s').replace(`id="${p}-s-grain"`,`id="${p}-sg"`)}`),'paper');
+  paperPaths.push(top.querySelector('.sheet'));
+  const sheetGrain=top.querySelector('.grain');
+  /* 종이 위 오버레이: 눌림 자국·절단선, 우표 그림자(종이 위 부분), 펀칭기 그림자 */
+  const over=add(PAPER_TOP+0.04,svg(`
+    <g clip-path="url(#${p}-out)"><path class="spaper" d="${STAMP_D}" fill="#2a2116" opacity="0" filter="url(#${p}-bp)"/></g>
+    <path class="die-sh" d="${PLATE_D}" fill-rule="evenodd" fill="#1d1a15" opacity="0" filter="url(#${p}-bd)"/>
+    <path class="score" d="${STAMP_D}" fill="none" stroke="#4a3d2f" stroke-width=".55" opacity="0"/>
+    <path class="seam" d="${STAMP_D}" fill="none" stroke="#3a4237" stroke-width=".6" opacity="0"/>`,
+    `<clipPath id="${p}-out"><path d="${SHEET_HOLE_D}" clip-rule="evenodd"/></clipPath>${blurDef(p+'-bp')}${blurDef(p+'-bd')}`),'over');
+  /* 잘린 조각: 벽 2장 + 윗면. 절단 전에는 존재하지 않음 */
+  const piece=[];
+  [[PAPER_TOP*.33,COLORS.paperWall2],[PAPER_TOP*.66,COLORS.paperWall]].forEach(([z,col],i)=>{
+    piece.push(add(z,svg(`<path d="${STAMP_D}" fill="${col}"/>`),'pw'+i));
+  });
+  piece.push(add(PAPER_TOP,svg(`<path d="${STAMP_D}" fill="${COLORS.paper}"/>${stampArt(p+'p')}
+    <path d="${STAMP_D}" fill="#000" filter="url(#${p}-pg)"/>`,
+    `<clipPath id="${p}p-clip"><path d="${STAMP_D}"/></clipPath>${grainDefs(p+'-p').replace(`id="${p}-p-grain"`,`id="${p}-pg"`)}`),'piece'));
+  /* 펀칭기: C2 날(아래→위 6겹) + C2 창이 뚫린 판(4겹) */
+  const blade=[];
+  for(let i=0;i<6;i++){
+    const col=i===0?'#dcdedf':i===1?'#b5babd':'#8e9497';
+    blade.push(add(0,svg(`<path d="${STAMP_D}" fill="none" stroke="${col}" stroke-width=".7" stroke-linejoin="round"/>`),'blade'));
+  }
+  const plate=[];
+  for(let i=0;i<4;i++){
+    const col=i<3?'#474c4f':'#6f7579';
+    plate.push(add(0,svg(`<path d="${PLATE_D}" fill-rule="evenodd" fill="${col}"/>${i===3?`<path d="${PLATE_D}" fill-rule="evenodd" fill="none" stroke="#8a9094" stroke-width=".35"/>`:''}`),'plate'));
+  }
+  return {plane,L,paperPaths,sheetGrain,artPaper:top.querySelector('.art'),over,sMat:sMat.querySelector('path'),piece,blade,plate,
+    spaper:over.querySelector('.spaper'),dieSh:over.querySelector('.die-sh'),score:over.querySelector('.score'),seam:over.querySelector('.seam'),
+    bp:over.querySelector(`#${p}-bp feGaussianBlur`),bd:over.querySelector(`#${p}-bd feGaussianBlur`),bm:sMat.querySelector(`#${p}-bm feGaussianBlur`)};
+}
+
+/* ---------- 렌더 ---------- */
+const TILT=40, PERSP=420;
+function setZ(el,z,u){el.style.transform=`translateZ(${(z*u).toFixed(3)}px)`;}
+function render(view){
+  const c=view.c, S=view.s, u=view.u;
+  if(!u)return;
+  const t=view.reduced?reducedTime(c,view.t):view.t;
+  const st=stateAt(c,t);
+  /* 종이: 절단 전후로 같은 요소의 경로만 교체 */
+  const d=st.cut?SHEET_HOLE_D:SHEET_D;
+  if(view.lastCut!==st.cut){
+    S.paperPaths.forEach(p=>p.setAttribute('d',d));
+    S.sheetGrain.setAttribute('d',d);
+    S.artPaper.style.display=st.cut?'none':'';
+    S.piece.forEach(l=>l.style.display=st.cut?'':'none');
+    view.lastCut=st.cut;
+  }
+  /* 조각 */
+  [PAPER_TOP*.33,PAPER_TOP*.66,PAPER_TOP].forEach((z,i)=>setZ(S.piece[i],z+st.lift,u));
+  const h=st.lift;
+  const sa=h>0?0.24*clamp01(h/2.5)*(1-h/60):0;
+  S.spaper.setAttribute('opacity',sa.toFixed(3));
+  S.spaper.setAttribute('transform',`translate(${(h*.16).toFixed(3)} ${(h*.26).toFixed(3)})`);
+  S.bp.setAttribute('stdDeviation',(0.25+h*0.11).toFixed(3));
+  const hm=h+PAPER_TOP;
+  S.sMat.setAttribute('opacity',(h>0?0.3*clamp01(h/2.5)*(1-hm/60):0).toFixed(3));
+  S.sMat.setAttribute('transform',`translate(${(hm*.16).toFixed(3)} ${(hm*.26).toFixed(3)})`);
+  S.bm.setAttribute('stdDeviation',(0.25+hm*0.11).toFixed(3));
+  /* 펀칭기 */
+  const db=st.dieBottom;
+  S.blade.forEach((l,i)=>setZ(l,db+i*0.6,u));
+  S.plate.forEach((l,i)=>setZ(l,db+3.6+i*0.6,u));
+  const above=Math.max(0,db+3.6-PAPER_TOP);
+  const da=db>=DIE_EXIT-1?0:0.30*(1-clamp01(above/40));
+  S.dieSh.setAttribute('opacity',da.toFixed(3));
+  S.dieSh.setAttribute('transform',`translate(${(above*.16).toFixed(3)} ${(above*.26).toFixed(3)})`);
+  S.bd.setAttribute('stdDeviation',(0.3+above*0.1).toFixed(3));
+  S.score.setAttribute('opacity',st.score.toFixed(3));
+  S.seam.setAttribute('opacity',(st.seam*0.85).toFixed(3));
+  /* 표시 */
+  view.ui.phase.textContent=st.phase;
+  view.ui.time.textContent=`${Math.round(view.t)} / ${c.total} ms`;
+  view.ui.fill.style.width=(100*view.t/c.total)+'%';
+}
+function reducedTime(c,t){
+  /* 움직임 줄이기: 보간 없이 세 상태만 — 한 장의 종이 / 잘려 분리됨 / 우표만 들린 종료 */
+  if(t<c.cut)return 0;
+  if(t<c.liftStart)return c.riseEnd;
+  return c.total;
+}
+
+/* ---------- UI·재생 ---------- */
+const views=[];
+const grid=document.getElementById('grid');
+CANDS.forEach(c=>{
+  const card=document.createElement('section');card.className='cand';
+  card.innerHTML=`<header><h2>${c.name}</h2><small>${c.total} ms</small></header><p class="desc">${c.desc}</p>
+   <div class="stage"></div>
+   <div class="hud"><span class="phase"></span><span class="time"></span></div>
+   <div class="track"><div class="rail"></div><div class="fill"></div></div>
+   <div class="ctrl"><button class="play">재생</button><button class="restart">처음부터</button></div>`;
+  grid.appendChild(card);
+  const stage=card.querySelector('.stage');
+  const S=buildScene(c);stage.appendChild(S.plane);
+  const track=card.querySelector('.track');
+  [['contact','접촉'],['cut','절단'],['riseEnd','상승 끝'],['liftStart','들림']].forEach(([k,label])=>{
+    const m=document.createElement('div');m.className='mk'+(k==='cut'?' cut':'');m.style.left=(100*c[k]/c.total)+'%';
+    if(k!=='contact'||c.contact!==c.cut){const sp=document.createElement('span');sp.textContent=label;m.appendChild(sp);}
+    track.appendChild(m);
+  });
+  const v={c,s:S,t:0,playing:false,u:0,reduced:false,lastCut:null,stage,
+    ui:{phase:card.querySelector('.phase'),time:card.querySelector('.time'),fill:card.querySelector('.fill'),play:card.querySelector('.play')}};
+  v.ui.play.onclick=()=>{if(v.playing)pause(v);else play(v);};
+  card.querySelector('.restart').onclick=()=>{v.t=0;play(v);};
+  views.push(v);
+});
+function syncBtn(v){v.ui.play.textContent=v.playing?'일시정지':(v.t>0&&v.t<v.c.total?'이어서 재생':'재생');}
+function play(v){if(v.t>=v.c.total)v.t=0;v.playing=true;syncBtn(v);kick();}
+function pause(v){v.playing=false;syncBtn(v);}
+function layout(){
+  views.forEach(v=>{
+    const w=v.stage.clientWidth, H=v.stage.clientHeight;
+    v.u=w/140;
+    v.stage.style.perspective=(PERSP*v.u)+'px';
+    v.stage.style.perspectiveOrigin='50% 18%';
+    const ph=w*110/140;
+    v.s.plane.style.top=((H-ph)/2+H*0.03)+'px';
+    v.s.plane.style.transform=`rotateX(${TILT}deg)`;
+    v.s.plane.style.transformOrigin='50% 55%';
+    render(v);
+  });
+}
+new ResizeObserver(layout).observe(grid);
+let last=null,raf=0;
+const speedSel=document.getElementById('speed'),loopChk=document.getElementById('loop');
+function tick(now){
+  raf=0;
+  const dt=last==null?0:Math.min(64,now-last);last=now;
+  const sp=+speedSel.value;let any=false;
+  views.forEach(v=>{
+    if(!v.playing)return;
+    v.t+=dt*sp;
+    if(v.t>=v.c.total){
+      if(loopChk.checked){v.t=v.t-v.c.total;}
+      else{v.t=v.c.total;v.playing=false;syncBtn(v);}
+    }
+    render(v);any=any||v.playing;
+  });
+  syncScrub();
+  if(any)raf=requestAnimationFrame(tick);else last=null;
+}
+function kick(){if(!raf){last=null;raf=requestAnimationFrame(tick);}}
+document.getElementById('playAll').onclick=()=>{views.forEach(v=>{v.t=0;v.playing=true;syncBtn(v);});kick();};
+const pauseBtn=document.getElementById('pauseAll');
+pauseBtn.onclick=()=>{
+  const anyPlaying=views.some(v=>v.playing);
+  if(anyPlaying){views.forEach(v=>pause(v));pauseBtn.textContent='이어서 재생';}
+  else{views.forEach(v=>{if(v.t<v.c.total){v.playing=true;syncBtn(v);}});pauseBtn.textContent='일시정지';kick();}
+};
+document.getElementById('restartAll').onclick=()=>{views.forEach(v=>{v.playing=false;v.t=0;syncBtn(v);render(v);});pauseBtn.textContent='일시정지';syncScrub();};
+document.querySelectorAll('[data-scene]').forEach(b=>b.onclick=()=>{
+  views.forEach(v=>{v.playing=false;v.t=SCENES[b.dataset.scene](v.c);syncBtn(v);render(v);});
+  pauseBtn.textContent='이어서 재생';
+  document.querySelectorAll('[data-scene]').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  syncScrub();
+});
+const scrub=document.getElementById('scrub'),scrubOut=document.getElementById('scrubOut');
+scrub.oninput=()=>{
+  const t=+scrub.value;
+  views.forEach(v=>{v.playing=false;v.t=Math.min(t,v.c.total);syncBtn(v);render(v);});
+  scrubOut.textContent=t+' ms';pauseBtn.textContent='이어서 재생';
+  document.querySelectorAll('[data-scene]').forEach(x=>x.setAttribute('aria-pressed','false'));
+};
+function syncScrub(){const m=Math.max(...views.map(v=>v.t));scrub.value=Math.round(m);scrubOut.textContent=Math.round(m)+' ms';}
+/* 움직임 줄이기 */
+const rm=document.getElementById('rm'),rmNote=document.getElementById('rmNote');
+const mq=window.matchMedia('(prefers-reduced-motion: reduce)');
+function applyRM(){
+  views.forEach(v=>{v.reduced=rm.checked;render(v);});
+  rmNote.textContent=rm.checked?'움직임 줄이기: 중간 보간 없이 "한 장의 종이 → 잘려 분리된 상태 → 우표만 들린 종료" 세 장면으로만 바뀌어.':'';
+}
+rm.checked=mq.matches;rm.onchange=applyRM;mq.addEventListener('change',()=>{rm.checked=mq.matches;applyRM();});
+
+/* 시간표 */
+const tb=document.querySelector('#timing tbody');
+CANDS.forEach(c=>{
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${c.name}</td><td>${c.total}</td><td>${c.descentStart}</td><td>${c.contact}</td><td>${c.cut}</td><td>${c.pressEnd}–${c.riseEnd}</td><td>${c.riseEnd}–${c.liftStart}</td><td>${c.liftStart}–${c.liftEnd}</td><td>${c.lift}</td>`;
+  tb.appendChild(tr);
+});
+
+/* 자기 점검: 모든 윤곽 사용처가 STAMP_D와 같은지, 윤곽이 닫히는지 */
+(function selfCheck(){
+  const all=[...document.querySelectorAll('.plane path')];
+  const usesStamp=all.filter(p=>(p.getAttribute('d')||'').includes(STAMP_D));
+  const pieceOk=views.every(v=>v.s.piece.every(l=>l.querySelector("path").getAttribute("d")===STAMP_D));
+  const holeOk=SHEET_HOLE_D===SHEET_D+STAMP_D&&PLATE_D.endsWith(STAMP_D);
+  let first=null,lastPt=null;
+  traceC2({moveTo(x,y){first=[x,y];lastPt=[x,y];},lineTo(x,y){lastPt=[x,y];},
+    arcTo(cx,cy,r,s,sw){const a=(s+sw)*Math.PI/180;lastPt=[cx+r*Math.cos(a),cy+r*Math.sin(a)];},close(){}});
+  const gap=Math.hypot(first[0]-lastPt[0],first[1]-lastPt[1]);
+  window.__punchCheck={stampPathUses:usesStamp.length,pieceOk,holeOk,closeGap:gap,stampD:STAMP_D};
+  document.getElementById('selfcheck').textContent=
+    `점검: STAMP_D를 쓰는 경로 ${usesStamp.length}개 · 조각=STAMP_D ${pieceOk?'일치':'불일치'} · 구멍/펀칭기 창=시트+STAMP_D ${holeOk?'일치':'불일치'} · 윤곽 닫힘 오차 ${gap.toExponential(2)}`;
+})();
+
+views.forEach(v=>{render(v);syncBtn(v);});
+applyRM();
+layout();
+</script>
+</body>
+</html>
