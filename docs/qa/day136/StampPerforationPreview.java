@@ -125,7 +125,7 @@ public class StampPerforationPreview {
     }
     public static void main(String[] args) throws Exception {
         Path root=Path.of(args[0]), out=Path.of(args[1]); Files.createDirectories(out);
-        String html=Files.readString(root.resolve("docs/mockups/day135-stamp-edge-study/index.html"));
+        String html=Files.readString(root.resolve("docs/ai/mockups/day135-stamp-edge-study/index.html"));
         var match=Pattern.compile("data:image/png;base64,([A-Za-z0-9+/=]+)").matcher(html);
         if (!match.find()) throw new IllegalStateException("No existing mockup photo");
         photo=ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(match.group(1))));
