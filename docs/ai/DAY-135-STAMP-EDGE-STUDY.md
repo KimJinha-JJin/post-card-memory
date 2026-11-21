@@ -4,9 +4,9 @@
 
 ## 지금 확인할 것
 
-- [비교 HTML](../mockups/day135-stamp-edge-study/index.html)을 내려받거나 로컬에서 더블클릭하면 돼. 파일 하나에 사진이 내장돼서 서버·설치·인터넷 연결이 필요 없어. GitHub의 HTML 소스 화면 자체는 실행 화면이 아니야.
+- [비교 HTML](mockups/day135-stamp-edge-study/index.html)을 내려받거나 로컬에서 더블클릭하면 돼. 파일 하나에 사진이 내장돼서 서버·설치·인터넷 연결이 필요 없어. GitHub의 HTML 소스 화면 자체는 실행 화면이 아니야.
 - 상단 C1/C2/C3 → 다섯 실제 크기 → 가장자리 6배·네 모서리 → 실제 설계값 순서야. 이전 A/B/개선 B/C는 하단 펼치기에 보존했어.
-- [60·38dp 캡처](../mockups/day135-stamp-edge-study/c-small-cards.png), [가장자리·네 모서리 캡처](../mockups/day135-stamp-edge-study/c-edge-corners.png)를 같이 남겼어. 브라우저 주소·프로필·개인 경로가 없는 본문만 잘랐어.
+- [60·38dp 캡처](mockups/day135-stamp-edge-study/c-small-cards.png), [가장자리·네 모서리 캡처](mockups/day135-stamp-edge-study/c-edge-corners.png)를 같이 남겼어. 브라우저 주소·프로필·개인 경로가 없는 본문만 잘랐어.
 - 사용자는 얕은 C 방향을 선호한다고 정했지만, C2/C3의 최종 채택이나 실제 앱 적용은 승인하지 않았어.
 
 ## C1/C2/C3의 차이
