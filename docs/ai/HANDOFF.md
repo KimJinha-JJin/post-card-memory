@@ -1,3 +1,29 @@
+# HANDOFF — 2026-11-21 139일차 후속: Markdown 운영 규칙 최소 정비
+
+패코(Codex), 수동 표준 모드. 사용자 후속 작업지시서로 기존 규칙 최소 수정·기존 HANDOFF 갱신·작업 브랜치 commit/push·PR·필수 CI 확인까지 승인됐어. **main 병합은 별도 최종 승인 전 금지**야. 아래 선행 작업 원문은 당시 상태로 그대로 보존했어.
+
+## 현재 상태와 변경 범위
+
+- 시작 local main = origin/main = GitHub 실제 main = `ceea1b488a84d02b64f659c04f21f809524b0ffe`. PR #34는 이미 병합됐고, 그때 작업 브랜치 정리도 끝났어. 아래 원문의 미병합·commit 전 상태는 현재 상태가 아니야.
+- 작업 브랜치 `docs/day139-markdown-rules`, 작성 시점 HEAD는 위 시작 SHA야. 시작 tracked/staged 변경 0개, 기존 미추적 47개와 SAFE 38개 해시 일치. 새 worktree 없음.
+- 저장소 수정은 `AGENTS.md` 문서·목업 저장 위치 절의 기존 두 항목과 이 HANDOFF뿐이야. 채팅 인수인계·기존 HANDOFF 갱신·명시적 독립 파일 생성을 구분하고, 기존 문서 우선·승인된 독립 증거 보존·재승인 방지 원칙을 유지했어. 과거 문서의 사실관계는 코드·설정·Git·CI와 대조하되 확정된 사용자 결정·안전 규칙은 임의로 무효화하지 않아.
+- `CLAUDE.md`와 에이전트별 실행 지침은 기존 공통 규칙 참조로 충분해 무변경. README의 CI 버전 오기는 사용자 지시대로 별도 정정 사항으로 남겼어. 37개 Markdown 재감사·새 보고서/관리 대장·파일 이동/삭제 없음.
+
+## 외부 사용자 플러그인 — 저장소 commit 밖의 변경
+
+- 원본 `%USERPROFILE%/plugins/post-card-memory-workflow/skills/`의 `post-card-memory-workflow/SKILL.md`, `write-project-handoff/SKILL.md`만 수정했어. 작업 루틴은 공통 구분을 참조하고 과거 사실 대조를 명확히 했어. 인수인계 스킬은 일반 요청의 채팅 제공을 기본으로 하고 별도 파일 생성은 명시적 요청/승인 범위로 한정했어.
+- 설치본은 `%USERPROFILE%/.codex/plugins/cache/personal/post-card-memory-workflow/0.1.0+codex.20260927080957/skills/`야. 시작 시 위 원본과 같았고 실제 스킬 목록은 이 캐시를 가리켜. 공식 재배포·재로딩 방식은 이번 확인 범위에서 확정하지 못했으므로 **캐시·플러그인 설정·버전은 임의 수정하지 않았어. 원본 수정 완료, 설치본 적용 대기**야. 현재 세션/새 세션에 자동 반영됐다고 주장하지 않아.
+
+## 검증·한계·재개 조건
+
+- 여섯 요청을 문구로 대조했어: 채팅 인수인계 → 채팅, HANDOFF 갱신 → 기존 문서, 명시적 독립 보고서 → 승인 범위 내 파일, 단순 조사 → 자동 파일 없음, 과거 보고서 → 최신 사실과 구분하되 확정 결정 존중, Codex/Claude → AGENTS 공통 기준. 실제 새 세션의 자동 선택·응답 동작을 실행 검증한 것은 아니야.
+- **로컬 자동검증 — 실행:** 저장소 diff/공백 검사, 외부 원본의 의도한 치환 외 변경 없음·frontmatter 보존 확인, 스킬 기본 형식·상대 참조 파일 검사. 공식 `quick_validate.py`는 Python의 PyYAML 미설치로 import 단계에서 중단됐어(test infrastructure). 검증 성공으로 표시하지 않으며 패키지 설치·환경 변경은 하지 않았어.
+- **Android 빌드·실사용 기기 instrumentation·실기기 감각 QA — 불필요:** 앱·테스트·Gradle·DB·자산 무변경, 기기 조작 없음. **GitHub Actions CI — 이 문서 작성 시점 미실행:** PR 생성 뒤 실제 범위와 필수 체크 결과를 최종 완료보고에서 확인해.
+- 기존 HANDOFF/archive 원문·SAFE 38개·미추적 47개를 보존해. commit 전 최종 diff·민감정보·보호 해시를 재확인하고 승인된 두 저장소 파일만 명시 stage해. 최종 SHA·PR·CI 결과는 대화 완료보고에 남기며, 정상 Git 성공만의 추가 HANDOFF commit은 만들지 않아.
+- 외부 설치본 적용은 원본 수정과 구분해 보고하고, 공식 적용 방법 확인 전 캐시 직접 수정으로 우회하지 않아. main 병합은 최종 PR head/base와 CI를 사용자가 검토·승인한 뒤에만 가능해. 우표 펀칭 Compose 구현은 별도 작업이며 이번 범위가 아니야.
+
+---
+
 # HANDOFF — 2026-11-21 139일차 선행: 저장소 구조 점검·목업 통합
 
 패코(Codex), 수동 표준 모드. 이번 사용자 작업지시서에 따라 추적 목업만 통합하고 문서 구조를 조사했어. 우표 펀칭 Compose 구현은 보류 상태야. **사용자가 139일차 구조 정리의 stage·commit·push·PR·필수 CI 확인을 1단계 승인했어. main 병합은 미승인**이야. 이 문서는 최종 commit 전 기록이며 실제 SHA·PR·CI 결과는 최종 완료보고에서 확인해.
