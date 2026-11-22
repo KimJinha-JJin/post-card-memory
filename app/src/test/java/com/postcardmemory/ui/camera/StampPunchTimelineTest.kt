@@ -93,9 +93,18 @@ class StampPunchTimelineTest {
         assertFalse(gate.tryClaim(CaptureState.Error("실패")))
         assertFalse(gate.tryClaim(CaptureState.Idle))
 
-        val success = CaptureState.Success("/stamps/a.jpg")
+        val success = CaptureState.Success("/stamps/a.jpg", postcardId = 42L)
         assertTrue(gate.tryClaim(success))
         assertFalse(gate.tryClaim(success))
-        assertFalse(gate.tryClaim(CaptureState.Success("/stamps/a.jpg")))
+        assertFalse(gate.tryClaim(CaptureState.Success("/stamps/a.jpg", postcardId = 42L)))
+    }
+
+    @Test
+    fun `펀칭 뒤 편집 화면은 방금 등록된 실제 엽서 id로만 열린다`() {
+        assertEquals(42L, editablePostcardIdOrNull(42L))
+        assertEquals(1L, editablePostcardIdOrNull(1L))
+        // Room 자동 id는 1부터라 0·음수(비정상 insert 결과)면 편집 대신 갤러리로 돌아간다.
+        assertEquals(null, editablePostcardIdOrNull(0L))
+        assertEquals(null, editablePostcardIdOrNull(-1L))
     }
 }

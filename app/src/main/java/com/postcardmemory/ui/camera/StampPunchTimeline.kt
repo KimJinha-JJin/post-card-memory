@@ -80,7 +80,14 @@ internal fun stampPunchStateAt(timeMs: Float): StampPunchState {
 }
 
 /**
- * 저장 성공 뒤 갤러리 복귀를 한 번만 허용하는 문. 화면 재구성·회전·애니메이션 종료 콜백이
+ * 펀칭 뒤 들어갈 편집 대상 엽서 id. Room 자동 id는 1부터라 0 이하(비정상 insert 결과)면
+ * 편집 화면 대신 예전처럼 갤러리로 돌아가게 null을 준다.
+ */
+internal fun editablePostcardIdOrNull(postcardId: Long): Long? =
+    postcardId.takeIf { it > 0L }
+
+/**
+ * 저장 성공 뒤 화면 이동(편집 화면 진입 또는 갤러리 복귀)을 한 번만 허용하는 문. 화면 재구성·회전·애니메이션 종료 콜백이
  * 여러 번 와도 popBackStack이 두 번 불리면 갤러리까지 빠져 버리므로 첫 요청만 통과시킨다.
  */
 internal class SuccessExitGate {

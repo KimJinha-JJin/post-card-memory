@@ -261,7 +261,7 @@ class CameraViewModel @Inject constructor(
                  * 참조할 주체가 영원히 없으므로 withProvisionalFile이 지운다.
                  * 커밋에 성공하면 소유권이 DB로 넘어가 더는 건드리지 않는다.
                  */
-                val savedImagePath =
+                val (savedImagePath, savedPostcardId) =
                     withProvisionalFile(
                         produce = {
                             withContext(Dispatchers.IO) {
@@ -292,19 +292,23 @@ class CameraViewModel @Inject constructor(
                                         capturedAt
                                 )
 
-                            withContext(Dispatchers.IO) {
-                                repository.insertPostcard(
-                                    postcard
-                                )
-                            }
+                            // 140일차 후속: Room이 만든 새 엽서 id를 받아 펀칭 뒤
+                            // 바로 그 엽서의 편집 화면으로 보낸다.
+                            val insertedId =
+                                withContext(Dispatchers.IO) {
+                                    repository.insertPostcard(
+                                        postcard
+                                    )
+                                }
 
-                            croppedFile.absolutePath
+                            croppedFile.absolutePath to insertedId
                         }
                     )
 
                 _captureState.value =
                     CaptureState.Success(
-                        imagePath = savedImagePath
+                        imagePath = savedImagePath,
+                        postcardId = savedPostcardId
                     )
             } catch (cancellation: CancellationException) {
                 // 취소는 저장 실패가 아니다. 에러 화면을 띄우지 않고 그대로
@@ -378,7 +382,7 @@ class CameraViewModel @Inject constructor(
         SuccessExitGate()
 
     /**
-     * 140일차: 펀칭 모션이 끝났을 때 갤러리 복귀를 허락할지. 실제 저장 성공 상태에서
+     * 140일차: 펀칭 모션이 끝났을 때 화면 이동(편집 화면 진입)을 허락할지. 실제 저장 성공 상태에서
      * 같은 저장에 대해 처음 한 번만 true라 화면 재구성·회전으로 콜백이 반복돼도
      * popBackStack이 두 번 불리지 않는다.
      */
@@ -418,7 +422,9 @@ sealed class CaptureState {
     object Saving : CaptureState()
 
     data class Success(
-        val imagePath: String
+        val imagePath: String,
+        /** 방금 Room에 등록된 엽서 id. 펀칭 뒤 이 엽서의 편집 화면으로 간다. */
+        val postcardId: Long
     ) : CaptureState()
 
     data class Error(

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,11 +22,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.StrokeJoin
@@ -54,6 +56,7 @@ import java.io.File
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
@@ -81,7 +84,20 @@ private val TILT_COS = cos(Math.toRadians(40.0)).toFloat()
 private val TILT_SIN = sin(Math.toRadians(40.0)).toFloat()
 private val PLANE_TOP = (STAGE_H - PLANE_H * TILT_COS) / 2f + STAGE_H * 0.03f
 
-private val StageColor = Color(0xFF5F6A5C)
+/*
+ * 140일차 후속(공간감): 매트는 책상 위에 놓인 두께 있는 판이다. 평면 안쪽으로 들여 그려
+ * 둘레에 책상이 보이게 하고, 앞쪽 두께 면과 책상 위 접지 그림자를 둔다. 장면 전체에는
+ * 먼 쪽이 아주 조금 좁아지는 원근만 건다. C2 윤곽·시간표·장면 구성은 그대로다.
+ */
+private const val MAT_INSET = 5f
+private const val MAT_THICK = 2.2f
+private const val MAT_RADIUS = 1.6f
+private const val FAR_EDGE_INSET = 0.035f // 먼 쪽(위) 가장자리가 한쪽당 폭의 3.5% 좁아짐
+
+private val DeskLight = ScreenBackgroundGray
+private val DeskShade = Color(0xFFE6DAC6)
+private val DeskShadow = Color(0xFF3A3024)
+private val MatEdge = Color(0xFF515B4E)
 private val MatColor = Color(0xFF6D7869)
 private val MatLine = Color(0xFF626D5F)
 private val MatMinor = Color(0xFF687365)
@@ -175,8 +191,15 @@ internal fun StampPunchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(ScreenBackgroundGray)
-            .semantics { contentDescription = "우표를 잘라 갤러리에 넣는 중" },
+            // 책상 표면: 기존 종이 배경색에서 가장자리로 아주 조금 어두워지는 은은한 면.
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(DeskLight, DeskLight, DeskShade),
+                    radius = LocalConfiguration.current.screenHeightDp.dp.value *
+                        density.density * 0.62f
+                )
+            )
+            .semantics { contentDescription = "우표를 잘라 편집 화면으로 넘기는 중" },
         contentAlignment = Alignment.Center
     ) {
         Canvas(
@@ -184,7 +207,6 @@ internal fun StampPunchScreen(
                 .padding(horizontal = 24.dp)
                 .fillMaxWidth()
                 .aspectRatio(VIEW_W / STAGE_H)
-                .clip(RoundedCornerShape(4.dp))
         ) {
             drawPunchStage(
                 state = stampPunchStateAt(elapsedMs),
@@ -232,24 +254,59 @@ private fun DrawScope.drawStampFace(paths: PunchPaths, photo: Painter?) {
 
 private fun clamp01(v: Float) = if (v < 0f) 0f else if (v > 1f) 1f else v
 
+/** 먼 쪽(위) 가장자리를 살짝 좁히는 원근. 장면 전체(매트·종이·펀칭기·그림자)에 같이 걸린다. */
+private fun DrawScope.farEdgePerspective(): android.graphics.Matrix {
+    val w = size.width
+    val h = size.height
+    val inset = w * FAR_EDGE_INSET
+    return android.graphics.Matrix().apply {
+        setPolyToPoly(
+            floatArrayOf(0f, 0f, w, 0f, w, h, 0f, h), 0,
+            floatArrayOf(inset, 0f, w - inset, 0f, w, h, 0f, h), 0,
+            4
+        )
+    }
+}
+
 private fun DrawScope.drawPunchStage(state: StampPunchState, paths: PunchPaths, photo: Painter?) {
+    val canvas = drawContext.canvas.nativeCanvas
+    canvas.save()
+    canvas.concat(farEdgePerspective())
+    try {
+        drawPunchScene(state, paths, photo)
+    } finally {
+        canvas.restore()
+    }
+}
+
+private fun DrawScope.drawPunchScene(state: StampPunchState, paths: PunchPaths, photo: Painter?) {
     val paperTop = StampPunchTimeline.PAPER_TOP
-    drawRect(StageColor)
+    val matRect = Rect(MAT_INSET, MAT_INSET, VIEW_W - MAT_INSET, PLANE_H - MAT_INSET)
+    val matPath = Path().apply { addRoundRect(RoundRect(matRect, CornerRadius(MAT_RADIUS))) }
+
+    // 책상 위 접지 그림자와 매트 앞쪽 두께 면: 매트 바닥은 책상(높이 -MAT_THICK)에 놓여 있다.
+    atHeight(-MAT_THICK) {
+        translate(1.2f, 2.4f) { softShadow(matPath, DeskShadow, 0.26f, 3f) }
+        translate(.3f, .6f) { softShadow(matPath, DeskShadow, 0.22f, .6f) }
+        drawPath(matPath, MatEdge)
+    }
 
     // 바닥판(커팅 매트)과 구멍 속 바닥에 드리운 절단면 그늘.
     atHeight(0f) {
-        drawRect(MatColor, Offset.Zero, Size(VIEW_W, PLANE_H))
-        var i = 0
-        while (i <= VIEW_W.toInt()) {
-            val major = i % 10 == 0
-            drawLine(if (major) MatLine else MatMinor, Offset(i.toFloat(), 0f), Offset(i.toFloat(), PLANE_H), if (major) .3f else .18f)
-            i += 5
-        }
-        var j = 0
-        while (j <= PLANE_H.toInt()) {
-            val major = j % 10 == 0
-            drawLine(if (major) MatLine else MatMinor, Offset(0f, j.toFloat()), Offset(VIEW_W, j.toFloat()), if (major) .3f else .18f)
-            j += 5
+        drawPath(matPath, MatColor)
+        clipPath(matPath) {
+            var i = 0
+            while (i <= VIEW_W.toInt()) {
+                val major = i % 10 == 0
+                drawLine(if (major) MatLine else MatMinor, Offset(i.toFloat(), 0f), Offset(i.toFloat(), PLANE_H), if (major) .3f else .18f)
+                i += 5
+            }
+            var j = 0
+            while (j <= PLANE_H.toInt()) {
+                val major = j % 10 == 0
+                drawLine(if (major) MatLine else MatMinor, Offset(0f, j.toFloat()), Offset(VIEW_W, j.toFloat()), if (major) .3f else .18f)
+                j += 5
+            }
         }
         if (state.cut) {
             clipPath(paths.stamp) {
@@ -270,6 +327,11 @@ private fun DrawScope.drawPunchStage(state: StampPunchState, paths: PunchPaths, 
                 softShadow(paths.stamp, Color(0xFF141611), 0.3f * clamp01(h / 2.5f) * (1f - hm / 60f), .25f + hm * .11f)
             }
         }
+    }
+
+    // 종이가 매트 위에 얹힌 높이 차이: 종이 바깥으로 짧게 번지는 접촉 그림자.
+    atHeight(0.02f) {
+        translate(.35f, .6f) { softShadow(paths.sheet, Color(0xFF2A2116), 0.2f, .9f) }
     }
 
     // 고정된 종이: 두께(벽 두 장) + 윗면. 절단 전엔 한 장, 절단 후엔 같은 C2 윤곽 구멍.
@@ -293,9 +355,21 @@ private fun DrawScope.drawPunchStage(state: StampPunchState, paths: PunchPaths, 
             }
         }
         if (dieVisible) {
+            // 펀칭기가 종이에 가까울수록 그림자가 짙고 또렷해지고, 날이 닿을 때는 날 아래에
+            // 눌린 그늘이 생긴다(멀 때는 옅고 넓게 퍼짐).
             val above = max(0f, db + 3.6f - paperTop)
+            val near = 1f - clamp01(above / 40f)
             translate(above * .16f, above * .26f) {
-                softShadow(paths.plate, Color(0xFF1D1A15), 0.30f * (1f - clamp01(above / 40f)), .3f + above * .1f)
+                softShadow(paths.plate, Color(0xFF1D1A15), 0.36f * near * sqrt(near), .2f + above * .12f)
+            }
+            val bladeGap = max(0f, db - paperTop + StampPunchTimeline.BITE)
+            val contact = 1f - clamp01(bladeGap / 4f)
+            if (contact > 0f) {
+                drawPath(
+                    paths.stamp,
+                    Color(0xFF1D1A15).copy(alpha = 0.22f * contact),
+                    style = Stroke(width = .5f + (1f - contact) * 1.2f, join = StrokeJoin.Round)
+                )
             }
         }
         if (state.seam > 0f) {
