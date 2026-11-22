@@ -1,3 +1,16 @@
+# HANDOFF — 2026-11-22 140일차 마지막: 펀칭 책상 공간감 · 펀칭 뒤 편집 화면 진입
+
+피코(Claude Code), 수동 표준 모드. PR #36(아래 절)은 main에 Merge commit `3d56253`으로 병합됐고 main CI는 verified-merge로 성공, 작업 브랜치는 정리됐어. 사용자 추가 지시로 최신 main에서 `feature/day140-punch-desk-and-editor`를 만들어 두 가지만 바꿨어. **main 병합은 사용자 승인 전 보류.**
+
+- **공간감(`StampPunchScreen.kt`):** 배경을 기존 종이색 중심에서 가장자리로 아주 조금 어두워지는 책상 면(radial gradient)으로 바꿨어. 매트는 평면 안쪽으로 들여 그려(둥근 모서리 1.6) 책상 위에 놓인 판으로 표현했어. 책상 높이에 앞쪽 두께 면(MAT_THICK 2.2)과 넓은·짧은 접지 그림자 두 겹을 두고, 종이가 매트에 얹힌 짧은 접촉 그림자를 더했어. 장면 전체에는 먼 쪽 가장자리가 한쪽당 3.5% 좁아지는 원근(`setPolyToPoly`)을 걸었어. 펀칭기 그림자는 가까울수록 짙고 또렷해지게 조정했고, 날이 닿을 때 C2 윤곽을 따라 눌린 그늘이 생기게 했어. 예전 무대 색 띠와 둥근 잘림은 없앴어(펀칭기가 무대 밖 책상 위로 빠져나감). C2 천공선·2.8초 시간표·장면 구성·사진 표시는 무변경.
+- **펀칭 뒤 편집 화면:** 기존 `insertPostcard`가 돌려주는 Room 자동 id를 `CaptureState.Success.postcardId`로 넘겨, 펀칭이 끝나면 기존 `detail/{id}` 경로로 바로 들어가. `popUpTo("camera") { inclusive = true }`라 갤러리를 거치는 이중 전환이 없고, 편집에서 뒤로 가면 갤러리야. id가 0 이하(비정상)면 예전처럼 갤러리 복귀(`editablePostcardIdOrNull`). 복귀 게이트(저장당 1회), 저장 중·실패·취소 분기, 움직임 줄이기 600ms는 그대로라 실패·취소 때 편집 화면으로 가지 않아. 엽서는 저장 때 한 번만 insert되고 편집 화면은 그 행을 열기만 해. DetailScreen·Undo/Redo·저장 로직·Room schema 19 무변경.
+- 변경: `StampPunchScreen.kt`, `StampPunchTimeline.kt`(id 판정 함수), `CameraScreen.kt`(`onOpenSavedPostcard`), `CameraViewModel.kt`(insert id 보존), `MainActivity.kt`(카메라 → 편집 이동), `StampPunchTimelineTest.kt`(+1건), 이 HANDOFF, `TEST-COVERAGE-MAP.md`.
+- **로컬 자동검증 — 실행:** `StampPunchTimelineTest` 8/8, 전체 `testDebugUnitTest` 1,303건·139 suite 실패 0, `assembleDebug` 성공.
+- **실기기 QA — 실행(승인된 실사용 기기, 사용자 승인 `adb install -r`, firstInstallTime 유지, 설치 전후 사진 15개 동일):** 저장 1회 → 펀칭(책상·매트 두께·접지 그림자·원근 프레임 확인) → 갤러리 없이 방금 저장한 엽서 편집 화면(같은 사진·날짜) → 뒤로가기로 갤러리, 사진 파일 +1(중복 없음), 임시 0, FATAL 없음. 사용자 육안 "둘 다 좋아".
+- 미검증: 움직임 줄이기 상태에서 편집 화면 진입은 기기에서 다시 확인하지 않았어(코드상 같은 `onFinished` 경로). 회전·저장 실패 실기기 재현은 이전과 같이 미검증.
+
+---
+
 # HANDOFF — 2026-11-22 140일차: C안 우표 펀칭 모션 앱 구현
 
 피코(Claude Code), 수동 표준 모드. 사용자 140일차 작업지시서로 138일차 채택 C안을 앱에 구현하고, 작업 브랜치 commit/push·PR·필수 CI 확인까지 승인됐어. **main 병합은 사용자 최종 승인 전 금지**야. 아래 139일차 이하 원문은 당시 상태로 보존했어.

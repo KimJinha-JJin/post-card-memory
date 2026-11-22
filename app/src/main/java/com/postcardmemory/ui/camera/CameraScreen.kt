@@ -79,6 +79,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun CameraScreen(
     onNavigateBack: () -> Unit,
+    onOpenSavedPostcard: (postcardId: Long) -> Unit,
     viewModel: CameraViewModel = hiltViewModel()
 ) {
     val cameraPermission = rememberPermissionState(
@@ -168,16 +169,28 @@ fun CameraScreen(
 
             /*
              * 140일차: 실제 저장(사진 자르기 + DB 등록)이 성공한 뒤에만
-             * C안 우표 펀칭을 보여 주고, 끝나면 한 번만 갤러리로 돌아간다.
+             * C안 우표 펀칭을 보여 주고, 끝나면 한 번만 방금 저장한 엽서의
+             * 편집 화면으로 간다(비정상 id면 예전처럼 갤러리 복귀).
              * 저장 중·실패·취소에는 이 화면이 나오지 않는다.
              */
             captureState is CaptureState.Success -> {
+                val success =
+                    captureState as CaptureState.Success
+
                 StampPunchScreen(
-                    imagePath =
-                        (captureState as CaptureState.Success).imagePath,
+                    imagePath = success.imagePath,
                     onFinished = {
                         if (viewModel.claimSuccessExit()) {
-                            onNavigateBack()
+                            val editId =
+                                editablePostcardIdOrNull(
+                                    success.postcardId
+                                )
+
+                            if (editId != null) {
+                                onOpenSavedPostcard(editId)
+                            } else {
+                                onNavigateBack()
+                            }
                         }
                     }
                 )

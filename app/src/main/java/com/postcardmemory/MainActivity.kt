@@ -197,6 +197,15 @@ private fun MainNavHost(visitedEpochDays: Set<Long>, totalVisitDays: Int?) {
             CameraScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onOpenSavedPostcard = { id ->
+                    // 카메라를 스택에서 빼고 바로 편집 화면으로 간다:
+                    // 갤러리를 거치는 이중 전환이 없고, 편집에서 뒤로 가면 갤러리다.
+                    navController.navigate("detail/$id") {
+                        popUpTo("camera") {
+                            inclusive = true
+                        }
+                    }
                 }
             )
         }
