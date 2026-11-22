@@ -6,8 +6,8 @@
 
 ## 140일차 — 저장 성공 뒤 C안 우표 펀칭 (2026-11-22)
 
-- 신규 `ui/camera/StampPunchTimelineTest` **6건**(행동, production 순수 함수 직접): C안 시간표 값(1,900·접촉 540·절단 560·상승 끝 860·들림 1,060–1,360·정착 1,660·높이 5), 절단 전 종이 한 장·조각 정지, 절단 후 들림 전까지 조각 제자리·절단선 표시, 펀칭기 접촉·누름·화면 밖 상승 높이, 들림 구간과 종료 높이 유지, `SuccessExitGate`가 저장 성공에서만·같은 저장에 한 번만 복귀를 허락.
-- 최종 로컬 `testDebugUnitTest assembleDebug` 성공(Gradle 9.9.1/Zulu 17). **1301/1301**, XML 139개, 실패·오류·skip 0. JVM source `@Test` 1301 / test 파일 138 / helper 1. 구조 검사 수 변화 없음. instrumentation 21건/8파일 무변경·미실행.
+- 신규 `ui/camera/StampPunchTimelineTest` **7건**(행동, production 순수 함수 직접): 140일차 속도 조정 시간표 값(2,800·접촉 950·절단 1,050·상승 끝 1,800·들림 1,900–2,350·정착 2,800·높이 5)과 단계 순서, 하강이 접촉 직전에 감속하고 상승이 천천히 출발하는 곡선, 절단 전 종이 한 장·조각 정지, 절단 후 들림 전까지 조각 제자리·절단선 표시, 펀칭기 접촉·누름·화면 밖 상승 높이, 들림 구간과 종료 높이 유지, `SuccessExitGate`가 저장 성공에서만·같은 저장에 한 번만 복귀를 허락.
+- 최종 로컬 `testDebugUnitTest assembleDebug` 성공(Gradle 9.9.1/Zulu 17). **1302/1302**, XML 139개, 실패·오류·skip 0. JVM source `@Test` 1302 / test 파일 138 / helper 1. 구조 검사 수 변화 없음. instrumentation 21건/8파일 무변경·미실행.
 - 자동 보호 공백: Canvas 장면의 실제 픽셀(구멍·조각 일치, 2D 근사, 그림자), Compose 재생·`rememberSaveable` 이어 재생, 실제 `popBackStack` 1회, BackHandler, 움직임 줄이기 분기는 JVM에서 실행하지 않아. 이번 근거는 실기기 QA(HANDOFF 140일차 절)야.
 
 ## 136일차 — C2 얕은 천공 공통 윤곽 (2026-11-18)

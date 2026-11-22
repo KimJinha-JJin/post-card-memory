@@ -4,19 +4,21 @@ import kotlin.math.pow
 
 /**
  * 138일차 채택 C안(경쾌한 손맛형) 우표 펀칭의 시간표와 한 시각의 물리 상태.
- * 값과 계산은 `docs/ai/mockups/stamp-punch-motion-mockup.html`의 `CANDS` C안·`stateAt`을
- * 그대로 옮겼다. 단위: 시간 ms, 높이는 목업 뷰박스(140×110) 단위.
+ * 장면·높이·계산 구조는 `docs/ai/mockups/stamp-punch-motion-mockup.html`의 `CANDS` C안·`stateAt`을
+ * 그대로 옮겼다. 140일차 실기기 확인 뒤 사용자 요청으로 시간만 1.9초 → 2.8초로 늘리고
+ * 하강(접근할수록 감속)·상승(천천히 떨어져 빠져나감) 곡선을 바꿨다.
+ * 단위: 시간 ms, 높이는 목업 뷰박스(140×110) 단위.
  */
 internal object StampPunchTimeline {
-    const val TOTAL_MS = 1_900
-    const val DESCENT_START_MS = 250
-    const val CONTACT_MS = 540
-    const val CUT_MS = 560
-    const val PRESS_END_MS = 600
-    const val RISE_END_MS = 860
-    const val LIFT_START_MS = 1_060
-    const val LIFT_END_MS = 1_360
-    const val SETTLE_END_MS = 1_660
+    const val TOTAL_MS = 2_800
+    const val DESCENT_START_MS = 120
+    const val CONTACT_MS = 950
+    const val CUT_MS = 1_050
+    const val PRESS_END_MS = 1_180
+    const val RISE_END_MS = 1_800
+    const val LIFT_START_MS = 1_900
+    const val LIFT_END_MS = 2_350
+    const val SETTLE_END_MS = 2_800
 
     const val DIE_START_HEIGHT = 60f
     const val DIE_EXIT_HEIGHT = 170f
@@ -45,18 +47,19 @@ internal data class StampPunchState(
 private fun clamp01(v: Float) = if (v < 0f) 0f else if (v > 1f) 1f else v
 private fun prog(t: Float, a: Int, b: Int) = clamp01((t - a) / (b - a).toFloat())
 private fun lerp(a: Float, b: Float, p: Float) = a + (b - a) * p
-private fun inQuad(p: Float) = p * p
 private fun outCubic(p: Float) = 1f - (1f - p).pow(3)
-private fun outQuart(p: Float) = 1f - (1f - p).pow(4)
+
+/** 천천히 출발해 중간에 빨라지고 끝에서 다시 느려진다(하강은 종이에 묵직하게 닿고, 상승은 천천히 떨어져 빠져나감). */
+private fun inOutCubic(p: Float) = if (p < 0.5f) 4f * p * p * p else 1f - (-2f * p + 2f).pow(3) / 2f
 
 internal fun stampPunchStateAt(timeMs: Float): StampPunchState {
     val t = timeMs
     with(StampPunchTimeline) {
         val dieBottom = when {
             t < DESCENT_START_MS -> DIE_START_HEIGHT
-            t < CONTACT_MS -> lerp(DIE_START_HEIGHT, PAPER_TOP, inQuad(prog(t, DESCENT_START_MS, CONTACT_MS)))
+            t < CONTACT_MS -> lerp(DIE_START_HEIGHT, PAPER_TOP, inOutCubic(prog(t, DESCENT_START_MS, CONTACT_MS)))
             t < PRESS_END_MS -> PAPER_TOP - BITE * outCubic(prog(t, CONTACT_MS, maxOf(CUT_MS, CONTACT_MS + 40)))
-            else -> lerp(PAPER_TOP - BITE, DIE_EXIT_HEIGHT, outQuart(prog(t, PRESS_END_MS, RISE_END_MS)))
+            else -> lerp(PAPER_TOP - BITE, DIE_EXIT_HEIGHT, inOutCubic(prog(t, PRESS_END_MS, RISE_END_MS)))
         }
         val cut = t >= CUT_MS
         val lift = if (cut) LIFT_HEIGHT * outCubic(prog(t, LIFT_START_MS, LIFT_END_MS)) else 0f
