@@ -1,3 +1,36 @@
+# HANDOFF — 2026-11-22 140일차: C안 우표 펀칭 모션 앱 구현
+
+피코(Claude Code), 수동 표준 모드. 사용자 140일차 작업지시서로 138일차 채택 C안을 앱에 구현하고, 작업 브랜치 commit/push·PR·필수 CI 확인까지 승인됐어. **main 병합은 사용자 최종 승인 전 금지**야. 아래 139일차 이하 원문은 당시 상태로 보존했어.
+
+## 현재 상태와 변경 범위
+
+- 시작 local main = origin/main = `3d8fc55`(PR #35 병합). 작업 브랜치 `feature/day140-stamp-punch-motion`(원본 폴더, 새 worktree 없음). 시작 tracked/staged 변경 0개, SAFE 38개 일치, 기존 미추적 47개(무시되는 `.claude/settings.local.json` 포함) 해시 기준선 기록.
+- 저장 성공(`CaptureState.Success` = 자르기 + DB insert 완료) 화면을 수정구 대기(1,100ms)에서 **C안 펀칭 → 갤러리 복귀**로 바꿨어. 첫 구현은 목업 그대로 1,900ms였고, 실기기 확인 뒤 사용자 후속 요청으로 **2,800ms**로 늘렸어(아래 속도 조정). 저장 중(`Saving`) 화면, 실패(`Error`) 문구, 취소(coroutine 취소 → 임시 파일 정리) 경로는 그대로야. 펀칭은 성공 상태에서만 그려져.
+- 새 파일: `ui/camera/StampPunchTimeline.kt`(목업 `CANDS` C안·`stateAt` 직역 순수 함수 + `SuccessExitGate`), `ui/camera/StampPunchScreen.kt`(Canvas 한 장). 수정: `CameraScreen.kt`(Success 분기 교체, 1,100ms `LaunchedEffect` 제거), `CameraViewModel.kt`(`claimSuccessExit()` 추가). 테스트: `test/.../ui/camera/StampPunchTimelineTest.kt` 7건. 문서: 이 HANDOFF, `TEST-COVERAGE-MAP.md`.
+- 장면: 커팅 매트 위 고정된 종이에 방금 저장한 사진이 C2 우표로 인쇄 → 펀칭기(C2 날 + C2 창 판) 하강·누름 → 1,050ms에 종이가 `시트 − C2`(Path Difference) 구멍 + 같은 C2 조각으로 바뀜 → 펀칭기 상승 → 조각만 높이 5로 들려 그림자 생김 → 정착 후 종료 정지 → 복귀. 윤곽은 `PostcardRenderSpec.createPinkingPath` 재사용(C2 재구현 없음).
+- 목업과의 차이: CSS 3D(rotateX 40°·perspective)를 정사영 2D 근사(평면 y×cos40°, 높이 z는 위로 sin40°, 높이에 비례한 작은 확대)로 그렸어. SVG 흐림 대신 겹친 반투명 층 그림자(minSdk 26 하드웨어 캔버스 호환), 종이 노이즈 결 생략, 우표 그림은 실제 저장 사진(우표 크기로만 decode, 사진 로딩은 최대 400ms 대기 후 진행).
+- 중복·생명주기: 복귀는 `SuccessExitGate`로 같은 저장에 한 번만 `popBackStack`. 진행 시각은 `rememberSaveable`이라 재생성 시 이어서 재생. 뒤로가기는 기존 BackHandler(Saving/Success 차단) 유지. 저장 연타는 기존 `CropReady` 검사로 무시. 복귀 직전 `resetState()`는 더 부르지 않아(카메라 미리보기가 나가는 화면에 잠깐 보이지 않게). VM은 pop 시 정리돼.
+- 움직임 줄이기(`rememberSystemReducedMotion`, 애니메이터 배율 0): 보간 없이 잘려 들린 끝 장면만 600ms 보여 주고 복귀. 배율 0.5 등은 Compose 기본 배율을 따라.
+- Room schema 19·Entity·DAO·저장 순서·파일 소유권 로직 무변경.
+
+## 검증
+
+- **속도 조정(사용자 후속 지시, 같은 브랜치·PR #36):** 장면·높이·그림자·디자인은 그대로 두고 `StampPunchTimeline`의 시간과 곡선만 바꿨어. 하강 120–950(종이에 가까울수록 감속하는 inOutCubic, 기존 inQuad), 누름 950–1,180·절단 1,050(누름 100ms 뒤 즉시 전환), 상승 1,180–1,800(천천히 떨어져 빠져나가는 inOutCubic, 기존 outQuart), 분리 확인 1,800–1,900, 들림 1,900–2,350(높이 5, outCubic 유지), 정착·종료 2,350–2,800 후 복귀. 움직임 줄이기 600ms·복귀 게이트·저장 분기 무변경.
+- **속도 조정 실기기 재검증 — 실행:** 사용자 승인 `adb install -r`(firstInstallTime 유지, 설치 전후 사진 14개 동일). 저장 1회에서 PC 연속 스크린샷으로 하강(펀칭기 위), 접촉·누름(펀칭기가 종이 위), 절단 후 분리(절단선·펀칭기 빠짐), 들림(조각 그림자·구멍 속 매트)을 약 2.8초 동안 확인. 사용자 육안 "이 속도 좋아". 앱 FATAL 없음, 임시 파일 0. 확인 중 사용자가 엽서 1장을 직접 삭제했어(파일 수 변화 원인).
+- **로컬 자동검증 — 실행:** 속도 조정 후 새 테스트 7/7(시간표 순서, 하강 감속·상승 출발 완만 검사 추가), 전체 `testDebugUnitTest` 1,302건·139 suite 실패 0, `assembleDebug` 성공(Gradle 9.9.1, Zulu 17).
+- **실사용 기기 instrumentation — 불필요:** 추가·변경 없음.
+- **실기기 감각 QA — 실행(승인된 실사용 기기 SM-S936N, 사용자 승인 `adb install -r`, firstInstallTime 유지·기존 사진 14개 보존 확인):** 정상 저장 → 펀칭 1회 → 갤러리 복귀·새 엽서 표시(사용자 "잘 됐어"). PC로 받은 연속 스크린샷에서 펀칭기 하강, 절단 후 구멍 속 매트·조각 그림자·들림 확인. 연타 + 재생 중 뒤로가기: 엽서 1장만 생성, 복귀 1회, 앱 종료 없음. 애니메이션 끔: 끝 장면 후 바로 복귀(사용자 확인), 배율 1.0 복원 확인. 5회 저장 동안 이 앱 FATAL 없음, `postcards_temp` 0개.
+- **미검증·한계:** 저장 실패 화면은 안전한 재현 수단이 없어 코드 경로 확인만(기존 Error 분기 무변경). 회전 중 재생성 이어 재생은 실기기 미확인. 반복 저장 메모리는 측정 화면 상태가 달라 PSS 265MB(3회 후)·324MB(5회 후, Graphics 44→121MB)를 엄밀히 비교하지 못했어 — 누수 단정도 배제도 하지 않아. 녹화 영상(h264)은 PC 디코더가 없어 프레임 분석 미실행(세션 scratchpad, 저장소 밖).
+- 테스트 중 생긴 사용자 확인 사항: 19:16 저장 엽서는 사용자가 앱에서 직접 삭제했어(파일 소실 아님). 오늘 테스트 엽서는 기기에 남아 있고 에이전트는 지우지 않았어.
+- **TEST-COVERAGE-MAP — 갱신 완료:** 기존 문서 맨 위에 140일차 절 추가(JVM 테스트 파일 +1·@Test +6, 보호·공백 범위). 새 Markdown 파일은 만들지 않았어.
+
+## 남은 위험·재개 조건
+
+1. 사용자가 실제 모션을 다시 보고 2D 근사(우표가 가로로 눌려 보이는 원근, 매트 위아래 띠, 펀칭기 크기·그림자 진하기)를 승인해야 최종 확정이야. 조정 요청은 같은 브랜치에서 수치만 바꿔.
+2. main 병합은 PR head/base·CI를 사용자가 검토·승인한 뒤에만.
+
+---
+
 # HANDOFF — 2026-11-21 139일차 후속: Markdown 운영 규칙 최소 정비
 
 패코(Codex), 수동 표준 모드. 사용자 후속 작업지시서로 기존 규칙 최소 수정·기존 HANDOFF 갱신·작업 브랜치 commit/push·PR·필수 CI 확인까지 승인됐어. **main 병합은 별도 최종 승인 전 금지**야. 아래 선행 작업 원문은 당시 상태로 그대로 보존했어.

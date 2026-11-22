@@ -374,6 +374,19 @@ class CameraViewModel @Inject constructor(
         )
     }
 
+    private val successExitGate =
+        SuccessExitGate()
+
+    /**
+     * 140일차: 펀칭 모션이 끝났을 때 갤러리 복귀를 허락할지. 실제 저장 성공 상태에서
+     * 같은 저장에 대해 처음 한 번만 true라 화면 재구성·회전으로 콜백이 반복돼도
+     * popBackStack이 두 번 불리지 않는다.
+     */
+    fun claimSuccessExit(): Boolean =
+        successExitGate.tryClaim(
+            _captureState.value
+        )
+
     fun resetState() {
         _captureState.value =
             CaptureState.Idle
