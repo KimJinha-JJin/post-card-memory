@@ -128,23 +128,6 @@ fun CameraScreen(
     }
 
     /*
-     * 저장 완료 후 연한 라벤더 이동 화면을 보여준 뒤
-     * 갤러리로 돌아간다.
-     */
-    LaunchedEffect(captureState) {
-        when (captureState) {
-            is CaptureState.Success -> {
-                delay(1100.milliseconds)
-
-                viewModel.resetState()
-                onNavigateBack()
-            }
-
-            else -> Unit
-        }
-    }
-
-    /*
      * 카메라 권한 요청
      */
     LaunchedEffect(Unit) {
@@ -183,10 +166,20 @@ fun CameraScreen(
                 )
             }
 
+            /*
+             * 140일차: 실제 저장(사진 자르기 + DB 등록)이 성공한 뒤에만
+             * C안 우표 펀칭을 보여 주고, 끝나면 한 번만 갤러리로 돌아간다.
+             * 저장 중·실패·취소에는 이 화면이 나오지 않는다.
+             */
             captureState is CaptureState.Success -> {
-                TeleportWaitingScreen(
-                    title = "갤러리로 이동하는 중...",
-                    subtitle = "뿅! 추억 한 장을 안전하게 옮기고 있어요"
+                StampPunchScreen(
+                    imagePath =
+                        (captureState as CaptureState.Success).imagePath,
+                    onFinished = {
+                        if (viewModel.claimSuccessExit()) {
+                            onNavigateBack()
+                        }
+                    }
                 )
             }
 
