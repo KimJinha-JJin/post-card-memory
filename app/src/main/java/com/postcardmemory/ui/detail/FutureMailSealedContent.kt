@@ -83,7 +83,7 @@ internal fun FutureMailSealedContent(
             }
 
             Text(
-                text = if (arrived) "엽서가 도착했어요" else "아직 여행 중이에요",
+                text = if (arrived) "엽서가 도착했어" else "아직 여행 중이야",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = InkPrimary,
@@ -92,9 +92,9 @@ internal fun FutureMailSealedContent(
 
             Text(
                 text = if (arrived) {
-                    "미래 우체통에서 열어보기를 눌러야\n다시 볼 수 있어요."
+                    "미래 우체통에서 열어보기를 눌러야\n다시 볼 수 있어."
                 } else {
-                    "한 번 보낸 엽서는\n다시 열어볼 수 없어요."
+                    "한 번 보낸 엽서는\n다시 열어볼 수 없어."
                 },
                 fontSize = 15.sp,
                 color = InkSecondary,
@@ -104,7 +104,7 @@ internal fun FutureMailSealedContent(
 
             if (!arrived && formattedDate != null) {
                 Text(
-                    text = "${formattedDate}에 다시 만나요.",
+                    text = "${formattedDate}에 다시 만나자.",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = InkPrimary,

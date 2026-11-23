@@ -15,7 +15,7 @@ class DeletionMessageLogicTest {
     @Test
     fun buildDeletionResultMessage_allSucceeded() {
         assertEquals(
-            "3개를 삭제했어.",
+            "엽서 3장을 삭제했어.",
             buildDeletionResultMessage(succeededCount = 3, failedCount = 0)
         )
     }
@@ -33,7 +33,7 @@ class DeletionMessageLogicTest {
         val message = buildDeletionResultMessage(succeededCount = 2, failedCount = 1)
 
         assertEquals(
-            "2개 삭제했고, 1개는 삭제하지 못했어.",
+            "2장 삭제했고, 1장은 삭제하지 못했어.",
             message
         )
     }

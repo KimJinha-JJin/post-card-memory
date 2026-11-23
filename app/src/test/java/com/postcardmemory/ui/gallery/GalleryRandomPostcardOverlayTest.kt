@@ -22,7 +22,7 @@ class GalleryRandomPostcardOverlayTest {
             .toInstant()
             .toEpochMilli()
 
-        assertEquals("9월 5일의 이야기예요~!", randomPostcardStoryLabel(capturedAt, seoul))
+        assertEquals("9월 5일의 이야기야!", randomPostcardStoryLabel(capturedAt, seoul))
     }
 
     @Test
@@ -32,9 +32,9 @@ class GalleryRandomPostcardOverlayTest {
             .toInstant()
             .toEpochMilli()
 
-        assertEquals("9월 25일의 이야기예요~!", randomPostcardStoryLabel(capturedAt, seoul))
+        assertEquals("9월 25일의 이야기야!", randomPostcardStoryLabel(capturedAt, seoul))
         assertEquals(
-            "9월 24일의 이야기예요~!",
+            "9월 24일의 이야기야!",
             randomPostcardStoryLabel(capturedAt, ZoneId.of("UTC"))
         )
     }

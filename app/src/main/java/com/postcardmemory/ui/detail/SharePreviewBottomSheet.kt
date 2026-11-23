@@ -88,7 +88,7 @@ internal fun SharePreviewBottomSheet(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "완성된 엽서를 이미지로 보낼 수 있어요",
+                text = "완성된 엽서를 이미지로 보낼 수 있어",
                 color = InkSecondary,
                 fontSize = 13.sp
             )

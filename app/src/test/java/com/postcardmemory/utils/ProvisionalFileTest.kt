@@ -141,7 +141,7 @@ class ProvisionalFileTest {
             thrown = error
         }
 
-        assertEquals("정사각형 사진을 저장하지 못했습니다.", thrown?.message)
+        assertEquals("정사각형 사진을 저장하지 못했어.", thrown?.message)
         assertFalse(output.exists())
     }
 

@@ -57,7 +57,7 @@ class FutureMailboxViewModel @Inject constructor(
      * 건드리지 않는다. 개봉 즉시 getAllPostcards()에 다시 잡혀 일반
      * 갤러리로 돌아간다(추가 네비게이션 없이 화면 이동만으로 확인 가능).
      * 개봉 자체는 멱등이라 연타해도 데이터는 안전하지만, 가드가 없으면
-     * "엽서가 갤러리로 돌아왔어요" 메시지가 중복으로 뜬다.
+     * "엽서가 갤러리로 돌아왔어" 메시지가 중복으로 뜬다.
      *
      * 묶음은 repository.openFutureMailGroup으로 **한 번에** 연다. 예전처럼
      * id마다 따로 열면 중간에 실패했을 때 앞의 몇 장만 열린 채로 남는다.
@@ -77,7 +77,7 @@ class FutureMailboxViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             openingGuard.releasingAfter(group.deliverAtMillis) {
                 repository.openFutureMailGroup(group.postcardIds)
-                _openedMessages.trySend("엽서가 갤러리로 돌아왔어요")
+                _openedMessages.trySend("엽서가 갤러리로 돌아왔어")
             }
         }
     }

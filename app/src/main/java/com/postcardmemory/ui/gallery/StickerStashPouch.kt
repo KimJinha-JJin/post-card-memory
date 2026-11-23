@@ -395,8 +395,8 @@ internal fun StickerStashPage(
             containerColor = PaperSurface,
             titleContentColor = BrutalBlack,
             textContentColor = BrutalBlack,
-            title = { Text("이 조각을 통에서 뺄까요?", fontWeight = FontWeight.SemiBold) },
-            text = { Text("엽서에 이미 붙인 스티커는 그대로 남아요.") },
+            title = { Text("이 조각을 통에서 뺄까?", fontWeight = FontWeight.SemiBold) },
+            text = { Text("엽서에 이미 붙인 스티커는 그대로 남아.") },
             confirmButton = {
                 TextButton(
                     onClick = {

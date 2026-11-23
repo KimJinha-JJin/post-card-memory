@@ -196,10 +196,10 @@ class PostcardFrontExportRoutingStructureTest {
 
         assertTrue(gallery.contains(".exportToGallery("))
         assertTrue(gallery.contains("_exportState.value"))
-        assertTrue(gallery.contains("이미지를 저장하지 못했습니다."))
+        assertTrue(gallery.contains("이미지를 저장하지 못했어."))
         assertTrue(share.contains(".exportForSharing("))
         assertTrue(share.contains("_shareState.value"))
-        assertTrue(share.contains("엽서 이미지를 준비하지 못했어요."))
+        assertTrue(share.contains("엽서 이미지를 준비하지 못했어."))
 
         listOf(gallery, share).forEach { function ->
             val io = function.indexOf("withContext(Dispatchers.IO)")

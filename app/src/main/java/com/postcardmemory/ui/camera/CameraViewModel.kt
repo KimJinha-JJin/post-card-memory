@@ -123,7 +123,7 @@ class CameraViewModel @Inject constructor(
                     _captureState.value =
                         CaptureState.Error(
                             exception.message
-                                ?: "카메라를 실행하지 못했습니다."
+                                ?: "카메라를 실행하지 못했어."
                         )
                 }
             },
@@ -137,7 +137,7 @@ class CameraViewModel @Inject constructor(
         if (currentImageCapture == null) {
             _captureState.value =
                 CaptureState.Error(
-                    "카메라가 아직 준비되지 않았습니다."
+                    "카메라가 아직 준비되지 않았어."
                 )
             return
         }
@@ -173,7 +173,7 @@ class CameraViewModel @Inject constructor(
                     _captureState.value =
                         CaptureState.Error(
                             exception.message
-                                ?: "사진 촬영에 실패했습니다."
+                                ?: "사진을 찍지 못했어."
                         )
                 }
 
@@ -219,7 +219,7 @@ class CameraViewModel @Inject constructor(
                 _captureState.value =
                     CaptureState.Error(
                         exception.message
-                            ?: "촬영한 사진을 불러오지 못했습니다."
+                            ?: "촬영한 사진을 불러오지 못했어."
                     )
             }
         }
@@ -239,7 +239,7 @@ class CameraViewModel @Inject constructor(
         if (viewportSize <= 0f) {
             _captureState.value =
                 CaptureState.Error(
-                    "사진 자르기 영역을 확인하지 못했습니다."
+                    "사진 자르기 영역을 확인하지 못했어."
                 )
             return
         }
@@ -318,7 +318,7 @@ class CameraViewModel @Inject constructor(
                 _captureState.value =
                     CaptureState.Error(
                         exception.message
-                            ?: "우표 사진을 저장하지 못했습니다."
+                            ?: "우표 사진을 저장하지 못했어."
                     )
             } finally {
                 /*
@@ -367,7 +367,7 @@ class CameraViewModel @Inject constructor(
 
             if (!created && !directory.exists()) {
                 throw IllegalStateException(
-                    "임시 사진 폴더를 만들지 못했습니다."
+                    "임시 사진 폴더를 만들지 못했어."
                 )
             }
         }

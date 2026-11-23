@@ -227,7 +227,7 @@ internal fun randomOverlayLayout(
 
 internal fun randomPostcardStoryLabel(capturedAt: Long, zoneId: ZoneId = ZoneId.systemDefault()): String {
     val date = Instant.ofEpochMilli(capturedAt).atZone(zoneId).toLocalDate()
-    return "${date.monthValue}월 ${date.dayOfMonth}일의 이야기예요~!"
+    return "${date.monthValue}월 ${date.dayOfMonth}일의 이야기야!"
 }
 
 internal fun nextShakeOverlayPostcardId(

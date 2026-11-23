@@ -26,7 +26,7 @@ object ImageUtils {
         sourceFile: File
     ): OrientedImageSize {
         require(sourceFile.exists()) {
-            "촬영된 사진 파일을 찾을 수 없습니다."
+            "촬영된 사진 파일을 찾을 수 없어."
         }
 
         val options = BitmapFactory.Options().apply {
@@ -43,7 +43,7 @@ object ImageUtils {
             options.outHeight <= 0
         ) {
             throw IllegalStateException(
-                "사진 크기를 확인하지 못했습니다."
+                "사진 크기를 확인하지 못했어."
             )
         }
 
@@ -85,11 +85,11 @@ object ImageUtils {
         viewportSize: Float
     ): File {
         require(sourceFile.exists()) {
-            "촬영된 사진 파일을 찾을 수 없습니다."
+            "촬영된 사진 파일을 찾을 수 없어."
         }
 
         require(viewportSize > 0f) {
-            "사진 자르기 영역의 크기가 올바르지 않습니다."
+            "사진 자르기 영역의 크기가 올바르지 않아."
         }
 
         val exif = ExifInterface(
@@ -104,7 +104,7 @@ object ImageUtils {
         val originalBitmap = BitmapFactory.decodeFile(
             sourceFile.absolutePath
         ) ?: throw IllegalStateException(
-            "사진을 불러올 수 없습니다."
+            "사진을 불러올 수 없어."
         )
 
         // 원본은 여기서 recycle하지 않는다(예전 동작 그대로).
@@ -218,7 +218,7 @@ object ImageUtils {
 
             if (!created && !directory.exists()) {
                 throw IllegalStateException(
-                    "사진 저장 폴더를 만들지 못했습니다."
+                    "사진 저장 폴더를 만들지 못했어."
                 )
             }
         }
@@ -262,7 +262,7 @@ object ImageUtils {
 
                 if (!saved) {
                     throw IllegalStateException(
-                        "정사각형 사진을 저장하지 못했습니다."
+                        "정사각형 사진을 저장하지 못했어."
                     )
                 }
 

@@ -45,8 +45,8 @@ class VisitCalendarTest {
     }
 
     @Test fun visitCountLabelReflectsTotalVisitDaysWithoutStreakOrRewardWording() {
-        assertEquals("오늘까지 73번 만났어요~!", visitCountLabel(73))
-        assertEquals("오늘까지 1번 만났어요~!", visitCountLabel(1))
+        assertEquals("오늘까지 73번 만났어!", visitCountLabel(73))
+        assertEquals("오늘까지 1번 만났어!", visitCountLabel(1))
         assertEquals("", visitCountLabel(null))
         val forbidden = listOf("연속", "출석", "성공", "streak", "reward", "achievement", "축하")
         forbidden.forEach { word -> assertFalse(visitCountLabel(73).contains(word)) }
