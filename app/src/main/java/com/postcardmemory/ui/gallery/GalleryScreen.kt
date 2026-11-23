@@ -604,7 +604,7 @@ fun GalleryScreen(
                         }
 
                         Text(
-                            text = "${selectedIds.size}개 선택",
+                            text = "${selectedIds.size}장 선택",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = BrutalCoral,
@@ -935,7 +935,7 @@ fun GalleryScreen(
                     )
 
                     Text(
-                        text = "아직 추억이 없어요\n첫 번째 사진을 찍어봐요!",
+                        text = "아직 추억이 없어\n첫 번째 사진을 찍어봐!",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = BrutalBlack,
@@ -1207,13 +1207,13 @@ fun GalleryScreen(
             textContentColor = BrutalBlack,
             title = {
                 Text(
-                    text = "${selectedIds.size}개를 삭제할까요?",
+                    text = "엽서 ${selectedIds.size}장을 삭제할까?",
                     fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
                 Text(
-                    text = "선택한 엽서는 삭제 후 복구할 수 없어요."
+                    text = "삭제하면 되돌릴 수 없어."
                 )
             },
             confirmButton = {
@@ -2450,7 +2450,7 @@ private fun SearchEmptyState(
             )
 
             Text(
-                text = "'$query' 관련 엽서는 아직 없어요.\n다른 기억의 조각을 검색해 보세요.",
+                text = "'$query' 관련 엽서는 아직 없어.\n다른 기억의 조각을 검색해 봐.",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = BrutalBlack,

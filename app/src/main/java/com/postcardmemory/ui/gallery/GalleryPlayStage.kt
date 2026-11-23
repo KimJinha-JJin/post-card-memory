@@ -387,7 +387,7 @@ fun GalleryPlayStage(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "새 엽서를 만들면 이곳을 뛰어다녀요.",
+                    text = "새 엽서를 만들면 이곳을 뛰어다녀.",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = GraphiteAccent,
@@ -454,7 +454,7 @@ fun GalleryPlayStage(
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Text(
-                        text = "엽서가 3장 모이면 쫑쫑컵을 열 수 있어요.",
+                        text = "엽서가 3장 모이면 쫑쫑컵을 열 수 있어.",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = GraphiteAccent

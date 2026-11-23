@@ -30,14 +30,14 @@ internal fun buildDeletionResultMessage(
     failedCount: Int
 ): String = when {
     failedCount == 0 ->
-        "${succeededCount}개를 삭제했어."
+        "엽서 ${succeededCount}장을 삭제했어."
 
     succeededCount == 0 ->
         "삭제하지 못했어. 다시 시도해줘."
 
     else ->
-        "${succeededCount}개 삭제했고, " +
-                "${failedCount}개는 삭제하지 못했어."
+        "${succeededCount}장 삭제했고, " +
+                "${failedCount}장은 삭제하지 못했어."
 }
 
 @HiltViewModel

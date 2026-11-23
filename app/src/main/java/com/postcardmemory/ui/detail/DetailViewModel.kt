@@ -2786,7 +2786,7 @@ class DetailViewModel @Inject constructor(
                 _layoutUpdateState.value =
                     LayoutUpdateState.Error(
                         exception.message
-                            ?: "레이아웃을 저장하지 못했습니다."
+                            ?: "레이아웃을 저장하지 못했어."
                     )
             }
         }
@@ -3693,7 +3693,7 @@ class DetailViewModel @Inject constructor(
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Error(
                         exception.message
-                            ?: "배경색을 저장하지 못했습니다."
+                            ?: "배경색을 저장하지 못했어."
                     )
             }
         }
@@ -3803,7 +3803,7 @@ class DetailViewModel @Inject constructor(
                 _backgroundUpdateState.value =
                     BackgroundUpdateState.Error(
                         exception.message
-                            ?: "배경 패턴을 저장하지 못했습니다."
+                            ?: "배경 패턴을 저장하지 못했어."
                     )
             }
         }
@@ -4683,7 +4683,7 @@ class DetailViewModel @Inject constructor(
                     _exportState.value =
                         ExportState.Error(
                             exception.message
-                                ?: "이미지를 저장하지 못했습니다."
+                                ?: "이미지를 저장하지 못했어."
                         )
                 }
             )
@@ -4733,7 +4733,7 @@ class DetailViewModel @Inject constructor(
                     _shareState.value =
                         ShareState.Error(
                             exception.message
-                                ?: "엽서 이미지를 준비하지 못했어요."
+                                ?: "엽서 이미지를 준비하지 못했어."
                         )
                 }
             )

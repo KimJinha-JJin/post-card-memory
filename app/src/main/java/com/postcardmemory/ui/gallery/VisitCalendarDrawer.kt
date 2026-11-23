@@ -107,7 +107,7 @@ internal fun visitDayKaomoji(date: LocalDate): String =
 
 // totalVisitDays를 그대로 읽어 보여주는 조용한 문구. streak/보상 의미는 담지 않는다.
 internal fun visitCountLabel(totalVisitDays: Int?): String =
-    totalVisitDays?.let { "오늘까지 ${it}번 만났어요~!" } ?: ""
+    totalVisitDays?.let { "오늘까지 ${it}번 만났어!" } ?: ""
 
 // 차분한 웜톤 잉크 색을 재사용한다(SealInkNavy/SealInkRed) — 새 원색을 추가하지 않는다.
 private val WeekendSaturday = SealInkNavy

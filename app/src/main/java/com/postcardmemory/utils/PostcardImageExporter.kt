@@ -280,7 +280,7 @@ object PostcardImageExporter {
             !shareDir.mkdirs()
         ) {
             throw IOException(
-                "공유 폴더를 만들지 못했습니다."
+                "공유 폴더를 만들지 못했어."
             )
         }
 
@@ -300,7 +300,7 @@ object PostcardImageExporter {
 
                 if (!saved) {
                     throw IOException(
-                        "공유용 이미지 파일 저장에 실패했습니다."
+                        "공유용 이미지 파일을 저장하지 못했어."
                     )
                 }
             }
@@ -310,7 +310,7 @@ object PostcardImageExporter {
                 shareFile.length() == 0L
             ) {
                 throw IOException(
-                    "공유용 이미지 파일이 비어 있습니다."
+                    "공유용 이미지 파일이 비어 있어."
                 )
             }
         } catch (exception: Exception) {
@@ -386,7 +386,7 @@ object PostcardImageExporter {
 
         if (!sourceFile.exists()) {
             throw IOException(
-                "원본 사진 파일을 찾지 못했습니다."
+                "원본 사진 파일을 찾지 못했어."
             )
         }
 
@@ -1672,7 +1672,7 @@ object PostcardImageExporter {
             sourceHeight <= 0f
         ) {
             throw IOException(
-                "사진 크기를 확인하지 못했습니다."
+                "사진 크기를 확인하지 못했어."
             )
         }
 
@@ -1755,7 +1755,7 @@ object PostcardImageExporter {
                         File(
                             stickerUri.path
                                 ?: throw IOException(
-                                    "스티커 파일 경로를 찾지 못했습니다."
+                                    "스티커 파일 경로를 찾지 못했어."
                                 )
                         )
                     )
@@ -1778,7 +1778,7 @@ object PostcardImageExporter {
                     BitmapFactory.decodeFile(
                         stickerUri.path
                             ?: throw IOException(
-                                "스티커 파일 경로를 찾지 못했습니다."
+                                "스티커 파일 경로를 찾지 못했어."
                             )
                     )
                 } else {
@@ -1791,7 +1791,7 @@ object PostcardImageExporter {
                         }
                 }
                     ?: throw IOException(
-                        "스티커 사진을 불러오지 못했습니다."
+                        "스티커 사진을 불러오지 못했어."
                     )
 
             val orientation =
@@ -1892,7 +1892,7 @@ object PostcardImageExporter {
                 collectionUri,
                 contentValues
             ) ?: throw IOException(
-                "갤러리에 이미지를 만들지 못했습니다."
+                "갤러리에 이미지를 만들지 못했어."
             )
 
         try {
@@ -1908,12 +1908,12 @@ object PostcardImageExporter {
 
                     if (!saved) {
                         throw IOException(
-                            "이미지 파일 저장에 실패했습니다."
+                            "이미지 파일을 저장하지 못했어."
                         )
                     }
                 }
                 ?: throw IOException(
-                    "이미지 저장 공간을 열지 못했습니다."
+                    "이미지 저장 공간을 열지 못했어."
                 )
 
             if (

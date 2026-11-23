@@ -39,7 +39,7 @@ object MaskingTapePhotoStorage {
             !photosDirectory.mkdirs()
         ) {
             throw IOException(
-                "마스킹테이프 사진 저장 폴더를 만들지 못했습니다."
+                "마스킹테이프 사진 저장 폴더를 만들지 못했어."
             )
         }
 
@@ -67,7 +67,7 @@ object MaskingTapePhotoStorage {
                         }
                 }
                 ?: throw IOException(
-                    "선택한 사진을 불러오지 못했습니다."
+                    "선택한 사진을 불러오지 못했어."
                 )
 
             if (
@@ -75,7 +75,7 @@ object MaskingTapePhotoStorage {
                 outputFile.length() <= 0L
             ) {
                 throw IOException(
-                    "사진 파일이 올바르게 저장되지 않았습니다."
+                    "사진 파일이 올바르게 저장되지 않았어."
                 )
             }
 
@@ -87,7 +87,7 @@ object MaskingTapePhotoStorage {
                         )
                 }.getOrNull()
                     ?: throw IOException(
-                        "선택한 사진을 열 수 없습니다."
+                        "선택한 사진을 열 수 없어."
                     )
 
             if (!decodedBitmap.isRecycled) {

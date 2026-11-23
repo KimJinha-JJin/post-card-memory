@@ -2493,7 +2493,7 @@ fun DetailScreen(
         viewModel.draftAutoRestoredEvents.collect {
             val result =
                 detailSnackbarHostState.showSnackbar(
-                    message = "이전에 꾸미던 상태를 불러왔어요",
+                    message = "이전에 꾸미던 상태를 불러왔어",
                     actionLabel = "원래대로",
                     duration = SnackbarDuration.Short
                 )
@@ -6206,7 +6206,7 @@ fun DetailScreen(
                         DraftSaveStatus.Saving -> "꾸미기 저장 중…"
                         DraftSaveStatus.Saved ->
                             "✓ 편집 내용 임시 저장됨".takeIf { showSavedBriefly }
-                        DraftSaveStatus.Failed -> "꾸미기를 저장하지 못했어요"
+                        DraftSaveStatus.Failed -> "꾸미기를 저장하지 못했어"
                         DraftSaveStatus.Idle -> null
                     }
 
@@ -6662,14 +6662,14 @@ fun DetailScreen(
             },
             title = {
                 Text(
-                    text = "삭제하시겠어요?",
+                    text = "이 엽서를 삭제할까?",
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
                     text =
-                        "이 엽서를 삭제하면 복구할 수 없어요."
+                        "삭제하면 되돌릴 수 없어."
                 )
             },
             confirmButton = {
@@ -6755,7 +6755,7 @@ fun DetailScreen(
                 state = datePickerState,
                 title = {
                     Text(
-                        text = "이 엽서를 언제 다시 만나고 싶나요?",
+                        text = "이 엽서를 언제 다시 만나고 싶어?",
                         modifier = Modifier.padding(
                             start = 24.dp,
                             end = 12.dp,
@@ -6765,7 +6765,7 @@ fun DetailScreen(
                 },
                 headline = {
                     Text(
-                        text = "한 번 보낸 엽서는 도착하는 날까지\n다시 열어볼 수 없어요.",
+                        text = "한 번 보낸 엽서는 도착하는 날까지\n다시 열어볼 수 없어.",
                         color = InkSecondary,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(
@@ -6795,13 +6795,13 @@ fun DetailScreen(
                 },
                 title = {
                     Text(
-                        text = "정말 보낼까요?",
+                        text = "정말 보낼까?",
                         fontWeight = FontWeight.Bold
                     )
                 },
                 text = {
                     Text(
-                        text = "${formattedDate}까지\n이 엽서를 다시 열어볼 수 없어요."
+                        text = "${formattedDate}까지\n이 엽서를 다시 열어볼 수 없어."
                     )
                 },
                 confirmButton = {
@@ -6825,7 +6825,7 @@ fun DetailScreen(
                             showFutureMailConfirmDialog = false
                         }
                     ) {
-                        Text("아직 안 보낼래요")
+                        Text("아직 안 보낼래")
                     }
                 }
             )
@@ -7137,7 +7137,7 @@ fun DetailScreen(
             if (!file.exists() || file.length() == 0L) {
                 Toast.makeText(
                     context,
-                    "공유 이미지를 준비하지 못했어요",
+                    "공유 이미지를 준비하지 못했어",
                     Toast.LENGTH_SHORT
                 ).show()
                 return
@@ -7157,7 +7157,7 @@ fun DetailScreen(
             if (shareUri == null) {
                 Toast.makeText(
                     context,
-                    "엽서를 공유할 수 없어요",
+                    "엽서를 공유할 수 없어",
                     Toast.LENGTH_SHORT
                 ).show()
                 isLaunchingShareChooser = false
@@ -7178,7 +7178,7 @@ fun DetailScreen(
             }.onFailure {
                 Toast.makeText(
                     context,
-                    "이 이미지를 받을 수 있는 앱이 없어요",
+                    "이 이미지를 받을 수 있는 앱이 없어",
                     Toast.LENGTH_SHORT
                 ).show()
             }

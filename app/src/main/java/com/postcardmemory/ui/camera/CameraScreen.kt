@@ -163,7 +163,7 @@ fun CameraScreen(
             captureState is CaptureState.Saving -> {
                 TeleportWaitingScreen(
                     title = "우표를 정리하는 중...",
-                    subtitle = "수정구가 추억의 좌표를 맞추고 있어요"
+                    subtitle = "수정구가 추억의 좌표를 맞추고 있어"
                 )
             }
 
@@ -301,7 +301,7 @@ private fun CameraPreviewScreen(
 
                 Text(
                     text =
-                        "프레임을 기준으로 촬영하고\n다음 화면에서 위치를 조정할 수 있어요",
+                        "프레임을 기준으로 촬영하고\n다음 화면에서 위치를 조정할 수 있어",
                     color = BrutalBlack,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
@@ -325,7 +325,7 @@ private fun CameraPreviewScreen(
             ) {
                 Text(
                     text =
-                        "카메라 권한이 필요합니다\n설정에서 권한을 허용해주세요",
+                        "카메라 권한이 필요해\n설정에서 권한을 허용해줘",
                     color = BrutalBlack,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center

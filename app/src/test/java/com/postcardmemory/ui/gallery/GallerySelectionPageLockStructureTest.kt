@@ -35,6 +35,6 @@ class GallerySelectionPageLockStructureTest {
     fun returningToMonthly_doesNotClearOrReplaceSelectedIds() {
         assertFalse("복귀하면서 선택 ID를 비우거나 바꾸면 안 됨", effect.contains("selectedIds"))
         assertTrue(source.contains("val selectionMode = selectedIds.isNotEmpty()"))
-        assertTrue(source.contains("text = \"\${selectedIds.size}개 선택\""))
+        assertTrue(source.contains("text = \"\${selectedIds.size}장 선택\""))
     }
 }
