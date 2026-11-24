@@ -1,5 +1,15 @@
 package com.postcardmemory.ui.gallery
 
+import androidx.compose.ui.draw.clip
+import java.io.File
+import com.postcardmemory.ui.components.PinkingPhotoShape
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
+import androidx.compose.foundation.BorderStroke
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -153,7 +163,6 @@ import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.components.StampCardContent
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.GraphiteAccent
@@ -607,23 +616,19 @@ fun GalleryScreen(
                             text = "${selectedIds.size}장 선택",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = BrutalCoral,
+                            color = InkPrimary,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(start = 8.dp)
                         )
 
-                        IconButton(
+                        // 141일차 B안: 아이콘 + "삭제" 글자의 테두리 버튼(종이색 바탕·2dp 모서리).
+                        // 보이는 상자는 36dp, 누를 수 있는 영역은 바 높이 48dp 전체다.
+                        GallerySelectionDeleteButton(
                             onClick = {
                                 showDeleteDialog = true
                             }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "선택 항목 삭제",
-                                tint = GalleryDangerRed
-                            )
-                        }
+                        )
                     }
 
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
@@ -1202,22 +1207,35 @@ fun GalleryScreen(
             onDismissRequest = {
                 showDeleteDialog = false
             },
+            // 141일차 B안: 종이 한 장 같은 4dp 모서리 창, 지울 엽서 썸네일, 2dp 모서리 버튼.
+            shape = RoundedCornerShape(4.dp),
             containerColor = PaperSurface,
             titleContentColor = BrutalBlack,
             textContentColor = BrutalBlack,
             title = {
                 Text(
                     text = "엽서 ${selectedIds.size}장을 삭제할까?",
+                    fontSize = 19.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
-                Text(
-                    text = "삭제하면 되돌릴 수 없어."
-                )
+                val thumbnails = remember(postcards, selectedIds) {
+                    galleryDeleteDialogThumbnails(postcards, selectedIds)
+                }
+                Column {
+                    if (thumbnails.shown.isNotEmpty()) {
+                        GalleryDeleteThumbnailRow(thumbnails)
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+                    // 실제 삭제 범위: 앱 안의 엽서 사진·꾸미기 상태·초안 파일과 DB 기록(되돌리기 없음).
+                    Text(
+                        text = "삭제하면 되돌릴 수 없어. 엽서에 담긴 사진과 꾸미기도 함께 지워져."
+                    )
+                }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         val idsToDelete = selectedIds
 
@@ -1225,29 +1243,128 @@ fun GalleryScreen(
                         selectedIds = emptySet()
 
                         viewModel.deletePostcards(idsToDelete)
-                    }
+                    },
+                    shape = RoundedCornerShape(2.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GalleryDangerRed,
+                        contentColor = PaperSurface
+                    )
                 ) {
                     Text(
-                        text = "삭제",
-                        color = GalleryDangerRed,
-                        fontWeight = FontWeight.SemiBold
+                        text = "${selectedIds.size}장 삭제",
+                        fontWeight = FontWeight.Bold
                     )
                 }
             },
             dismissButton = {
-                TextButton(
+                OutlinedButton(
                     onClick = {
                         showDeleteDialog = false
-                    }
+                    },
+                    shape = RoundedCornerShape(2.dp),
+                    border = BorderStroke(1.5.dp, PaperDivider),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = InkPrimary
+                    )
                 ) {
                     Text(
                         text = "취소",
-                        color = GraphiteAccent,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
         )
+    }
+}
+
+/**
+ * 141일차 B안: 선택 모드 상단 삭제 버튼. 휴지통 아이콘과 "삭제" 글자를 적갈색 테두리·종이색
+ * 바탕·2dp 모서리 상자에 함께 둔다(알약형 아님). 보이는 상자는 36dp, 터치 영역은 48dp.
+ */
+@Composable
+private fun GallerySelectionDeleteButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(end = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier
+                .height(36.dp)
+                .background(PaperSurface, RoundedCornerShape(2.dp))
+                .border(1.5.dp, GalleryDangerRed, RoundedCornerShape(2.dp))
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = null,
+                tint = GalleryDangerRed,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "삭제",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = GalleryDangerRed
+            )
+        }
+    }
+}
+
+/** 삭제 확인창에 보여줄 썸네일: 갤러리 순서대로 앞의 [limit]장과 나머지 장 수. */
+internal data class GalleryDeleteThumbnails(
+    val shown: List<Postcard>,
+    val remaining: Int
+)
+
+internal const val GALLERY_DELETE_THUMBNAIL_LIMIT = 4
+
+internal fun galleryDeleteDialogThumbnails(
+    postcards: List<Postcard>,
+    selectedIds: Set<Long>,
+    limit: Int = GALLERY_DELETE_THUMBNAIL_LIMIT
+): GalleryDeleteThumbnails {
+    val selected = postcards.filter { it.id in selectedIds }
+    return GalleryDeleteThumbnails(
+        shown = selected.take(limit),
+        remaining = (selected.size - limit).coerceAtLeast(0)
+    )
+}
+
+/**
+ * 지울 엽서 썸네일 줄. 44dp 크기로만 불러와(Coil이 표시 크기에 맞춰 decode) 원본을 크게 읽지
+ * 않고, 4장을 넘으면 "+N"만 적는다. 사진을 못 읽으면 종이색 빈 자리로 남는다.
+ */
+@Composable
+private fun GalleryDeleteThumbnailRow(thumbnails: GalleryDeleteThumbnails) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        thumbnails.shown.forEach { postcard ->
+            AsyncImage(
+                model = File(postcard.imagePath),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(PinkingPhotoShape)
+                    .background(PaperTray)
+            )
+        }
+        if (thumbnails.remaining > 0) {
+            Text(
+                text = "+${thumbnails.remaining}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = InkSecondary,
+                modifier = Modifier.padding(start = 2.dp)
+            )
+        }
     }
 }
 
@@ -2379,7 +2496,8 @@ private fun GalleryMonthlyGridItem(
             isSelected = isSelected,
             dateLabelOverride = dayLabel,
             // 130일차 B: 눌림·누른 쪽 기울기·집어 듦(그리기만, 클릭 처리는 기존과 같은 combinedClickable).
-            modifier = Modifier.randomPostcardShake(postcard.id, randomReveal, randomReducedMotion).then(galleryCardPressFeel(
+            modifier = Modifier.semantics { selected = isSelected }
+                .randomPostcardShake(postcard.id, randomReveal, randomReducedMotion).then(galleryCardPressFeel(
                 liftOnOpen = liftOnOpen,
                 enabled = randomReveal?.session == null,
                 onClick = onClick,

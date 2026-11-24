@@ -1,3 +1,44 @@
+# HANDOFF — 2026-11-24 142일차 추가: PR #39 카드 선택 접근성 보정
+
+- 추가 지시의 선행 검증에서 일반 월별 갤러리 카드가 선택 상태를 Compose semantics로 전달하지 않는 것을 확인했어. `GalleryScreen.kt`의 일반 카드 modifier에 `selected = isSelected`만 연결했어. 시각 디자인·선택/삭제 로직·Room schema 19·다른 화면은 무변경이야.
+- **로컬 자동검증 — 실행:** `testDebugUnitTest assembleDebug` 성공, XML 1,307 tests / 140 suites, failures/errors/skipped 0. JVM source `@Test` 1,307·테스트 파일 139로 수·테스트 구현은 무변경이야. 이 JVM 검사가 실제 TalkBack 발화를 보호하는 것은 아니야.
+- **실기기 감각 QA — 실행:** 같은 승인 기기 SM-S936N·package·서명·schema에서 기존 승인 범위의 `adb install -r`로 보정 APK 설치 성공. 최초 설치 시각 유지, 설치 APK와 로컬 APK hash 일치. 설치 직후 내부 files 139개 경로·hash가 설치 전과 전부 같았어.
+- 시스템 animator scale 1.0→0에서 앱에 새로 진입해 단일 선택·도장 최종 표시를 확인하고 1.0으로 복구했어. 140ms 정밀 프레임 측정은 사용자 추가 지시로 병합 필수 조건에서 제외됐어.
+- 사용자가 TalkBack을 직접 켜서 선택한 첫 엽서와 선택하지 않은 옆 엽서를 확인한 뒤 **“선택됨/선택 안 됨이 구분돼”**라고 보고했어. 실제 음성은 사용자 확인 근거야. 기존 비파괴 QA의 1~5장 선택·해제·삭제 확인창 취소 결과와 함께 사용해. 최종 삭제·편집 저장·실기기 instrumentation은 실행하지 않았어.
+- UIAutomator XML의 selected=false만으로 보정 실패를 판정하지 않아. 일반 Compose 선택 항목은 stateDescription으로 전달될 수 있고 XML dump는 그 속성을 충분히 보여주지 않아. 초기 코드의 semantics 누락과 XML 관찰의 한계를 구분해. [AndroidX 접근성 구현](https://android.googlesource.com/platform/frameworks/support/+/b8f12c706099a47e1e44d9772d03e14a4ae37146/compose/ui/ui/src/androidMain/kotlin/androidx/compose/ui/platform/AndroidComposeViewAccessibilityDelegateCompat.android.kt)도 대조했어.
+- TEST-COVERAGE-MAP에 자동 보호 범위와 실제 기기 확인을 구분해 기록했어. `Protect main` 활성·Merge commit만 허용·strict 최신 base·필수 `build-and-test`를 원격 조회로 확인했어.
+- 작성 시점 PR #39 원격 head는 `08b2f03a491b6d41380ea3d7d3db9118480553b2`, base는 `7609a67f59ce7e16f804b4ea90a61f41ba9dd5b1`. 보정 commit/push 후 새 head와 CI를 보고하고 AGENTS.md 9절에 따라 최종 병합 승인을 갱신해야 해. **기존 head에서 접근성 누락이 확인됐으므로 자동 병합하지 않아.**
+- 사용자 추가 지시로 기억 책갈피 A/B/C·27조합·별도 Entity·schema 20 구현은 승인됐지만, PR #39 선행 마감 전 구현 기준 브랜치를 임의로 바꾸지 않아. 책갈피 production 미착수. 목업·앞선 조사 기록은 별도 보존하고 갤러리 보정 commit에 혼합하지 않아.
+
+---
+
+# HANDOFF — 2026-11-23 141일차 후속: 갤러리 선택·삭제 B안(종이 도장형) 구현
+
+피코(Claude Code), 수동 표준 모드. 반말 통일 PR #38은 main에 Merge commit `7609a67`로 병합됐고(main CI verified-merge 성공, 작업 브랜치 로컬·원격 정리 완료), 그 위에서 기존 빈 브랜치 `feature/day141-gallery-selection-ui`를 최신 main으로 맞춰 사용자가 확정한 B안을 Compose로 구현했어. 브랜치 commit/push·PR·CI까지 승인, **main 병합은 사용자 최종 승인 전 금지**.
+
+## 현재 상태와 변경 범위
+
+- **선택 카드(`ui/components/StampCard.kt` `StampCardContent`):** 선택되면 카드 뒤에 `PaperTray` 종이를 사방 4dp 덧대 그려(2dp 모서리, `drawBehind`라 그리드 배치·카드 크기 불변). 그리드 간격 가로 8·세로 10dp라 이웃 선택 카드와 겹치지 않아(가로는 맞닿음, 세로 2dp 틈). 사진은 가위 윤곽 안쪽만 `PaperTray` 22%로 바래고, 날짜는 `InkPrimary`·SemiBold로 강조. 기존 핑크(`BrutalCoral`) 오버레이와 14dp 점은 없앴어. 오른쪽 위 24dp 잉크 체크 도장(`InkSecondary` 원, 종이색 테두리·안쪽 얇은 링, 흰 체크, 1dp 그림자)은 선택 순간에만 140ms 0.86배·투명→1로 찍히고 회전·번짐·튕김 없음. 이미 선택된 채 스크롤로 들어온 카드와 시스템 "애니메이션 끄기"는 바로 최종 모습. 130일차 눌림·기울기, 가위 윤곽, 흰 테두리, 편지 배지는 무변경. 연못·경주 화면은 `isSelected=false`만 넘겨 영향 없음.
+- **상단 선택 바(`GalleryScreen.kt`):** `N장 선택` 글자색 핑크→`InkPrimary`. 휴지통 아이콘만 있던 버튼을 아이콘+`삭제` 글자의 적갈색(`GalleryDangerRed`) 테두리·종이색 바탕·2dp 모서리 상자로(보이는 높이 36dp, 터치 48dp, 알약형 아님).
+- **삭제 확인창:** 4dp 모서리 종이 창, 제목 `엽서 N장을 삭제할까?`, 지울 엽서 썸네일 44dp(갤러리 순서 앞 4장, 초과는 `+N`), 안내 `삭제하면 되돌릴 수 없어. 엽서에 담긴 사진과 꾸미기도 함께 지워져.`(실제 삭제 범위 = 앱 안 사진·꾸미기 상태·초안 파일과 DB 기록, 되돌리기 없음과 일치), 테두리 `취소` + 적갈색 채움 `N장 삭제`(2dp 모서리). 썸네일은 Coil `AsyncImage`가 44dp 표시 크기로 decode하고 4장까지만 만들어 대량 선택에도 원본 decode가 없어. 사진을 못 읽으면 종이색 빈 자리로 남아.
+- 선택 상태 구조, ViewModel 선택·삭제 로직, Repository, Room schema 19, 저장 무결성, 미래 우체통, C2 천공, 140일차 펀칭, 갤러리 전체 배치는 무변경. 삭제 확인을 생략하는 경로 없음.
+- 변경: `StampCard.kt`, `GalleryScreen.kt`, 신규 `GalleryDeleteDialogThumbnailsTest.kt`, `TEST-COVERAGE-MAP.md`, 이 HANDOFF. 목업 HTML은 미추적 그대로.
+
+## 검증
+
+- **로컬 자동검증 — 실행:** 전체 `testDebugUnitTest` 1,307건·140 suite 실패 0(신규 4건), `assembleDebug` 성공(Gradle 9.9.1, Zulu 17). 선택 개수 문구 구조 검사 통과.
+- **TEST-COVERAGE-MAP — 갱신 완료:** 141일차 절 추가.
+- **실사용 기기 instrumentation — 불필요**(변경 없음).
+- **실기기 감각 QA — 필요·대기(기기 미연결, `adb devices` 0대):** 길게 누르기 직후, 1장·여러 장 선택, 해제, 도장 찍힘, 종이 덧댐(밝은·어두운 사진, 이웃 카드), 삭제 버튼, 확인창 썸네일·긴 문구, 취소 후 복귀. PR #38에서 미검증으로 남은 삭제 문구 표시도 함께. 실제 삭제 QA는 사용자 사전 승인 없이 하지 않아.
+
+## 남은 위험·재개 조건
+
+1. 실기기 QA 전에는 병합하지 않는 게 안전해(시각 결과는 자동 검사로 보호 안 됨).
+2. 화면 낭독기: 카드의 선택 상태 전달은 이번에 바꾸지 않았어(별도 범위). 상단 삭제 버튼은 `Role.Button`+보이는 `삭제` 글자로 읽혀.
+3. 위 141일차 반말 절의 용어·알약형 후보는 그대로 대기.
+
+---
+
 # HANDOFF — 2026-11-23 141일차: 안내 문구 반말 통일
 
 피코(Claude Code), 수동 표준 모드. 사용자 작업지시서로 앱 공식 문체를 반말(해체)로 확정하고, 화면 표시 문장 중 해요체·합니다체만 반말로 바꿨어. 작업 브랜치 commit/push·PR·필수 CI까지 승인됐고 **main 병합은 사용자 최종 승인 전 금지**야. 140일차 PR #36·#37은 이미 병합돼 있어(시작 main = `bde0420`).

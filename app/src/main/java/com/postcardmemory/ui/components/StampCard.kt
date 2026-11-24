@@ -1,6 +1,16 @@
 package com.postcardmemory.ui.components
 
 import androidx.compose.animation.core.LinearEasing
+import com.postcardmemory.ui.gallery.rememberSystemReducedMotion
+import com.postcardmemory.ui.theme.PaperTray
+import com.postcardmemory.ui.theme.InkSecondary
+import com.postcardmemory.ui.theme.InkPrimary
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.shadow
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Animatable
@@ -63,7 +73,6 @@ import com.postcardmemory.ui.gallery.PondController
 import com.postcardmemory.ui.gallery.PondLeafBody
 import com.postcardmemory.ui.gallery.pondWaterTiltAngleDegrees
 import com.postcardmemory.ui.gallery.pondWaterTiltRiseDp
-import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.GraphiteAccent
 import com.postcardmemory.ui.theme.PaperDivider
 import com.postcardmemory.ui.theme.PaperSurface
@@ -724,8 +733,31 @@ fun StampCardContent(
     // 무변경.
     dateLabelOverride: String? = null
 ) {
+    // 선택 해제 상태를 본 적이 있는 카드만 도장을 찍는 움직임을 보여준다. 이미 선택된 채로
+    // 스크롤해 들어온 카드는 움직이지 않고 최종 모습으로 나온다.
+    val seenUnselected = remember(postcard.id) { mutableStateOf(!isSelected) }
+    LaunchedEffect(isSelected) {
+        if (!isSelected) seenUnselected.value = true
+    }
+
+    // 141일차 B안(종이 도장형): 선택된 엽서 뒤에 한 톤 진한 종이를 한 장 덧댄다.
+    // 카드 바깥으로 4dp 번져 그리므로 그리드 배치·카드 크기는 그대로다(가로 간격 8dp라 이웃과 겹치지 않음).
+    val paperBacking = if (isSelected) {
+        Modifier.drawBehind {
+            val spread = SELECTED_PAPER_SPREAD.toPx()
+            drawRoundRect(
+                color = PaperTray,
+                topLeft = Offset(-spread, -spread),
+                size = Size(size.width + spread * 2f, size.height + spread * 2f),
+                cornerRadius = CornerRadius(SELECTED_PAPER_CORNER.toPx())
+            )
+        }
+    } else {
+        Modifier
+    }
+
     Column(
-        modifier = modifier,
+        modifier = modifier.then(paperBacking),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -740,27 +772,22 @@ fun StampCardContent(
             )
 
             if (isSelected) {
+                // 사진이 종이색으로 은은하게 바랜다(가위 윤곽 안쪽만).
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .clip(PinkingPhotoShape)
                         .background(
-                            color = BrutalCoral.copy(alpha = 0.3f)
+                            color = PaperTray.copy(alpha = SELECTED_PHOTO_PAPER_WASH_ALPHA)
                         )
                 )
-            }
 
-            if (isSelected) {
-                Box(
+                SelectedInkCheckStamp(
+                    animateIn = seenUnselected.value,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(14.dp)
-                        .background(
-                            color = BrutalCoral,
-                            shape = CircleShape
-                        )
+                        .padding(4.dp)
                 )
             }
 
@@ -796,8 +823,8 @@ fun StampCardContent(
             Text(
                 text = dateLabel,
                 fontSize = dateTextSizeSp.sp,
-                fontWeight = FontWeight.Medium,
-                color = GraphiteAccent,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isSelected) InkPrimary else GraphiteAccent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 6.dp)
@@ -805,3 +832,57 @@ fun StampCardContent(
         }
     }
 }
+
+/**
+ * 141일차 B안: 선택된 엽서 오른쪽 위의 24dp 잉크 체크 도장. 상태 표시라서 글자·물결선 없는
+ * 단색 원 + 체크만 그린다(소인·우표 장식과 구별). 선택되는 순간 140ms 동안 0.86배·투명에서
+ * 살짝 찍히고, 회전·번짐·튕김은 없다. 이미 선택된 채로 화면에 들어온 카드(스크롤)와
+ * 시스템 "애니메이션 끄기"에서는 움직임 없이 바로 최종 모습이다.
+ */
+@Composable
+private fun SelectedInkCheckStamp(animateIn: Boolean, modifier: Modifier = Modifier) {
+    val reduceMotion = rememberSystemReducedMotion()
+    val appear = remember { Animatable(if (reduceMotion || !animateIn) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (appear.value < 1f) {
+            appear.animateTo(1f, tween(SELECTED_STAMP_IN_MS, easing = FastOutSlowInEasing))
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .size(SELECTED_STAMP_SIZE)
+            .graphicsLayer {
+                val scale = SELECTED_STAMP_START_SCALE + (1f - SELECTED_STAMP_START_SCALE) * appear.value
+                scaleX = scale
+                scaleY = scale
+                alpha = appear.value
+            }
+            .shadow(elevation = 1.dp, shape = CircleShape)
+            .border(1.5.dp, PaperSurface, CircleShape)
+            .background(InkSecondary, CircleShape)
+            .drawBehind {
+                // 도장 안쪽 테두리 한 줄(종이색, 반투명)
+                drawCircle(
+                    color = PaperSurface.copy(alpha = 0.55f),
+                    radius = size.minDimension / 2f - 2.5.dp.toPx(),
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Check,
+            contentDescription = null,
+            tint = PaperSurface,
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+private val SELECTED_PAPER_SPREAD = 4.dp
+private val SELECTED_PAPER_CORNER = 2.dp
+private const val SELECTED_PHOTO_PAPER_WASH_ALPHA = 0.22f
+private val SELECTED_STAMP_SIZE = 24.dp
+private const val SELECTED_STAMP_IN_MS = 140
+private const val SELECTED_STAMP_START_SCALE = 0.86f
