@@ -2496,7 +2496,8 @@ private fun GalleryMonthlyGridItem(
             isSelected = isSelected,
             dateLabelOverride = dayLabel,
             // 130일차 B: 눌림·누른 쪽 기울기·집어 듦(그리기만, 클릭 처리는 기존과 같은 combinedClickable).
-            modifier = Modifier.randomPostcardShake(postcard.id, randomReveal, randomReducedMotion).then(galleryCardPressFeel(
+            modifier = Modifier.semantics { selected = isSelected }
+                .randomPostcardShake(postcard.id, randomReveal, randomReducedMotion).then(galleryCardPressFeel(
                 liftOnOpen = liftOnOpen,
                 enabled = randomReveal?.session == null,
                 onClick = onClick,

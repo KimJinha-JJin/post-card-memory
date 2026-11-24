@@ -1,3 +1,17 @@
+# HANDOFF — 2026-11-24 142일차 추가: PR #39 카드 선택 접근성 보정
+
+- 추가 지시의 선행 검증에서 일반 월별 갤러리 카드가 선택 상태를 Compose semantics로 전달하지 않는 것을 확인했어. `GalleryScreen.kt`의 일반 카드 modifier에 `selected = isSelected`만 연결했어. 시각 디자인·선택/삭제 로직·Room schema 19·다른 화면은 무변경이야.
+- **로컬 자동검증 — 실행:** `testDebugUnitTest assembleDebug` 성공, XML 1,307 tests / 140 suites, failures/errors/skipped 0. JVM source `@Test` 1,307·테스트 파일 139로 수·테스트 구현은 무변경이야. 이 JVM 검사가 실제 TalkBack 발화를 보호하는 것은 아니야.
+- **실기기 감각 QA — 실행:** 같은 승인 기기 SM-S936N·package·서명·schema에서 기존 승인 범위의 `adb install -r`로 보정 APK 설치 성공. 최초 설치 시각 유지, 설치 APK와 로컬 APK hash 일치. 설치 직후 내부 files 139개 경로·hash가 설치 전과 전부 같았어.
+- 시스템 animator scale 1.0→0에서 앱에 새로 진입해 단일 선택·도장 최종 표시를 확인하고 1.0으로 복구했어. 140ms 정밀 프레임 측정은 사용자 추가 지시로 병합 필수 조건에서 제외됐어.
+- 사용자가 TalkBack을 직접 켜서 선택한 첫 엽서와 선택하지 않은 옆 엽서를 확인한 뒤 **“선택됨/선택 안 됨이 구분돼”**라고 보고했어. 실제 음성은 사용자 확인 근거야. 기존 비파괴 QA의 1~5장 선택·해제·삭제 확인창 취소 결과와 함께 사용해. 최종 삭제·편집 저장·실기기 instrumentation은 실행하지 않았어.
+- UIAutomator XML의 selected=false만으로 보정 실패를 판정하지 않아. 일반 Compose 선택 항목은 stateDescription으로 전달될 수 있고 XML dump는 그 속성을 충분히 보여주지 않아. 초기 코드의 semantics 누락과 XML 관찰의 한계를 구분해. [AndroidX 접근성 구현](https://android.googlesource.com/platform/frameworks/support/+/b8f12c706099a47e1e44d9772d03e14a4ae37146/compose/ui/ui/src/androidMain/kotlin/androidx/compose/ui/platform/AndroidComposeViewAccessibilityDelegateCompat.android.kt)도 대조했어.
+- TEST-COVERAGE-MAP에 자동 보호 범위와 실제 기기 확인을 구분해 기록했어. `Protect main` 활성·Merge commit만 허용·strict 최신 base·필수 `build-and-test`를 원격 조회로 확인했어.
+- 작성 시점 PR #39 원격 head는 `08b2f03a491b6d41380ea3d7d3db9118480553b2`, base는 `7609a67f59ce7e16f804b4ea90a61f41ba9dd5b1`. 보정 commit/push 후 새 head와 CI를 보고하고 AGENTS.md 9절에 따라 최종 병합 승인을 갱신해야 해. **기존 head에서 접근성 누락이 확인됐으므로 자동 병합하지 않아.**
+- 사용자 추가 지시로 기억 책갈피 A/B/C·27조합·별도 Entity·schema 20 구현은 승인됐지만, PR #39 선행 마감 전 구현 기준 브랜치를 임의로 바꾸지 않아. 책갈피 production 미착수. 목업·앞선 조사 기록은 별도 보존하고 갤러리 보정 commit에 혼합하지 않아.
+
+---
+
 # HANDOFF — 2026-11-23 141일차 후속: 갤러리 선택·삭제 B안(종이 도장형) 구현
 
 피코(Claude Code), 수동 표준 모드. 반말 통일 PR #38은 main에 Merge commit `7609a67`로 병합됐고(main CI verified-merge 성공, 작업 브랜치 로컬·원격 정리 완료), 그 위에서 기존 빈 브랜치 `feature/day141-gallery-selection-ui`를 최신 main으로 맞춰 사용자가 확정한 B안을 Compose로 구현했어. 브랜치 commit/push·PR·CI까지 승인, **main 병합은 사용자 최종 승인 전 금지**.
