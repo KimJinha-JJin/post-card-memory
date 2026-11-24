@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.androidx.palette)
 
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(

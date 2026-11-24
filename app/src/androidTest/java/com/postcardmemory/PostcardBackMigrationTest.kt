@@ -38,7 +38,7 @@ class PostcardBackMigrationTest {
                 db.version = 18
             }
             fun open() = Room.databaseBuilder(context, PostcardDatabase::class.java, name)
-                .addMigrations(PostcardDatabase.MIGRATION_18_19).build()
+                .addMigrations(PostcardDatabase.MIGRATION_18_19, PostcardDatabase.MIGRATION_19_20).build()
             room = open()
             val dao = room.postcardDao()
             val old = checkNotNull(dao.getPostcardById(1)) // Room validates migrated schema here
