@@ -3,6 +3,8 @@ package com.postcardmemory.ui.gallery
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.postcardmemory.data.BookmarkDesign
+import com.postcardmemory.data.MemoryBookmarkRepository
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.data.PostcardRepository
 import com.postcardmemory.ui.futuremail.FutureMailGroup
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -43,7 +46,8 @@ internal fun buildDeletionResultMessage(
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
     private val repository: PostcardRepository,
-    private val deletionManager: PostcardDeletionManager
+    private val deletionManager: PostcardDeletionManager,
+    bookmarkRepository: MemoryBookmarkRepository
 ) : ViewModel() {
 
     val postcards: StateFlow<List<Postcard>> =
@@ -53,6 +57,21 @@ class GalleryViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = emptyList()
+            )
+
+    /*
+     * 143일차: 엽서 id → 책갈피. 키가 있으면 책갈피가 있는 엽서이고, 값이 null이면 이 버전이 그릴 수
+     * 없는 미래 형식이다(필터에는 남기고 그리지만 않는다). 첫 값 전은 null이라 필터가 켜진 채
+     * 돌아와도 "없음" 화면이 잠깐 비치지 않는다.
+     */
+    val bookmarks: StateFlow<Map<Long, BookmarkDesign?>?> =
+        bookmarkRepository
+            .observeAll()
+            .map { rows -> rows.associate { it.postcardId to it.designOrNull() } }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = null
             )
 
     /*

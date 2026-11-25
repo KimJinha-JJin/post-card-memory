@@ -1,3 +1,39 @@
+# HANDOFF — 2026-11-25 143일차: 기억 책갈피 구현·실기기 QA 완료, main 병합 전
+
+- **구현:** 승인 A로 색 6개 추가(9색·81조합, schema 20 그대로)와 가는 가장자리 선. 편집 화면 더보기에서 여는 제작 화면(종이·색·작은 흔적, 저장하지 않는 미리보기, 저장 성공 뒤에만 나오는 930ms 끼우기 모션, 다시 꾸미기, 책갈피만 빼기), 월별 갤러리 표시, 정렬 메뉴의 책갈피 있는 엽서만 보기. DetailViewModel·초안·확정 저장·공유 exporter 무변경. 연못·쉼터·쫑쫑컵·흔들어서 한 장·기억 밀도에는 책갈피를 그리지 않아.
+- **자동 검증:** 최종 코드 전체 JVM **1346/1346**(146 suites, 실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest` 성공. 계측 테스트는 컴파일만 했어.
+- **실기기 QA(사용자):** 만들기·모션, 재시작 유지·다시 꾸미기·빼기, 접근성(애니메이션 끄기·TalkBack·큰 글자) 정상 보고. 갤러리 노출은 "조금 더 잘 보이게" 요청으로 5.5%→9.5%로 늘려 재설치했고 "딱 좋아" 확정(작업지시서의 5~6%보다 사용자 확정값이 우선).
+- **미검증:** 실제 Android 자동 백업·복원, 복사본 복원, 실제 APK 교체 다운그레이드. 프로세스 강제 종료 뒤 제작 화면 복원은 JVM 세션 테스트까지만 했어. 원격 CI 결과와 PR은 대화상 최종 보고에서 확인해.
+- **Git:** 이 기록은 commit 전 작성이야. main 병합 미승인.
+
+## schema 20 설치 이후 주의사항
+
+- **현재 사실:** 사용자 B-1 승인으로 SM-S936N에 `feature/day142-memory-bookmark` schema 20 APK를 `adb install -r`로 설치·실행했어. 이후 받은 다운그레이드 확인 지시(설치 전 조건)보다 설치가 먼저였어. 실기기 DB는 19→20이고, 첫 실행 직후 엽서 11장·37컬럼이 설치 전과 같았어. 이후 사용자 추가 승인으로 길이 수정본을 같은 방식으로 한 번 더 설치했고, 설치 직후 DB·files·shared_prefs 해시 변화는 0이었어. 그 밖의 APK 설치는 매번 새 승인이 필요해.
+- **main 병합 전 금지:** 이 기기에 main이나 schema 19인 다른 브랜치의 APK를 설치하지 않아. Android Studio Run(현재 브랜치가 무엇인지 먼저 확인), CI·과거 APK도 같아. main의 DB 버전은 19이고 20→19 migration은 없어.
+- **브랜치 전환:** 코드 조회·PC 테스트를 위한 전환은 괜찮지만 기기 설치는 schema 20 이상인 이 브랜치 APK로만 해. 이후 파생 브랜치도 schema 20을 포함해야 해.
+- **앱이 안 열리면:** 앱 제거·데이터 삭제·초기화·재설치 우회 금지. 그대로 멈추고 사용자에게 알린 뒤 schema 20용 수정판을 검토해. 역방향 migration이나 DB 초기화·destructive fallback을 임의로 추가하지 않아(main·이 브랜치 소스 모두 해당 설정 없음).
+- **백업 한계:** 설치 전 앱을 닫고 DB·files·shared_prefs 146개를 PC 저장소 밖으로 복사해 해시 일치·DB 무결성·사진 11개를 확인했어. 두 번째 설치 전에도 schema 20 상태 147개를 따로 복사했어. 복원은 검증하지 않았어. Android 자동 백업도 미검증이야.
+- **격리 시험(PC Robolectric/API 34, 가상 엽서 11장, origin/main `0e30c10`과 이 브랜치의 실제 `DatabaseModule`):** main으로 schema 20을 5회 열면 매번 `A migration from 20 to 19 was required`로 실패하고, 엽서·책갈피·version 20·integrity는 그대로였어(정상 종료본은 파일 바이트까지 동일, WAL이 남은 본은 WAL이 본 파일에 합쳐져 바이트만 달라짐). 이어 브랜치로 다시 열면 전부 동일하고 저장·추가·삭제도 정상이야. DB 계층만의 확인이고 실제 앱 화면의 종료 모습·사진/꾸미기 파일·실기기 다운그레이드는 미검증(실기기 실험 금지).
+
+---
+
+# HANDOFF — 2026-11-24 142일차 사용량 한도에 따른 안전 중단
+
+- 사용자 긴급 지시로 새 구현을 중단했어. 책갈피의 전체 기능 완료가 아니라 **데이터 기반 작업과 미완성 종이 렌더러를 보존하는 체크포인트**야. 아래 조사 당시의 승인 대기·Git 상태는 역사 기록이고 이 절이 현재 상태야.
+- **PR #39 완료:** 접근성 보정 head `6fa514d882f02e9a70f8d96696b3061cbe62da7e`의 JVM·APK·instrumentation 컴파일 CI 성공, 사용자 TalkBack 선택 상태 구분 확인과 갱신된 병합 승인 후 Merge commit `0e30c10be8828e1ac31c52ba687fb211bf1f5b2b`으로 병합. main CI [45390163795](https://github.com/KimJinha-JJin/post-card-memory/actions/runs/45390163795)는 `verified-merge` 빌드 생략 성공이야. local main=origin/main도 같은 SHA야.
+- 현재 브랜치 `feature/day142-memory-bookmark`, 체크포인트 commit 전 HEAD는 위 main SHA야. 기존 갤러리 브랜치와 책갈피 production을 분리했어. 최종 commit·push SHA는 대화상 마감 보고에서 확인해. 신규 책갈피 main 병합은 금지야.
+- **작성한 데이터 기반:** `MemoryBookmark` Entity·형태/색/작은 흔적 27조합·DAO/Repository, 엽서 id PK+FK로 0..1 관계, CASCADE 정리, 미래 형식 덮어쓰기 transaction 방어. `PostcardDao.insertPostcard` 한 메서드만 REPLACE→Room Upsert로 바꿔 같은 id 재저장 시 자식 삭제를 피하게 했어. DAO 전체 재작성 없음.
+- **Room:** schema 20 export JSON 생성, `MIGRATION_19_20`은 빈 책갈피 테이블만 만들고 기존 엽서 행을 쓰지 않아. DatabaseModule 등록 완료. 기존 두 migration 계측 테스트도 새 현재 버전까지 연결했지만 계측 실행은 하지 않았어.
+- **로컬 자동검증 — 실행:** 관련 신규 JVM **10/10**, XML 2 suites, failures/errors/skipped 0. `assembleDebug`도 성공(50 tasks: 24 executed·26 up-to-date). `testDebugUnitTest --tests com.postcardmemory.data.MemoryBookmarkDesignTest --tests com.postcardmemory.data.MemoryBookmarkDatabaseTest assembleDebug --no-daemon --max-workers=1`로 실행했어. 전체 JVM 1317건은 재실행하지 않았어. schema 20 APK는 실제 사용자 기기에 설치하지 않았고 중단 마감에서도 설치하지 않아.
+- 사용자 별도 승인으로 테스트 전용 Robolectric 4.18.1을 추가했어. API 34·기존 JDK 17, PC 임시 Application/DB만 사용하며 실제 앱 DB·실기기·emulator는 사용하지 않아. DB 사본 검사는 **닫힌 PC 테스트 DB snapshot**의 id/관계 복원 검사이지 Android 시스템 백업·사진/꾸미기 파일·기기 간 복원 검증이 아니야.
+- **미완성 별도 보존:** `ui/components/MemoryBookmarkPaper.kt`는 A/B/C Path·섬유·작은 흔적·뒤쪽 그리기 초안이야. 컴파일은 통과했지만 아직 호출부가 없고 실제 화면/27조합 렌더링 검증은 안 했어. 데이터 체크포인트와 별도 WIP commit으로 구분해. 사용자 검토한 HTML 목업과 앞선 조사 기록도 보존해. 책갈피 PR·CI·실기기 QA는 미실행이며 사용량 중단 지시에 따라 이번 마감에서 확대하지 않아.
+- **미착수:** 제작 overlay/ViewModel, 더보기 진입, 미리보기/삽입 모션, 갤러리 표시·필터, 편집/제거/취소 UI, 책갈피 실기기 QA. 앱에서 책갈피를 사용할 수 있는 상태가 아니야.
+- 환경 이력: `classes.jar` 잠금으로 테스트 도달 전 실패가 반복됐어. 점유 주체를 읽기 전용 조회하고 이번 작업의 유휴 Gradle daemon을 정상 종료했어(강제 종료·산출물/캐시 삭제 없음). 단일 실행 daemon·작업자 1개(`--no-daemon --max-workers=1`)에서는 JAR 단계를 통과했어. 이후 신규 테스트의 API 사용 오류 두 가지를 최소 보정했어. 환경 실패와 실제 테스트 실패를 구분해.
+- 보호 확인: 기존 보호 JSON **38/38**, 시작 미추적·`.claude` 자료 **48/48** 해시 유지. 보호 이미지·목업·보안 자료·설정·기존 worktree 정리 없음. 실사용 엽서 삭제 없음.
+- **정확한 재개점:** 이 브랜치의 최신 Git·이 절·마감 보고와 테스트 결과부터 확인해. migration/Room 테스트 미통과면 그 첫 오류부터 해결하고 실기기 설치는 보류해. 통과했다면 기존 상세 화면 composition/VM을 유지하는 제작 overlay부터 구현해. `draftSaveStatus=Saved/Idle`을 확정 저장 완료로 오인하지 말고, 진입에서 기존 꾸미기 저장·초안 삭제·되돌리기를 자동 호출하지 않아. 일반 갤러리의 기존 NONE 상태 엽서 목록에 책갈피 Map/필터를 결합하고 선택·삭제 원천은 유지해. 전체 회귀·실기기·OS 백업 검증은 후속 범위야.
+
+---
+
 # HANDOFF — 2026-11-24 142일차 추가: PR #39 카드 선택 접근성 보정
 
 - 추가 지시의 선행 검증에서 일반 월별 갤러리 카드가 선택 상태를 Compose semantics로 전달하지 않는 것을 확인했어. `GalleryScreen.kt`의 일반 카드 modifier에 `selected = isSelected`만 연결했어. 시각 디자인·선택/삭제 로직·Room schema 19·다른 화면은 무변경이야.
@@ -9,6 +45,101 @@
 - TEST-COVERAGE-MAP에 자동 보호 범위와 실제 기기 확인을 구분해 기록했어. `Protect main` 활성·Merge commit만 허용·strict 최신 base·필수 `build-and-test`를 원격 조회로 확인했어.
 - 작성 시점 PR #39 원격 head는 `08b2f03a491b6d41380ea3d7d3db9118480553b2`, base는 `7609a67f59ce7e16f804b4ea90a61f41ba9dd5b1`. 보정 commit/push 후 새 head와 CI를 보고하고 AGENTS.md 9절에 따라 최종 병합 승인을 갱신해야 해. **기존 head에서 접근성 누락이 확인됐으므로 자동 병합하지 않아.**
 - 사용자 추가 지시로 기억 책갈피 A/B/C·27조합·별도 Entity·schema 20 구현은 승인됐지만, PR #39 선행 마감 전 구현 기준 브랜치를 임의로 바꾸지 않아. 책갈피 production 미착수. 목업·앞선 조사 기록은 별도 보존하고 갤러리 보정 commit에 혼합하지 않아.
+
+---
+
+# HANDOFF — 2026-11-24 142일차: 갤러리 B안 비파괴 QA · 기억 책갈피 조사와 비교 목업
+
+패코(Codex), 수동 표준 모드. 앱 production·test·리소스·Room·Gradle 설정은 수정하지 않았어. 사용자 승인으로 PR #39 Debug APK를 실사용 기기에 데이터 유지 설치하고 선택·삭제 확인창 취소를 검증했어. 기억 책갈피는 **조사·설계 제안·독립 HTML 목업까지만** 진행했고 디자인·정책·migration·구현 승인은 아직 없어. 아래 141일차 기록은 당시 상태로 보존해.
+
+## 현재 상태와 검증
+
+- 로컬 브랜치 `feature/day141-gallery-selection-ui`, HEAD `08b2f03a491b6d41380ea3d7d3db9118480553b2`, local main/origin/main `7609a67f59ce7e16f804b4ea90a61f41ba9dd5b1`. 시작 tracked/staged 변경 0개. 기존 보조 worktree(detached HEAD `7b4c2bf`, prunable 표시)를 정리하지 않았어. Git CLI 원격 조회는 네트워크 제한으로 실패했지만 GitHub connector로 PR #39 open·merged=false·head/base 일치를 확인했어.
+- [PR #39](https://github.com/KimJinha-JJin/post-card-memory/pull/39) [Android CI run 184](https://github.com/KimJinha-JJin/post-card-memory/actions/runs/45178052479): `build-and-test` 성공. JVM·Debug APK·instrumentation 컴파일 단계 실제 실행 성공(빌드 생략 성공이 아님). CI 재실행이나 PR 수정은 하지 않았어.
+- **로컬 자동검증 — 실행:** 현재 head에서 Gradle 9.9.1·Zulu 17 `assembleDebug` 성공(41 tasks, 1 executed·40 up-to-date). 첫 offline 시도는 foojay 플러그인 해석 실패로 코드 검사 전에 중단됐고, 정상 저장소 접근으로 재시도해 성공했어. JVM은 오늘 재실행하지 않았어(앱 코드 무변경, 위 CI와 141일차 로컬 1,307건 기록을 구분해 사용).
+- **실사용 기기 instrumentation — 미실행:** 이번 QA는 ADB 관찰·안전한 입력만 사용했어. `connected*`, instrumentation, emulator 사용 없음.
+- **설치 — 사용자 명시 승인 후 실행:** SM-S936N, 실측 1080×2340·450dpi. 기존 설치본과 새 APK 서명 일치 확인 후 `adb install -r` 성공. 최초 설치 시각 유지, 설치된 APK 해시와 로컬 APK 해시 일치. 설치 직후 `files` 내부 139개 경로·SHA-256가 설치 전과 모두 같았어.
+- **실기기 감각 QA — 실행·일부 미검증:** 아래 표. 중간에 사용자의 기기 조작으로 다른 화면에 진입해 입력을 멈췄고, 사용자가 직접 조작했다고 확인했어. 이후 폰을 잠시 비워두겠다는 응답 후 재개했어. 최종 삭제·편집 저장·공유·내보내기는 누르지 않았어.
+- QA 후 `files`는 139개 유지. 실행 프로필 표식 `files/profileInstalled` 1개만 해시 변경, 나머지 138개는 같았어. 현재 앱 프로세스 AndroidRuntime 로그의 FATAL 표시 0개. **DB·SharedPreferences 전체 동일성이나 과거 모든 로그의 무오류를 보장하는 근거는 아니야.** 화면·로그 원본은 공개 저장소에 추가하지 않았어.
+- 기존 보호 JSON 기준선은 **38개 모두 일치**, 이번 시작 시 따로 확보한 기존 미추적·`.claude` 파일 **48개 모두 해시 유지**. 지시서의 과거 SAFE 43개와 집계 기준이 달라 43개 검증으로 바꿔 쓰지 않았어. 기존 미추적 목업·보안 자료·이미지·설정·로컬 산출물 이동/정리 없음. 민감정보 훅 활성 확인, 설정 변경 없음.
+- `TEST-COVERAGE-MAP` 변경 없음: production/test 및 보호 범위 변경 없음. 신규 Markdown 파일 없음. 신규 파일은 `docs/ai/mockups/memory-bookmark-day142.html` 하나야. Git stage·commit·push·main 병합 없음. 이 HANDOFF와 목업은 미커밋 상태로 검토 대기야.
+
+| 갤러리 QA 항목 | 결과와 한계 |
+|---|---|
+| 길게 누르기·단일 선택 | 실행: 선택 바·종이 덧댐·체크 도장 표시 |
+| 복수 선택·밝은/어두운 사진 | 실행: 1~5장 선택 수와 도장 수 일치, 이웃 카드 겹침·잘림 미발견 |
+| 140ms 모션·눌림 충돌 | 자동 프레임·시간 측정 미실행. 사용자는 깜빡임·충돌 문제 없다고 확인 |
+| 개별 해제·전체 선택 종료 | 실행: 5→4장, 선택 종료 후 기존 사진·날짜 표시로 복귀 |
+| 삭제 확인창 | 실행: 제목·경고 문구·적갈색 버튼·썸네일 4개·5장 선택의 `+1`, 잘림 미발견 |
+| 삭제 취소 | 실행: 확인창 닫힌 뒤 5장 선택 그대로 유지 |
+| 임시 종이와 엽서 자체 구분 | 사용자 확인: “선택 표시로 잘 구분되고 문제 없었어” |
+| 접근성·애니메이션 비활성화 | 미실행: 현재 animator scale 1.0·accessibility_enabled 0, 설정 변경 없음. 화면 낭독·배율 0·스크롤 재진입 모션은 미검증 |
+
+일반 사용 조건에서 수정할 결함을 발견하지 못했고 사용자 시각 확인도 받았어. **접근성·움직임 끄기 미검증을 남긴 조건부 병합 후보**이며 최종 병합 승인은 아직 없어. 전체 QA 통과로 표현하지 않아.
+
+## 기억 책갈피 — 실제 구조와 반례
+
+- `app/src/main/java/com/postcardmemory/data/Postcard.kt:7`: `postcards`, 자동 생성 `Long id` PK. 책갈피 속성·범용 metadata 컬럼은 없어. `PostcardDatabase.kt:8`은 Postcard 단일 Entity·schema 19. `DatabaseModule.kt:26`에서 1→19 migration을 전부 등록하며 destructive fallback 없음.
+- `PostcardDao.kt` → `PostcardRepository.kt` → `GalleryViewModel.kt:49`의 Flow로 갤러리 공급. 일반 목록은 `futureMailState='NONE'`; 책갈피 필터도 이 조건 안에서 적용해야 봉인된 편지가 노출되지 않아. 검색·정렬·월별 개수는 같은 필터 결과를 보도록 설계해야 해.
+- `CameraViewModel.kt:264`는 이미지 임시 생성 → `insertPostcard` 성공 → 파일 소유권 확정 흐름이야. 실패·취소는 임시 파일만 정리해. 현재 production insert 호출은 카메라 신규 생성(id=0)이야. `PostcardDao.kt:83`은 `OnConflictStrategy.REPLACE`이므로 **향후 같은 id 재삽입과 CASCADE 외래키가 만나는 반례**를 보호해야 해. 지금 책갈피가 지워진다는 현재 결함은 아니야. SQLite는 PK 충돌 REPLACE에서 기존 행을 먼저 삭제한다고 명시해([공식 REPLACE 문서](https://www.sqlite.org/lang_conflict.html), [외래키 동작](https://www.sqlite.org/foreignkeys.html)).
+- 엽서 컬럼 수정은 개별 DAO UPDATE와 `DetailViewModel.kt:467`의 `styleWriteMutex`로 직렬화돼. 꾸미기 6종은 `PostcardOwnedFileLayout.kt`의 엽서 id별 확정 파일, `PostcardEditDraft.kt`·`PostcardDraftStorage.kt`의 별도 초안, `DecorationEditHistory.kt`와 종류별 이력으로 관리돼.
+- `DetailViewModel.kt:945` 완료 저장은 `ConfirmedEditTransaction`으로 6종+이미지를 준비 후 교체해. DB transaction과 같은 것이 아니며 rename 중 부분 실패·프로세스 종료 한계도 명시돼 있어. 책갈피를 여기에 단순 일곱 번째 파일로 붙이면 저장·초안·확정 기준선·Undo·삭제·진단 전체를 확장해야 해.
+- `PostcardDeletionManager.kt`는 DB 삭제 성공 후에만 소유 파일 정리, 취소는 재전파해. B안 Entity는 DB 안에서 엽서와 관계 정리 후 기존 파일 정리 순서를 유지할 수 있어. 삭제 중 책갈피 재저장 경합도 별도 검증이 필요해.
+- `AndroidManifest.xml:9`의 `allowBackup=true`를 확인했어. 앱 자체 데이터 백업·가져오기/복원 workflow는 production 검색에서 찾지 못했어. 꾸미기 초안 복원은 시스템 백업과 다르고, 이미지 내보내기도 데이터 백업이 아니야. OS 백업·기기 간 복원 성공은 미검증이며 allowBackup만으로 보장하지 않아.
+- 앞면 공유·이미지 저장은 `DetailViewModel.kt:4649/4698` → `PostcardImageExporter.kt`, 뒷면은 `exportBackPostcard`와 `PostcardBackExportCapture.kt`의 캡처 경로야. 책갈피 포함을 고르면 두 출력과 화면의 여백·겹침·최종 범위를 함께 설계해야 해.
+
+## 저장 방식 비교 — 전부 승인 전 제안
+
+| 방식 | 무결성·수정·삭제 | 난이도·확장 | 백업/복원·schema |
+|---|---|---|---|
+| A Postcard 컬럼 추가 | 엽서와 같은 행에서 관리·삭제. 전용 UPDATE로 다른 속성 보존 가능 | 초기 단순, 선택 속성과 null 조합·모델 확장 부담 | 같은 DB에 포함, migration 필요 → 20 |
+| B 별도 Bookmark Entity **권장** | `postcardId` PK+FK로 0..1 관계, 설정 한 번 저장·조회·필터, 엽서 삭제와 관계 정리를 DB에서 처리 | 중간, DAO/Flow/경합·REPLACE 반례 테스트 필요. 확장과 책임 분리 유리 | 같은 DB에 포함, 빈 새 테이블 19→20 추가 후보. 실제 복원 검증은 별도 |
+| C 엽서별 확정 파일 | 기존 파일 저장 선례 있음. DB와 분리돼 고아·삭제 경합·원자성 직접 관리 | schema는 유지하나 필터 인덱스·Flow 갱신·초안·진단·소유권 처리 비용 큼 | schema 19 유지 가능. 파일·DB를 함께 복원하는 일관성 위험 |
+
+권장 데이터 초안은 `postcardId`, 안정된 `shapeId/colorId/decorationId`, 설정 format version이야. 자산 파일 없는 작은 종이 설정으로 시작하고, schema 19 유지를 위해 기존 스티커·도장 필드에 숨기거나 SharedPreferences에 흩어 저장하는 우회는 권장하지 않아. schema 20은 **필요성 제안일 뿐 변경·실행하지 않았어**. 승인 후 migration 계획은 기존 엽서 무변경·기존 엽서 책갈피 없음·새 빈 테이블·외래키/인덱스·19→20 스키마 검증·삭제/재저장/실패/재시작/복원 테스트를 포함해야 해. 실제 migration instrumentation은 격리 환경 부재와 실기기 보호 경계를 따라 실행 가능성을 따로 보고해야 해.
+
+## 진입 위치와 UI/UX 문법 사전 보고
+
+| 후보 | 발견·흐름·복잡도 | 제안 |
+|---|---|---|
+| 엽서 상세 | 한 장에 집중, 의미 명확 | 현재 독립 읽기 상세와 편집은 별도 화면이 아님. `MainActivity.kt:213`의 `detail/{postcardId}`가 `DetailScreen` 편집으로 이어져 |
+| 편집 화면 더보기 | `DetailScreen.kt:6420` 기존 메뉴 활용 가능. 도구 7종에 새 탭을 늘리지 않음 | **주 진입 권장:** 더보기 → 기억 책갈피 만들기/다시 꾸미기. 미저장 꾸미기/진행 중 저장이 있으면 선행 완료 저장 또는 취소를 사용자에게 선택하게 하고 몰래 저장하지 않는 안 |
+| 갤러리 엽서별 메뉴 | 찾아가기 빠르지만 현행 메뉴 없는 카드에 새 조작 필요 | 초기 보류. 길게 누르기의 선택·삭제 의미를 바꾸지 않음 |
+| 검색·필터 | 완성품 다시 찾기에 적합, 제작 대상은 아직 불명확 | 제작 진입 없이 ‘책갈피 있는 엽서’ 필터만 후보. 다중 선택 제작·복제 없음 |
+
+- 사용자 행동: 한 엽서에 독립 종이 소품 제작·끼우기. UI 역할: Preset Selection(종이 끝·무늬), Color Selection, Property Row, Completion/Save, 제거는 Destructive Action. 자유 이동하는 Canvas Object·기존 Sticker Add Action과 다른 역할이야.
+- 토큰/속성 행/기본 견본은 기존 Warm Paper 문법 보존 후보야. 전용 제작대와 끼우기 완료 흐름은 기존 variant가 아니라 **신규 문법 제안**으로 판단했어. 기존 꾸미기 고급 편집기 전체를 승인된 패밀리로 간주해 복사하지 않았어. 최신 전체 실기기 UX 감사·책갈피 선례는 없어 미확인 부분을 최종 승인으로 쓰지 않아.
+- 새 문법 이유: 스티커처럼 표면에 붙이고 이동하는 문법으로는 ‘뒤에 끼운 별도 종이’의 제작 과정과 겹침이 흐려져. 한 장을 제작하는 작업대와 전후 깊이 미리보기로 해결하는 제안이야. 다른 종이 소품으로의 전파·공용화는 현재 범위에 없어.
+- 진입·완료·제거·미저장 꾸미기 처리·연민트 콘텐츠 색 등은 목업 제안이며 앱 구현 STOP. 사용자 지시가 승인한 독립 HTML 비교에만 적용했어. 외부 앱 레퍼런스 복제 없음.
+
+## 디자인 자산과 신규 범위
+
+- 종이 질감: 추적 자산 `app/src/main/res/drawable-nodpi/gallery_paper_tile.png`, `GalleryScreen.kt:1685`·`DetailScreen.kt:2542` 재사용 후보. **미추적 보호 자료 `postcard_paper_fiber_tile.png`는 사용·변경하지 않았어.** HTML은 외부 파일 없이 CSS 결을 근사해.
+- 색: `ui/theme/Color.kt`의 PaperCanvas/Surface/Field/Tray/Divider, InkPrimary/Secondary, SealInkSepia. 연민트는 기존 공식 토큰으로 주장하지 않는 새 콘텐츠 색 후보야.
+- 종이 윤곽/C2: `utils/PostcardRenderSpec.kt:776`의 공용 `createPinkingPath`, `ui/components/StampCard.kt` 표시. 책갈피는 작은 별도 윤곽을 새로 설계하되 엽서의 C2 경계는 바꾸지 않아. HTML 천공은 근사야.
+- 잉크: `ui/components/SealShapes.kt`, `utils/SealInkWearRenderer.kt`; 테이프: `ui/components/MaskingTapeShapes.kt`의 섬유·끝선. 종이 질감·잉크 표현의 계산 선례만 참고하고 사용자의 도장/테이프 객체나 저장 생애주기를 책갈피로 재사용하지 않아.
+- 그림자: `PostcardRenderSpec.kt` 접촉 그림자와 `ui/detail/DecorationLiftFeel.kt` 참고 후보. 새 책갈피/엽서의 앞뒤 레이어와 가림·작은 그리드 노출 범위는 신규 구현 필요.
+- 움직임 줄이기: `ui/gallery/StickerStashPouch.kt:123`의 `rememberSystemReducedMotion`, `GalleryCardPressFeel.kt`, `StampCard.kt:844` 선례. 현재 helper는 remember 시 설정을 읽어, 화면 살아 있는 중 설정 변경 반영은 별도 확인 필요야. 이번에 수정하지 않았어.
+
+## HTML 목업과 기능 정책 제안
+
+파일: [memory-bookmark-day142.html](mockups/memory-bookmark-day142.html). 파일을 Chrome/Edge로 열면 돼. 외부 라이브러리·네트워크·실제 사진·앱 데이터·localStorage 없이 탭 메모리만 사용해. A 클래식 V자 / B 손오림 / C 미니 태그를 동일 가상 풍경·색·장식으로 비교해. 일반 엽서 → 제작 → 종이 끝/색/장식 → 미리보기 → 뒤에 끼우기 → 갤러리 → 책갈피 필터를 조작할 수 있어. 엽서마다 별도 설정이고 복제 없음. 미리보기·취소는 저장하지 않고, 끼우기 모션 중 재진입은 막아. 시스템 모션 감소와 목업 체크박스는 즉시 완료 상태로 처리해.
+
+- 추천은 **B의 작은 비대칭**: 기존 손오림 종이와 조화하며 선택 배경의 사방 덧댐/체크와 구분돼. A는 의미가 명확하지만 긴 노출, C는 작은 카드에 안정적이나 개성이 약해질 가능성이 있어. 이 추천은 목업 실화면 승인 전 제안이야.
+- 초기 범위 후보: 엽서당 1개·A/B/C 종이 끝·아이보리/브라운/연민트·장식 없음/작은 소인/세 줄. 길이 조절·사용자 글귀·위치 이동·복수 책갈피·완성품 복제는 후속 후보. 길이는 형태에 고정해.
+- 편집: 기존 것을 다시 꾸미고 명시 완료 때만 교체. 취소는 이전 것 유지. 제거: 책갈피만 제거하고 엽서는 유지, 확인 절차 후보. 기존 6종 꾸미기 Undo/Redo와 분리하고 제작 세션의 취소/원래대로를 우선 제안해. 책갈피가 기존 꾸미기 완료 저장을 대신하지 않아.
+- 필터: 일반 갤러리 내 책갈피 있는 엽서만, 검색/정렬과 함께 적용. 저장 성공 후 표시·재시작 유지. 엽서 삭제 시 관계 정리, 미래 편지 발송 시 데이터 유지하되 기존 비노출 정책 준수.
+- 공유/이미지 내보내기: 초기 제외 권장(앱 안 보관 소품), 제외 안내 필요. 포함을 원하면 앞뒤 공통 renderer·출력 크기·클리핑까지 별도 범위로 승인받아. OS 백업·복원 호환 목표는 유지하되 실제 검증되지 않은 복원 보장은 하지 않아.
+- 접근성: ‘책갈피 있음’ 설명·옵션 이름/선택 상태·색 외 표시·충분한 터치 범위·모션 감소 시 최종 모습. 갤러리 카드 크기·3열·간격 유지, 작은 노출이 이웃 행/선택 도장과 충돌하지 않는지 Compose·실기기 검증 필요.
+- **목업 검증:** Node VM의 DOM 대역으로 JS 구문·A/B/C 갱신·미리보기 비저장·엽서별 독립 적용·취소 보존·필터 토글·모션 재진입 방지·외부 요청 없음 통과. 첫 대역 검사는 PowerShell pipe 인코딩으로 한글 기대값이 깨져 실패했고 ASCII escape 기대값으로 바로잡았어. 앱/목업 결함으로 처리하지 않아.
+- **목업 실제 브라우저 표시·포인터 조작·모바일 반응형 시각 검증은 미실행:** browser access host unavailable, native Chrome 접근도 coordinate geometry unavailable / foreground process id 오류로 중단. 코드 대역 검증을 실제 브라우저 QA로 표현하지 않아. 사용자 화면 검토 또는 도구 복구 후 시각 검증이 필요해.
+
+## 승인 대기와 재개 조건
+
+1. PR #39: 위 head/base·CI와 일반 조건 QA 결과, 접근성/모션 끄기 미검증을 검토하고 병합 여부를 별도로 결정해야 해. 사용자 시각 OK는 병합 승인이 아니야.
+2. 책갈피: A/B/C 디자인, 초기 옵션·진입/미저장 처리·독립 완료·수정/제거·필터·공유 제외/포함 정책을 승인받아야 해. 목업 표시 확인도 남아 있어.
+3. 저장: B Entity와 schema 20/migration은 별도 명시 승인 필요. 승인 전 앱 코드·schema·DB 수정 없음. 새 dependency/빌드 변경도 하지 않아.
+4. PR #39 미병합 상태이므로 책갈피 Compose를 현재 브랜치에 섞지 않아. 병합 승인 후 최신 main·별도 `feature/day142-memory-bookmark`에서 시작하거나, 미병합이면 구현 기준 브랜치를 먼저 확인해야 해.
 
 ---
 

@@ -3,6 +3,7 @@ package com.postcardmemory.di
 import android.content.Context
 import androidx.room.Room
 import com.postcardmemory.data.PostcardDao
+import com.postcardmemory.data.MemoryBookmarkDao
 import com.postcardmemory.data.PostcardDatabase
 import dagger.Module
 import dagger.Provides
@@ -46,7 +47,8 @@ object DatabaseModule {
                 PostcardDatabase.MIGRATION_15_16,
                 PostcardDatabase.MIGRATION_16_17,
                 PostcardDatabase.MIGRATION_17_18,
-                PostcardDatabase.MIGRATION_18_19
+                PostcardDatabase.MIGRATION_18_19,
+                PostcardDatabase.MIGRATION_19_20
             )
             .build()
     }
@@ -57,4 +59,8 @@ object DatabaseModule {
     ): PostcardDao {
         return database.postcardDao()
     }
+
+    @Provides
+    fun provideMemoryBookmarkDao(database: PostcardDatabase): MemoryBookmarkDao =
+        database.memoryBookmarkDao()
 }

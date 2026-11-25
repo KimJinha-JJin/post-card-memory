@@ -6,13 +6,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Postcard::class],
-    version = 19,
+    entities = [Postcard::class, MemoryBookmark::class],
+    version = 20,
     exportSchema = true
 )
 abstract class PostcardDatabase : RoomDatabase() {
 
     abstract fun postcardDao(): PostcardDao
+    abstract fun memoryBookmarkDao(): MemoryBookmarkDao
 
     companion object {
 
@@ -459,6 +460,23 @@ abstract class PostcardDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE postcards ADD COLUMN backWrittenAt INTEGER")
                 db.execSQL("ALTER TABLE postcards ADD COLUMN backWrittenOffsetMinutes INTEGER")
                 db.execSQL("ALTER TABLE postcards ADD COLUMN backWritingRecordEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 기존 postcards 행과 사용자 파일에는 쓰지 않아.
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `memory_bookmarks` (
+                        `postcardId` INTEGER NOT NULL,
+                        `shapeId` TEXT NOT NULL DEFAULT 'HAND_CUT',
+                        `paperId` TEXT NOT NULL DEFAULT 'IVORY',
+                        `traceId` TEXT NOT NULL DEFAULT 'POSTMARK',
+                        `formatVersion` INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY(`postcardId`),
+                        FOREIGN KEY(`postcardId`) REFERENCES `postcards`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
             }
         }
 

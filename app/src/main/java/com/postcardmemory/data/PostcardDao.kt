@@ -1,8 +1,7 @@
 package com.postcardmemory.data
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
+import androidx.room.Upsert
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
@@ -80,9 +79,8 @@ interface PostcardDao {
         ids: List<Long>
     )
 
-    @Insert(
-        onConflict = OnConflictStrategy.REPLACE
-    )
+    // 같은 id를 재저장해도 부모 행을 삭제하지 않아 연결된 책갈피를 보존해.
+    @Upsert
     suspend fun insertPostcard(
         postcard: Postcard
     ): Long

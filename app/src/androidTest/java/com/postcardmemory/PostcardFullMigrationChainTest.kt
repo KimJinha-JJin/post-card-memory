@@ -108,7 +108,8 @@ class PostcardFullMigrationChainTest {
                     PostcardDatabase.MIGRATION_15_16,
                     PostcardDatabase.MIGRATION_16_17,
                     PostcardDatabase.MIGRATION_17_18,
-                    PostcardDatabase.MIGRATION_18_19
+                    PostcardDatabase.MIGRATION_18_19,
+                    PostcardDatabase.MIGRATION_19_20
                 )
                 .build()
 
@@ -221,7 +222,8 @@ class PostcardFullMigrationChainTest {
                     PostcardDatabase.MIGRATION_15_16,
                     PostcardDatabase.MIGRATION_16_17,
                     PostcardDatabase.MIGRATION_17_18,
-                    PostcardDatabase.MIGRATION_18_19
+                    PostcardDatabase.MIGRATION_18_19,
+                    PostcardDatabase.MIGRATION_19_20
                 )
                 .build()
 

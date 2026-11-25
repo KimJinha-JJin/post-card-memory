@@ -159,6 +159,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.postcardmemory.ui.futuremail.FutureMailGroup
+import com.postcardmemory.data.BookmarkDesign
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.components.StampCard
 import com.postcardmemory.ui.components.StampCardContent
@@ -381,6 +382,7 @@ fun GalleryScreen(
 ) {
     val postcards by viewModel.postcards.collectAsState()
     val futureMailGroups by viewModel.futureMailGroups.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -451,6 +453,11 @@ fun GalleryScreen(
         mutableStateOf(false)
     }
 
+    // 143일차: 책갈피 있는 엽서만 보기. 월별 보기에만 적용하고 기억 밀도·놀이에는 영향이 없다.
+    var bookmarkOnly by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     // 검색·정렬은 월별 보기 top bar에만 노출된다(위 topBar 참고). 기억
     // 밀도 보기로 넘어간 사이에도 이 상태들이 true로 남아있으면 월별 보기로
     // 돌아왔을 때 검색창이나 드롭다운이 탭 없이 저절로 열려 보인다 — 월별
@@ -515,7 +522,11 @@ fun GalleryScreen(
         if (shakePickedPostcardId != null) return@GalleryShakeToOpenEffect
 
         val candidateIds =
-            filterPostcardsForSearch(postcards, searchQuery).map { it.id }
+            filterPostcardsForBookmark(
+                filterPostcardsForSearch(postcards, searchQuery),
+                bookmarks,
+                bookmarkOnly && currentPageFormat == GalleryPageFormat.MONTHLY
+            ).map { it.id }
         val id = nextShakeOverlayPostcardId(shakePickedPostcardId, candidateIds)
             ?: return@GalleryShakeToOpenEffect
 
@@ -555,6 +566,14 @@ fun GalleryScreen(
     fun handleItemLongClick(id: Long) {
         if (randomReveal.session != null) return
         toggleSelection(id)
+    }
+
+    // 뒤로가기는 검색과 같이 책갈피만 보기부터 풀어 준다. 선택·검색·메뉴가 먼저다(나중에 등록된 쪽 우선).
+    BackHandler(
+        enabled = bookmarkOnly && playMode == GalleryPlayMode.NONE &&
+            currentPageFormat == GalleryPageFormat.MONTHLY
+    ) {
+        bookmarkOnly = false
     }
 
     BackHandler(enabled = selectionMode) {
@@ -720,6 +739,9 @@ fun GalleryScreen(
                         }
                     }
 
+                    if (bookmarkOnly) {
+                        GalleryBookmarkFilterBar(onClear = { bookmarkOnly = false })
+                    }
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
             } else {
@@ -848,6 +870,31 @@ fun GalleryScreen(
                                             sortMenuExpanded = false
                                         }
                                     )
+                                    HorizontalDivider(color = PaperDivider, thickness = 1.dp)
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "책갈피 있는 엽서만",
+                                                color = InkPrimary,
+                                                fontWeight = if (bookmarkOnly) {
+                                                    FontWeight.Bold
+                                                } else {
+                                                    FontWeight.Normal
+                                                }
+                                            )
+                                        },
+                                        modifier = (if (bookmarkOnly) {
+                                            Modifier.background(SunsetGold.copy(alpha = 0.16f))
+                                        } else {
+                                            Modifier
+                                        }).semantics { selected = bookmarkOnly },
+                                        onClick = {
+                                            bookmarkOnly = !bookmarkOnly
+                                            // 놀이 화면은 필터와 무관한 엽서를 띄우므로 켜는 순간 월별 보기로 돌아온다.
+                                            if (bookmarkOnly) playMode = GalleryPlayMode.NONE
+                                            sortMenuExpanded = false
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -884,6 +931,12 @@ fun GalleryScreen(
                         )
                     }
 
+                    if (
+                        bookmarkOnly && playMode == GalleryPlayMode.NONE &&
+                        currentPageFormat == GalleryPageFormat.MONTHLY
+                    ) {
+                        GalleryBookmarkFilterBar(onClear = { bookmarkOnly = false })
+                    }
                     HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
                 }
             }
@@ -971,6 +1024,11 @@ fun GalleryScreen(
                     GallerySortOrder.OLDEST ->
                         filtered.sortedBy { it.capturedAt }
                 }
+            }
+
+            // 책갈피 필터는 월별 보기에만 얹는다. 기억 밀도는 위 displayedPostcards 그대로다.
+            val monthlyPostcards = remember(displayedPostcards, bookmarks, bookmarkOnly) {
+                filterPostcardsForBookmark(displayedPostcards, bookmarks, bookmarkOnly)
             }
 
             // 연못은 월별 묶음 대신 전체 엽서 중 최신 10장만 띄운다(검색·정렬 무관).
@@ -1081,7 +1139,9 @@ fun GalleryScreen(
 
                         GalleryPageFormat.MONTHLY, null ->
                             GalleryMonthlyGridPage(
-                                postcards = if (isPondModeOn) pondPostcards else displayedPostcards,
+                                postcards = if (isPondModeOn) pondPostcards else monthlyPostcards,
+                                bookmarks = bookmarks,
+                                bookmarkOnly = bookmarkOnly && !isPondModeOn,
                                 selectedIds = selectedIds,
                                 shakeTrigger = shakeTrigger,
                                 isPondModeOn = isPondModeOn,
@@ -2226,6 +2286,8 @@ private val monthlyGridDayLabelFormatter: DateTimeFormatter =
 @Composable
 private fun GalleryMonthlyGridPage(
     postcards: List<Postcard>,
+    bookmarks: Map<Long, BookmarkDesign?>?,
+    bookmarkOnly: Boolean,
     selectedIds: Set<Long>,
     shakeTrigger: Int,
     isPondModeOn: Boolean,
@@ -2240,9 +2302,12 @@ private fun GalleryMonthlyGridPage(
     onItemLongClick: (Long) -> Unit
 ) {
     if (postcards.isEmpty()) {
+        // 책갈피를 아직 불러오는 중이면 "없음" 안내를 띄우지 않는다.
+        if (bookmarkOnly && bookmarks == null) return
         SearchEmptyState(
             query = searchQuery.trim(),
-            paddingValues = paddingValues
+            paddingValues = paddingValues,
+            bookmarkOnly = bookmarkOnly
         )
         return
     }
@@ -2428,6 +2493,7 @@ private fun GalleryMonthlyGridPage(
                             onItemLongClick(postcard.id)
                         },
                         liftOnOpen = selectedIds.isEmpty(),
+                        bookmark = bookmarks?.get(postcard.id),
                         randomReveal = randomReveal,
                         randomCards = randomCards,
                         randomReducedMotion = randomReducedMotion
@@ -2458,6 +2524,7 @@ private fun GalleryMonthlyGridItem(
     pondLeaf: ImageBitmap? = null,
     // 선택 모드가 아니라 탭이 상세로 가는 경우에만 집어 드는 움직임을 보여준다.
     liftOnOpen: Boolean = false,
+    bookmark: BookmarkDesign? = null,
     randomReveal: GalleryRandomRevealState? = null,
     randomCards: GalleryRandomCardRegistry? = null,
     randomReducedMotion: Boolean = false
@@ -2495,6 +2562,7 @@ private fun GalleryMonthlyGridItem(
             postcard = postcard,
             isSelected = isSelected,
             dateLabelOverride = dayLabel,
+            bookmark = bookmark,
             // 130일차 B: 눌림·누른 쪽 기울기·집어 듦(그리기만, 클릭 처리는 기존과 같은 combinedClickable).
             modifier = Modifier.semantics { selected = isSelected }
                 .randomPostcardShake(postcard.id, randomReveal, randomReducedMotion).then(galleryCardPressFeel(
@@ -2542,8 +2610,14 @@ internal fun calendarCellsFor(yearMonth: YearMonth): List<LocalDate?> {
 @Composable
 private fun SearchEmptyState(
     query: String,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    bookmarkOnly: Boolean = false
 ) {
+    if (bookmarkOnly) {
+        BookmarkFilterEmptyState(query = query, paddingValues = paddingValues)
+        return
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2578,6 +2652,61 @@ private fun SearchEmptyState(
         }
     }
 }
+
+/** 143일차: 책갈피만 보기에 걸린 엽서가 없을 때. 종이 바탕 위에 글만 둔다(이모지·둥근 칩 없음). */
+@Composable
+private fun BookmarkFilterEmptyState(query: String, paddingValues: PaddingValues) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(horizontal = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (query.isEmpty()) {
+                "아직 책갈피를 끼운 엽서가 없어.\n아끼는 엽서를 열고 더보기에서 만들어 봐."
+            } else {
+                "책갈피 있는 엽서 중에는\n'$query' 관련 엽서가 없어."
+            },
+            fontSize = 15.sp,
+            lineHeight = 24.sp,
+            fontWeight = FontWeight.Medium,
+            color = InkSecondary,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** 책갈피만 보기가 켜져 있음을 알리는 한 줄. 누를 수 있는 영역은 48dp다. */
+@Composable
+private fun GalleryBookmarkFilterBar(onClear: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(GalleryPaperWhite)
+            .padding(start = 20.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "책갈피 있는 엽서만 보는 중",
+            fontSize = 13.sp,
+            color = InkPrimary,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onClear, shape = RoundedCornerShape(2.dp)) {
+            Text(text = "모두 보기", fontSize = 13.sp, color = InkSecondary, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** 책갈피가 있는 엽서만 남긴다. [bookmarks]가 아직 null(불러오기 전)이면 아무것도 남기지 않는다. */
+internal fun filterPostcardsForBookmark(
+    postcards: List<Postcard>,
+    bookmarks: Map<Long, BookmarkDesign?>?,
+    bookmarkOnly: Boolean
+): List<Postcard> =
+    if (!bookmarkOnly) postcards else postcards.filter { bookmarks?.containsKey(it.id) == true }
 
 private data class GalleryMonthSection(
     val yearMonth: YearMonth,

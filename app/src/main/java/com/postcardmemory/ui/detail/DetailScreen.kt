@@ -54,6 +54,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -163,6 +164,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.postcardmemory.R
+import com.postcardmemory.ui.bookmark.MemoryBookmarkStudio
+import com.postcardmemory.ui.bookmark.MemoryBookmarkViewModel
 import com.postcardmemory.ui.components.BackgroundColorSwatch
 import com.postcardmemory.ui.components.EditorUndoRedoButtons
 import com.postcardmemory.ui.components.LABEL_STICKER_BASE_FONT_SIZE_SP
@@ -1457,9 +1460,14 @@ private fun ContentDrawScope.drawCornerFoldFlap(
 fun DetailScreen(
     postcardId: Long,
     onNavigateBack: () -> Unit,
-    viewModel: DetailViewModel = hiltViewModel()
+    viewModel: DetailViewModel = hiltViewModel(),
+    bookmarkViewModel: MemoryBookmarkViewModel = hiltViewModel()
 ) {
     val postcard by viewModel.postcard.collectAsState()
+    // 143일차 기억 책갈피: 편집 상태와 나뉜 별도 ViewModel. 편집 저장·초안·되돌리기를 부르지 않는다.
+    val bookmarkStudio by bookmarkViewModel.session.state.collectAsState()
+    val hasBookmark by remember(postcardId) { bookmarkViewModel.hasBookmark(postcardId) }
+        .collectAsState(initial = false)
     val deleteState by viewModel.deleteState.collectAsState()
     val futureMailSendState by viewModel.futureMailSendState.collectAsState()
     val exportState by viewModel.exportState.collectAsState()
@@ -6427,6 +6435,27 @@ fun DetailScreen(
                     ) {
                         DropdownMenuItem(
                             text = {
+                                Text(
+                                    text = if (hasBookmark) "기억 책갈피 다시 꾸미기" else "기억 책갈피 만들기",
+                                    color = BrutalBlack
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.BookmarkBorder,
+                                    contentDescription = null,
+                                    tint = BrutalBlack
+                                )
+                            },
+                            enabled = controlsEnabled && postcard != null,
+                            onClick = {
+                                moreMenuExpanded = false
+                                bookmarkViewModel.session.open(postcardId)
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = {
                                 Text(text = "미래 우체통", color = BrutalBlack)
                             },
                             leadingIcon = {
@@ -6467,6 +6496,22 @@ fun DetailScreen(
             }
 
             HorizontalDivider(color = SurfaceGray, thickness = 1.dp)
+        }
+    }
+
+    LaunchedEffect(bookmarkViewModel) {
+        bookmarkViewModel.session.messages.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    bookmarkStudio?.let { studio ->
+        postcard?.let { pc ->
+            MemoryBookmarkStudio(
+                session = bookmarkViewModel.session,
+                state = studio,
+                imagePath = pc.imagePath
+            )
         }
     }
 

@@ -130,7 +130,12 @@ class GalleryMonthlyGridStructureTest {
         )
         assertTrue(
             "연못일 때만 연못 목록, 아니면 검색·정렬된 월별 목록을 넘겨야 함",
-            sourceText.contains("postcards = if (isPondModeOn) pondPostcards else displayedPostcards")
+            sourceText.contains("postcards = if (isPondModeOn) pondPostcards else monthlyPostcards")
+        )
+        // 143일차: 월별 목록은 검색·정렬 결과에 책갈피 필터만 더한 것이어야 한다(연못 목록은 필터와 무관).
+        assertTrue(
+            "월별 목록은 검색·정렬된 displayedPostcards에서만 나와야 함",
+            sourceText.contains("filterPostcardsForBookmark(displayedPostcards, bookmarks, bookmarkOnly)")
         )
         assertTrue(
             "연못일 때는 월 섹션(헤더)을 만들지 않아야 함",
