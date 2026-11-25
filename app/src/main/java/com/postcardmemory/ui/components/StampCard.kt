@@ -61,12 +61,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.postcardmemory.data.BookmarkDesign
 import com.postcardmemory.data.Postcard
 import com.postcardmemory.ui.gallery.PondContactTuning
 import com.postcardmemory.ui.gallery.PondController
@@ -731,7 +734,9 @@ fun StampCardContent(
     // 전체 날짜 대신 일(day)만 넘겨 중복 표기를 피한다. null이면(기본값)
     // 기존 3단 그리드와 동일하게 전체 날짜를 그대로 보여준다 — 기존 호출부
     // 무변경.
-    dateLabelOverride: String? = null
+    dateLabelOverride: String? = null,
+    // 143일차: 엽서 뒤에 끼워 둔 기억 책갈피. 카드 크기·배치는 그대로이고 사진 뒤에서 종이 끝만 나온다.
+    bookmark: BookmarkDesign? = null
 ) {
     // 선택 해제 상태를 본 적이 있는 카드만 도장을 찍는 움직임을 보여준다. 이미 선택된 채로
     // 스크롤해 들어온 카드는 움직이지 않고 최종 모습으로 나온다.
@@ -761,12 +766,24 @@ fun StampCardContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .memoryBookmarkBehind(bookmark)
+                .then(
+                    if (bookmark == null) Modifier
+                    else Modifier.semantics { contentDescription = "기억 책갈피 있음" }
+                )
         ) {
             StampPhoto(
                 imagePath = postcard.imagePath,
                 contentDescription = postcard.title,
-                modifier = Modifier.fillMaxWidth(),
+                // 사진을 불러오는 동안이나 사진이 없을 때 뒤의 책갈피가 비치지 않게 엽서 종이를 깐다.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (bookmark == null) Modifier
+                        else Modifier.background(PaperSurface, PinkingPhotoShape)
+                    ),
                 outlineColor = Color.White,
                 outlineWidth = 3f
             )
