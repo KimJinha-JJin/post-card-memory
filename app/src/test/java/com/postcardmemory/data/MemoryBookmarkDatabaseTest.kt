@@ -6,7 +6,15 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -126,6 +134,98 @@ class MemoryBookmarkDatabaseTest {
             assertEquals(id, restored.postcardDao().getPostcardById(id)!!.id)
             assertEquals(design, restored.memoryBookmarkDao().get(id)!!.designOrNull())
             restored.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
+        }
+    }
+
+    @Test fun everyPaperSavesPerPostcardAndSurvivesReopen() = runBlocking {
+        val file = name()
+        val saved = mutableMapOf<Long, BookmarkDesign>()
+        open(file).useDatabase { room ->
+            val repository = MemoryBookmarkRepository(room.memoryBookmarkDao())
+            BookmarkPaper.entries.forEachIndexed { i, paper ->
+                val id = room.postcardDao().insertPostcard(postcard())
+                val design = BookmarkDesign(BookmarkShape.entries[i % 3], paper, BookmarkTrace.entries[i % 3])
+                repository.save(id, design)
+                repository.save(id, design) // 같은 저장을 반복해도 한 장만 남아.
+                saved[id] = design
+            }
+        }
+        open(file).useDatabase { room ->
+            val rows = room.memoryBookmarkDao().observeAll().first()
+            assertEquals(saved, rows.associate { it.postcardId to it.designOrNull() })
+            assertEquals(saved.size, rows.size)
+        }
+    }
+
+    @Test fun galleryFlowFollowsSaveRemoveAndParentDeletion() = runBlocking {
+        open(name()).useDatabase { room ->
+            val repository = MemoryBookmarkRepository(room.memoryBookmarkDao())
+            val a = room.postcardDao().insertPostcard(postcard()); val b = room.postcardDao().insertPostcard(postcard())
+            val seen = Channel<Set<Long>>(Channel.UNLIMITED)
+            val job = launch(Dispatchers.IO) {
+                repository.observeAll().collect { rows -> seen.send(rows.map { it.postcardId }.toSet()) }
+            }
+            suspend fun awaitIds(expected: Set<Long>) = withTimeout(10_000) {
+                while (seen.receive() != expected) Unit
+            }
+            awaitIds(emptySet())
+            repository.save(a, BookmarkDesign()); awaitIds(setOf(a))
+            repository.save(b, BookmarkDesign()); awaitIds(setOf(a, b))
+            repository.remove(a); awaitIds(setOf(b))
+            room.postcardDao().deletePostcardById(b); awaitIds(emptySet())
+            job.cancelAndJoin()
+        }
+    }
+
+    @Test fun concurrentSaveRemoveAndDeletionNeverLeaveAnOrphan() = runBlocking {
+        open(name()).useDatabase { room ->
+            val repository = MemoryBookmarkRepository(room.memoryBookmarkDao())
+            repeat(20) { round ->
+                val id = room.postcardDao().insertPostcard(postcard())
+                val keep = room.postcardDao().insertPostcard(postcard())
+                repository.save(keep, BookmarkDesign(paper = BookmarkPaper.ROSE))
+                val jobs = listOf(
+                    async(Dispatchers.IO) {
+                        BookmarkPaper.entries.forEach { paper ->
+                            try { repository.save(id, BookmarkDesign(paper = paper)) } catch (_: SQLiteConstraintException) { }
+                        }
+                    },
+                    async(Dispatchers.IO) { if (round % 2 == 0) repository.remove(id) },
+                    async(Dispatchers.IO) { room.postcardDao().deletePostcardById(id) }
+                )
+                jobs.awaitAll()
+                assertNull(room.postcardDao().getPostcardById(id))
+                assertNull(repository.get(id))
+                assertEquals(BookmarkPaper.ROSE, repository.get(keep)!!.designOrNull()!!.paper)
+            }
+            room.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
+        }
+    }
+
+    /** schema 19 백업 파일을 되돌려 놓은 상황: 닫힌 사본을 여러 번 열어도 한 번만 migration되고 엽서가 남아. */
+    @Test fun restoredSchema19CopyMigratesOnceAndAcceptsBookmarks() = runBlocking {
+        val source = context.getDatabasePath(name()).apply { parentFile!!.mkdirs() }
+        val schema = listOf(File("schemas/com.postcardmemory.data.PostcardDatabase/19.json"),
+            File("app/schemas/com.postcardmemory.data.PostcardDatabase/19.json")).first(File::exists)
+        val json = org.json.JSONObject(schema.readText()).getJSONObject("database")
+        SQLiteDatabase.openOrCreateDatabase(source, null).use { raw ->
+            raw.execSQL(json.getJSONArray("entities").getJSONObject(0).getString("createSql").replace("\${TABLE_NAME}", "postcards"))
+            val setup = json.getJSONArray("setupQueries")
+            for (i in 0 until setup.length()) raw.execSQL(setup.getString(i))
+            for (id in listOf(3, 8)) raw.execSQL("""INSERT INTO postcards
+                (id,imagePath,title,capturedAt,backgroundColorArgb,message) VALUES ($id,'p$id','t',1,4294966263,'m$id')""")
+            raw.version = 19
+        }
+        val restored = name()
+        source.copyTo(context.getDatabasePath(restored))
+        open(restored).useDatabase { room ->
+            MemoryBookmarkRepository(room.memoryBookmarkDao()).save(8, BookmarkDesign(paper = BookmarkPaper.BLUE))
+        }
+        open(restored).useDatabase { room ->
+            assertEquals("m3", room.postcardDao().getPostcardById(3)!!.message)
+            assertEquals("m8", room.postcardDao().getPostcardById(8)!!.message)
+            assertEquals(listOf(8L), room.memoryBookmarkDao().observeAll().first().map { it.postcardId })
+            assertEquals(20, room.openHelper.readableDatabase.version)
         }
     }
 }

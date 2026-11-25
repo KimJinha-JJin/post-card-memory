@@ -3,7 +3,9 @@ package com.postcardmemory.ui.components
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -14,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import com.postcardmemory.data.BookmarkDesign
 import com.postcardmemory.data.BookmarkShape
 import com.postcardmemory.data.BookmarkTrace
-import kotlin.math.min
 
 /** 목업의 세 가지 끝선을 비례 좌표로 보존해. 엽서 C2 윤곽과는 별개의 종이야. */
 internal fun bookmarkOutline(shape: BookmarkShape, width: Float, height: Float): Path {
@@ -67,13 +68,61 @@ internal fun DrawScope.drawBookmarkPaper(design: BookmarkDesign, origin: Offset,
                 }
             }
         }
+        // 143일차 승인: 아이보리는 갤러리 선택 종이와 같은 색이라 가는 선으로 종이 끝을 구분해.
+        drawPath(path, BookmarkEdgeInk, style = Stroke(.6.dp.toPx()))
     }
 }
 
-/** 배치 크기는 바꾸지 않고 사진 아래 날짜 전 6dp 여백 안에 끝만 내밀어. */
+private val BookmarkEdgeInk = Color(0x6B5B5046)
+
+/**
+ * 갤러리에서 엽서 아래로 내미는 길이(엽서 한 변 대비). 날짜는 가운데에 있어 겹치지 않아.
+ * 143일차 실기기 QA에서 "조금 더 잘 보이게" 요청으로 5.5%에서 늘렸어. 클래식 V자 파임보다 길어야
+ * 종이가 이어져 보이고, 날짜 줄(6dp + 글자) 안에 머물러서 아래 카드에는 닿지 않아.
+ */
+internal const val BOOKMARK_EXPOSURE_FRACTION = .095f
+internal const val BOOKMARK_WIDTH_FRACTION = .18f
+internal const val BOOKMARK_LEFT_FRACTION = .72f
+
+/** 엽서 한 변이 [edge]일 때 다 끼운 책갈피의 자리. 제작 화면과 갤러리가 같은 값을 써. */
+internal fun insertedBookmarkBounds(shape: BookmarkShape, edge: Float): Rect {
+    val height = edge * bookmarkHeightFraction(shape)
+    return Rect(
+        offset = Offset(edge * BOOKMARK_LEFT_FRACTION, edge * (1f + BOOKMARK_EXPOSURE_FRACTION) - height),
+        size = Size(edge * BOOKMARK_WIDTH_FRACTION, height)
+    )
+}
+
+/**
+ * 엽서가 책갈피 위에 드리우는 옅은 그림자. 종이 윤곽 안에서 엽서 아래 변 바로 밑에만 깔려서
+ * 사진에 붙인 스티커가 아니라 뒤에 끼운 종이로 보이게 해.
+ */
+internal fun DrawScope.drawPostcardShadeOnBookmark(
+    design: BookmarkDesign,
+    bounds: Rect,
+    edge: Float,
+    strength: Float = 1f
+) {
+    if (edge <= 0f || strength <= 0f) return
+    val top = edge * .985f - bounds.top
+    val depth = edge * .035f
+    translate(bounds.left, bounds.top) {
+        clipPath(bookmarkOutline(design.shape, bounds.width, bounds.height)) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    listOf(Color(0x4030251A).copy(alpha = .25f * strength), Color(0x0030251A)), startY = top, endY = top + depth
+                ),
+                topLeft = Offset(0f, top),
+                size = Size(bounds.width, depth)
+            )
+        }
+    }
+}
+
+/** 카드 배치 크기는 바꾸지 않고, 사진 뒤에서 종이 끝만 아래로 내밀어. */
 internal fun Modifier.memoryBookmarkBehind(design: BookmarkDesign?): Modifier = if (design == null) this else drawBehind {
     val edge = size.width
-    val exposure = min(edge * .055f, 5.dp.toPx())
-    val height = edge * bookmarkHeightFraction(design.shape)
-    drawBookmarkPaper(design, Offset(edge * .72f, edge + exposure - height), Size(edge * .18f, height))
+    val bounds = insertedBookmarkBounds(design.shape, edge)
+    drawBookmarkPaper(design, bounds.topLeft, bounds.size)
+    drawPostcardShadeOnBookmark(design, bounds, edge)
 }

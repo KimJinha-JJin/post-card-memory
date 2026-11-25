@@ -6,8 +6,14 @@ import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
 
 enum class BookmarkShape { CLASSIC, HAND_CUT, MINI_TAG }
+/**
+ * 종이 색. DB에는 순서(ordinal)가 아니라 이름이 저장되므로 이미 있는 이름은 바꾸거나 지우지 않고,
+ * 새 색은 뒤에 더하기만 해(컬럼 변화가 없어 schema는 그대로야).
+ */
 enum class BookmarkPaper(val argb: Long) {
-    IVORY(0xFFE8DCC6), BROWN(0xFFBBA184), MINT(0xFFBECFC1)
+    IVORY(0xFFE8DCC6), BROWN(0xFFBBA184), MINT(0xFFBECFC1),
+    LAVENDER(0xFFC8BED5), BLUE(0xFFB4C5CF), APRICOT(0xFFDFC0A3),
+    ROSE(0xFFCFAFB2), OLIVE(0xFFC4C5A2), BUTTER(0xFFE5D6A5)
 }
 enum class BookmarkTrace { NONE, POSTMARK, LINES }
 
