@@ -18,7 +18,7 @@ import kotlinx.coroutines.isActive
  * 읽어 이미 새 날짜인데, 이 값을 쓰지 않는 화면만 어제에 머무는 상황을 없앤다.
  *
  * 쓰는 곳은 방문 달력(오늘 marker·채움색·picker 현재 월/연도 판정·오늘 복귀 링크),
- * 기억밀도 화면(기준 연도), 그리고 봉인된 미래 엽서 상세 화면(도착·D-day 판정)이다.
+ * 기억 저울 화면(기준 연도), 그리고 봉인된 미래 엽서 상세 화면(도착·D-day 판정)이다.
  * ViewModel 쪽에서 같은 경계가 필요하면 Compose state 대신
  * [com.postcardmemory.utils.dayBoundaryTicks]를 쓴다 — 둘 다 같은
  * [millisUntilNextMidnight]를 쓰므로 기준이 갈라지지 않는다. **바뀌는 건 "지금이 며칠인가"뿐이고 사용자가 보고 있던

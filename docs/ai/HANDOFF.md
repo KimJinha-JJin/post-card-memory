@@ -1,3 +1,22 @@
+# HANDOFF — 2026-11-26 144일차 추가: 기억 저울 B안 실제 앱 적용·화면 간소화
+
+- **현재 승인:** 사용자가 HTML의 B안(2.4초)을 채택하고 실제 Android 적용을 승인했어. 이후 실기기 B안 형태·접촉·반동·정착을 확인하고 남은 QA/Git 마감 진행을 승인했어. 마지막 추가 지시로 **12개월 그래프 완전 제거와 세로 간소화**를 승인했으므로, 아래 조사 당시의 그래프 보존·앱 적용 미승인 상태는 역사 기록이야. main 병합은 여전히 별도 승인 전 금지야.
+- **시작/작업 Git:** 기존 `feature/day144-memory-scale`, 시작 HEAD와 origin 작업 브랜치 `df2956d4f980b8e7a075e8a29a125b0454306700`. 새 worktree/프로젝트 없음. 이번 절은 구현 commit 전 작업트리 상태야. commit/push/PR/CI의 최종 결과는 대화 완료보고에서 확인해.
+- **앱 구성:** 제목 → 전체/연간/월간 기간 선택 → B안 Canvas 저울 → 실제 장수/최대 눈금 → 기존 미래 우체통. `GalleryMemoryScalePage`·`MemoryScaleDrawing`·`MemoryScaleModel`로 화면/그리기/집계를 분리했어. 새 이미지·dependency·Gradle·Room 변경 없음.
+- **B안:** HTML과 같은 400ms 접촉·2400ms 종료, 받침대 w21/d20·바늘 w16/d15, 이동량16·각도−120~120·최대12겹. 같은 하중 시각으로 받침대/피스톤/정착 더미/바늘을 계산하고 종료값을 정확히 맞춰. 최대 눈금 이탈 방지를 위해 응답을 clamp하는 점은 HTML과 달라. 프레임 상태를 draw 단계에서 읽고 Path/눈금/문자 Paint를 캐시해. 대상 id 집합·기간이 바뀌거나 화면 재진입할 때 재생하고, 일반 재구성/정렬/꾸미기 변경은 재생 키를 바꾸지 않아. page/lifecycle 비활성·composition 제거 시 effect가 취소돼. 시스템 animator scale 변경을 관찰해 0이면 즉시 최종 자세야.
+- **간소화:** 그래프/펜/20장 막대/초과표시/질감 행렬과 전용 상수를 제거했어. `GalleryPostcardMonth`·`postcardMonthsForYear`는 역할 중심 이름으로 보존하고 실제 연간/월간 집계에서 재사용해. 이미지 참조 조사 결과 기존 gallery 종이 타일은 배경·편집·저울에서 공용이라 제거하지 않았어. 저울은 같은 440 단위 기하를 유지하며 y65~390(440×325)만 표시해 위/아래 빈 공간을 줄였어. 낙하 더미는 화면 위 경계에서 들어오고 접촉 좌표·하중식은 같아. 제목은 페이지 점과 같은 상단 높이를 쓰고, 결과·우체통 간격을 줄였어. 큰 글자/작은 화면은 세로 스크롤로 보호해.
+- **실제 집계:** DAO→Repository→GalleryViewModel 기존 흐름 유지. NONE 엽서만 읽고 기본 기간 ALL, 연간/월간은 capturedAt·기기 시간대·선택 연월 기준이야. 60/100/200/500/1000 이후 2·5·10 계열 Long 눈금으로 확장하므로 HTML 10000 입력 제한을 가져오지 않았어. DB/파일에 통계를 쓰지 않아.
+- **명칭/호환:** 사용자 기능명과 진입 Composable은 기억 저울/`GalleryMemoryScalePage`. 구 그래프 식별자는 production에서 제거했고 월별 집계는 위 역할 이름으로 정비했어. `GalleryPageFormat.DENSITY`와 `.name` Saver는 그대로 유지해 기존 복원 문자열을 깨지 않아. 픽셀/배경 패턴 Density와 과거 archive는 변경하지 않았어.
+- **우체통:** 기존 봉투·종이·도착/D-day·semantics·`onOpenFutureMailbox`/`futureMailbox` 경로를 재사용해. Slot의 `keepVisible` 경로로 글자 크기에 맞는 높이를 확보하며 topGap만8dp로 조정했어. 기존 날짜 포매터 `monthlyGridDayLabelFormatter`와 일반 갤러리/책갈피/방문 달력의 공용 동작을 보존했어.
+- **로컬 자동검증 — 실행/통과:** 간소화 전 전체 JVM1362/1362·148 suites·Debug 빌드 성공. 간소화 후 첫 컴파일에서 그래프 사이에 있던 공용 날짜 포매터 누락을 발견해 원문 복원했어. 다음 전체 JVM1347 중 자정 소비자 구조 검사1건이 옛 파일 위치를 가리켜 실패했고, 실제 저울 화면과 GalleryViewModel을 검사하도록 목록을 갱신했어(방문 기록 생성 금지 assertion 유지). 최종 `testDebugUnitTest assembleDebug --no-daemon --max-workers=1` 성공(Gradle9.9.1/Zulu17), XML **1347/1347·147 suites·실패/오류/skip0**, Debug APK 성공이야. 초기 기존 플러그인 접근 실패는 네트워크/캐시 환경 문제였고 설정 변경 없이 해결했어.
+- **테스트 범위:** 신규 모션/집계 순수11건·연결 구조5건. 기존 월별 집계8건은 `GalleryPostcardMonthTest`로 유지하고 제거된 그래프 전용 계산8건·구조7건은 제거했어. 전체 source @Test1347/test파일146/helper1, instrumentation21건/8파일 무변경. 새 UI의 실제 프레임·TalkBack·lifecycle 동작은 순수/구조 검사 성공으로 확대하지 않아.
+- **실기기 — 실행:** 사용자 설치 승인 후 SM-S936N에 같은 package/서명·schema20 APK를 `adb install -r`로 설치했어. 최초 설치 직전/직후 내부147개 파일 해시 변화0. 첫 B안 화면의 0장·11월5장 표시와 사용자 모션 만족을 확인했어. 같은 승인 범위의 간소화판도 같은 package/서명·schema20으로 `install -r` 설치했고 직전/직후 내부148개 파일 해시 변화0, 설치 APK와 로컬 빌드 SHA-256 일치를 확인했어. 간소화판은 제목/기간/저울/결과/우체통을 스크롤 없이 함께 표시했어. 실제 전체10장·2026년 연간10장·11월5장·9월0장·다시5/10장 전환이 읽기 전용 DB 집계와 같았어. 우체통 진입/Back 복귀와 갤러리 페이지 왕복 후 저울·선택 기간·수량을 확인했고 AndroidRuntime fatal 표식0이야. 사용자가 간소화 화면을 확인한 뒤 기간 선택창을 갤러리 정렬 메뉴와 통일하도록 추가 요청했어. 기간/연도/월 모두 RectangleShape·PaperSurface·InkPrimary·선택 SunsetGold16% 배경/Bold로 맞췄고 기기에서 종이색 직각 메뉴와 선택 강조를 확인했어. 메뉴 수정본도 전체 JVM1347/1347·147 suites·실패/오류/skip0 및 Debug 빌드를 통과했고 같은 서명/schema20 재설치 직전/직후 내부148개 파일 해시 변화0이야. 현재 기기1080×2340/450dpi/fontScale0.9/animator1.0을 읽었고 전역 설정은 바꾸지 않았어.
+- **데이터/보호:** 기기 DB의 로컬 읽기 전용 사본에서 schema20·integrity ok·전체11장/일반보관10장(미래발송 제외)/11월5장을 확인했어. 기존 schema19/20 백업은 열거나 덮어쓰거나 복원하지 않았어. QA 명령으로 원본 기기 DB·엽서·사진을 직접 생성/수정/삭제하지 않았어. 메뉴 최종 수정본 QA 뒤에도 기기 DB schema20·integrity ok와 엽서 id/capturedAt/futureMailState가 읽기 전용 기준과 같았어. SAFE38/38·시작 미추적48/48 해시 유지. DB 확인 사본·설치 APK 비교본·화면/XML 증거는 저장소 밖 로컬 임시 경로에만 있어.
+- **미검증/경계:** 실사용 instrumentation 미실행(이번 UI 확인 수단 아님), CONDITIONAL/FORBIDDEN은 격리 환경 없어 실행 불가. 큰 글자·TalkBack 음성·실제 시스템 모션0 전환·저사양 성능은 별도 감각 QA 미검증. 로컬 emulator 사용 없음. 신규 Markdown 없음. TEST-COVERAGE-MAP을 최종 실행 수·제거/유지 보호 범위로 갱신했어.
+- **Git 마감:** 사용자에게 승인된 작업 브랜치 commit/push/PR/CI는 최종 검증·필요 QA 후 수행해. main 병합 금지. 최종 PR head/base SHA와 CI 결과를 보고하고 별도 병합 승인 대기에서 멈춰.
+
+---
+
 # HANDOFF — 2026-11-26 144일차: 기억 저울 구조 조사·HTML 비교 목업
 
 - **사용자 관점:** 앱은 바뀌지 않았어. 기존 기억 밀도·미래 우체통·엽서·책갈피는 그대로야. [단일 HTML 비교 목업](mockups/memory-scale-day144.html)을 브라우저에서 열어 A/B/C 모션·수량·눈금·기본 도형/색상/질감을 비교할 수 있어. 디자인과 실제 Android 적용은 사용자 승인 대기야.
