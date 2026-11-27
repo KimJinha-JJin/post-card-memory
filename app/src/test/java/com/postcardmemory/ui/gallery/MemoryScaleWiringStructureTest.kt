@@ -34,11 +34,17 @@ class MemoryScaleWiringStructureTest {
         assertTrue(drawing.contains("drawWithCache"))
         assertTrue(drawing.indexOf("onDrawBehind {") < drawing.indexOf("memoryScaleFrame(count, elapsedMs())"))
         val tray = drawing.substring(drawing.indexOf("translate(top = frame.trayY)"), drawing.indexOf("drawCircle(paper, 85f"))
-        assertTrue(tray.contains("drawPath(tray, metal)")); assertTrue(tray.contains("cards(frame.layers)"))
+        assertTrue(tray.contains("drawPath(tray, trayBrush)")); assertTrue(tray.contains("cards(frame.layers)"))
         assertTrue(drawing.contains("61f - frame.trayY"))
         assertTrue(drawing.contains("rotate(frame.needleDegrees, pivot = Offset(220f, 269f))"))
         assertTrue(drawing.contains("count.coerceIn(0, 12)"))
         assertFalse(drawing.contains("AsyncImage")); assertFalse(drawing.contains("Bitmap.createBitmap"))
+        // 질감용 작은 알갱이 그림은 composition당 한 번만 만들고, 프레임(draw) 단계에서는 만들지 않는다.
+        assertTrue(drawing.contains("val speckle = remember { memoryScaleSpeckleTile() }"))
+        val perFrame = drawing.substring(drawing.indexOf("onDrawBehind {"))
+        assertFalse(perFrame.contains("ImageBitmap(")); assertFalse(perFrame.contains("memoryScaleSpeckleTile()"))
+        // 145일차 사용자 결정: 저울 하단 영어 문구는 표시하지 않는다.
+        assertFalse(drawing.contains("M E M O R Y")); assertFalse(drawing.contains("POST OFFICE"))
     }
     @Test fun resultHasActualCountAndDecorativeTicksAreNotIndividualSemantics() {
         assertTrue(page.contains("contentDescription = \"기억 저울, 엽서 \${count}장, 최대 눈금 \${capacity}장\""))

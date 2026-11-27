@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>기억 저울 질감 비교 · 145일차</title>
+<style>
+:root{--canvas:#F4ECDE;--ink:#1A1324;--ink2:#5B5046;--line:#cdbfa8;--brown:#66513E}
+*{box-sizing:border-box}
+body{margin:0;background:#ebe4d8;color:#2d241b;font-family:system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:14px;line-height:1.6}
+h1,h2,h3,p{margin:0}
+h1{font-family:Georgia,"Batang",serif;font-weight:500;font-size:30px;letter-spacing:-1px}
+h2{font-size:17px;font-weight:650;margin-bottom:10px}
+.wrap{max-width:1180px;margin:auto;padding:28px 22px 60px}
+.eyebrow{font-size:11px;letter-spacing:2px;color:#7b6b58;margin-bottom:4px}
+.intro{display:flex;justify-content:space-between;align-items:end;gap:20px;border-bottom:1px solid var(--line);padding-bottom:18px}
+.intro p{max-width:440px;color:#6c5f51}
+.top{display:grid;grid-template-columns:auto minmax(280px,360px);gap:36px;padding-top:24px;align-items:start;justify-content:center}
+button,select,input{font:inherit;color:inherit}
+button,select,input[type=number]{border:1px solid #b5a68f;background:#fffaf1;padding:8px 11px;border-radius:4px}
+button{cursor:pointer}
+button[aria-pressed=true]{background:#66513E;border-color:#66513E;color:#fff8ec}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #997347;outline-offset:2px}
+.panel{padding:0 0 16px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.label{display:block;font-size:12px;font-weight:650;margin-bottom:8px;color:#4d3c2c}
+.seg{display:flex;gap:5px;flex-wrap:wrap}.seg button{flex:1;min-width:58px;padding:8px 4px}
+.seg button small{display:block;font-size:10px;opacity:.8}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.presets{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.presets button{font-size:12px;padding:3px 9px}
+.actions{display:flex;gap:8px}.actions button{flex:1}
+.note{font-size:12px;color:#75695b;margin-top:8px}
+.readout{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#6c5f51;margin-top:10px;overflow-wrap:anywhere}
+/* 휴대폰 */
+.phone{position:relative;border:10px solid #2f2822;border-radius:30px;overflow:hidden;background:var(--canvas);box-shadow:0 16px 40px #3a2a1a2a}
+.phone .bg{position:absolute;inset:80px 0 0 0;background:#F4ECDE url("../../../app/src/main/res/drawable-nodpi/gallery_paper_tile.png") 0 0/360px 360px}
+.statusbar{height:24px;background:var(--canvas)}
+.appbar{height:56px;background:var(--canvas);border-bottom:1px solid #DBCBB0;display:flex;align-items:center;padding:0 16px;color:#8b7d6c;font-size:12px}
+.page{position:relative;padding:4px 16px 0;display:flex;flex-direction:column;align-items:center}
+.ptitle{width:100%;font-size:19px;font-weight:600;color:var(--ink)}
+.period{color:var(--ink);font-size:14px;padding:10px 12px}
+.page .scalebox{width:100%;max-width:336px}
+.result{text-align:center}.result b{display:block;font-size:28px;font-weight:400;color:var(--ink);line-height:1.25}
+.result span{font-size:12px;color:var(--ink2)}
+.mailbox{margin-top:12px;width:100%;height:150px;border:1px dashed #b9a88c;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#8c7c68;font-size:12px;background:#fff8e955}
+.fit{font-size:12px;margin-top:10px;text-align:center}
+.fit.ok{color:#476a3a}.fit.bad{color:#9b3d27}
+/* 비교 */
+section.block{margin-top:36px;border-top:1px solid var(--line);padding-top:22px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.cell{background:#F4ECDE url("../../../app/src/main/res/drawable-nodpi/gallery_paper_tile.png") 0 0/360px 360px;border:1px solid #d6c7ae;border-radius:6px;padding:12px 8px 8px}
+.cell h3{font-size:13px;margin-bottom:4px}.cell p{font-size:11px;color:#6c5f51;min-height:34px}
+.zoomwrap{background:#F4ECDE url("../../../app/src/main/res/drawable-nodpi/gallery_paper_tile.png") 0 0/360px 360px;border:1px solid #d6c7ae;border-radius:6px;padding:16px;max-width:880px;margin:auto}
+.zoomhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px;flex-wrap:wrap}
+svg.scale{display:block;width:100%;height:auto}
+svg text{font-family:"Noto Serif KR","Batang","Nanum Myeongjo",Georgia,serif;white-space:pre}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;vertical-align:top;padding:8px 9px;border-bottom:1px solid #d3c4ab}
+th{font-weight:650;background:#efe6d6}
+.tablewrap{overflow:auto}
+.tag{display:inline-block;font-size:11px;padding:0 6px;border:1px solid #b5a68f;border-radius:3px;margin-right:4px}
+@media(max-width:900px){.top{grid-template-columns:1fr}.controls{max-width:460px;margin:auto;width:100%}.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.wrap{padding:18px 12px}.intro{display:block}.intro p{margin-top:8px}.grid4{grid-template-columns:1fr}.phone{border-width:6px;border-radius:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <header class="intro">
+  <div><div class="eyebrow">POSTCARD MEMORY / DAY 145</div><h1>기억 저울 · 재질 고르기</h1></div>
+  <p>모양과 움직임(144일차 B안 2.4초)은 네 칸 모두 똑같아. 바뀌는 건 <b>재질과 표현 강도</b>뿐이야. 배경과 눈금판·엽서 종이는 앱의 실제 갤러리 종이 타일을 그대로 썼어.</p>
+ </header>
+
+ <div class="top">
+  <section aria-label="휴대폰 화면 미리보기">
+   <div class="phone" id="phone">
+    <div class="bg"></div>
+    <div class="statusbar"></div>
+    <div class="appbar">갤러리 상단바 (목업에선 생략)</div>
+    <div class="page" id="page">
+     <div class="ptitle">기억 저울</div>
+     <div class="period">전체 ▾</div>
+     <div class="scalebox" id="phoneScale"></div>
+     <div class="result"><b id="resultMain">11장</b><span id="resultSub">눈금 0–60장</span></div>
+     <div class="mailbox" id="mailbox">미래 우체통 (기존 그대로 · 목업은 자리만)</div>
+    </div>
+   </div>
+   <p class="fit" id="fit"></p>
+  </section>
+
+  <aside class="controls" aria-label="조작부">
+   <div class="panel"><span class="label">01 / 재질 고르기</span>
+    <div class="seg" id="variants">
+     <button data-v="base" aria-pressed="false">기존<small>지금 앱</small></button>
+     <button data-v="A" aria-pressed="false">A<small>절제 무광</small></button>
+     <button data-v="B" aria-pressed="true">B<small>오래된 우체국</small></button>
+     <button data-v="C" aria-pressed="false">C<small>물성 강조</small></button>
+    </div>
+    <p class="note">아래 "네 칸 나란히"와 "확대"도 같이 움직여.</p>
+   </div>
+   <div class="panel"><label class="label" for="count">02 / 올려놓을 엽서</label>
+    <div class="row"><input id="count" type="number" min="0" max="100000" value="11" style="width:110px"><span>장</span></div>
+    <div class="presets" id="presets"></div>
+   </div>
+   <div class="panel"><span class="label">03 / 재생</span>
+    <div class="actions"><button id="play" aria-pressed="true">측정 재생 (B안 2.4초)</button><button id="reset">빈 저울</button></div>
+    <label class="row" style="margin-top:10px"><input type="checkbox" id="reduce"> 애니메이션 끄기 (시스템 설정 0과 같음)</label>
+    <label class="row" style="margin-top:6px"><input type="checkbox" id="slow"> 4배 느리게 (그림자 따라오는지 보기용)</label>
+    <div class="readout" id="readout"></div>
+   </div>
+   <div><label class="label" for="device">04 / 화면 크기</label>
+    <select id="device" style="width:100%">
+     <option value="360x780">360 × 780 (작은 폰)</option>
+     <option value="384x832" selected>384 × 832 (사용자 기기 1080×2340 · 450dpi)</option>
+     <option value="412x915">412 × 915 (큰 폰)</option>
+    </select>
+    <p class="note">글자 크기는 사용자 기기 설정(0.9배)이 아니라 1배 기준이야. 큰 글자·실제 비율은 실기기 QA에서 다시 봐.</p>
+   </div>
+  </aside>
+ </div>
+
+ <section class="block" aria-label="네 칸 나란히">
+  <h2>네 칸 나란히 — 같은 수량, 같은 순간</h2>
+  <div class="grid4">
+   <div class="cell"><h3>기존</h3><p>단색 + 굵은 갈색 테두리. 지금 앱 그대로.</p><div id="g-base"></div></div>
+   <div class="cell"><h3>A · 절제 무광</h3><p>테두리를 덜고 위→아래 명암만. 가장 조용해.</p><div id="g-A"></div></div>
+   <div class="cell"><h3>B · 오래된 우체국 (권장)</h3><p>무광 도장 알갱이, 테두리 링, 원통 피스톤, 종이 결.</p><div id="g-B"></div></div>
+   <div class="cell"><h3>C · 물성 강조</h3><p>B보다 명암 대비·두께·나사·유리 반사가 뚜렷해.</p><div id="g-C"></div></div>
+  </div>
+ </section>
+
+ <section class="block" aria-label="확대">
+  <div class="zoomhead"><h2 style="margin:0">확대 — <span id="zoomName">B · 오래된 우체국</span></h2><span class="note" style="margin:0">눈금판 종이 결·도장 알갱이·바늘 그림자를 확인하는 용도야. 실제 폰에선 위 휴대폰 크기로 보여.</span></div>
+  <div class="zoomwrap"><div id="zoomScale"></div></div>
+ </section>
+
+ <section class="block" aria-label="부품별 조사">
+  <h2>부품별 지금 상태와 투박해 보이는 이유 (MemoryScaleDrawing.kt 실측)</h2>
+  <div class="tablewrap"><table>
+   <thead><tr><th>부품</th><th>지금 그리는 방식</th><th>투박해 보이는 이유</th><th>움직임과 연결</th><th>B안에서 바꾸는 것</th></tr></thead>
+   <tbody>
+    <tr><td>본체</td><td>Path 단색 #A18E74 + 2px 진갈색 외곽선, 대각 빗금 28줄(8%)</td><td>빛 방향이 없어 평면 스티커처럼 보임. 굵은 외곽선이 만화 같은 인상. 빗금은 재질이 아니라 무늬로 읽힘</td><td>없음(고정)</td><td>위→아래 명암, 좌측 밝음·우측 그늘, 윗곡선 반사선, 고정 도장 알갱이, 외곽선 1px</td></tr>
+    <tr><td>받침대</td><td>사다리꼴 단색 + 2px 외곽선 + 종이색 선 1줄</td><td>윗면과 앞면 구분이 없어 두께가 안 느껴짐</td><td>trayY만큼 아래로 이동</td><td>윗면(밝음)·앞면(어두움) 경계, 가장자리 반사선, 아래 피스톤에 떨어지는 그림자(같이 이동)</td></tr>
+    <tr><td>피스톤</td><td>사각형 2개(진갈색 + 금속색)</td><td>막대 두 개로 보임, 원통감 없음, 본체에 들어가는 자리가 없음</td><td>y = 127+trayY, 높이 61−trayY</td><td>가로 방향 원통 명암(세로로는 무늬 없음 → 길이가 변해도 늘어나 보이지 않음), 본체 입구 고정 칼라</td></tr>
+    <tr><td>눈금판</td><td>단색 원 + 3px 외곽선, 종이 타일 6%</td><td>종이 타일이 그림 좌표 배율 때문에 약 2.6배 확대된 채 6%로 깔려 사실상 안 보임. 테두리가 선이라 계기판 테두리(링)가 없음</td><td>없음(고정)</td><td>타일을 갤러리 배경과 같은 크기로 되돌려 42%, 금속 링 테두리, 안쪽 그늘, 가장자리 살짝 어둡게. 눈금은 굵기만 정리(위치 동일)</td></tr>
+    <tr><td>바늘·축</td><td>단색 Path 회전 + 원 2개</td><td>그림자가 없어 눈금판에 붙어 보임, 축이 평면 점</td><td>(220,269) 축 회전, 각도 needleDegrees</td><td>같은 각도로 도는 그림자(빛은 고정이라 화면 기준 오른쪽 아래로 고정 오프셋), 얇은 반사선, 볼록한 축 머리</td></tr>
+    <tr><td>엽서 더미</td><td>층마다 3px 사각형 + 1px 진갈색 외곽선, 윗면 타일 8%</td><td>층마다 테두리가 있어 줄무늬 막대처럼 보임, 모든 장이 같은 색</td><td>받침대와 함께 이동, 최대 12겹</td><td>층별 미세한 색 차이, 아래 가장자리만 옅은 선, 윗면 종이 결, 받침대 접촉 그림자·더미 옆 그늘</td></tr>
+    <tr><td>바닥 그림자</td><td>타원 단색 9%</td><td>가장자리가 딱 잘려 붙여 놓은 느낌</td><td>없음</td><td>가운데 진하고 바깥으로 사라지는 그림자 + 발 아래 짧은 접촉 그림자</td></tr>
+    <tr><td>배경·여백</td><td>갤러리 종이 배경(360dp 타일) 위, 저울 최대 336dp</td><td>배경은 이미 종이인데 저울만 단색이라 따로 노는 느낌</td><td>—</td><td>변경 없음. 저울 쪽 종이를 배경과 같은 결로 맞춤</td></tr>
+   </tbody>
+  </table></div>
+ </section>
+
+ <section class="block" aria-label="안별 비교">
+  <h2>A / B / C 차이와 실제 앱 구현</h2>
+  <div class="tablewrap"><table>
+   <thead><tr><th></th><th>A · 절제 무광</th><th>B · 오래된 우체국</th><th>C · 물성 강조</th></tr></thead>
+   <tbody>
+    <tr><td>인상</td><td>깔끔·조용. 투박함은 줄지만 "물건" 느낌은 약함</td><td>손때 묻은 무광 철제 + 인쇄된 종이 눈금판. 갤러리 종이와 가장 자연스러움</td><td>가장 입체적. 대신 화면에서 저울이 우체통보다 튀고 장난감 같아질 위험</td></tr>
+    <tr><td>좋은 점</td><td>눈금 가독성 최상, 추가 그리기 가장 적음</td><td>재질 구분(금속/종이)이 분명하면서 과하지 않음</td><td>두께·나사·유리 반사로 기계 느낌이 가장 강함</td></tr>
+    <tr><td>아쉬운 점</td><td>질감 개선 체감이 작을 수 있음</td><td>도장 알갱이 농도는 실기기 화면에서 한 번 더 맞춰야 함</td><td>유리 반사가 눈금 일부를 덮음, 대비가 강해 오래 보면 피곤</td></tr>
+    <tr><td>Compose 난이도</td><td>낮음 — Brush.verticalGradient 몇 개, 외곽선 굵기 조정</td><td>보통 — 그라디언트 + 캐시한 작은 알갱이 비트맵(ImageShader) + 타일 배율 보정(setLocalMatrix, 갤러리 배경과 같은 방법)</td><td>보통 — B + 나사·유리 호 몇 개</td></tr>
+    <tr><td>새 이미지 자원</td><td colspan="3">셋 다 <b>필요 없음</b>. 종이 결은 이미 쓰는 <code>gallery_paper_tile.png</code> 재사용, 도장 알갱이는 코드로 한 번 만들어 캐시. 보호 자료 <code>postcard_paper_fiber_tile.png</code>는 쓰지 않음</td></tr>
+    <tr><td>렌더링 비용 예상</td><td>draw 호출 +약 10</td><td>+약 25 (그림자는 흐림 효과 없이 오프셋 도형·그라디언트로만)</td><td>+약 35</td></tr>
+    <tr><td colspan="4" class="note">공통: 모든 Brush·Path·비트맵은 drawWithCache에서 한 번만 만들고, 프레임마다 바뀌는 건 지금처럼 trayY·바늘 각도·층수뿐이야. 매 프레임 비트맵 생성·디코딩 없음. 흐림(blur) 그림자는 쓰지 않아(기기 부담). 측정·모션 계산(MemoryScaleModel.kt)은 건드리지 않아.</td></tr>
+   </tbody>
+  </table></div>
+ </section>
+</div>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const TILE_URL='../../../app/src/main/res/drawable-nodpi/gallery_paper_tile.png';
+
+/* ---- MemoryScaleModel.kt 그대로 이식 ---- */
+const DUR=2400, CONTACT=400;
+function capacity(n){n=Math.max(0,n);if(n<=60)return 60;let m=100;for(;;){for(const f of [1,2,5]){if(n<=m*f)return m*f}m*=10}}
+function resp(ms,w,d){if(ms<=0)return 0;const s=ms/1000;return 1-Math.exp(-d*s)*(Math.cos(w*s)+d/w*Math.sin(w*s))}
+function scaleFrame(count,ms,reduced){
+ const c=Math.max(0,count),fin=reduced||c===0||ms>=DUR,t=Math.max(0,ms),ratio=c/capacity(c),lt=t-CONTACT;
+ const tl=fin?1:resp(lt,21,20),nl=fin?1:resp(lt,16,15),dp=clamp((t-60)/340,0,1);
+ return {trayY:16*clamp(ratio*tl,0,1),needle:-120+240*clamp(ratio*nl,0,1),layers:(fin||t>=CONTACT)?Math.min(c,12):0,
+  falling:c>0&&!fin&&t>=60&&t<CONTACT,dropY:fin?0:-68*(1-dp*dp),finished:fin};
+}
+function labelText(v){if(v>=1e8)return(v/1e8)+'억';if(v>=1e4)return(v/1e4)+'만';return v.toLocaleString('ko-KR')}
+
+/* ---- 재질 강도 표 (모양 좌표는 전부 공통) ---- */
+const S={
+ A:{name:'A · 절제 무광',bodyTop:'#ad9c82',bodyBot:'#94816a',sideL:.10,sideR:.10,outW:1,outA:.55,speck:0,bevel:.35,tileDial:.28,tileCard:.22,vign:.05,bezelW:3,bezelGrad:false,nsh:[1,1.5,.14],hub:'flat',minorW:1,majorW:1.2,ink:'#493725',contact:.16,ground:.13,collar:false,screws:false,glass:0,stackSh:0,tints:['#F6ECD9','#F1E5CF'],cardEdge:.22,faceEdge:.35,stampFill:0,trayTop:'#c0b092',trayFront:'#9a876d',trayDark:'#86735b'},
+ B:{name:'B · 오래된 우체국',bodyTop:'#a8957a',bodyBot:'#86735b',sideL:.16,sideR:.17,outW:1,outA:.7,speck:.55,bevel:.55,tileDial:.42,tileCard:.32,vign:.10,bezelW:6,bezelGrad:true,nsh:[1.5,2.2,.2],hub:'dome',minorW:.8,majorW:1.4,ink:'#3d2c1d',contact:.24,ground:.17,collar:true,screws:false,glass:0,stackSh:.10,tints:['#F6ECD9','#EEE1C8','#F3E8D4','#E9DAC0'],cardEdge:.28,faceEdge:.45,stampFill:.16,trayTop:'#c8b899',trayFront:'#938068',trayDark:'#76644f'},
+ C:{name:'C · 물성 강조',bodyTop:'#b4a184',bodyBot:'#76644e',sideL:.24,sideR:.27,outW:1.3,outA:.85,speck:.8,bevel:.8,tileDial:.5,tileCard:.4,vign:.15,bezelW:8,bezelGrad:true,nsh:[2,3,.28],hub:'dome',minorW:.8,majorW:1.6,ink:'#33241a',contact:.32,ground:.23,collar:true,screws:true,glass:.22,stackSh:.16,tints:['#F7EDDB','#EADBC0','#F2E5CF','#E2D0B2'],cardEdge:.38,faceEdge:.6,stampFill:.24,trayTop:'#d2c3a4',trayFront:'#8b785f',trayDark:'#64533f'}
+};
+const NAMES={base:'기존 (지금 앱)',A:S.A.name,B:S.B.name,C:S.C.name};
+const BODY='M159 175Q220 157 281 175L310 360L130 360Z';
+const TRAY='M101 120L339 120L329 132L111 132Z';
+const NEEDLE='M217 281L218 218L220 201L222 218L223 281ZM216 280L224 280L220 290Z';
+/* 도장 알갱이: 고정 시드로 한 번만 생성 (앱에선 작은 비트맵을 한 번 만들어 ImageShader로 반복) */
+const SPECK=(()=>{let seed=145,o='';const r=()=>(seed=(seed*16807)%2147483647)/2147483647;
+ for(let i=0;i<26;i++)o+=`<circle cx="${(r()*24).toFixed(2)}" cy="${(r()*24).toFixed(2)}" r="${(.25+r()*.35).toFixed(2)}" fill="#2b1d12" opacity="${(.25+r()*.35).toFixed(2)}"/>`;
+ for(let i=0;i<10;i++)o+=`<circle cx="${(r()*24).toFixed(2)}" cy="${(r()*24).toFixed(2)}" r="${(.3+r()*.3).toFixed(2)}" fill="#fff4dc" opacity="${(.3+r()*.3).toFixed(2)}"/>`;
+ return o})();
+function pt(deg,r){const a=deg*Math.PI/180;return [220+Math.sin(a)*r,269-Math.cos(a)*r]}
+
+let uid=0;
+function makeScale(host,variantGetter){
+ const p='s'+(uid++)+'_';
+ const inst={host,p,variantGetter,v:null,cap:null,layersKey:null,fallKey:null,el:{}};
+ inst.build=function(){
+  const v=variantGetter(); inst.v=v; inst.cap=null; inst.layersKey=null; inst.fallKey=null;
+  host.innerHTML=svg(p,v);
+  for(const k of ['load','pistonA','pistonB','cards','ticks','nsh','needle','falling','fallcards','contact'])inst.el[k]=host.querySelector('#'+p+k);
+ };
+ inst.update=function(f,count){
+  if(variantGetter()!==inst.v)inst.build();
+  const v=inst.v,el=inst.el,cap=capacity(count);
+  if(cap!==inst.cap){inst.cap=cap;el.ticks.innerHTML=ticks(v,cap)}
+  el.load.setAttribute('transform',`translate(0 ${f.trayY})`);
+  el.pistonA.setAttribute('y',127+f.trayY);el.pistonA.setAttribute('height',61-f.trayY);
+  el.pistonB.setAttribute('y',127+f.trayY);el.pistonB.setAttribute('height',61-f.trayY);
+  const sh=v==='base'?null:S[v].nsh;
+  el.needle.setAttribute('transform',`rotate(${f.needle} 220 269)`);
+  if(sh)el.nsh.setAttribute('transform',`translate(${sh[0]} ${sh[1]}) rotate(${f.needle} 220 269)`);
+  if(f.layers!==inst.layersKey){inst.layersKey=f.layers;el.cards.innerHTML=cards(v,f.layers,p);if(el.contact)el.contact.style.display=f.layers>0?'':'none'}
+  const fk=f.falling?Math.min(count,12):0;
+  if(fk!==inst.fallKey){inst.fallKey=fk;el.fallcards.innerHTML=fk?cards(v,fk,p):''}
+  el.falling.setAttribute('transform',`translate(0 ${f.trayY+f.dropY})`);
+ };
+ inst.build();
+ return inst;
+}
+
+function defs(p,v){
+ const tileSize=v==='base'?1254:471; // 기존: 그림 배율로 타일이 크게 늘어난 상태 재현 / 새 안: 갤러리 배경과 같은 360dp 결
+ let d=`<defs><pattern id="${p}tile" patternUnits="userSpaceOnUse" width="${tileSize}" height="${tileSize}"><image href="${TILE_URL}" width="${tileSize}" height="${tileSize}" preserveAspectRatio="none"/></pattern>
+ <clipPath id="${p}bodyclip"><path d="${BODY}"/></clipPath><clipPath id="${p}dialclip"><circle cx="220" cy="269" r="85"/></clipPath>`;
+ if(v!=='base'){const s=S[v];
+  d+=`<pattern id="${p}speck" patternUnits="userSpaceOnUse" width="24" height="24">${SPECK}</pattern>
+  <linearGradient id="${p}body" gradientUnits="userSpaceOnUse" x1="0" y1="158" x2="0" y2="360"><stop offset="0" stop-color="${s.bodyTop}"/><stop offset="1" stop-color="${s.bodyBot}"/></linearGradient>
+  <linearGradient id="${p}side" gradientUnits="userSpaceOnUse" x1="130" y1="0" x2="310" y2="0"><stop offset="0" stop-color="#fff6e4" stop-opacity="${s.sideL}"/><stop offset=".32" stop-color="#fff6e4" stop-opacity="0"/><stop offset=".68" stop-color="#20140b" stop-opacity="0"/><stop offset="1" stop-color="#20140b" stop-opacity="${s.sideR}"/></linearGradient>
+  <linearGradient id="${p}plinth" gradientUnits="userSpaceOnUse" x1="0" y1="359" x2="0" y2="376"><stop offset="0" stop-color="${s.bodyTop}"/><stop offset="1" stop-color="${s.trayDark}"/></linearGradient>
+  <linearGradient id="${p}sleeve" gradientUnits="userSpaceOnUse" x1="205" y1="0" x2="235" y2="0"><stop offset="0" stop-color="#4f3f30"/><stop offset=".35" stop-color="#8a775e"/><stop offset=".5" stop-color="#9c8a70"/><stop offset=".8" stop-color="#6e5c47"/><stop offset="1" stop-color="#45362a"/></linearGradient>
+  <linearGradient id="${p}rod" gradientUnits="userSpaceOnUse" x1="211" y1="0" x2="229" y2="0"><stop offset="0" stop-color="#76644e"/><stop offset=".3" stop-color="#b3a285"/><stop offset=".42" stop-color="${v==='C'?'#e4d8bf':'#c8b99b'}"/><stop offset=".65" stop-color="#9c896e"/><stop offset="1" stop-color="#64523f"/></linearGradient>
+  <linearGradient id="${p}collar" gradientUnits="userSpaceOnUse" x1="0" y1="163" x2="0" y2="171"><stop offset="0" stop-color="#b9a789"/><stop offset="1" stop-color="#5f4d3b"/></linearGradient>
+  <linearGradient id="${p}channel" gradientUnits="userSpaceOnUse" x1="0" y1="168" x2="0" y2="192"><stop offset="0" stop-color="#20140b" stop-opacity=".35"/><stop offset="1" stop-color="#20140b" stop-opacity="0"/></linearGradient>
+  <linearGradient id="${p}tray" gradientUnits="userSpaceOnUse" x1="0" y1="120" x2="0" y2="132"><stop offset="0" stop-color="${s.trayTop}"/><stop offset=".24" stop-color="${s.trayTop}"/><stop offset=".26" stop-color="${s.trayFront}"/><stop offset="1" stop-color="${s.trayDark}"/></linearGradient>
+  <radialGradient id="${p}vign" gradientUnits="userSpaceOnUse" cx="220" cy="269" r="85"><stop offset=".62" stop-color="#5a3c1e" stop-opacity="0"/><stop offset="1" stop-color="#5a3c1e" stop-opacity="${s.vign}"/></radialGradient>
+  <linearGradient id="${p}bezel" gradientUnits="userSpaceOnUse" x1="160" y1="190" x2="280" y2="350"><stop offset="0" stop-color="#b09a78"/><stop offset=".5" stop-color="#6c5641"/><stop offset="1" stop-color="#46362a"/></linearGradient>
+  <radialGradient id="${p}ground" gradientUnits="userSpaceOnUse" cx="220" cy="381" r="128" gradientTransform="translate(0 381) scale(1 .07) translate(0 -381)"><stop offset="0" stop-color="#2a1d12" stop-opacity="${s.ground}"/><stop offset="1" stop-color="#2a1d12" stop-opacity="0"/></radialGradient>
+  <radialGradient id="${p}contactg" gradientUnits="userSpaceOnUse" cx="220" cy="120" r="82" gradientTransform="translate(0 120) scale(1 .05) translate(0 -120)"><stop offset="0" stop-color="#2a1d12" stop-opacity="${s.contact}"/><stop offset="1" stop-color="#2a1d12" stop-opacity="0"/></radialGradient>
+  <radialGradient id="${p}hub" gradientUnits="userSpaceOnUse" cx="217.6" cy="266.6" r="8.5"><stop offset="0" stop-color="#d6c3a0"/><stop offset=".55" stop-color="#7a6450"/><stop offset="1" stop-color="#3f3025"/></radialGradient>
+  <radialGradient id="${p}screw" gradientUnits="objectBoundingBox" cx=".38" cy=".35" r=".7"><stop offset="0" stop-color="#d9c8a6"/><stop offset="1" stop-color="#5a4838"/></radialGradient>`;
+ }
+ return d+'</defs>';
+}
+
+function svg(p,v){
+ let o=`<svg class="scale" viewBox="0 65 440 325" aria-hidden="true">`+defs(p,v);
+ if(v==='base'){
+  o+=`<ellipse cx="220" cy="381" rx="125" ry="7" fill="#000" opacity=".09"/>
+  <path d="${BODY}" fill="#A18E74" stroke="#66513E" stroke-width="2"/>
+  <g clip-path="url(#${p}bodyclip)">${Array.from({length:28},(_,i)=>`<line x1="130" y1="${176+i*7}" x2="310" y2="${166+i*7}" stroke="#66513E" stroke-opacity=".08" stroke-width=".45"/>`).join('')}</g>
+  <rect x="116" y="359" width="208" height="17" rx="5" fill="#A18E74" stroke="#66513E" stroke-width="2"/>
+  <rect x="146" y="376" width="25" height="5" rx="2" fill="#66513E"/><rect x="269" y="376" width="25" height="5" rx="2" fill="#66513E"/>
+  <rect id="${p}pistonA" x="205" y="127" width="30" height="61" fill="#66513E"/><rect id="${p}pistonB" x="211" y="127" width="18" height="61" fill="#A18E74"/>
+  <g id="${p}load"><path d="${TRAY}" fill="#A18E74" stroke="#66513E" stroke-width="2"/><line x1="112" y1="123" x2="328" y2="123" stroke="#F6ECD9" stroke-opacity=".65"/>
+   <ellipse id="${p}contact" cx="220" cy="119" rx="92" ry="2" fill="#66513E" opacity=".18"/><g id="${p}cards"></g></g>
+  <circle cx="220" cy="269" r="85" fill="#F6ECD9" stroke="#66513E" stroke-width="3"/>
+  <circle cx="220" cy="269" r="85" fill="url(#${p}tile)" opacity=".06"/>
+  <g id="${p}ticks"></g>
+  <text x="220" y="315" text-anchor="middle" font-size="11" fill="#493725">엽서 · 장</text>
+  <g id="${p}nsh"></g>
+  <g id="${p}needle"><path d="${NEEDLE}" fill="#704634"/></g>
+  <circle cx="220" cy="269" r="7" fill="#66513E"/><circle cx="220" cy="269" r="3" fill="#F6ECD9"/>
+  <text x="220" y="348" text-anchor="middle" font-size="8" fill="#493725">M E M O R Y  P O S T  O F F I C E</text>
+  <g id="${p}falling"><g id="${p}fallcards"></g></g></svg>`;
+  return o;
+ }
+ const s=S[v],edge='#66513E',light='#f6ead2';
+ // 바닥
+ o+=`<ellipse cx="220" cy="381" rx="128" ry="9" fill="url(#${p}ground)"/><ellipse cx="220" cy="377.5" rx="104" ry="2.2" fill="#2a1d12" opacity="${(s.ground*.7).toFixed(3)}"/>`;
+ // 본체: 명암 → 좌우 빛 → 도장 알갱이 → 반사선/그늘 → 얇은 외곽선
+ o+=`<path d="${BODY}" fill="url(#${p}body)"/><path d="${BODY}" fill="url(#${p}side)"/>`;
+ if(s.speck)o+=`<path d="${BODY}" fill="url(#${p}speck)" opacity="${s.speck}"/>`;
+ o+=`<g clip-path="url(#${p}bodyclip)" fill="none">
+  <path d="M159 177Q220 159 281 177" stroke="${light}" stroke-opacity="${s.bevel}" stroke-width="1.6"/>
+  <path d="M160.6 178L132 360" stroke="${light}" stroke-opacity="${(s.bevel*.55).toFixed(2)}" stroke-width="1.4"/>
+  <path d="M279.4 178L308 360" stroke="#20140b" stroke-opacity="${(s.bevel*.45).toFixed(2)}" stroke-width="1.6"/>
+  ${s.collar?`<rect x="201" y="166" width="38" height="26" fill="url(#${p}channel)"/>`:''}</g>
+  <path d="${BODY}" fill="none" stroke="${edge}" stroke-opacity="${s.outA}" stroke-width="${s.outW}"/>`;
+ // 받침 판
+ o+=`<rect x="116" y="359" width="208" height="17" rx="5" fill="url(#${p}plinth)"/>`;
+ if(s.speck)o+=`<rect x="116" y="359" width="208" height="17" rx="5" fill="url(#${p}speck)" opacity="${s.speck}"/>`;
+ o+=`<line x1="121" y1="360.6" x2="319" y2="360.6" stroke="${light}" stroke-opacity="${s.bevel}" stroke-width="1.1"/>
+  <rect x="116" y="359" width="208" height="17" rx="5" fill="none" stroke="${edge}" stroke-opacity="${s.outA}" stroke-width="${s.outW}"/>
+  <rect x="146" y="376" width="25" height="5" rx="2" fill="#45362a"/><rect x="269" y="376" width="25" height="5" rx="2" fill="#45362a"/>`;
+ if(s.screws)for(const x of [128,312])o+=`<circle cx="${x}" cy="367.5" r="2.6" fill="url(#${p}screw)" stroke="#3f3025" stroke-width=".5"/><line x1="${x-1.7}" y1="368.4" x2="${x+1.7}" y2="366.6" stroke="#3f3025" stroke-width=".6"/>`;
+ // 피스톤 (가로 명암만 → 길이가 바뀌어도 늘어나 보이지 않음)
+ o+=`<rect id="${p}pistonA" x="205" y="127" width="30" height="61" fill="${s.bezelGrad?`url(#${p}sleeve)`:'#7b6852'}"/>
+  <rect id="${p}pistonB" x="211" y="127" width="18" height="61" fill="url(#${p}rod)"/>`;
+ if(s.collar)o+=`<rect x="200" y="163.5" width="40" height="7.5" rx="1.5" fill="url(#${p}collar)" stroke="${edge}" stroke-opacity="${s.outA}" stroke-width=".8"/><line x1="202" y1="164.6" x2="238" y2="164.6" stroke="${light}" stroke-opacity="${s.bevel}" stroke-width=".8"/>`;
+ // 받침대 + 엽서 (같이 이동)
+ o+=`<g id="${p}load">
+  ${s.collar?`<rect x="205" y="132" width="30" height="3.2" fill="#20140b" opacity=".22"/>`:''}
+  <path d="${TRAY}" fill="url(#${p}tray)"/>${s.speck?`<path d="${TRAY}" fill="url(#${p}speck)" opacity="${s.speck}"/>`:''}
+  <line x1="103" y1="120.6" x2="337" y2="120.6" stroke="${light}" stroke-opacity="${s.bevel}" stroke-width="1"/>
+  <path d="${TRAY}" fill="none" stroke="${edge}" stroke-opacity="${s.outA}" stroke-width="${s.outW}"/>
+  ${s.screws?`<circle cx="118" cy="127.6" r="1.7" fill="url(#${p}screw)"/><circle cx="322" cy="127.6" r="1.7" fill="url(#${p}screw)"/>`:''}
+  <ellipse id="${p}contact" cx="220" cy="120" rx="82" ry="4" fill="url(#${p}contactg)"/>
+  <g id="${p}cards"></g></g>`;
+ // 눈금판: 종이 + 결 + 가장자리 → 금속 링 → 안쪽 그늘
+ const bw=s.bezelW,rr=85-bw/2;
+ o+=`<circle cx="220" cy="269" r="85" fill="#F5EBD7"/>
+  <circle cx="220" cy="269" r="85" fill="url(#${p}tile)" opacity="${s.tileDial}"/>
+  <circle cx="220" cy="269" r="85" fill="url(#${p}vign)"/>
+  <circle cx="220" cy="269" r="${rr}" fill="none" stroke="${s.bezelGrad?`url(#${p}bezel)`:'#7a6450'}" stroke-width="${bw}"/>
+  ${s.bezelGrad?`<circle cx="220" cy="269" r="${85-bw-.6}" fill="none" stroke="#3a2716" stroke-opacity=".18" stroke-width="1.2"/><circle cx="220" cy="269" r="84.4" fill="none" stroke="#2b1d12" stroke-opacity=".5" stroke-width=".8"/>`:''}
+  <g id="${p}ticks"></g>
+  <text x="220" y="315" text-anchor="middle" font-size="11" fill="${s.ink}">엽서 · 장</text>
+  <g id="${p}nsh"><path d="${NEEDLE}" fill="#20140b" opacity="${s.nsh[2]}"/></g>
+  <g id="${p}needle"><path d="${NEEDLE}" fill="${v==='A'?'#704634':'#5f3a2a'}"/>${v==='A'?'':`<path d="M219.3 279L219.5 214L220 204" fill="none" stroke="#f3dcc6" stroke-opacity=".35" stroke-width=".6"/>`}</g>`;
+ if(s.hub==='flat')o+=`<circle cx="221" cy="270.5" r="7" fill="#20140b" opacity=".14"/><circle cx="220" cy="269" r="7" fill="#66513E"/><circle cx="220" cy="269" r="3" fill="#F6ECD9"/>`;
+ else o+=`<circle cx="221.3" cy="271" r="7.4" fill="#20140b" opacity=".22"/><circle cx="220" cy="269" r="7" fill="url(#${p}hub)"/><circle cx="220" cy="269" r="2.6" fill="#e6d8bc"/><line x1="218.4" y1="269.9" x2="221.6" y2="268.1" stroke="#5a4838" stroke-width=".7"/>`;
+ // 기존 위치(220,348) 유지. 링·본체에 걸친 글자가 묻히지 않게 종이색 테두리를 먼저 칠한다(Compose: Paint STROKE 후 FILL).
+ o+=`<text x="220" y="348" text-anchor="middle" font-size="8" fill="${s.ink}" stroke="#F5EBD7" stroke-opacity=".8" stroke-width="1.4" stroke-linejoin="round" paint-order="stroke">M E M O R Y  P O S T  O F F I C E</text>`;
+ if(s.glass){const a=pt(-74,73),b=pt(-22,73);o+=`<path d="M${a[0]} ${a[1]}A73 73 0 0 1 ${b[0]} ${b[1]}" fill="none" stroke="#fff" stroke-opacity="${s.glass}" stroke-width="4" stroke-linecap="round"/>`}
+ o+=`<g id="${p}falling"><g id="${p}fallcards"></g></g></svg>`;
+ return o;
+}
+
+function ticks(v,cap){
+ const base=v==='base',s=base?null:S[v],ink=base?'#493725':s.ink;let o='';
+ for(let i=0;i<=40;i++){
+  const major=i%4===0,a=pt(-120+i*6,major?66:70),b=pt(-120+i*6,76),c=pt(-120+i*6,53);
+  o+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${ink}" stroke-width="${base?1:(major?s.majorW:s.minorW)}"/>`;
+  if(major&&!(cap>=1000&&i%8!==0))o+=`<text x="${c[0]}" y="${c[1]+3}" text-anchor="middle" font-size="9" fill="${ink}"${base?'':' font-weight="500"'}>${labelText(Math.floor(cap*i/40))}</text>`;
+ }
+ return o;
+}
+
+function cards(v,layers,p){
+ if(!layers)return '';let o='';
+ const face=(x,y)=>`M${x} ${y-3}L${x+10} ${y-22}L${x+143} ${y-22}L${x+150} ${y-3}Z`;
+ const top=layers-1,tx=145+(top%3-1)*1.8,ty=120-top*3;
+ const details=(x,y,a,stamp)=>`<path d="M${x+76} ${y-18}v11M${x+88} ${y-12}h31M${x+88} ${y-8}h24" stroke="#66513E" stroke-opacity="${a}" stroke-width=".6" fill="none"/><rect x="${x+119}" y="${y-19}" width="13" height="8" fill="${stamp?'#b5674c':'none'}" fill-opacity="${stamp||0}" stroke="#66513E" stroke-opacity=".5" stroke-width="${stamp?.6:1}"/>`;
+ if(v==='base'){
+  for(let i=0;i<layers;i++){const x=145+(i%3-1)*1.8,y=120-i*3;o+=`<rect x="${x}" y="${y-3}" width="150" height="3" fill="#F6ECD9" stroke="#66513E" stroke-width="1"/>`}
+  o+=`<path d="${face(tx,ty)}" fill="#F6ECD9" stroke="#66513E" stroke-width="1"/><path d="${face(tx,ty)}" fill="url(#${p}tile)" opacity=".08"/>`+details(tx,ty,.4,0);
+  return o;
+ }
+ const s=S[v];
+ if(s.stackSh)o+=`<rect x="${147.5}" y="${ty-2}" width="151" height="${122-ty}" fill="#20140b" opacity="${s.stackSh}"/>`;
+ for(let i=0;i<layers;i++){const x=145+(i%3-1)*1.8,y=120-i*3;
+  o+=`<rect x="${x}" y="${y-3}" width="150" height="3" fill="${s.tints[i%s.tints.length]}"/><line x1="${x}" y1="${y-.3}" x2="${x+150}" y2="${y-.3}" stroke="#66513E" stroke-opacity="${s.cardEdge}" stroke-width=".6"/>`}
+ o+=`<path d="${face(tx,ty)}" fill="#F7EEDD"/><path d="${face(tx,ty)}" fill="url(#${p}tile)" opacity="${s.tileCard}"/><path d="${face(tx,ty)}" fill="none" stroke="#66513E" stroke-opacity="${s.faceEdge}" stroke-width=".7"/>`+details(tx,ty,.4,s.stampFill);
+ return o;
+}
+
+/* ---- 화면 구성과 재생 ---- */
+const state={variant:'B',count:11,shown:11,start:0,running:false,raf:0,reduce:false};
+const followers=[makeScale($('#phoneScale'),()=>state.variant),makeScale($('#zoomScale'),()=>state.variant)];
+const fixed=['base','A','B','C'].map(v=>makeScale($('#g-'+v),()=>v));
+const all=[...followers,...fixed];
+function renderAll(f){
+ all.forEach(i=>i.update(f,state.shown));
+ const cap=capacity(state.shown);
+ $('#resultMain').textContent=f.finished?state.shown.toLocaleString('ko-KR')+'장':'측정 중';
+ $('#resultSub').textContent='눈금 0–'+cap.toLocaleString('ko-KR')+'장';
+ $('#readout').textContent=`받침대 ${f.trayY.toFixed(2)} · 바늘 ${f.needle.toFixed(2)}° · 층 ${f.layers}${f.falling?' · 낙하 '+f.dropY.toFixed(1):''} · ${f.finished?'정착':'진행 중'}`;
+}
+function stop(){cancelAnimationFrame(state.raf);state.running=false}
+function play(){
+ stop();state.shown=state.count;
+ if(state.reduce||state.shown===0){renderAll(scaleFrame(state.shown,DUR,true));return}
+ state.running=true;const start=performance.now(),k=$('#slow').checked?4:1;
+ const tick=now=>{const ms=(now-start)/k;const f=scaleFrame(state.shown,Math.min(ms,DUR),false);renderAll(f);if(ms<DUR)state.raf=requestAnimationFrame(tick);else{renderAll(scaleFrame(state.shown,DUR,false));state.running=false}};
+ state.raf=requestAnimationFrame(tick);
+}
+function reset(){stop();state.shown=0;renderAll(scaleFrame(0,DUR,false))}
+$('#variants').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;state.variant=b.dataset.v;
+ $('#variants').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));$('#zoomName').textContent=NAMES[state.variant];
+ if(!state.running)renderAll(scaleFrame(state.shown,DUR,false))};
+$('#count').addEventListener('change',e=>{const n=Number(e.target.value);state.count=clamp(Number.isFinite(n)?Math.round(n):0,0,100000);e.target.value=state.count;play()});
+$('#presets').innerHTML=[0,1,5,11,12,30,60,61,200,1000].map(n=>`<button data-n="${n}">${n}</button>`).join('');
+$('#presets').onclick=e=>{const b=e.target.closest('[data-n]');if(!b)return;state.count=Number(b.dataset.n);$('#count').value=state.count;play()};
+$('#play').onclick=play;$('#reset').onclick=reset;
+$('#reduce').onchange=e=>{state.reduce=e.target.checked;play()};
+function sizePhone(){const [w,h]=$('#device').value.split('x').map(Number);const ph=$('#phone');ph.style.width=(w+20)+'px';ph.style.height=(h+20)+'px';
+ requestAnimationFrame(()=>{const page=$('#page'),mb=$('#mailbox');const bottom=mb.getBoundingClientRect().bottom-ph.getBoundingClientRect().top-10;
+  // 하단 내비게이션(약 80dp)을 뺀 높이 안에 우체통 자리까지 들어오는지
+  const fits=bottom<=h-80;const el=$('#fit');el.className='fit '+(fits?'ok':'bad');
+  el.textContent=fits?`스크롤 없이 저울·결과·우체통 자리까지 들어와 (${w}×${h})`:`이 크기에선 우체통 일부가 아래로 넘쳐 (${w}×${h}) — 재질 변경과 무관, 기존과 같은 배치`;})}
+$('#device').onchange=sizePhone;sizePhone();
+play();
+window.scaleLab={scaleFrame,capacity,state,play,reset};
+</script>
+</body>
+</html>

@@ -1730,7 +1730,7 @@ private fun GalleryQuickSelectHand(
 private val GALLERY_PAGE_INDICATOR_RESERVED_HEIGHT = 28.dp
 
 /** 종이 타일 한 장이 화면에 보이는 크기. 기기 밀도와 상관없이 섬유 크기를 일정하게 둔다. */
-private val GALLERY_PAPER_TILE_SIZE = 360.dp
+internal val GALLERY_PAPER_TILE_SIZE = 360.dp
 
 /** 헤더와 같은 단색 위에 겹치는 종이 타일의 농도. 실기기 QA로 맞추는 값이다. */
 private const val GALLERY_PAPER_TILE_ALPHA = 1f
