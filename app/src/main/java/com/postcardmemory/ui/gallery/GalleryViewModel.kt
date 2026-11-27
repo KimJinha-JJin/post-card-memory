@@ -75,7 +75,7 @@ class GalleryViewModel @Inject constructor(
             )
 
     /*
-     * 127일차: 기억 밀도 아래 미래 우체통 종이가 읽는 묶음(읽기 전용). 우체통 화면
+     * 127일차: 기억 저울 아래 미래 우체통 종이가 읽는 묶음(읽기 전용). 우체통 화면
      * (FutureMailboxViewModel.groups)과 같은 계산 — 보낸 엽서 Flow + 자정 신호 — 이라
      * 도착 여부·D-day가 두 화면에서 갈라지지 않는다. 첫 값이 오기 전은 null로 두어
      * 엽서가 있는데도 "빈 우체통"이 잠깐 비치지 않게 한다.

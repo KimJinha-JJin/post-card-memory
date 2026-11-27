@@ -57,22 +57,23 @@ class GalleryFutureMailDioramaStructureTest {
         assertTrue(diorama.contains("BoxWithConstraints"))
         assertTrue(
             diorama.contains(
-                "if (!futureMailDioramaFits(maxHeight.value, sheetHeight.value)) return@BoxWithConstraints"
+                "if (!keepVisible && !futureMailDioramaFits(maxHeight.value, sheetHeight.value)) return@BoxWithConstraints"
             )
         )
         assertFalse(diorama.contains("verticalScroll"))
     }
 
     @Test
-    fun densityPage_placesSlotAfterGraphAndUsesExistingMailboxNavigation() {
-        val start = screen.indexOf("private fun GalleryDensityPage(")
-        val end = screen.indexOf("private fun GalleryMemoryDensityBar(", start)
-        assertTrue(start >= 0 && end > start)
-        val body = screen.substring(start, end)
-        val foot = body.indexOf("GalleryMemoryDensityFoot(")
+    fun scalePage_preservesVisibleSlotAndUsesExistingMailboxNavigation() {
+        val body = read("GalleryMemoryScalePage.kt")
+        val scale = body.indexOf("MemoryScaleDrawing(")
         val slot = body.indexOf("GalleryFutureMailDioramaSlot(")
-        assertTrue(foot >= 0 && slot > foot)
-        assertTrue(body.substring(slot).contains(".weight(1f)"))
+        assertTrue(scale >= 0 && slot > scale)
+        assertTrue(body.contains("onOpenFutureMailbox = onOpenFutureMailbox"))
+        assertTrue(body.contains("keepVisible = true"))
+        assertTrue(body.contains("verticalScroll(rememberScrollState())"))
+        assertTrue(diorama.contains("modifier.height(sheetHeight + topGap)"))
+        assertTrue(body.contains("topGap = 8.dp"))
         assertEquals(1, Regex("""onOpenFutureMailbox = onNavigateToFutureMailbox""").findAll(screen).count())
     }
 

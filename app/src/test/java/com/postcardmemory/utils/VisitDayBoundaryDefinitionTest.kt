@@ -47,7 +47,8 @@ class VisitDayBoundaryDefinitionTest {
     private val dayBoundaryConsumers = listOf(
         "ui/futuremail/FutureMailboxViewModel.kt",
         "ui/detail/DetailScreen.kt",
-        "ui/gallery/GalleryScreen.kt",
+        "ui/gallery/GalleryMemoryScalePage.kt",
+        "ui/gallery/GalleryViewModel.kt",
         "ui/gallery/VisitCalendarDrawer.kt"
     )
 

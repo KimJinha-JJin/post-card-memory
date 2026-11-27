@@ -61,7 +61,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /*
- * 127일차: 기억 밀도 그래프 아래 빈자리에 놓는 미래 우체통 종이 한 장(목업 B안).
+ * 기억 저울 아래에 놓는 기존 미래 우체통 종이 한 장(127일차 목업 B안).
  * 방문 달력 장과 같은 종이·가위 가장자리·접촉 그림자·테이프 위에 봉투와 원형 소인만
  * 둔다. 숫자 현황판이 아니라 그림이 상태를 먼저 말한다 — 소인의 진하기, 봉인 여부,
  * 봉투 뒤로 고개를 내민 엽서. 우체통 데이터(도착일·D-day·도착 여부)는 기존
@@ -171,7 +171,7 @@ internal fun futureMailDioramaTexts(
     }
 }
 
-/** 그래프 아래 끝과 종이 사이 틈. */
+/** 기본 배치에서 본문과 종이 사이 틈. */
 internal val FUTURE_MAIL_DIORAMA_TOP_GAP = 24.dp
 
 /** 기본 글꼴에서의 종이 높이(목업 B안). 큰 글꼴이면 [futureMailDioramaSheetHeight]가 늘린다. */
@@ -185,7 +185,7 @@ private val FUTURE_MAIL_DIORAMA_TEXT_VERTICAL_PADDING = 12.dp
 private const val FUTURE_MAIL_DIORAMA_HANDLE_CLEARANCE_DP = 4f
 
 /**
- * 갤러리 페이지 본문의 바닥은 Scaffold 아래 inset 위로 24dp 더 올라와 있고([GalleryDensityPage]
+ * 갤러리 페이지 본문의 바닥은 Scaffold 아래 inset 위로 24dp 더 올라와 있고([GalleryMemoryScalePage]
  * bottom padding), 퀵셀렉트 손 컨테이너의 바닥은 그 inset 바로 위다. 둘의 차이.
  */
 private const val GALLERY_PAGE_BOTTOM_PADDING_DP = 24f
@@ -217,8 +217,8 @@ internal fun futureMailDioramaBottomReserveDp(): Float =
         .coerceAtLeast(0f) + FUTURE_MAIL_DIORAMA_HANDLE_CLEARANCE_DP
 
 /**
- * 그래프 아래 남은 높이 [availableHeightDp] 안에 틈 + 종이 + 손잡이 여유가 다 들어가는지.
- * 들어가지 않으면 종이를 아예 그리지 않는다 — 줄이거나 그래프를 밀어 올리지 않는다.
+ * 기본 배치의 남은 높이 [availableHeightDp] 안에 틈 + 종이 + 손잡이 여유가 다 들어가는지.
+ * 들어가지 않으면 종이를 숨긴다. 기억 저울의 스크롤 배치는 keepVisible 경로를 쓴다.
  */
 internal fun futureMailDioramaFits(
     availableHeightDp: Float,
@@ -234,18 +234,21 @@ private fun futureMailDioramaSheetHeight(): Dp {
 }
 
 /**
- * 기억 밀도 페이지에서 그래프 아래 남은 칸 전체를 받는다([modifier]에 weight). 칸 높이가
- * 모자라면 아무것도 구성하지 않아 접근성 트리에도 남지 않는다.
+ * 기본 경로는 남는 높이가 부족하면 숨긴다. 기억 저울의 스크롤 경로는 keepVisible로
+ * 종이 높이를 확보하며, 기존 종이·봉투·상태·접근성은 그대로 재사용한다.
  */
 @Composable
 internal fun GalleryFutureMailDioramaSlot(
     groups: List<FutureMailGroup>,
     onOpenFutureMailbox: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    keepVisible: Boolean = false,
+    topGap: Dp = FUTURE_MAIL_DIORAMA_TOP_GAP
 ) {
     val sheetHeight = futureMailDioramaSheetHeight()
-    BoxWithConstraints(modifier = modifier) {
-        if (!futureMailDioramaFits(maxHeight.value, sheetHeight.value)) return@BoxWithConstraints
+    val slotModifier = if (keepVisible) modifier.height(sheetHeight + topGap) else modifier
+    BoxWithConstraints(modifier = slotModifier) {
+        if (!keepVisible && !futureMailDioramaFits(maxHeight.value, sheetHeight.value)) return@BoxWithConstraints
         // 도착·D-day는 groups를 만들 때 이미 같은 자정 기준으로 계산됐다. 여기서 읽는 시각은
         // "올해인지"만 가르는 데 쓰므로 groups가 바뀔 때(자정 신호 포함) 다시 읽으면 충분하다.
         val nowMillis = remember(groups) { System.currentTimeMillis() }
@@ -257,7 +260,7 @@ internal fun GalleryFutureMailDioramaSlot(
             onClick = onOpenFutureMailbox,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = FUTURE_MAIL_DIORAMA_TOP_GAP)
+                .padding(top = topGap)
         )
     }
 }
@@ -288,7 +291,7 @@ private fun GalleryFutureMailDiorama(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 달력 종이 bitmap. 기억 밀도 페이지가 구성돼 있는 동안만 들고 있는다.
+    // 달력 종이 bitmap. 기억 저울 페이지가 구성돼 있는 동안만 들고 있는다.
     val paper = ImageBitmap.imageResource(R.drawable.visit_calendar_paper)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()

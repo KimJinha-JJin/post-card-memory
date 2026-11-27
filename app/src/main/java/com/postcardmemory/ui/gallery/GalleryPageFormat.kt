@@ -10,8 +10,8 @@ package com.postcardmemory.ui.gallery
  *
  * [sortAffectsOrder]는 정렬 방식(최신순/오래된순)이 해당 보기의 실제
  * 표시 순서에 반영되는지를 나타낸다. 월별은 그룹핑 헬퍼가 입력 순서를
- * 그대로 보존해 정렬값을 물려받지만, 기억 밀도는 항상 1월→12월로 고정돼
- * 정렬과 무관하다.
+ * 그대로 보존해 정렬값을 물려받지만, 기억 저울은 집계 수량을 읽으므로
+ * 정렬과 무관하다. DENSITY는 기존 화면 복원 문자열과의 호환성을 위해 유지한다.
  */
 enum class GalleryPageFormat(
     val sortAffectsOrder: Boolean = false

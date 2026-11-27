@@ -31,10 +31,14 @@ class GalleryPaperBackgroundStructureTest {
     }
 
     private fun functionBody(name: String): String {
-        val start = sourceText.indexOf("private fun $name(")
+        val code = if (name == "GalleryMemoryScalePage") {
+            val parent = listOf("src/main/java", "app/src/main/java").map(::File).first(File::exists)
+            File(parent, "com/postcardmemory/ui/gallery/GalleryMemoryScalePage.kt").readText()
+        } else sourceText
+        val start = code.indexOf("fun $name(")
         assertTrue("$name 선언을 찾지 못함", start >= 0)
-        val end = sourceText.indexOf("\n@Composable", start).let { if (it < 0) sourceText.length else it }
-        return sourceText.substring(start, end)
+        val end = code.indexOf("\n@Composable", start).let { if (it < 0) code.length else it }
+        return code.substring(start, end)
     }
 
     @Test
@@ -50,7 +54,7 @@ class GalleryPaperBackgroundStructureTest {
         )
         assertTrue(sourceText.contains("val paperTile = rememberGalleryPaperTile()"))
         assertTrue(sourceText.contains("GalleryPaperBackground(\n                    tile = paperTile,"))
-        val densityCall = sourceText.substring(sourceText.indexOf("GalleryDensityPage(\n"), sourceText.indexOf("GalleryPageFormat.MONTHLY, null ->"))
+        val densityCall = sourceText.substring(sourceText.indexOf("GalleryMemoryScalePage(\n"), sourceText.indexOf("GalleryPageFormat.MONTHLY, null ->"))
         assertTrue("기억 밀도도 배경과 같은 이미지를 받아야 함", densityCall.contains("paperTile = paperTile"))
     }
 
@@ -83,7 +87,7 @@ class GalleryPaperBackgroundStructureTest {
 
     @Test
     fun galleryPages_doNotPaintTheirOwnFullScreenBackground() {
-        listOf("GalleryMonthlyGridPage", "GalleryDensityPage", "SearchEmptyState").forEach { name ->
+        listOf("GalleryMonthlyGridPage", "GalleryMemoryScalePage", "SearchEmptyState").forEach { name ->
             assertFalse(
                 "$name 는 GalleryPaperWhite 전체 배경을 칠하면 안 됨(종이를 가림)",
                 functionBody(name).contains(".background(GalleryPaperWhite)")

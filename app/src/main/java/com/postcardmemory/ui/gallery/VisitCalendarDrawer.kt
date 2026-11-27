@@ -1258,7 +1258,7 @@ private const val VISIT_CALENDAR_PAPER_EDGE_STEP_DP = 4f
 private const val VISIT_CALENDAR_PAPER_EDGE_SEED = 96_000
 
 // 종이 밑에 깔리는 접촉 그림자. 장 아래·오른쪽으로 1dp 남짓만 비쳐 거의 느껴지지 않게 둔다.
-// 127일차: 기억 밀도 아래 미래 우체통 종이([GalleryFutureMailDiorama])도 같은 장 문법을 쓰도록 internal.
+// 127일차: 기억 저울 아래 미래 우체통 종이([GalleryFutureMailDiorama])도 같은 장 문법을 쓰도록 internal.
 internal val VisitCalendarPaperShadowColor = Color(0xFF3B3226)
 internal val VISIT_CALENDAR_PAPER_SHADOW_LAYERS = listOf(
     Triple(0.3f, 0.8f, 0.06f), // dx dp, dy dp, alpha

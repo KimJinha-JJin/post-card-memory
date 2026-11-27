@@ -1,15 +1,119 @@
-# HANDOFF — 2026-11-25 143일차: 기억 책갈피 구현·실기기 QA 완료, main 병합 전
+# HANDOFF — 2026-11-27 145일차: 기억 저울 B안 질감(오래된 우체국) 적용
+
+- **현재 승인:** 사용자가 질감 비교 [목업](mockups/memory-scale-texture-day145.html)의 B안을 고르고, 실기기 확인 뒤 하단 영어 문구 `MEMORY POST OFFICE` 제거를 조건으로 최종 승인했어. 추가 디자인 탐색은 하지 않아. 작업 브랜치 commit·push·PR #41 갱신까지 승인, **main 병합은 별도 승인 전 금지**.
+- **시작 Git:** `feature/day144-memory-scale` = origin = `b227ec9514ae4ae7078303778ef219c0f3069bc1`, origin/main `6c2aa0d`. 추적 변경 0, PR #41 OPEN·CI 성공·CLEAN. 새 worktree 없음.
+- **조사 결과(투박함 원인):** ① 모든 부품이 단색이라 빛 방향이 없었어. ② 2~3px 진갈색 외곽선이 만화 같은 인상을 주고, 엽서 층마다 테두리가 있어 줄무늬 막대처럼 보였어. ③ 종이 타일이 그림 좌표 배율 탓에 약 2.6배 확대된 채 6~8%로 깔려 사실상 보이지 않았어.
+- **구현(`MemoryScaleDrawing.kt`만, 기하·모션 동일):**
+  - 본체: 세로 명암·좌우 빛·윗곡선 반사, 무광 도장 알갱이, 외곽선 1px/70%.
+  - 받침대·받침판: 윗면/앞면 경계, 반사선, 피스톤에 지는 그림자(받침대와 같이 이동).
+  - 피스톤: 가로 원통 명암만 써서 길이가 바뀌어도 무늬가 늘어나지 않아. 본체 입구에 고정 칼라.
+  - 눈금판: 종이 타일을 갤러리 배경과 같은 360dp 결로 보정해 42%, 금속 링·안쪽 그늘. 눈금 굵기(큰 눈금 1.4·작은 눈금 0.8)만 정리하고 위치는 그대로.
+  - 바늘: 같은 각도로 도는 화면 기준 오프셋 그림자, 반사선, 볼록한 축 머리.
+  - 엽서 더미: 층별 미세 색 차이, 아래 가장자리만 옅은 선, 윗면 종이 결, 접촉 그림자.
+  - 하단 영어 문구와 그 전용 테두리 Paint를 제거하고 대체 장식은 넣지 않았어.
+  - 그림자는 흐림 없이 오프셋 도형·그라디언트로만 그려. Brush·Path는 drawWithCache에서 한 번 만들고, 64×64 알갱이 타일은 `remember`로 composition당 한 번만 만들어.
+- **유지:** `MemoryScaleModel.kt`(400ms 접촉·2400ms 정착·감쇠·눈금 확장)와 화면 배치, 기간 선택, 미래 우체통은 그대로야. `GalleryScreen.kt`는 종이 타일 크기 상수를 `private`→`internal`로 바꾼 한 줄뿐이야. 새 이미지·dependency·Gradle·Room 변경 없음. 보호 자료 `postcard_paper_fiber_tile.png`는 사용하지 않았어.
+- **로컬 자동검증 — 실행/통과:** 최종 `testDebugUnitTest assembleDebug --no-daemon --max-workers=1`(Gradle9.9.1/Zulu17) 성공. XML **1347/1347·147 suites·실패/오류/skip0**, Debug APK 성공. `MemoryScaleWiringStructureTest` 1건의 assertion을 새 이름·알갱이 1회 생성·영어 문구 없음으로 갱신했어(TEST-COVERAGE-MAP 145일차 절).
+- **실기기 — 실행(SM-S936N, 사용자 승인 `install -r`, schema20·같은 서명):**
+  - 첫 질감판 설치는 기기가 스트리밍 전송본을 파싱하지 못해 세션이 버려졌어. 서명 문제가 아니었고 기존 앱은 그대로였어. 같은 설치를 `--no-streaming`으로 한 번 다시 해서 성공했어.
+  - 두 번 설치 모두 직전/직후 내부 149개 파일 해시 변화 0, 설치 APK와 로컬 빌드 SHA-256 일치.
+  - 질감판 QA: 기존 화면과 같은 10장 자리에서 정착. 11월 5장·9월 0장·연간 10장·측정 중 연속 기간 전환·페이지 이탈/재진입·우체통 진입/Back·갤러리/책갈피 정상, 앱 종료 오류 0건.
+  - 애니메이션 끄기(0으로 바꿨다 1.0 복구)는 즉시 정착. 큰 글자(1.3으로 바꿨다 0.9 복구)에서도 스크롤 없이 우체통까지 표시. 접근성 정보는 "기억 저울, 엽서 N장, 최대 눈금 60장" 유지.
+  - gfxinfo는 위쪽 시계 포함 99% 11ms 이내, 지연 0.19%.
+  - 문구 제거판: 문구가 사라졌고 외형·전체 10장·월간 5장 모션·semantics가 유지됐어. 오류 0건.
+- **데이터/보호:** QA 중 내부 파일 변화는 실행 표식(`profileInstalled`·ActivityThread prefs)과 앱 실행 시 생기는 당일 방문 기록뿐이었고, DB 파일 해시는 설치·QA 전후 같았어. 마지막 읽기 전용 DB 사본에서 schema20·integrity ok·전체 11장/일반 보관 10장을 확인했어. 사본·화면은 저장소 밖 로컬 임시 경로에만 있어. schema19/20 사용자 백업 폴더는 열거나 바꾸지 않았어. SAFE 38/38·시작 미추적 48/48 해시 유지(새 미추적은 이번 목업 1개뿐이고 이번 commit에 함께 넣어).
+- **미검증/경계:** TalkBack을 실제로 켜서 듣지는 않았어(접근성 트리만 확인). 기존 버전과 나란히 잰 프레임 비교값이 없어. 저사양 기기 성능은 미검증이야. 실사용 instrumentation 미실행(해당 없음), CONDITIONAL/FORBIDDEN은 실행 불가, emulator 미사용.
+- **Git 마감:** 이 절은 commit 전 작성이야. 최종 PR #41 head SHA·CI 결과는 대화 완료보고에서 확인해. 다음은 사용자 main 병합 승인 대기야.
+
+---
+
+# HANDOFF — 2026-11-26 144일차 추가: 기억 저울 B안 실제 앱 적용·화면 간소화
+
+- **현재 승인:** 사용자가 HTML의 B안(2.4초)을 채택하고 실제 Android 적용을 승인했어. 이후 실기기 B안 형태·접촉·반동·정착을 확인하고 남은 QA/Git 마감 진행을 승인했어. 마지막 추가 지시로 **12개월 그래프 완전 제거와 세로 간소화**를 승인했으므로, 아래 조사 당시의 그래프 보존·앱 적용 미승인 상태는 역사 기록이야. main 병합은 여전히 별도 승인 전 금지야.
+- **시작/작업 Git:** 기존 `feature/day144-memory-scale`, 시작 HEAD와 origin 작업 브랜치 `df2956d4f980b8e7a075e8a29a125b0454306700`. 새 worktree/프로젝트 없음. 이번 절은 구현 commit 전 작업트리 상태야. commit/push/PR/CI의 최종 결과는 대화 완료보고에서 확인해.
+- **앱 구성:** 제목 → 전체/연간/월간 기간 선택 → B안 Canvas 저울 → 실제 장수/최대 눈금 → 기존 미래 우체통. `GalleryMemoryScalePage`·`MemoryScaleDrawing`·`MemoryScaleModel`로 화면/그리기/집계를 분리했어. 새 이미지·dependency·Gradle·Room 변경 없음.
+- **B안:** HTML과 같은 400ms 접촉·2400ms 종료, 받침대 w21/d20·바늘 w16/d15, 이동량16·각도−120~120·최대12겹. 같은 하중 시각으로 받침대/피스톤/정착 더미/바늘을 계산하고 종료값을 정확히 맞춰. 최대 눈금 이탈 방지를 위해 응답을 clamp하는 점은 HTML과 달라. 프레임 상태를 draw 단계에서 읽고 Path/눈금/문자 Paint를 캐시해. 대상 id 집합·기간이 바뀌거나 화면 재진입할 때 재생하고, 일반 재구성/정렬/꾸미기 변경은 재생 키를 바꾸지 않아. page/lifecycle 비활성·composition 제거 시 effect가 취소돼. 시스템 animator scale 변경을 관찰해 0이면 즉시 최종 자세야.
+- **간소화:** 그래프/펜/20장 막대/초과표시/질감 행렬과 전용 상수를 제거했어. `GalleryPostcardMonth`·`postcardMonthsForYear`는 역할 중심 이름으로 보존하고 실제 연간/월간 집계에서 재사용해. 이미지 참조 조사 결과 기존 gallery 종이 타일은 배경·편집·저울에서 공용이라 제거하지 않았어. 저울은 같은 440 단위 기하를 유지하며 y65~390(440×325)만 표시해 위/아래 빈 공간을 줄였어. 낙하 더미는 화면 위 경계에서 들어오고 접촉 좌표·하중식은 같아. 제목은 페이지 점과 같은 상단 높이를 쓰고, 결과·우체통 간격을 줄였어. 큰 글자/작은 화면은 세로 스크롤로 보호해.
+- **실제 집계:** DAO→Repository→GalleryViewModel 기존 흐름 유지. NONE 엽서만 읽고 기본 기간 ALL, 연간/월간은 capturedAt·기기 시간대·선택 연월 기준이야. 60/100/200/500/1000 이후 2·5·10 계열 Long 눈금으로 확장하므로 HTML 10000 입력 제한을 가져오지 않았어. DB/파일에 통계를 쓰지 않아.
+- **명칭/호환:** 사용자 기능명과 진입 Composable은 기억 저울/`GalleryMemoryScalePage`. 구 그래프 식별자는 production에서 제거했고 월별 집계는 위 역할 이름으로 정비했어. `GalleryPageFormat.DENSITY`와 `.name` Saver는 그대로 유지해 기존 복원 문자열을 깨지 않아. 픽셀/배경 패턴 Density와 과거 archive는 변경하지 않았어.
+- **우체통:** 기존 봉투·종이·도착/D-day·semantics·`onOpenFutureMailbox`/`futureMailbox` 경로를 재사용해. Slot의 `keepVisible` 경로로 글자 크기에 맞는 높이를 확보하며 topGap만8dp로 조정했어. 기존 날짜 포매터 `monthlyGridDayLabelFormatter`와 일반 갤러리/책갈피/방문 달력의 공용 동작을 보존했어.
+- **로컬 자동검증 — 실행/통과:** 간소화 전 전체 JVM1362/1362·148 suites·Debug 빌드 성공. 간소화 후 첫 컴파일에서 그래프 사이에 있던 공용 날짜 포매터 누락을 발견해 원문 복원했어. 다음 전체 JVM1347 중 자정 소비자 구조 검사1건이 옛 파일 위치를 가리켜 실패했고, 실제 저울 화면과 GalleryViewModel을 검사하도록 목록을 갱신했어(방문 기록 생성 금지 assertion 유지). 최종 `testDebugUnitTest assembleDebug --no-daemon --max-workers=1` 성공(Gradle9.9.1/Zulu17), XML **1347/1347·147 suites·실패/오류/skip0**, Debug APK 성공이야. 초기 기존 플러그인 접근 실패는 네트워크/캐시 환경 문제였고 설정 변경 없이 해결했어.
+- **테스트 범위:** 신규 모션/집계 순수11건·연결 구조5건. 기존 월별 집계8건은 `GalleryPostcardMonthTest`로 유지하고 제거된 그래프 전용 계산8건·구조7건은 제거했어. 전체 source @Test1347/test파일146/helper1, instrumentation21건/8파일 무변경. 새 UI의 실제 프레임·TalkBack·lifecycle 동작은 순수/구조 검사 성공으로 확대하지 않아.
+- **실기기 — 실행:** 사용자 설치 승인 후 SM-S936N에 같은 package/서명·schema20 APK를 `adb install -r`로 설치했어. 최초 설치 직전/직후 내부147개 파일 해시 변화0. 첫 B안 화면의 0장·11월5장 표시와 사용자 모션 만족을 확인했어. 같은 승인 범위의 간소화판도 같은 package/서명·schema20으로 `install -r` 설치했고 직전/직후 내부148개 파일 해시 변화0, 설치 APK와 로컬 빌드 SHA-256 일치를 확인했어. 간소화판은 제목/기간/저울/결과/우체통을 스크롤 없이 함께 표시했어. 실제 전체10장·2026년 연간10장·11월5장·9월0장·다시5/10장 전환이 읽기 전용 DB 집계와 같았어. 우체통 진입/Back 복귀와 갤러리 페이지 왕복 후 저울·선택 기간·수량을 확인했고 AndroidRuntime fatal 표식0이야. 사용자가 간소화 화면을 확인한 뒤 기간 선택창을 갤러리 정렬 메뉴와 통일하도록 추가 요청했어. 기간/연도/월 모두 RectangleShape·PaperSurface·InkPrimary·선택 SunsetGold16% 배경/Bold로 맞췄고 기기에서 종이색 직각 메뉴와 선택 강조를 확인했어. 메뉴 수정본도 전체 JVM1347/1347·147 suites·실패/오류/skip0 및 Debug 빌드를 통과했고 같은 서명/schema20 재설치 직전/직후 내부148개 파일 해시 변화0이야. 현재 기기1080×2340/450dpi/fontScale0.9/animator1.0을 읽었고 전역 설정은 바꾸지 않았어.
+- **데이터/보호:** 기기 DB의 로컬 읽기 전용 사본에서 schema20·integrity ok·전체11장/일반보관10장(미래발송 제외)/11월5장을 확인했어. 기존 schema19/20 백업은 열거나 덮어쓰거나 복원하지 않았어. QA 명령으로 원본 기기 DB·엽서·사진을 직접 생성/수정/삭제하지 않았어. 메뉴 최종 수정본 QA 뒤에도 기기 DB schema20·integrity ok와 엽서 id/capturedAt/futureMailState가 읽기 전용 기준과 같았어. SAFE38/38·시작 미추적48/48 해시 유지. DB 확인 사본·설치 APK 비교본·화면/XML 증거는 저장소 밖 로컬 임시 경로에만 있어.
+- **미검증/경계:** 실사용 instrumentation 미실행(이번 UI 확인 수단 아님), CONDITIONAL/FORBIDDEN은 격리 환경 없어 실행 불가. 큰 글자·TalkBack 음성·실제 시스템 모션0 전환·저사양 성능은 별도 감각 QA 미검증. 로컬 emulator 사용 없음. 신규 Markdown 없음. TEST-COVERAGE-MAP을 최종 실행 수·제거/유지 보호 범위로 갱신했어.
+- **Git 마감:** 사용자에게 승인된 작업 브랜치 commit/push/PR/CI는 최종 검증·필요 QA 후 수행해. main 병합 금지. 최종 PR head/base SHA와 CI 결과를 보고하고 별도 병합 승인 대기에서 멈춰.
+
+---
+
+# HANDOFF — 2026-11-26 144일차: 기억 저울 구조 조사·HTML 비교 목업
+
+- **사용자 관점:** 앱은 바뀌지 않았어. 기존 기억 밀도·미래 우체통·엽서·책갈피는 그대로야. [단일 HTML 비교 목업](mockups/memory-scale-day144.html)을 브라우저에서 열어 A/B/C 모션·수량·눈금·기본 도형/색상/질감을 비교할 수 있어. 디자인과 실제 Android 적용은 사용자 승인 대기야.
+- **승인 범위/운영:** 수동 표준 모드. 144일차 지시서의 조사·HTML 제작·검증·HANDOFF·작업 브랜치 Git 마감만 수행해. production/test/리소스/Gradle/Room 수정과 이미지 생성 없음. 신규 Markdown 없음. 마지막 안전 기준은 아래 시작 SHA이며, 목업 변경은 앱 동작과 분리돼 있어.
+- **시작 Git:** `main` = `origin/main` = `6c2aa0d2441c6f7b37634079fa4ab7ea68d150ed`, 추적 파일 변경 없음·기존 미추적 파일 48개. 원격 main도 실제 조회로 같았어. `feature/day144-memory-scale` 생성, 오래된 잔여 브랜치와 worktree는 정리하지 않았어. 민감정보 pre-commit/pre-push 훅 활성 확인. 아래 143일차의 오래된 main 병합 전·schema 19 설명만 현재 사실로 최소 정정했어.
+
+## 실제 구현 조사
+
+- **진입:** `MainActivity.kt`의 갤러리 → `GalleryScreen.kt`의 `HorizontalPager`. `GalleryPageFormat.MONTHLY` 다음 `DENSITY` 페이지가 고정돼 있어. 기억 밀도 전용 nav route·Screen 파일·ViewModel은 없어.
+- **원천:** `PostcardDao.getAllPostcards()`는 `futureMailState='NONE'`만 `capturedAt DESC`로 조회해. `PostcardRepository.getAllPostcards()` → `GalleryViewModel.postcards` StateFlow → `displayedPostcards` → `GalleryDensityPage`. 검색은 월별 페이지 이탈 때 비워지고, 정렬은 개수에 영향 없어. 책갈피 필터도 월별 전용이야.
+- **실제 계산:** `memoryDensityMonthsForYear`가 `capturedAt`을 시스템 시간대의 `YearMonth`로 묶고 올해 1~12월을 0 포함해서 반환해. `GalleryMemoryDensityMonth.count=postcards.size`. 방문 일수·기억 점수·책갈피 가중치가 아니야. `rememberTodayDate()`로 연도 경계를 갱신해. 현재 기간 선택 UI는 없어.
+- **현재 표현:** `GalleryMemoryDensityBar`는 `count/20`(0~1), 20장 초과는 `+`, `GalleryMemoryDensityFoot`는 월 숫자만 표시해. `MemoryDensityPenStroke` 계열의 중성펜 획과 갤러리 공용 종이 타일을 Canvas에 그려. 별도 저울용 이미지·하중 모션은 없어. semantics는 월과 기억 개수를 막대에 설명하고 하단 중복 발화를 지워.
+- **미래 우체통:** `GalleryViewModel.futureMailGroups`는 `getFutureMailPostcards()`(SENT) + `dayBoundaryTicks()` → `buildFutureMailGroups`. `GalleryFutureMailDiorama.kt`의 도착 우선 상태·봉투·D-day·종이 전체 클릭을 유지할 수 있어. `onOpenFutureMailbox` → `onNavigateToFutureMailbox` → 기존 `futureMailbox` route. 퀵셀렉트의 별도 진입도 유지해야 해. 현재 디오라마는 남는 높이가 부족하면 숨겨지는 구조라 실제 교체 시 짧은 화면 배치를 다시 검증해야 해. 목업 봉투/D−7은 가상 배치이며 실제 우체통 화면은 구현하지 않았어.
+- **테스트:** `GalleryMemoryDensityTest`는 월별 계산·20장 비율·초과·펜/질감, `GalleryMemoryDensityStructureTest`는 현재 12개월 그래프 구조·접근성·상호작용 제한을 보호해. `GalleryPagerTargetIndexTest`, `GalleryViewSelectionStructureTest`, `GalleryPondPageLockStructureTest`, `GalleryPaperBackgroundStructureTest`, `GalleryFutureMailDioramaTest/StructureTest`에도 연결돼 있어. 승인된 UI 전환 때 새 의미에 맞게 관련 검증을 바꾸되 기존 보호를 단순 삭제하면 안 돼.
+
+## 명칭 전수 조사와 후속 변경 후보 (이번에는 변경 안 함)
+
+| 실제 명칭 | 위치 | 역할 | 변경 필요성 | 호환성 영향 |
+|---|---|---|---|---|
+| `기억 밀도` / `기억밀도` | gallery Kotlin 주석, DAO 주석, 관련 테스트, HANDOFF·TEST-COVERAGE-MAP | 기능 설명 | 향후 현행 설명 정비. 현재 main에서 이 문자열을 렌더링하는 사용자 제목은 없고 밀도 페이지 제목은 연도야 | 사용자 새 표시명은 기억 저울. archive·과거 기록은 소급 변경 안 함 |
+| `GalleryDensityPage` | `GalleryScreen.kt` | private Composable | `GalleryMemoryScalePage` 후보 | 내부 호출·구조 테스트 함께 수정 |
+| `GalleryMemoryDensityMonth`, `memoryDensityMonthsForYear` | 같은 파일 | 월별 집계 모델·함수 | 재사용하면 `GalleryPostcardMonth`, `postcardMonthsForYear`처럼 역할 이름 권장 | 기존 날짜/시간대·0월 보장 테스트 유지 |
+| `memoryDensityHeightFraction`, `memoryDensityHasOverflow` | 같은 파일 | 20장 막대 계산 | 저울 눈금·각도 계산으로 교체 검토 | 종전 함수명만 치환하면 의미가 틀려져 |
+| `MEMORY_DENSITY_FULL_POSTCARDS`, `PLOT_HEIGHT`, `OVERFLOW_MARK_HEIGHT`, `BAR_WIDTH_RATIO`, `PEN_OPACITY`, `PEN_SEED` (뒤 5개도 `MEMORY_DENSITY_` 접두) | 같은 파일 | 기존 막대/펜 상수 | 막대 제거 확정 뒤 reference 조사하고 제거/대체 | 20장 기준을 저울 기준으로 자동 전파 금지 |
+| `MemoryDensityPenStroke`, `memoryDensityRulerStroke`, `memoryDensityGelPenBarStrokes`, `memoryDensityGelPenPlusStrokes`, `memoryDensityPaperColorMatrices` | 같은 파일 | 기존 그림 전용 획·색 행렬 | 새 저울에 필요하지 않으면 사용처 검증 후 제거. 재사용이면 역할 기반 명명 | Canvas·구조 테스트와 연결 |
+| `GalleryMemoryDensityBar`, `GalleryMemoryDensityFoot` | 같은 파일 | 막대·월 숫자 | 승인 시 저울 component로 교체 | 12개월 비교 기능이 사라지는 제품 판단 필요 |
+| `GalleryPageFormat.DENSITY` | `GalleryPageFormat.kt`, pager·복원·관련 테스트 | 페이지 enum | `SCALE` 후보이나 기존 이름 유지도 가능 | **`PageFormatSaver`가 `.name` 문자열 저장·valueOf 복원. `DENSITY`→새 값 alias 복원 필요**. Room 영구 키가 아니라 saveable 상태야 |
+| `GalleryMemoryDensityTest`, `GalleryMemoryDensityStructureTest` | `app/src/test/.../ui/gallery` | 현재 기능 검증·파일명 | 기능 전환 시 새 역할로 명명·검증 재설계 | 다른 구조 테스트 내 문자열/reference 동시 점검 |
+| `GalleryViewModel`, `PostcardRepository`, `PostcardDao`, gallery 패키지·파일 | 공용 코드 | 월별·우체통과 공유 | 기억 저울 이름으로 바꾸지 않아 | 전용 `MemoryDensityViewModel/Screen`은 실제로 없어 |
+| `futureMailbox` | `MainActivity.kt` | 우체통 nav route | 유지 | 밀도 전용 route는 없어. Room/설정/직렬화에서 별도 밀도 영구 식별자는 발견되지 않았어 |
+| `LocalDensity`, DrawScope `density`, `backgroundPatternDensity`, `randomDensity` | 화면·꾸미기/저장 | 픽셀 배율·무늬 밀도 | 변경 대상 아님 | 단순 Density 치환 금지 |
+
+## 설계·목업 결과
+
+- **UI 문법 사전 판단:** 조회형 콘텐츠의 신규 인터랙션 실험이며 144일차 지시서가 HTML A/B/C·기간/눈금/표현 비교를 명시 승인했어. 기존 종이·봉투 역할을 참고하되 새 저울과 기간 선택은 기존 앱에서 확정된 문법으로 주장하지 않아. 실제 Compose 교체는 STOP/승인 대기야.
+- **추천 후보:** 일반 보관 엽서(NONE) 개수·단위 `장`, 단계 확장 눈금 + 상시 범위 표시, B 손맛 모션. 전체/연간/월간 중 기본 기간, 미래 발송분 포함 여부, 기존 12개월 비교를 대체할지 사용자가 결정해야 해. 월간이면 기존 월별 함수 재사용, 전체면 기존 목록 size로 충분해. 새 저장 통계/DB 변경 불필요, schema 20 유지 가능해.
+- **눈금:** 고정 60·100·200·500·1000 비교 가능. 초과는 바늘을 끝에 두고 정확한 실제 장수+범위 초과를 별도 표시해. 확장은 60→100→200→500→1000→2000→5000→10000. 60→61 때 바늘이 뒤로 가는 단점이 있어. 재생 중 눈금 범위는 고정해. 기간 선택은 A/B와 독립이며 목업에서는 동일 시험값을 사용해(기간별 실제 집계 아님).
+- **구조:** 고정 본체/눈금판, 길이가 변하는 지지 피스톤, 같은 좌표계의 받침대+정착 엽서, 별도 낙하 엽서, 고정 축 바늘. 접촉 전 하중 0, 접촉 후 같은 step history가 받침대·바늘 spring에 전달돼. 최종 각도 `-120 + 240 * min(개수/범위,1)`, 받침대 `16 * min(개수/범위,1)`. 마지막 프레임을 목표에 정확히 맞춰. 더미는 최대 12겹 대표 표현이라 두께가 장수의 선형 그래프는 아니야.
+- **A:** 1.2초·임계 감쇠·신속 측정. **B:** 2.4초·작은 감쇠 반동·손맛. **C:** 400ms 첫 접촉 이후 230ms 간격 적재, 180ms 낙하, 최대 4.2초·대표 더미. A/B/C 모두 같은 구조·입력·눈금·크기야. 모션/수량 변경은 이전 RAF를 취소하고 빈 저울에서 다시 시작해.
+- **색·질감:** 기본 무채색→아이보리/브라운→절차적 섬유·금속 결·눈금 인쇄/접촉·받침대 그림자 순서. 모두 같은 기하 구조야. 실제 앱 종이 타일과 픽셀 동일성은 주장하지 않아.
+- **이미지 판단:** 본체·피스톤·받침대·엽서·눈금·바늘은 Compose Canvas/Path와 graphicsLayer로 충분해. 새 이미지 필수 아님. 기존 종이 tile 재사용이 유리할 수 있고 새 금속 bitmap은 사용자 승인 후 성능/미감 이점이 있을 때만 검토해. 사용하더라도 본체·받침대·엽서·눈금판·바늘은 독립 레이어, 바늘/눈금 일체 이미지는 금지해.
+
+## 검증·현재 마감 상태
+
+- **로컬 자동검증 — 실행:** JS syntax, Edge headless 실제 브라우저에서 162개 수량/모션/범위 계산 조합(지정 0/1/11/30/60/100/500/1000 + 10000, 고정 5범위+확장)의 정확한 정착 확인. 각 조합의 17ms 표본에서 유한 값·음수 하강 없음·더미 상한 확인. 기본/색상/질감 × A/B/C 9회 실제 RAF 종료(3장)와 결과/각도 일치, 각 모드 질감 표시 여부 확인. 모션 중 전환·빠른 재생/초기화·30회 연속 수량/모션/초기화·감소·입력 clamp·범위 초과·체크박스와 OS prefers-reduced-motion 즉시 정착 확인. 최종 목업 런타임 예외 0. 외부 라이브러리·네트워크 자원·앱 데이터 접근 없음.
+- **브라우저 시각 검증 — 실행:** 기본 도형 검사 뒤 접촉 좌표의 3단위 틈과 C안 겹친 낙하 구간을 보정하고 재검증. 색상/질감 적용 뒤 1280px·390px 캡처를 직접 확인, 320/360/390/740px 가로 overflow 0. 작은 눈금은 작으므로 정확한 결과 텍스트가 판독 기준이야. 임시 브라우저 profile·검증 script·화면 캡처는 저장소 밖 임시 경로에만 두고 공개 Git에는 넣지 않아.
+- **보호:** SAFE 기준 **38/38**, 시작 미추적 **48/48** SHA-256이 시작과 최종 검사에서 모두 일치했어. schema 19/20 사용자 백업은 열거나 변경하거나 외부 전송하지 않았고 복원도 실행하지 않았어. 기기·DB·갤러리·설치 접근 없음. 백업의 현시점 복구 가능성을 재검증한 것은 아니야.
+- **Android JVM/Debug 빌드 — 불필요:** 앱/test/빌드 코드 변경 없음. 1346개 통과는 143일차 이력이지 이번 실행 결과가 아니야. TEST-COVERAGE-MAP 변경 없음.
+- **실사용 기기 instrumentation·실기기 감각 QA — 불필요:** 앱 무변경. Android 적용 후 실제 저울·작은 화면·큰 글자·TalkBack·OS 모션 설정은 미검증이야. 로컬 emulator 사용 없음.
+- **GitHub Actions CI:** 143일차 main push success는 실제 조회했어. 144일차 새 CI는 아직 미실행이야. 작업 브랜치 push만으로 CI가 실행된다고 가정하지 않아.
+- **사용자 QA/디자인 — 대기:** HTML A/B/C와 눈금/기본 기간 선택을 검토해야 해. 이는 실제 Android 구현의 승인 관문이야. 앱 실행 QA는 이번 산출물에 불필요하고 목업을 검토 가능한 작업물로 commit/push하는 범위는 144일차 9절에 명시돼 있어.
+- **Git 작성 시점:** 아직 commit 전이야. 변경은 이 HANDOFF와 HTML 1개뿐이며, 작업 지시대로 명시적 stage·작업 브랜치 commit/push 후 SHA·동기화 여부를 최종 보고에 남겨. PR은 디자인 검토 후 생성할 후보로 보류해. main 병합은 별도 승인 전 금지야.
+- **다음 출발점:** 사용자 모션·눈금·측정 기간 선택 → 실제 앱 교체 범위와 기존 연간 비교 보존 여부 확정 → 최소 Compose 정적 구조·우체통 배치 검토. 이번 목업을 최종 디자인 확정이나 Android 적용 승인으로 해석하지 않아.
+
+---
+
+# HANDOFF — 2026-11-25 143일차: 기억 책갈피 구현·실기기 QA 완료, main 병합 완료
 
 - **구현:** 승인 A로 색 6개 추가(9색·81조합, schema 20 그대로)와 가는 가장자리 선. 편집 화면 더보기에서 여는 제작 화면(종이·색·작은 흔적, 저장하지 않는 미리보기, 저장 성공 뒤에만 나오는 930ms 끼우기 모션, 다시 꾸미기, 책갈피만 빼기), 월별 갤러리 표시, 정렬 메뉴의 책갈피 있는 엽서만 보기. DetailViewModel·초안·확정 저장·공유 exporter 무변경. 연못·쉼터·쫑쫑컵·흔들어서 한 장·기억 밀도에는 책갈피를 그리지 않아.
 - **자동 검증:** 최종 코드 전체 JVM **1346/1346**(146 suites, 실패·오류·skip 0), `assembleDebug`·`assembleDebugAndroidTest` 성공. 계측 테스트는 컴파일만 했어.
 - **실기기 QA(사용자):** 만들기·모션, 재시작 유지·다시 꾸미기·빼기, 접근성(애니메이션 끄기·TalkBack·큰 글자) 정상 보고. 갤러리 노출은 "조금 더 잘 보이게" 요청으로 5.5%→9.5%로 늘려 재설치했고 "딱 좋아" 확정(작업지시서의 5~6%보다 사용자 확정값이 우선).
 - **미검증:** 실제 Android 자동 백업·복원, 복사본 복원, 실제 APK 교체 다운그레이드. 프로세스 강제 종료 뒤 제작 화면 복원은 JVM 세션 테스트까지만 했어. 원격 CI 결과와 PR은 대화상 최종 보고에서 확인해.
-- **Git:** 이 기록은 commit 전 작성이야. main 병합 미승인.
+- **Git(144일차 현재 상태 정정):** PR #40은 Merge commit `6c2aa0d2441c6f7b37634079fa4ab7ea68d150ed`으로 병합됐고 local main=origin/main이야. 해당 push의 main CI [45609619884](https://github.com/KimJinha-JJin/post-card-memory/actions/runs/45609619884)는 success로 확인했어. 아래 설치 실험의 main schema 19는 당시 기준이며 현재 main은 schema 20이야.
 
 ## schema 20 설치 이후 주의사항
 
 - **현재 사실:** 사용자 B-1 승인으로 SM-S936N에 `feature/day142-memory-bookmark` schema 20 APK를 `adb install -r`로 설치·실행했어. 이후 받은 다운그레이드 확인 지시(설치 전 조건)보다 설치가 먼저였어. 실기기 DB는 19→20이고, 첫 실행 직후 엽서 11장·37컬럼이 설치 전과 같았어. 이후 사용자 추가 승인으로 길이 수정본을 같은 방식으로 한 번 더 설치했고, 설치 직후 DB·files·shared_prefs 해시 변화는 0이었어. 그 밖의 APK 설치는 매번 새 승인이 필요해.
-- **main 병합 전 금지:** 이 기기에 main이나 schema 19인 다른 브랜치의 APK를 설치하지 않아. Android Studio Run(현재 브랜치가 무엇인지 먼저 확인), CI·과거 APK도 같아. main의 DB 버전은 19이고 20→19 migration은 없어.
+- **현재 설치 보호(144일차 정정):** 현재 main은 schema 20이야. schema 19인 과거 main·다른 브랜치·CI APK의 설치는 금지해. Android Studio Run도 설치 효과를 먼저 확인하고, schema 20 이상이어도 실기기 설치에는 별도 승인이 필요해. 20→19 migration은 없어.
 - **브랜치 전환:** 코드 조회·PC 테스트를 위한 전환은 괜찮지만 기기 설치는 schema 20 이상인 이 브랜치 APK로만 해. 이후 파생 브랜치도 schema 20을 포함해야 해.
 - **앱이 안 열리면:** 앱 제거·데이터 삭제·초기화·재설치 우회 금지. 그대로 멈추고 사용자에게 알린 뒤 schema 20용 수정판을 검토해. 역방향 migration이나 DB 초기화·destructive fallback을 임의로 추가하지 않아(main·이 브랜치 소스 모두 해당 설정 없음).
 - **백업 한계:** 설치 전 앱을 닫고 DB·files·shared_prefs 146개를 PC 저장소 밖으로 복사해 해시 일치·DB 무결성·사진 11개를 확인했어. 두 번째 설치 전에도 schema 20 상태 147개를 따로 복사했어. 복원은 검증하지 않았어. Android 자동 백업도 미검증이야.

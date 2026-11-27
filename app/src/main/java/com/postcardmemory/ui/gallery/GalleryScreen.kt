@@ -115,17 +115,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
@@ -426,7 +421,7 @@ fun GalleryScreen(
         mutableStateOf(GallerySortOrder.NEWEST)
     }
 
-    // 76일차: 월별 보기·기억 밀도 보기 2개만 남아 사용자가 껐다 켤 UI가
+    // 76일차: 월별 보기·기억 저울 보기 2개만 남아 사용자가 껐다 켤 UI가
     // 없으므로 더 이상 토글 가능한 상태가 아니다 — 항상 이 순서(월별 먼저)로
     // 고정된 값이다.
     val activePageFormats = remember {
@@ -453,13 +448,13 @@ fun GalleryScreen(
         mutableStateOf(false)
     }
 
-    // 143일차: 책갈피 있는 엽서만 보기. 월별 보기에만 적용하고 기억 밀도·놀이에는 영향이 없다.
+    // 143일차: 책갈피 있는 엽서만 보기. 월별 보기에만 적용하고 기억 저울·놀이에는 영향이 없다.
     var bookmarkOnly by rememberSaveable {
         mutableStateOf(false)
     }
 
     // 검색·정렬은 월별 보기 top bar에만 노출된다(위 topBar 참고). 기억
-    // 밀도 보기로 넘어간 사이에도 이 상태들이 true로 남아있으면 월별 보기로
+    // 저울 보기로 넘어간 사이에도 이 상태들이 true로 남아있으면 월별 보기로
     // 돌아왔을 때 검색창이나 드롭다운이 탭 없이 저절로 열려 보인다 — 월별
     // 보기를 벗어나는 순간 정리한다.
     LaunchedEffect(currentPageFormat) {
@@ -782,7 +777,7 @@ fun GalleryScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        // 검색·정렬은 월별 보기 안에서만 의미가 있다. 기억 밀도
+                        // 검색·정렬은 월별 보기 안에서만 의미가 있다. 기억 저울
                         // 보기는 좌우 스와이프(GalleryPageIndicator 점)로
                         // 들어가므로 별도 진입 아이콘이 필요 없다(76일차).
                         if (currentPageFormat == GalleryPageFormat.MONTHLY) {
@@ -1003,16 +998,16 @@ fun GalleryScreen(
                 }
             }
         } else {
-            // 배경과 12개월 막대가 같은 디코딩 결과를 공유한다.
+            // 배경과 기억 저울이 같은 종이 디코딩 결과를 공유한다.
             val paperTile = rememberGalleryPaperTile()
             // 갤러리는 HorizontalPager 페이지로 묶여, 월별 보기(MONTHLY)와
-            // 기억 밀도 보기(DENSITY) 두 페이지가 고정 순서로 있다(위
+            // 기억 저울 보기(DENSITY) 두 페이지가 고정 순서로 있다(위
             // activePageFormats). 연못 모드는 별도 화면이 아니라 월별 grid
             // 안에서 그려진다(isPondModeOn 전달).
             //
             // 검색·정렬 적용 결과(displayedPostcards)는 여기 pager 레벨에서
             // 한 번만 계산해 두 페이지에 동일하게 내려보낸다 — 월별 보기를
-            // 벗어나면 검색은 항상 비워지므로(위 LaunchedEffect) 기억 밀도
+            // 벗어나면 검색은 항상 비워지므로(위 LaunchedEffect) 기억 저울
             // 보기에서는 사실상 sortOrder만 반영된다.
             val displayedPostcards = remember(postcards, sortOrder, searchQuery) {
                 val filtered = filterPostcardsForSearch(postcards, searchQuery)
@@ -1026,7 +1021,7 @@ fun GalleryScreen(
                 }
             }
 
-            // 책갈피 필터는 월별 보기에만 얹는다. 기억 밀도는 위 displayedPostcards 그대로다.
+            // 책갈피 필터는 월별 보기에만 얹는다. 기억 저울은 위 displayedPostcards 그대로다.
             val monthlyPostcards = remember(displayedPostcards, bookmarks, bookmarkOnly) {
                 filterPostcardsForBookmark(displayedPostcards, bookmarks, bookmarkOnly)
             }
@@ -1078,7 +1073,7 @@ fun GalleryScreen(
                 }
             }
 
-            // 108일차: 기억 밀도 페이지를 보던 중 퀵셀렉트로 연못을 켜면 연못이 보이지 않는
+            // 108일차: 기억 저울 페이지를 보던 중 퀵셀렉트로 연못을 켜면 연못이 보이지 않는
             // 페이지에 머물게 되므로, 연못이 켜지는 순간 월별 페이지로 옮긴다. 이동한 뒤
             // currentPageFormat은 위 currentPage effect가 MONTHLY로 맞춘다.
             LaunchedEffect(isPondModeOn) {
@@ -1129,12 +1124,13 @@ fun GalleryScreen(
                 ) { page ->
                     when (orderedActiveFormats.getOrNull(page)) {
                         GalleryPageFormat.DENSITY ->
-                            GalleryDensityPage(
+                            GalleryMemoryScalePage(
                                 postcards = displayedPostcards,
-                                paddingValues = pageContentPaddingValues,
+                                paddingValues = paddingValues,
                                 paperTile = paperTile,
                                 futureMailGroups = futureMailGroups,
-                                onOpenFutureMailbox = onNavigateToFutureMailbox
+                                onOpenFutureMailbox = onNavigateToFutureMailbox,
+                                isPageVisible = pagerState.currentPage == page
                             )
 
                         GalleryPageFormat.MONTHLY, null ->
@@ -1465,7 +1461,7 @@ private fun vibrateGalleryFab(context: Context, durationMillis: Long, amplitude:
 private val GalleryQuickSelectActiveColor = SunsetGold
 // 닫힌 묶음이 오른쪽 끝에 삐져나온 자리의 손잡이 터치 영역.
 private val GalleryQuickSelectHandleWidth = 60.dp
-// 127일차: 기억 밀도 아래 미래 우체통 종이가 닫힌 손잡이를 피하는 계산에도 쓴다.
+// 127일차: 기억 저울 아래 미래 우체통 종이가 닫힌 손잡이를 피하는 계산에도 쓴다.
 internal val GalleryQuickSelectHandleHeight = 64.dp
 
 private fun GalleryQuickSelectItem.handResId(): Int =
@@ -1734,12 +1730,12 @@ private fun GalleryQuickSelectHand(
 private val GALLERY_PAGE_INDICATOR_RESERVED_HEIGHT = 28.dp
 
 /** 종이 타일 한 장이 화면에 보이는 크기. 기기 밀도와 상관없이 섬유 크기를 일정하게 둔다. */
-private val GALLERY_PAPER_TILE_SIZE = 360.dp
+internal val GALLERY_PAPER_TILE_SIZE = 360.dp
 
 /** 헤더와 같은 단색 위에 겹치는 종이 타일의 농도. 실기기 QA로 맞추는 값이다. */
 private const val GALLERY_PAPER_TILE_ALPHA = 1f
 
-/** 배경과 기억 밀도에 전달할 종이 이미지를 같은 composition에서 한 번 읽는다. */
+/** 배경과 기억 저울에 전달할 종이 이미지를 같은 composition에서 한 번 읽는다. */
 @Composable
 private fun rememberGalleryPaperTile(): ImageBitmap =
     ImageBitmap.imageResource(R.drawable.gallery_paper_tile)
@@ -1833,434 +1829,6 @@ private fun GalleryPageIndicator(
                     )
             )
         }
-    }
-}
-
-internal data class GalleryMemoryDensityMonth(
-    val yearMonth: YearMonth,
-    val postcards: List<Postcard>
-) {
-    val count: Int
-        get() = postcards.size
-}
-
-/**
- * 76일차: 기억밀도는 더 이상 여러 연도를 이어붙여 훑어보는 화면이 아니라
- * 지정한 한 해의 1~12월만 항상 보여주는 연간 그래프다(연도 이동 picker는
- * 기존에 없던 기능이라 새로 만들지 않는다). 기존 Gallery의 날짜 의미와
- * 동일하게 capturedAt을 시스템 시간대의 월로 변환하고, 기록이 없는 달도
- * 0개로 채운다(막대가 사라지지 않고 "0칸"으로 표현됨). 방문 기록이 아니라
- * 포스트카드 생성 시각만 기준으로 삼는다.
- */
-internal fun memoryDensityMonthsForYear(
-    postcards: List<Postcard>,
-    year: Int,
-    zoneId: ZoneId = ZoneId.systemDefault()
-): List<GalleryMemoryDensityMonth> {
-    val grouped = postcards.groupBy { postcard ->
-        YearMonth.from(
-            Instant.ofEpochMilli(postcard.capturedAt).atZone(zoneId)
-        )
-    }
-
-    return (1..12).map { month ->
-        val yearMonth = YearMonth.of(year, month)
-        GalleryMemoryDensityMonth(
-            yearMonth = yearMonth,
-            postcards = grouped[yearMonth].orEmpty()
-        )
-    }
-}
-
-/** 93일차: 엽서 20장이면 꽉 찬 높이. 그보다 많으면 높이는 그대로 두고 위에 작은 "+"만 그린다. */
-private const val MEMORY_DENSITY_FULL_POSTCARDS = 20
-
-/**
- * 93일차(비례형): 막대 높이 비율. 계단 없이 엽서 1장마다 조금씩 자라고,
- * 20장에서 1이 된 뒤 더 커지지 않는다. 0장은 0(막대 없음, 억지 최소 높이를 주지 않는다).
- */
-internal fun memoryDensityHeightFraction(count: Int): Float =
-    (count.coerceAtLeast(0).toFloat() / MEMORY_DENSITY_FULL_POSTCARDS).coerceAtMost(1f)
-
-/** 20장 초과분은 막대를 더 키우지 않고 위에 작은 "+" 표시로만 알린다. */
-internal fun memoryDensityHasOverflow(count: Int): Boolean =
-    count > MEMORY_DENSITY_FULL_POSTCARDS
-
-private val MEMORY_DENSITY_PLOT_HEIGHT = 120.dp // 20장 = 120dp, 1장 = 6dp
-private val MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT = 14.dp
-private const val MEMORY_DENSITY_BAR_WIDTH_RATIO = 0.55f
-private const val MEMORY_DENSITY_PEN_OPACITY = 0.9f
-private const val MEMORY_DENSITY_PEN_SEED = 50_500
-
-/** 중성펜 한 획. 좌표와 굵기는 dp 단위이고 그릴 때 density를 곱한다. */
-internal class MemoryDensityPenStroke(
-    val points: List<Offset>,
-    val widthDp: Float,
-    val alpha: Float,
-    val isOutline: Boolean = false
-)
-
-/**
- * 자를 대고 중성펜으로 그은 한 획. 실루엣은 곧고, 0.1dp 남짓의 손떨림만 있다.
- * 잉크 농도는 획마다 거의 일정하다(중성펜은 볼펜과 달리 뭉치거나 끊기지 않는다).
- */
-private fun memoryDensityRulerStroke(
-    from: Offset,
-    to: Offset,
-    widthDp: Float,
-    alpha: Float,
-    wobble: Float,
-    random: kotlin.random.Random,
-    isOutline: Boolean = false
-): MemoryDensityPenStroke {
-    val length = (to - from).getDistance()
-    val dir = if (length > 0f) (to - from) / length else Offset.Zero
-    val normal = Offset(-dir.y, dir.x)
-    val segments = maxOf(2, kotlin.math.ceil(length / 1.6f).toInt())
-    val phase1 = random.nextFloat() * 6.28f
-    val phase2 = random.nextFloat() * 6.28f
-    val freq1 = 0.08f + random.nextFloat() * 0.06f
-    val freq2 = 0.3f + random.nextFloat() * 0.2f
-    val points = (0..segments).map { k ->
-        val d = length * k / segments
-        val offset = wobble * (0.7f * kotlin.math.sin(d * freq1 + phase1) + 0.3f * kotlin.math.sin(d * freq2 + phase2))
-        from + dir * d + normal * offset
-    }
-    return MemoryDensityPenStroke(points, widthDp, alpha * (0.9f + random.nextFloat() * 0.1f), isOutline)
-}
-
-/**
- * 93일차: 기억밀도 막대 하나를 중성펜으로 그린 획들. 사선 반복선으로 안을 메우고,
- * 왼쪽·위·오른쪽 외곽을 자 대고 긋는다(아래는 바닥선이 맡는다). 반복선 끝은 막대
- * 경계에서 1dp 미만으로 살짝 모자라거나 삐져나갈 뿐이라 막대 실루엣은 반듯하다.
- * 같은 seed면 항상 같은 획이 나온다 — 재구성될 때마다 그림이 흔들리지 않는다.
- * 목업: `docs/ai/mockups/memory-density-steps-mockup.html`의 중성펜.
- */
-internal fun memoryDensityGelPenBarStrokes(
-    left: Float,
-    top: Float,
-    width: Float,
-    height: Float,
-    seed: Int
-): List<MemoryDensityPenStroke> {
-    if (width <= 0f || height <= 0f) return emptyList()
-    val random = kotlin.random.Random(seed)
-    val strokes = mutableListOf<MemoryDensityPenStroke>()
-    val right = left + width
-    val bottom = top + height
-
-    val angle = Math.toRadians((-55.0 + (random.nextDouble() - 0.5) * 1.5)).toFloat()
-    val dir = Offset(kotlin.math.cos(angle), kotlin.math.sin(angle))
-    val normal = Offset(-dir.y, dir.x)
-    val projections = listOf(
-        Offset(left, top), Offset(right, top), Offset(left, bottom), Offset(right, bottom)
-    ).map { it.x * normal.x + it.y * normal.y }
-    val spacing = 2.1f
-    var c = projections.min() + spacing * random.nextFloat()
-    while (c < projections.max()) {
-        val base = normal * c
-        // 직선(base + dir·t)이 막대 사각형 안에 들어오는 구간 [t0, t1]
-        var t0 = -Float.MAX_VALUE
-        var t1 = Float.MAX_VALUE
-        fun clip(p: Float, d: Float, lo: Float, hi: Float): Boolean {
-            if (kotlin.math.abs(d) < 1e-6f) return p in lo..hi
-            val a = (lo - p) / d
-            val b = (hi - p) / d
-            t0 = maxOf(t0, minOf(a, b))
-            t1 = minOf(t1, maxOf(a, b))
-            return t0 <= t1
-        }
-        if (clip(base.x, dir.x, left, right) && clip(base.y, dir.y, top, bottom)) {
-            val start = t0 - (0.35f * random.nextFloat() - 0.4f * random.nextFloat())
-            val end = t1 + (0.35f * random.nextFloat() - 0.4f * random.nextFloat())
-            if (end > start) {
-                strokes += memoryDensityRulerStroke(
-                    from = base + dir * start,
-                    to = base + dir * end,
-                    widthDp = 0.75f,
-                    alpha = 0.62f,
-                    wobble = 0.14f,
-                    random = random
-                )
-            }
-        }
-        c += spacing * (0.8f + 0.4f * random.nextFloat())
-    }
-
-    // 모서리에서 선이 1dp 남짓 지나치거나 살짝 덜 닿는다
-    fun cornerOver() = 1.2f * (random.nextFloat() * 1.2f - 0.2f)
-    listOf(
-        Offset(left, bottom) to Offset(left, top - cornerOver()),
-        Offset(left - cornerOver(), top) to Offset(right + cornerOver(), top),
-        Offset(right, top - cornerOver()) to Offset(right, bottom)
-    ).forEach { (a, b) ->
-        val (from, to) = if (random.nextBoolean()) a to b else b to a
-        strokes += memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.1f, random = random, isOutline = true)
-    }
-    return strokes
-}
-
-/** 20장을 넘은 달의 막대 위에 같은 중성펜으로 긋는 작은 "+". */
-internal fun memoryDensityGelPenPlusStrokes(
-    center: Offset,
-    armDp: Float,
-    seed: Int
-): List<MemoryDensityPenStroke> {
-    val random = kotlin.random.Random(seed)
-    return listOf(
-        Offset(center.x - armDp, center.y) to Offset(center.x + armDp, center.y),
-        Offset(center.x, center.y - armDp) to Offset(center.x, center.y + armDp)
-    ).map { (from, to) ->
-        memoryDensityRulerStroke(from, to, widthDp = 0.95f, alpha = 0.9f, wobble = 0.08f, random = random, isOutline = true)
-    }
-}
-
-/** 목업 C: alpha = clamp(.17 + (235 - luma) / 100 * 1.25, .06, .52).
- * 두 행렬 사이의 0..255 clamp를 이용해 범위를 맞춘다. 첫 필터로 shader를 그리고,
- * 막대 내부로 제한한 임시 레이어를 두 번째 필터로 합성한다. 별도 Bitmap은 만들지 않는다.
- * 반환 순서는 안쪽(명도→정규화 alpha), 바깥쪽(alpha 범위 .06~.52)이다. */
-internal fun memoryDensityPaperColorMatrices(inkArgb: Int): Pair<FloatArray, FloatArray> {
-    val alphaRange = 0.52f - 0.06f
-    val slope = -1.25f / 100f * 255f / alphaRange
-    val offset = (0.17f + 235f / 100f * 1.25f - 0.06f) * 255f / alphaRange
-    val inner = floatArrayOf(
-        0f, 0f, 0f, 0f, ((inkArgb ushr 16) and 255).toFloat(),
-        0f, 0f, 0f, 0f, ((inkArgb ushr 8) and 255).toFloat(),
-        0f, 0f, 0f, 0f, (inkArgb and 255).toFloat(),
-        slope * 0.299f, slope * 0.587f, slope * 0.114f, 0f, offset
-    )
-    val outer = floatArrayOf(
-        0f, 0f, 0f, 0f, ((inkArgb ushr 16) and 255).toFloat(),
-        0f, 0f, 0f, 0f, ((inkArgb ushr 8) and 255).toFloat(),
-        0f, 0f, 0f, 0f, (inkArgb and 255).toFloat(),
-        0f, 0f, 0f, alphaRange, 0.06f * 255f
-    )
-    return inner to outer
-}
-
-/**
- * 76일차: 기억밀도의 새 정의 — "한 해 동안 어느 달에 기억을 많이 남겼는지
- * 조용히 바라보는 화면". dashboard·통계판이 아니라 1월→12월로 흐르는 작은
- * 화단이다. 사진을 보여주거나 탭해서 상세로 들어가는 상호작용은 두지
- * 않는다 — 순수 조회 화면.
- *
- * 127일차: 그래프 아래 남는 자리에 미래 우체통 종이 한 장([GalleryFutureMailDioramaSlot])을
- * 둔다. 그래프 자체는 여전히 조회만 하고, 종이 전체가 기존 우체통 화면으로 가는 입구다.
- * 남은 높이가 모자란 짧은 화면에서는 종이를 그리지 않는다(그래프는 줄이지 않는다).
- */
-@Composable
-private fun GalleryDensityPage(
-    postcards: List<Postcard>,
-    paddingValues: PaddingValues,
-    paperTile: ImageBitmap,
-    futureMailGroups: List<FutureMailGroup>?,
-    onOpenFutureMailbox: () -> Unit
-) {
-    // 이 화면에는 연도 선택 UI가 없다 — year는 "사용자가 고른 연도"가 아니라 순수하게
-    // "지금 몇 년인가"다. 그래서 앱을 켜 둔 채 연말 자정을 넘기면 제목과 12칸이 지난해에
-    // 머무는 문제가 있었고, 방문 달력과 같은 자정 기준([rememberTodayDate])을 쓴다.
-    val year = rememberTodayDate().year
-    val months = remember(postcards, year) {
-        memoryDensityMonthsForYear(postcards, year)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(
-                start = 16.dp,
-                end = 16.dp,
-                top = paddingValues.calculateTopPadding() + 20.dp,
-                bottom = paddingValues.calculateBottomPadding() + 24.dp
-            )
-    ) {
-        Text(
-            text = "${year}년",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = InkPrimary
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 76일차 후속: 각 달의 막대·구분선·월 숫자를 한 Column에 몰아두면
-        // 구분선이 달마다 짧게 끊겨 보인다(실기기 QA 지적) — 막대 Row와
-        // 월 숫자 Row를 분리하고 그 사이에 전체 폭 구분선 하나만 둬서
-        // 12개월이 하나로 이어진 선 위에 서 있는 모습으로 만든다.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            months.forEach { month ->
-                GalleryMemoryDensityBar(
-                    month = month,
-                    paperTile = paperTile,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        HorizontalDivider(
-            modifier = Modifier.fillMaxWidth(),
-            color = PaperDivider,
-            thickness = 1.dp
-        )
-
-        Spacer(modifier = Modifier.height(5.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            months.forEach { month ->
-                GalleryMemoryDensityFoot(
-                    month = month,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // 첫 묶음이 오기 전(null)에는 자리만 둔다 — 빈 우체통이 잠깐 비치지 않게.
-        if (futureMailGroups != null) {
-            GalleryFutureMailDioramaSlot(
-                groups = futureMailGroups,
-                onOpenFutureMailbox = onOpenFutureMailbox,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            )
-        }
-    }
-}
-
-/**
- * 126일차 C안: 비례형 종이 질감 막대에 기존 중성펜 윤곽과 작은 "+"를 유지한다.
- * 내부 사선만 목업처럼 22%로 낮춘다. 접근성 설명(월·기억 개수)은 여기에만 붙이고 아래
- * [GalleryMemoryDensityFoot]는 별도로 읽히지 않게 한다.
- */
-@Composable
-private fun GalleryMemoryDensityBar(
-    month: GalleryMemoryDensityMonth,
-    paperTile: ImageBitmap,
-    modifier: Modifier = Modifier
-) {
-    val heightFraction = memoryDensityHeightFraction(month.count)
-    val hasOverflow = memoryDensityHasOverflow(month.count)
-    val seed = MEMORY_DENSITY_PEN_SEED + month.yearMonth.monthValue
-
-    Box(
-        modifier = modifier
-            .semantics {
-                contentDescription = "${month.yearMonth.monthValue}월, 기억 ${month.count}개"
-            }
-            .fillMaxWidth()
-            .height(MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT + MEMORY_DENSITY_PLOT_HEIGHT)
-            .drawWithCache {
-                val widthDp = size.width / density
-                val heightDp = size.height / density
-                val markDp = MEMORY_DENSITY_OVERFLOW_MARK_HEIGHT.value
-                val barWidthDp = widthDp * MEMORY_DENSITY_BAR_WIDTH_RATIO
-                val barHeightDp = (heightDp - markDp) * heightFraction
-                val barLeft = (size.width - barWidthDp * density) / 2f
-                val barTop = size.height - barHeightDp * density
-                val paperPaint = if (barHeightDp > 0f) {
-                    val monthIndex = month.yearMonth.monthValue - 1
-                    val shader = ImageShader(paperTile, TileMode.Repeated, TileMode.Repeated)
-                    val scale = GALLERY_PAPER_TILE_SIZE.toPx() / paperTile.width
-                    shader.setLocalMatrix(android.graphics.Matrix().apply {
-                        setScale(scale, scale)
-                        // HTML의 전체 그래프 좌표를 각 월의 로컬 좌표에 맞춘다.
-                        postTranslate(
-                            ((monthIndex * 37) % 110).dp.toPx() - monthIndex * (size.width + 2.dp.toPx()),
-                            ((monthIndex * 23) % 90).dp.toPx()
-                        )
-                    })
-                    val (inner, outer) = memoryDensityPaperColorMatrices(InkPrimary.toArgb())
-                    val texturePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                        isFilterBitmap = true
-                        this.shader = shader
-                        colorFilter = android.graphics.ColorMatrixColorFilter(inner)
-                    }
-                    val rangePaint = android.graphics.Paint().apply {
-                        colorFilter = android.graphics.ColorMatrixColorFilter(outer)
-                    }
-                    texturePaint to rangePaint
-                } else null
-                val strokes = buildList {
-                    if (heightFraction > 0f) {
-                        addAll(
-                            memoryDensityGelPenBarStrokes(
-                                left = (widthDp - barWidthDp) / 2f,
-                                top = heightDp - barHeightDp,
-                                width = barWidthDp,
-                                height = barHeightDp,
-                                seed = seed
-                            )
-                        )
-                    }
-                    if (hasOverflow) {
-                        addAll(
-                            memoryDensityGelPenPlusStrokes(
-                                center = Offset(widthDp / 2f, markDp / 2f),
-                                armDp = 3f,
-                                seed = seed
-                            )
-                        )
-                    }
-                }.map { stroke ->
-                    Triple(
-                        Path().apply {
-                            stroke.points.forEachIndexed { index, point ->
-                                if (index == 0) moveTo(point.x * density, point.y * density)
-                                else lineTo(point.x * density, point.y * density)
-                            }
-                        },
-                        Stroke(width = stroke.widthDp * density, cap = StrokeCap.Round),
-                        InkPrimary.copy(alpha = stroke.alpha * MEMORY_DENSITY_PEN_OPACITY *
-                            if (stroke.isOutline) 1f else 0.22f)
-                    )
-                }
-                onDrawBehind {
-                    if (paperPaint != null) {
-                        drawIntoCanvas { canvas ->
-                            val right = barLeft + barWidthDp * density
-                            val nativeCanvas = canvas.nativeCanvas
-                            val saved = nativeCanvas.save()
-                            try {
-                                // alpha 하한이 빈 영역을 칠하지 않도록 종이 영역 안에서만 합성한다.
-                                nativeCanvas.clipRect(barLeft, barTop, right, size.height)
-                                val layer = nativeCanvas.saveLayer(barLeft, barTop, right, size.height, paperPaint.second)
-                                nativeCanvas.drawRect(barLeft, barTop, right, size.height, paperPaint.first)
-                                nativeCanvas.restoreToCount(layer)
-                            } finally {
-                                nativeCanvas.restoreToCount(saved)
-                            }
-                        }
-                    }
-                    strokes.forEach { (path, style, color) -> drawPath(path, color = color, style = style) }
-                }
-            }
-    )
-}
-
-/**
- * 월 하나의 아래쪽 — 월 숫자만. 93일차에 고정 얼굴("•_•")을 걷어냈다.
- * 양은 위 [GalleryMemoryDensityBar]의 막대 높이만으로 보여준다.
- */
-@Composable
-private fun GalleryMemoryDensityFoot(
-    month: GalleryMemoryDensityMonth,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.clearAndSetSemantics {}
-    ) {
-        Text(
-            text = month.yearMonth.monthValue.toString(),
-            fontSize = 11.sp,
-            color = InkSecondary
-        )
     }
 }
 

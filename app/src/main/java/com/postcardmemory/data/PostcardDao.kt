@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 interface PostcardDao {
 
     /**
-     * 일반 갤러리(월별 3열 그리드/기억 밀도 보기 공통 원천)용 조회. 미래로
+     * 일반 갤러리(월별 3열 그리드/기억 저울 보기 공통 원천)용 조회. 미래로
      * 발송된(futureMailState != 'NONE') 엽서는 여기서 제외해 두 보기가
      * 항상 같은 결과를 보게 한다.
      */

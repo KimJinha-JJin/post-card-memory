@@ -1,8 +1,23 @@
-# 테스트 보호지도 — 91일차 저장 누락 방지 최신화 (원본 79일차 마감, 현재 테스트 총계는 136일차 작업 재확인 — 맨 위 136일차 절)
+# 테스트 보호지도 — 최신 실행 결과는 맨 위 145일차 절
 
 확인일: 2026-10-02 (원본 79일차 확인일 2026-09-20) / 기준 브랜치: `feature/photo-sticker` / 기준: `3b01f18` 위 91일차 작업트리. 2026-10-03(92일차 선행 안전정비): 테스트 수 변화 없이 로컬 emulator 폐기와 instrumentation 실사용 기기 안전 등급만 추가했어.
 
 기존 78~82일차 감사와 실제 실행 결과를 기능 중심으로 유지하면서, 83일차에는 도장 잉크 질감과 신문지 손 찍기 상호작용, 84일차에는 갤러리 "흔들어서 한 장"(흔들림 판정·랜덤 선택·overlay 배치), 85일차에는 사진 스티커 오림 스타일(기본·폴라로이드·가위 오림·찢은 종이·잡지 오림), 87일차에는 사진 스티커 핀셋 붙이기(조준·핀셋 손) 상태 흐름, 88일차에는 갤러리 퀵 셀렉트(신문 오림 손 부채)의 열기/닫기 단계·중복 탭 방지·부채 배치, 89일차에는 메인 갤러리 종이 배경 구조, 90일차에는 방문 달력의 종이 한 장 구조와 위로 넘기는 월 이동, 91일차에는 꾸미기 디렉터리 계약(저장·삭제·고아 진단 일치), 96일차에는 방문 달력 질감(손으로 자른 장 가장자리·테이프·중성펜 출첵)에 추가된 보호 범위와 현재 테스트 총계를 실제 코드·결과 기준으로 최신화했어. 이번 문서 작업으로 앱 동작이나 기존 엽서 데이터가 달라지지는 않아.
+
+## 145일차 — 기억 저울 B안 질감 (2026-11-27)
+
+- 테스트 수 변화 없음. 기존 `MemoryScaleWiringStructureTest`의 draw 구조 검사 1건(`drawingReadsFramesOnlyInDrawAndSharesTrayTransformWithPile`)의 의미를 갱신했어: 받침대는 `trayBrush`로 그리고 엽서 더미와 같은 transform을 유지, 도장 알갱이 타일은 `remember`로 composition당 한 번만 만들고 `onDrawBehind` 안에서는 비트맵을 만들지 않음, 사용자 결정으로 하단 영어 문구(`MEMORY POST OFFICE`)를 그리지 않음. 사진 decode·`Bitmap.createBitmap` 금지는 그대로야.
+- 최종 JVM XML **1347/1347**, **147 suites**, 실패·오류·skip **0**. source `@Test` **1347** / test 파일 **146** / helper **1**. instrumentation **21건/8파일 무변경·미실행**. Room schema **20 유지**.
+- 자동 보호 공백: 재질의 실제 픽셀(명암·알갱이 농도·종이 결 배율), 바늘 그림자와 바늘의 시각적 일치, 프레임 성능은 순수/구조 검사로 보호하지 않아. 실기기 확인 결과는 최신 HANDOFF를 봐.
+
+## 144일차 — 기억 저울 B안·실제 기간 집계·그래프 제거 (2026-11-26)
+
+- 신규 `ui/gallery/MemoryScaleModelTest` **11건**: NONE 집계·전체/연간/월간/빈 기간·시간대 연월 경계, 60/61·100/101·10000 초과·Int.MAX_VALUE의 확장 눈금, 접촉 전 무하중·400ms 접촉, HTML B안 독립 수치 표본, 2400ms 정확한 정착·최대12겹·작은 반동/눈금 제한·감소·0장·모션 비활성화. production 순수 함수 표본 검사야.
+- 신규 `ui/gallery/MemoryScaleWiringStructureTest` **5건**: 기존 목록/기간 연결·실험 조작부 없음, 대상 id/기간 key·page/lifecycle 활성·observer 정리, draw 단계 프레임 읽기·받침대/더미 공통 transform·고정 축·사진 decode 없음, 실제 장수 semantics·시스템 모션 설정 관찰, 그래프 제거·월별 집계 재사용·DENSITY Saver 호환·간소화 viewport. 실제 lifecycle나 음성 발화 검증은 아니야.
+- 사용자 추가 승인으로 기존 12개월 그래프의 전용 계산8건·구조7건을 제거했어. 기존 월별 집계8건은 `GalleryPostcardMonthTest`로 옮겨 빈 달·월 순서·capturedAt/시간대 의미를 유지해. `GalleryFutureMailDioramaStructureTest`와 `GalleryPaperBackgroundStructureTest`는 기존 봉투/소인/접근성·콜백·공유 종이·배경 중복 금지를 유지하며 새 저울 연결/높이 확보를 검사해. `VisitDayBoundaryDefinitionTest`의 실제 소비자 목록을 새 저울 화면과 GalleryViewModel로 갱신하고 자정만으로 방문을 만들지 않는 assertion을 유지했어.
+- 최종 JVM XML **1347/1347**, **147 suites**, 실패·오류·skip **0**. source `@Test` **1347** / test 파일 **146** / helper **1**. 143일차1346 대비 새 저울16건 추가·제거 기능 전용15건 정리로 순증1건. instrumentation **21건/8파일 무변경·미실행**. Room schema **20 유지**.
+- 기간/연도/월 선택창의 색·형태·선택 강조는 갤러리 정렬 메뉴 문법으로 통일하고 실기기에서 확인했어. 색상 변경만을 복제하는 새 테스트는 추가하지 않았으며 최종 메뉴 수정본에서도 위 전체 JVM과 Debug 빌드가 통과했어.
+- 자동 보호 공백: Android 실제 픽셀·B안 손맛·프레임 성능, 큰 글자 메뉴/우체통 배치, 실제 lifecycle·재진입 재생 횟수, TalkBack 발화. 승인된 실기기 설치/QA와 Debug 빌드·CI의 실제 상태는 최신 HANDOFF 및 대화 완료보고를 확인해. 테스트 개수의 감소를 다른 기존 기능의 검사 삭제로 해석하지 않아.
 
 ## 143일차 — 기억 책갈피 제작·갤러리·모션 (2026-11-25)
 
