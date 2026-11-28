@@ -1,3 +1,23 @@
+# HANDOFF — 2026-11-28 146일차 추가 B: 근본 꾸미기 기능 정비 (STOP 1 — 디자인 선택 대기)
+
+- **현재 승인:** 꾸미기 개선 작업 진행 승인. 이번 단계 승인 범위는 ① 기본 사진 스티커 저장 불일치 수정 ② 저장 실패 제목 색 정비 ③~⑨ 비교 목업까지. **신규 디자인 선택, 과거 엽서 외형 변경 허용, 저장 형식·Room 변경은 미승인.** 로컬 체크포인트 commit만 승인(push·PR 미승인).
+- **브랜치 분리:** `feature/day146-decoration-refinement`를 `origin/main` `68260cf`에서 생성(새 worktree 없음, upstream 추적 해제해 main 오push 방지). 인트로 PR #42(`feature/day146-intro-film-texture`, head `ee9530b`)는 그대로 두었고, 이 브랜치에는 PR #42 변경(인트로 재질·146일차 인트로 HANDOFF 절)이 **없음**. 로컬 체크포인트 commit `0f73a9a`(push 안 함).
+- **선행 조사(읽기 전용):** 꾸미기 탭 7개(사진·배경·글귀·스티커·테이프·도장·낙서). 사진 레이아웃·오림 4종·라벨 엠보싱·도장 잉크 닳음·하단 탭·종이 라벨 막대·`EditorSlider`·`EditorTextAction`은 유지 대상. 엽서는 완성 이미지가 아니라 저장값으로 열 때마다 다시 그려져서 **렌더러를 바꾸면 과거 엽서 모습도 바뀜**(이미 갤러리에 저장된 JPG는 별개).
+- **① 기본 사진 스티커 — 수정 완료:** 7/4 `7f7e647`이 화면의 검은 3dp 테두리만 지우고 저장(`PostcardImageExporter`)엔 남겨 화면과 저장 이미지가 달랐어. Robolectric native graphics로 재현(가장자리 픽셀 `#000000`) 후 저장 쪽 테두리와 `STICKER_BORDER_WIDTH_RATIO` 제거, 그리기를 `drawDefaultPhotoSticker`로 분리. 모서리 비율·크롭·회전·대칭, 다른 오림 4종·배경 제거 경로, 화면 쪽은 그대로. 저장된 스티커 데이터·JPG 변경 없음.
+- **① 관련 미수정 발견:** 기본 스티커 모서리가 화면은 고정 16dp, 저장은 크기 비례(16/120)라 스티커 크기를 바꾸면 둥글기가 조금 다름. 범위 밖이라 기록만.
+- **② 저장 실패 제목 — 수정 완료:** 편집 화면 저장 실패 창 3곳(갤러리 저장·배경·레이아웃) 제목 코랄 `#FF7F8E` → `GalleryDangerRed`(`#C0392B`). 문구·동작 그대로. 테마 `error`·카메라 화면 코랄 안내는 범위 밖이라 그대로. `SaveResultAlertDialog`는 바탕·모서리를 지정하지 않아 Material 기본값(바탕 `#ECE6F0` 추정, 28dp)일 가능성 — 코드 추정, 실기기 미확인, 대화창 결정과 함께 판단.
+- **③~⑨ 비교 목업(HTML 재현, 실제 캡처 아님, 가상 사진·글귀):**
+  - [decoration-controls-day146.html](mockups/decoration-controls-day146.html): 대화창 기준/A 4dp/B 종이 편집 도구/C 편집 작업대(키보드·큰 글자 전환), 테이프 칩 기준/A 종이 라벨/B 실제 견본/C 사각 체크 목록, 테이프 표기 비교(무늬 없음·모서리 자름·한쪽 찢김·양쪽 찢김 — 저장 enum 그대로), 저장 실패 창 전후.
+  - [decoration-materials-day146.html](mockups/decoration-materials-day146.html): 글귀 패널(기준: 반경 34·번짐 없는 (+12,+14) 그림자·▼) A/B/C, 날짜 패널(기준 잉크 `#463A44`) A/B/C, 한 엽서 조합, 마스킹테이프 A 화지/B 반투명 접착/C 손으로 찢은(가장자리 4종 확대), 낙서 A 곡선 보간/B 획 끝·사각 펜촉, 배경 안쪽 흰 테두리 현재/옅게/없음, 기존 엽서 영향표.
+- **과거 엽서 영향(결정 필요):** 글귀·날짜·안쪽 테두리·낙서·테이프는 렌더러만 바꾸면 과거 엽서도 바뀜. 새 엽서에만 적용하려면 글귀·날짜·테두리는 Room 컬럼(schema 21 + migration), 테이프·낙서는 꾸미기 줄 필드 추가(저장 형식 변경) — 모두 별도 승인. 대화창·칩·문구는 엽서 외형 영향 없음. 글귀 흰 판·그림자·▼와 안쪽 테두리는 7/3 `688dd5b`부터 있던 초창기 디자인(의도 기록 없음).
+- **로컬 자동검증 — 실행/통과:** `testDebugUnitTest assembleDebug --no-daemon --max-workers=1` 성공. XML **1351/1351·149 suites·실패/오류/skip 0**(main 1347 + 신규 4; PR #42의 1354와 다른 브랜치). 신규 `PhotoStickerDefaultExportTest` 3건(실제 픽셀)·`SaveResultDialogColorStructureTest` 1건. 기존 `SaveErrorDialogStructureTest`의 고정 기대색 3곳을 승인된 새 색으로 갱신(검사 방식 그대로). `git diff --check` 통과, Room schema 20 그대로. TEST-COVERAGE-MAP은 디자인 구현 마감 때 함께 갱신 예정(미갱신).
+- **실기기 — 미실행(보호):** 147일차 인트로 동적 QA 전까지 설치·Run·Apply Changes·adb install·instrumentation·앱 실행 자동화 금지. 현재 `app/build/outputs/apk/debug/app-debug.apk`는 이 꾸미기 브랜치 빌드라 **설치 금지**. 폰의 인트로 최종 APK·방문 기록 그대로.
+- **데이터/보호:** 사용자 DB·엽서·사진 접근 없음. SAFE 38/38(`docs/ai/privacy-rewrite/protected-baseline.json`) 일치, 기존 미추적 48/48은 145일차 로컬 기준과 일치(그 이후 변화는 이 기준으로 알 수 없음).
+- **병합 시 주의:** PR #42 병합 후 최신 main을 이 브랜치에 반영하면 이 HANDOFF 맨 위(146일차 인트로 절과 이 절)가 같은 자리라 충돌이 예상돼. 해결은 두 절을 모두 남기는 것(이 절을 위로)이고, 실제 충돌이므로 반영 전에 사용자에게 보고 후 진행.
+- **재개 조건·다음:** ① 11/29 인트로 동적 QA → PR #42 병합 승인 → main 동기화 → 이 브랜치에 main 반영·회귀 검증. ② 사용자가 목업에서 항목별 안 선택 + 과거 엽서 변경 허용 여부 결정. ③ 승인된 디자인만 단위별 구현 → 실기기 QA(기본 스티커 저장 이미지·저장 실패 창 실제 바탕 포함) → HANDOFF·TEST-COVERAGE-MAP 마감 → 새 PR → 병합 승인 대기.
+
+---
+
 # HANDOFF — 2026-11-27 145일차: 기억 저울 B안 질감(오래된 우체국) 적용
 
 - **현재 승인:** 사용자가 질감 비교 [목업](mockups/memory-scale-texture-day145.html)의 B안을 고르고, 실기기 확인 뒤 하단 영어 문구 `MEMORY POST OFFICE` 제거를 조건으로 최종 승인했어. 추가 디자인 탐색은 하지 않아. 작업 브랜치 commit·push·PR #41 갱신까지 승인, **main 병합은 별도 승인 전 금지**.
