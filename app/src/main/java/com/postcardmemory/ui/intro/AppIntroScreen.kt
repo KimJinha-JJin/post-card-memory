@@ -11,7 +11,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,10 +54,6 @@ import com.postcardmemory.ui.detail.SealStampHandOverlay
 import com.postcardmemory.ui.detail.SealType
 import com.postcardmemory.ui.theme.GalleryPaperWhite
 import com.postcardmemory.ui.theme.InkSecondary
-import com.postcardmemory.ui.theme.PaperDivider
-import com.postcardmemory.ui.theme.PaperField
-import com.postcardmemory.ui.theme.PaperSurface
-import com.postcardmemory.ui.theme.PaperTray
 import com.postcardmemory.utils.VisitRecord
 import com.postcardmemory.utils.visitDayStartMillis
 import kotlin.random.Random
@@ -245,8 +238,11 @@ private const val INTRO_FILM_APPEAR_MS = 150
 /** 지난 방문 칸에 이미 찍혀 있는 소인의 옅기. */
 private const val INTRO_FILM_PAST_STAMP_ALPHA = 0.9f
 
-/** 아직 오지 않은 날·기록 이전 빈 칸의 종이색(조금 더 밝은 미사용 종이). */
-private val IntroFilmBlankPaper = Color(0xFFFCF8F0)
+/**
+ * 146일차: B안 호박색 필름 위 날짜 잉크. 기존 InkSecondary(#5B5046)는 필름 위 대비가 약 3.7:1이라
+ * 사용자 승인으로 날짜만 소폭 진하게 했다(가장 어두운 칸에서도 4.5:1 이상). 소인·문구 색은 그대로다.
+ */
+private val IntroFilmDateInk = Color(0xFF46392E)
 
 /** 시스템 애니메이션 배율이 0이면 필름 이송·도장 탄성 없이 찍힌 모습만 보여준다(시작 시 1회 읽음). */
 private fun readIntroReducedMotion(context: Context): Boolean = runCatching {
@@ -434,10 +430,10 @@ fun AppIntroScreen(
 }
 
 /**
- * 날짜별 종이 필름. 칸은 시간 순서로 왼쪽(지난 날)부터 오른쪽(아직 오지 않은 날)까지 놓이고,
+ * 날짜별 필름(146일차부터 B안 아날로그 사진 필름 재질). 칸은 시간 순서로 왼쪽(지난 날)부터 오른쪽(아직 오지 않은 날)까지 놓이고,
  * [progress] 0→1 동안 시작 칸에서 오늘 칸이 가운데 기준 위치로 오도록 필름 전체를 왼쪽으로 옮긴다.
- * 이동은 [graphicsLayer] 안에서만 읽어 프레임마다 recomposition이 일어나지 않는다. 칸은 사각형·원과
- * 기존 원형 소인 렌더러만 그린다(새 이미지·엽서 사진 디코딩 없음).
+ * 이동은 [graphicsLayer] 안에서만 읽어 프레임마다 recomposition이 일어나지 않는다. 칸 재질은
+ * [introFilmFrameMaterial]이 칸 좌표에 캐시해 그려 필름과 함께 움직이고, 날짜·소인은 기존 렌더러 그대로다(새 이미지·엽서 사진 디코딩 없음).
  */
 @Composable
 private fun IntroFilmStrip(
@@ -455,6 +451,8 @@ private fun IntroFilmStrip(
         val stripHeight = cellHeight + INTRO_FILM_BAND * 2
         val stampSize = minOf(frameWidth * INTRO_FILM_STAMP_RATIO, INTRO_FILM_STAMP_MAX)
         val windowWidth = maxWidth
+        // B안 그레인 타일 두 장(고정 시드). composition당 한 번만 만든다.
+        val grain = remember { introFilmGrain() }
 
         val description = if (plan != null && plan.stamp != IntroFilmStamp.NONE && visitRecord != null) {
             "오늘 방문 소인, " + PostcardDateFormat.formatIso(visitDayStartMillis(visitRecord.lastVisitEpochDay))
@@ -484,19 +482,12 @@ private fun IntroFilmStrip(
                                 (plan.todayIndex - plan.startIndex) * progress.value
                             translationX = windowWidth.toPx() / 2f - frame * (position + 0.5f)
                         }
-                        .drawBehind {
-                            val line = 1.dp.toPx()
-                            drawRect(PaperDivider, size = size.copy(height = line))
-                            drawRect(
-                                PaperDivider,
-                                topLeft = Offset(0f, size.height - line),
-                                size = size.copy(height = line)
-                            )
-                        }
                 ) {
-                    plan.frames.forEach { frame ->
+                    plan.frames.forEachIndexed { index, frame ->
                         IntroFilmFrameCell(
                             frame = frame,
+                            index = index,
+                            grain = grain,
                             frameWidth = frameWidth,
                             stampSize = stampSize,
                             todayStamp = todayStamp
@@ -511,6 +502,8 @@ private fun IntroFilmStrip(
 @Composable
 private fun IntroFilmFrameCell(
     frame: IntroFilmFrame,
+    index: Int,
+    grain: IntroFilmGrain,
     frameWidth: Dp,
     stampSize: Dp,
     todayStamp: @Composable (Dp) -> Unit
@@ -519,36 +512,28 @@ private fun IntroFilmFrameCell(
         modifier = Modifier
             .width(frameWidth)
             .fillMaxHeight()
-            .background(PaperSurface)
-            .drawBehind {
-                // 위아래 띠에 같은 간격으로 뚫린 둥근 구멍.
-                val spacing = INTRO_FILM_HOLE_SPACING.toPx()
-                val radius = INTRO_FILM_HOLE_RADIUS.toPx()
-                val bandCenter = INTRO_FILM_BAND.toPx() / 2f
-                var x = spacing / 2f
-                while (x < size.width) {
-                    drawCircle(PaperTray, radius, Offset(x, bandCenter))
-                    drawCircle(PaperTray, radius, Offset(x, size.height - bandCenter))
-                    x += spacing
-                }
-            }
+            // 146일차 B안: 반투명 호박색 필름 바탕·실제로 뚫린 천공·칸 노출 면을 칸 좌표에 함께 그린다.
+            .introFilmFrameMaterial(
+                index = index,
+                blank = frame.epochDay == null,
+                grain = grain,
+                band = INTRO_FILM_BAND,
+                holeSpacing = INTRO_FILM_HOLE_SPACING,
+                holeRadius = INTRO_FILM_HOLE_RADIUS,
+                cellInset = INTRO_FILM_CELL_INSET
+            )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = INTRO_FILM_CELL_INSET, vertical = INTRO_FILM_BAND)
-                .background(
-                    if (frame.epochDay == null) IntroFilmBlankPaper else PaperField,
-                    RoundedCornerShape(2.dp)
-                )
-                .border(1.dp, PaperDivider, RoundedCornerShape(2.dp))
         ) {
             val epochDay = frame.epochDay
             if (epochDay != null) {
                 Text(
                     text = PostcardDateFormat.formatIso(visitDayStartMillis(epochDay)),
                     fontSize = 9.5.sp,
-                    color = InkSecondary,
+                    color = IntroFilmDateInk,
                     // 쉰 날(도장 없는 지난 날짜)은 한 톤 옅게.
                     modifier = Modifier
                         .align(Alignment.TopStart)

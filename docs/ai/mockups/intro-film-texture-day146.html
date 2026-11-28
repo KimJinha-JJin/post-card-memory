@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>146일차 인트로 필름 재질 비교</title>
+<style>
+  :root {
+    --canvas: #F4ECDE; --surface: #FFFBF3; --field: #FAF4E9; --divider: #DBCBB0;
+    --tray: #E8DCC6; --ink: #1A1324; --ink2: #5B5046; --gold: #8C5F00;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #E9DFCD; color: var(--ink);
+    font-family: system-ui, "Noto Sans KR", "Malgun Gothic", sans-serif;
+  }
+  header { padding: 20px 28px 8px; max-width: 1640px; margin: 0 auto; }
+  h1 { font-size: 19px; margin: 0 0 6px; font-weight: 700; }
+  header p { margin: 0; font-size: 13px; color: var(--ink2); line-height: 1.6; max-width: 980px; }
+
+  .controls {
+    position: sticky; top: 0; z-index: 5; background: var(--surface);
+    border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider);
+    padding: 10px 28px; display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center;
+  }
+  .group { display: flex; align-items: center; gap: 0; }
+  .group > .label { font-size: 12px; color: var(--ink2); margin-right: 8px; }
+  .seg button, .act {
+    font: inherit; font-size: 13px; background: var(--field); color: var(--ink);
+    border: 1px solid var(--divider); padding: 5px 11px; cursor: pointer; border-radius: 0;
+  }
+  .seg button + button { border-left: none; }
+  .seg button[aria-pressed="true"] { background: rgba(140,95,0,.16); font-weight: 700; }
+  .act + .act { margin-left: 6px; }
+  .act:hover, .seg button:hover { background: #F1E7D6; }
+  input[type=range] { width: 260px; accent-color: var(--gold); }
+  .time { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink2); width: 118px; margin-left: 10px; }
+
+  main { max-width: 1640px; margin: 0 auto; padding: 18px 28px 40px; }
+  .stage { display: flex; flex-wrap: wrap; gap: 26px; justify-content: center; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .phone-title { font-size: 14px; font-weight: 700; }
+  .phone-sub { font-size: 12px; color: var(--ink2); max-width: 340px; text-align: center; line-height: 1.5; min-height: 36px; }
+  .phone {
+    border: 1px solid #CDBB9C; box-shadow: 0 1px 0 #fff8 inset, 0 10px 26px rgba(60,40,20,.12);
+    background: var(--canvas); overflow: hidden; position: relative;
+  }
+  .phone canvas { display: block; }
+
+  section.notes { margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .note { background: var(--surface); border: 1px solid var(--divider); padding: 14px 16px; font-size: 13px; line-height: 1.65; }
+  .note h3 { margin: 0 0 6px; font-size: 14px; }
+  .note ul { margin: 0; padding-left: 18px; }
+  .note .cost { color: var(--ink2); font-size: 12px; margin-top: 6px; }
+  .fine { font-size: 12px; color: var(--ink2); margin-top: 22px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<header>
+  <h1>146일차 · 인트로 필름 재질 비교 (기준안 · A · B · C)</h1>
+  <p>
+    모든 시안은 <b>같은 모션</b>(AppIntroScreen.kt/IntroFilmPlan.kt 실측값: 이송 시작 280ms, 한 칸 720ms,
+    cubic-bezier(.40,0,.12,1), 정착 후 140ms 뒤 손 도장 720ms, 260ms 유지, 갤러리 크로스페이드 180ms)과
+    같은 기하(칸 폭 = 화면 폭 40% → 153.6dp, 칸 높이 ×1.18, 위아래 띠 14dp, 지름 4.8dp 원형 천공 14dp 간격)를 쓴다.
+    재질만 다르다. 화면은 384×832dp(현 실사용 기기 1080×2340 / 450dpi 기준)이고, 날짜·방문 수·문구는 예시값이다.
+  </p>
+</header>
+
+<div class="controls" role="toolbar" aria-label="비교 조작">
+  <div class="group">
+    <span class="label">보기</span>
+    <div class="seg" id="layoutSeg">
+      <button data-v="all" aria-pressed="true">네 안 나란히</button>
+      <button data-v="base">기준안</button>
+      <button data-v="A">A</button>
+      <button data-v="B">B</button>
+      <button data-v="C">C</button>
+    </div>
+  </div>
+  <div class="group">
+    <span class="label">상황</span>
+    <div class="seg" id="scenarioSeg">
+      <button data-v="one" aria-pressed="true">어제 방문(1칸)</button>
+      <button data-v="three">사흘 만(3칸)</button>
+      <button data-v="same">같은 날 재실행</button>
+      <button data-v="reduced">애니메이션 끔</button>
+    </div>
+  </div>
+  <div class="group">
+    <span class="label">재생</span>
+    <button class="act" id="playBtn">일시 정지</button>
+    <button class="act" id="restartBtn">처음부터</button>
+  </div>
+  <div class="group">
+    <span class="label">속도</span>
+    <div class="seg" id="speedSeg">
+      <button data-v="1" aria-pressed="true">1×</button>
+      <button data-v="0.25">0.25×</button>
+      <button data-v="0.1">0.1×</button>
+    </div>
+  </div>
+  <div class="group">
+    <span class="label">시점</span>
+    <input type="range" id="scrub" min="0" max="3000" step="1" value="0" aria-label="재생 시점">
+    <span class="time" id="timeLabel">0 ms</span>
+  </div>
+  <div class="group">
+    <span class="label">시점 고정</span>
+    <div class="seg" id="jumpSeg">
+      <button data-v="mid">이송 중간</button>
+      <button data-v="settle">정착 직후</button>
+      <button data-v="stamped">찍힌 뒤</button>
+    </div>
+  </div>
+  <div class="group">
+    <span class="label">확대</span>
+    <div class="seg" id="zoomSeg">
+      <button data-v="1" aria-pressed="true">실제 크기</button>
+      <button data-v="2">2배(필름 부분)</button>
+    </div>
+  </div>
+  <div class="group">
+    <span class="label">배경</span>
+    <div class="seg" id="bgSeg">
+      <button data-v="app" aria-pressed="true">앱 배경</button>
+      <button data-v="dark">어두운 확인판</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="stage" id="stage"></div>
+
+  <section class="notes">
+    <div class="note">
+      <h3>기준안 — 현재 앱</h3>
+      <ul>
+        <li>사진 필름이 아니라 <b>아이보리 종이 필름</b>이야. 칸마다 PaperSurface 단색, 안쪽 기록 칸은 PaperField + 1dp PaperDivider 테두리.</li>
+        <li>천공은 PaperTray 색 원을 <b>그린 것</b>이라 실제로 뚫려 있지 않아. 어두운 확인판에서도 베이지 점으로 남아.</li>
+        <li>필름 위아래 1dp 경계선은 Row의 drawBehind라 칸 배경에 가려서 실제로는 보이지 않아.</li>
+        <li>바탕과 화면 배경의 명도 차가 작고 두께·결이 없어서 납작한 종이 띠처럼 보여.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>A — 아날로그 종이 기록지형</h3>
+      <ul>
+        <li>아이보리 종이 색과 구조는 그대로 두고, 미세한 종이 결·섬유와 위아래 가장자리의 얕은 따뜻한 농도를 더했어.</li>
+        <li>천공은 종이를 실제로 뚫어서 배경이 보여. 위쪽에는 종이 두께 그늘, 아래쪽에는 잘린 단면의 밝은 선이 있어.</li>
+        <li>회색 테두리 대신 갈색 잉크로 인쇄된 얇은 칸 선을 썼어.</li>
+      </ul>
+      <div class="cost">Compose 예상: drawWithCache로 천공 차감 Path 1개, 칸 index 시드 섬유 Path(캐시), 64px 결 타일 1장. 새 이미지 없음. 비용 낮음(칸이 많으면 섬유 Path 수에 비례).</div>
+    </div>
+    <div class="note">
+      <h3>B — 아날로그 사진 필름형</h3>
+      <ul>
+        <li>호박·갈색 반투명 네거티브 필름이고, 띠 쪽 농도가 조금 더 짙어. 칸 안도 종이로 덮지 않은 필름 면이야.</li>
+        <li>날짜·소인은 기존 잉크(InkSecondary #5B5046)와 크기 그대로 필름 위에 찍혀. <b>가독성 저하를 숨기지 않았어.</b></li>
+        <li>칸마다 다른 은은한 노출 흔적(고정 시드), 필름 그레인, 드문 먼지 점, 뚜렷한 천공 두께를 넣었어.</li>
+      </ul>
+      <div class="cost">Compose 예상: 반투명 바탕 그라디언트 + 천공 차감 + 칸별 RadialGradient(캐시) + 그레인 타일. 새 이미지 없음. 비용은 A와 비슷하거나 약간 높아.</div>
+    </div>
+    <div class="note">
+      <h3>C — 종이·필름 혼합형</h3>
+      <ul>
+        <li>위아래 천공 띠만 호박색 필름이고, 가운데 기록 영역은 아이보리 종이가 필름 위에 붙은 구조야.</li>
+        <li>종이 띠 아래에 얕은 그늘을 깔아서 종이와 필름의 재질 경계를 만들었어.</li>
+        <li>날짜·소인은 A와 같은 종이 위에 기록돼.</li>
+      </ul>
+      <div class="cost">Compose 예상: A 구성 + 필름 띠 그라디언트·그레인. 새 이미지 없음. 비용은 A와 B 사이.</div>
+    </div>
+  </section>
+
+  <section class="note" style="margin-top:18px">
+    <h3>평가표 (초안 — 판단은 직접 보고 해 줘)</h3>
+    <table style="border-collapse:collapse;font-size:12.5px;width:100%">
+      <thead><tr style="text-align:left;border-bottom:1px solid var(--divider)">
+        <th style="padding:6px">항목</th><th>기준안</th><th>A 종이 기록지</th><th>B 사진 필름</th><th>C 혼합</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:5px 6px">날짜 가독성</td><td>좋음</td><td>좋음(동일 잉크·종이)</td><td>떨어짐: 호박색 위 9.5sp 갈색 글자의 대비가 낮아</td><td>좋음</td></tr>
+        <tr><td style="padding:5px 6px">방문 소인 식별성</td><td>좋음</td><td>좋음</td><td>보통: 소인 선이 바탕에 묻히는 편</td><td>좋음</td></tr>
+        <tr><td style="padding:5px 6px">갈색 잉크와 바탕 대비</td><td>높음</td><td>높음</td><td>낮음(같은 갈색 계열)</td><td>높음</td></tr>
+        <tr><td style="padding:5px 6px">도장 찍는 행위의 자연스러움</td><td>자연스러움</td><td>가장 자연스러움(종이에 잉크)</td><td>어색함: 사진 필름에 잉크 도장을 찍지 않아</td><td>자연스러움</td></tr>
+        <tr><td style="padding:5px 6px">재질의 물리적 설득력</td><td>낮음(단색 띠)</td><td>중간~높음</td><td>필름으로는 높음, 기록지로는 모순</td><td>높음(필름 운반 + 종이 기록)</td></tr>
+        <tr><td style="padding:5px 6px">천공 표현</td><td>그려진 점</td><td>뚫린 구멍(종이 단면)</td><td>뚫린 구멍(필름 두께)</td><td>뚫린 구멍(필름 두께)</td></tr>
+        <tr><td style="padding:5px 6px">이동 중 질감 일체감</td><td>해당 없음</td><td>필름 좌표 고정</td><td>필름 좌표 고정</td><td>필름 좌표 고정</td></tr>
+        <tr><td style="padding:5px 6px">기존 앱과의 조화</td><td>높음</td><td>높음(갤러리 종이 계열)</td><td>낮음~중간(앱에 없던 짙은 호박색)</td><td>중간~높음</td></tr>
+        <tr><td style="padding:5px 6px">예상 렌더링 비용</td><td>최저</td><td>낮음</td><td>낮음~중간</td><td>낮음~중간</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <p class="fine">
+    렌더링 방식: 필름(바탕·천공·칸·날짜·지난 소인·그레인)은 시안·상황별로 한 번만 오프스크린 캔버스에 그려 두고(정적 캐시),
+    매 프레임에는 앱의 graphicsLayer translationX와 같은 식 <code>화면폭/2 − 칸폭 × (위치 + 0.5)</code>으로 통째 옮기기만 한다.
+    그래서 그레인·노출 얼룩은 필름 좌표에 붙어 함께 움직이고, 프레임마다 다시 생성되지 않는다(깜빡임 없음).
+    천공은 destination-out으로 바탕을 실제로 지운다. 오늘 칸 소인은 앱과 같은 스프링(감쇠 0.5, 강성 2600, 0.94→1)으로 따로 그리며 필름과 같은 좌표에 붙는다.
+    손 이미지는 저장소의 <code>seal_stamp_hand.png</code>를 상대경로로 읽고, 없으면 손 없이 재생된다.
+  </p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- 앱 실측 상수 ---------- */
+  const SCREEN = { w: 384, h: 832 };
+  const COL = {
+    canvas: '#F4ECDE', surface: '#FFFBF3', field: '#FAF4E9', blank: '#FCF8F0',
+    divider: '#DBCBB0', tray: '#E8DCC6', ink2: '#5B5046', ink: '#1A1324'
+  };
+  const FRAME_W = Math.min(170, Math.max(112, SCREEN.w * 0.40));   // 153.6
+  const CELL_H = FRAME_W * 1.18;
+  const BAND = 14, HOLE_SP = 14, HOLE_R = 2.4, INSET = 4;
+  const STRIP_H = CELL_H + BAND * 2;
+  const STAMP = Math.min(FRAME_W * 0.44, 66);
+  const T = {
+    appear: 150, moveDelay: 280, move: 720, extra: 0.45, maxFactor: 2.6,
+    stampDelay: 140, hand: 720, handEnter: 300, pressIn: 50, pressHold: 90, pressOut: 60, handExit: 220,
+    afterHand: 260, staticHold: 650, reducedHold: 800, crossfade: 180
+  };
+
+  /* ---------- easing ---------- */
+  function bezier(x1, y1, x2, y2) {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const sx = t => ((ax * t + bx) * t + cx) * t;
+    const sy = t => ((ay * t + by) * t + cy) * t;
+    const dx = t => (3 * ax * t + 2 * bx) * t + cx;
+    return x => {
+      if (x <= 0) return 0; if (x >= 1) return 1;
+      let t = x;
+      for (let i = 0; i < 8; i++) { const e = sx(t) - x; const d = dx(t); if (Math.abs(e) < 1e-6 || !d) break; t -= e / d; }
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 30 && Math.abs(sx(t) - x) > 1e-6; i++) { if (sx(t) < x) lo = t; else hi = t; t = (lo + hi) / 2; }
+      return sy(t);
+    };
+  }
+  const moveEase = bezier(0.40, 0, 0.12, 1);
+  const fastOutSlowIn = bezier(0.4, 0, 0.2, 1);
+  const handEnterEase = bezier(0.2, 0.75, 0.25, 1);
+  const handExitEase = bezier(0.55, 0, 0.85, 0.4);
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+
+  /* 소인 스프링: dampingRatio 0.5, stiffness 2600, 0.94 → 1 (해석해) */
+  const W0 = Math.sqrt(2600), Z = 0.5, WD = W0 * Math.sqrt(1 - Z * Z);
+  function stampSpring(ms) {
+    const t = ms / 1000, A = 1 - 0.94, B = Z * W0 * A / WD;
+    return 1 - Math.exp(-Z * W0 * t) * (A * Math.cos(WD * t) + B * Math.sin(WD * t));
+  }
+
+  /* ---------- 상황(계획) ---------- */
+  const TODAY = Date.UTC(2026, 10, 28) / 86400000;  // 2026-11-28 epochDay
+  const iso = d => new Date(d * 86400000).toISOString().slice(0, 10);
+  const VISITED = new Set([TODAY - 1, TODAY - 2, TODAY - 3, TODAY - 5, TODAY - 6, TODAY - 8]);
+
+  function moveDuration(n) {
+    if (n <= 0) return 0;
+    return Math.round(T.move * Math.min(1 + T.extra * (n - 1), T.maxFactor));
+  }
+  function frame(day, isToday = false) {
+    if (day == null) return { day: null, isToday: false, stamp: false, faded: false };
+    const visited = !isToday && VISITED.has(day);
+    return { day, isToday, stamp: visited, faded: !isToday && !visited };
+  }
+  function buildPlan(key) {
+    const future = [frame(null), frame(null), frame(null)];
+    let past, plays = true, reduced = key === 'reduced';
+    let previous;
+    if (key === 'one') previous = TODAY - 1;
+    else if (key === 'three') previous = TODAY - 3;
+    else { plays = false; }
+    if (key === 'reduced') { plays = true; previous = TODAY - 1; }
+
+    if (!plays) {
+      past = [4, 3, 2, 1].map(i => frame(TODAY - i));
+    } else {
+      const missed = Math.max(0, TODAY - previous - 1);
+      past = [4, 3, 2, 1, 0].map(i => previous - i);
+      for (let m = missed; m >= 1; m--) past.push(TODAY - m);
+      past = past.map(d => {
+        const f = frame(d);
+        if (d === previous) { f.stamp = true; f.faded = false; }     // 직전 방문일은 확인된 방문
+        else if (d > previous) { f.stamp = false; f.faded = true; }  // 쉰 날
+        return f;
+      });
+    }
+    const frames = [...past, frame(TODAY, true), ...future];
+    const todayIndex = past.length;
+    if (!plays || reduced) {
+      return { frames, startIndex: todayIndex, todayIndex, stamp: 'INKED', moveMs: 0,
+               holdMs: reduced ? T.reducedHold : T.staticHold };
+    }
+    const startIndex = 4;
+    const moveMs = moveDuration(todayIndex - startIndex);
+    return { frames, startIndex, todayIndex, stamp: 'HAND', moveMs, holdMs: 0 };
+  }
+  function timeline(p) {
+    if (p.stamp === 'HAND') {
+      const moveEnd = T.moveDelay + p.moveMs;
+      const handStart = moveEnd + T.stampDelay;
+      const contact = handStart + T.handEnter;
+      const handEnd = handStart + T.hand;
+      const finish = handEnd + T.afterHand;
+      return { moveStart: T.moveDelay, moveEnd, handStart, contact, handEnd, finish, end: finish + T.crossfade };
+    }
+    return { moveStart: 0, moveEnd: 0, handStart: null, contact: 0, handEnd: 0, finish: p.holdMs, end: p.holdMs + T.crossfade };
+  }
+
+  /* ---------- 결정적 난수 ---------- */
+  function mulberry32(seed) {
+    return () => {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* 그레인 타일: 기기 픽셀 단위 백색 잡음이라 반복해도 이음새가 없다. 시안별 1회 생성. */
+  const tileCache = new Map();
+  function grainTile(amp, warm, seed) {
+    const key = amp + '|' + warm + '|' + seed;
+    if (tileCache.has(key)) return tileCache.get(key);
+    const n = 96, c = document.createElement('canvas');
+    c.width = c.height = n;
+    const g = c.getContext('2d'), img = g.createImageData(n, n), r = mulberry32(seed);
+    for (let i = 0; i < n * n; i++) {
+      const v = r(), dark = v < 0.5, a = Math.abs(v - 0.5) * 2;
+      img.data[i * 4] = dark ? 70 : 255;
+      img.data[i * 4 + 1] = dark ? 44 : (warm ? 244 : 252);
+      img.data[i * 4 + 2] = dark ? 18 : (warm ? 226 : 244);
+      img.data[i * 4 + 3] = Math.round(255 * amp * a * a);
+    }
+    g.putImageData(img, 0, 0);
+    tileCache.set(key, c);
+    return c;
+  }
+
+  /* ---------- 소인(앱 drawCirclePostmark와 같은 비율) ---------- */
+  function drawPostmark(g, cx, cy, size, dateStr, alpha, rotDeg, scale) {
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(rotDeg * Math.PI / 180);
+    g.scale(scale, scale);
+    g.globalAlpha *= alpha;
+    const sw = size * 0.035, outer = size / 2 - sw, inner = outer * 0.72;
+    g.strokeStyle = COL.ink2; g.fillStyle = COL.ink2;
+    g.lineWidth = sw; g.beginPath(); g.arc(0, 0, outer, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = sw * 0.7; g.beginPath(); g.arc(0, 0, inner, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = sw * 0.6;
+    for (let i = 0; i < 16; i++) {
+      const a = Math.PI * 2 * i / 16;
+      g.beginPath();
+      g.moveTo(Math.cos(a) * outer * 0.86, Math.sin(a) * outer * 0.86);
+      g.lineTo(Math.cos(a) * outer * 0.96, Math.sin(a) * outer * 0.96);
+      g.stroke();
+    }
+    g.font = `700 ${inner * 0.32}px system-ui, "Noto Sans KR", sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(dateStr, 0, 0);
+    g.restore();
+  }
+
+  /* ---------- 시안 정의 ---------- */
+  const VARIANTS = {
+    base: { title: '기준안 — 현재 앱', sub: '아이보리 종이 칸 · 그려진 천공 점 · 1dp 칸 테두리' },
+    A: { title: 'A — 아날로그 종이 기록지형', sub: '아이보리 종이 유지 · 종이 섬유 · 실제로 뚫린 천공 · 종이 두께' },
+    B: { title: 'B — 아날로그 사진 필름형', sub: '호박색 반투명 필름 · 필름 그레인 · 칸 안도 필름 위에 기록' },
+    C: { title: 'C — 종이·필름 혼합형', sub: '가운데 아이보리 기록 칸 · 위아래 호박색 필름 띠와 천공' }
+  };
+
+  function cellRect(i) {
+    return { x: i * FRAME_W + INSET, y: BAND, w: FRAME_W - INSET * 2, h: CELL_H };
+  }
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+    g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+    g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y); g.closePath();
+  }
+  function holeCenters(n) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      for (let x = HOLE_SP / 2; x < FRAME_W; x += HOLE_SP) {
+        pts.push([i * FRAME_W + x, BAND / 2]);
+        pts.push([i * FRAME_W + x, STRIP_H - BAND / 2]);
+      }
+    }
+    return pts;
+  }
+  function drawFrameText(g, f, i) {
+    if (f.day == null) return;
+    const c = cellRect(i);
+    g.save();
+    g.globalAlpha = f.faded ? 0.5 : 1;
+    g.fillStyle = COL.ink2;
+    g.font = `400 9.5px system-ui, "Noto Sans KR", sans-serif`;
+    g.textBaseline = 'top';
+    g.fillText(iso(f.day), c.x + 7, c.y + 6 + 1.5);
+    g.restore();
+    if (f.stamp) {
+      drawPostmark(g, c.x + c.w / 2, c.y + c.h - 9 - STAMP / 2, STAMP, iso(f.day), 0.9, -7, 1);
+    }
+  }
+
+  /* 기준안: 현재 코드를 그대로 따른다. */
+  function paintBase(g, plan) {
+    const n = plan.frames.length, W = n * FRAME_W;
+    // Row drawBehind의 위아래 1dp 선 — 아래 칸 배경에 가려진다(현재 앱과 동일).
+    g.fillStyle = COL.divider; g.fillRect(0, 0, W, 1); g.fillRect(0, STRIP_H - 1, W, 1);
+    plan.frames.forEach((f, i) => {
+      g.fillStyle = COL.surface; g.fillRect(i * FRAME_W, 0, FRAME_W, STRIP_H);
+    });
+    g.fillStyle = COL.tray;
+    holeCenters(n).forEach(([x, y]) => { g.beginPath(); g.arc(x, y, HOLE_R, 0, Math.PI * 2); g.fill(); });
+    plan.frames.forEach((f, i) => {
+      const c = cellRect(i);
+      roundRect(g, c.x, c.y, c.w, c.h, 2);
+      g.fillStyle = f.day == null ? COL.blank : COL.field; g.fill();
+      roundRect(g, c.x + 0.5, c.y + 0.5, c.w - 1, c.h - 1, 2);
+      g.strokeStyle = COL.divider; g.lineWidth = 1; g.stroke();
+      drawFrameText(g, f, i);
+    });
+  }
+
+  /* 공통: 반투명 필름 바탕 + 실제로 뚫린 천공 + 가장자리 */
+  function paintFilmBase(g, plan, s, o) {
+    const n = plan.frames.length, W = n * FRAME_W;
+    // 바탕 농도: 위아래 띠 쪽이 조금 더 짙다.
+    const grad = g.createLinearGradient(0, 0, 0, STRIP_H);
+    o.baseStops.forEach(([p, c]) => grad.addColorStop(p, c));
+    g.fillStyle = grad; g.fillRect(0, 0, W, STRIP_H);
+
+    // 그레인(필름 좌표에 고정된 패턴)
+    const tile = grainTile(o.grain, true, o.seed);
+    const pat = g.createPattern(tile, 'repeat');
+    pat.setTransform(new DOMMatrix().scale(1 / s, 1 / s));
+    g.fillStyle = pat; g.fillRect(0, 0, W, STRIP_H);
+
+    // 천공: 바탕을 실제로 지운다.
+    const holes = holeCenters(n);
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = '#000';
+    holes.forEach(([x, y]) => { g.beginPath(); g.arc(x, y, HOLE_R, 0, Math.PI * 2); g.fill(); });
+    g.restore();
+
+    // 천공 단면(얇은 두께): 위쪽 그늘, 아래쪽 밝은 선.
+    g.lineWidth = o.holeEdge;
+    holes.forEach(([x, y]) => {
+      g.strokeStyle = o.holeShade;
+      g.beginPath(); g.arc(x, y, HOLE_R - o.holeEdge / 2, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+      g.strokeStyle = o.holeLight;
+      g.beginPath(); g.arc(x, y, HOLE_R - o.holeEdge / 2, Math.PI * 0.1, Math.PI * 0.9); g.stroke();
+    });
+
+    // 필름 가장자리: 아주 얇은 짙은 선 + 안쪽 밝은 선
+    g.fillStyle = o.edge; g.fillRect(0, 0, W, 0.75); g.fillRect(0, STRIP_H - 0.75, W, 0.75);
+    g.fillStyle = o.edgeLight; g.fillRect(0, 0.75, W, 0.6); g.fillRect(0, STRIP_H - 1.35, W, 0.6);
+  }
+
+  /* 종이 섬유: 칸 index 시드로 한 번만 그려 필름 캐시에 붙는다(매 프레임 재생성 없음). */
+  function paintPaperFibers(g, x0, y0, w, h, seed, perArea) {
+    const r = mulberry32(seed);
+    const count = Math.round(w * h * perArea);
+    g.save();
+    g.beginPath(); g.rect(x0, y0, w, h); g.clip();
+    g.lineCap = 'round';
+    for (let k = 0; k < count; k++) {
+      const x = x0 + r() * w, y = y0 + r() * h;
+      const len = 2.5 + r() * 7, a = r() * Math.PI, bend = (r() - 0.5) * 3;
+      const light = r() < 0.4;
+      g.strokeStyle = light ? 'rgba(255,255,252,0.55)' : `rgba(138,108,72,${0.06 + r() * 0.08})`;
+      g.lineWidth = 0.25 + r() * 0.3;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo(x + Math.cos(a) * len / 2 - Math.sin(a) * bend, y + Math.sin(a) * len / 2 + Math.cos(a) * bend,
+                         x + Math.cos(a) * len, y + Math.sin(a) * len);
+      g.stroke();
+    }
+    g.restore();
+  }
+  function fillGrain(g, x, y, w, h, s, amp, seed) {
+    const pat = g.createPattern(grainTile(amp, true, seed), 'repeat');
+    pat.setTransform(new DOMMatrix().scale(1 / s, 1 / s));
+    g.fillStyle = pat; g.fillRect(x, y, w, h);
+  }
+  /* 종이를 뚫은 천공: 바탕을 지우고 위쪽에 종이 두께 그늘, 아래쪽에 잘린 단면의 밝은 선. */
+  function punchPaperHoles(g, plan, seed) {
+    const holes = holeCenters(plan.frames.length), r = mulberry32(seed);
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = '#000';
+    holes.forEach(([x, y]) => { g.beginPath(); g.arc(x, y, HOLE_R, 0, Math.PI * 2); g.fill(); });
+    g.restore();
+    holes.forEach(([x, y]) => {
+      const j = (r() - 0.5) * 0.25;
+      g.lineWidth = 0.55;
+      g.strokeStyle = 'rgba(112,86,56,0.38)';
+      g.beginPath(); g.arc(x, y, HOLE_R - 0.25, Math.PI * (1.0 + j), Math.PI * (2.0 + j)); g.stroke();
+      g.strokeStyle = 'rgba(255,253,247,0.75)';
+      g.beginPath(); g.arc(x, y, HOLE_R + 0.35, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+    });
+  }
+  /* 갈색 잉크로 인쇄된 기록 칸 선(종이 위 인쇄). 크기·위치는 기존 칸과 같다. */
+  function paperCell(g, f, i, s) {
+    const c = cellRect(i);
+    roundRect(g, c.x, c.y, c.w, c.h, 2);
+    g.fillStyle = f.day == null ? 'rgba(252,248,240,0.80)' : 'rgba(250,244,233,0.82)';
+    g.fill();
+    roundRect(g, c.x + 0.4, c.y + 0.4, c.w - 0.8, c.h - 0.8, 2);
+    g.strokeStyle = 'rgba(122,92,60,0.42)'; g.lineWidth = 0.8; g.stroke();
+    drawFrameText(g, f, i);
+  }
+
+  /* A: 아날로그 종이 기록지 — 아이보리 종이 그대로, 섬유·결·실제 천공·종이 두께 */
+  function paintA(g, plan, s) {
+    const n = plan.frames.length, W = n * FRAME_W;
+    g.fillStyle = COL.surface; g.fillRect(0, 0, W, STRIP_H);
+    // 아주 얕은 종이 명암(가장자리로 갈수록 조금 더 따뜻함)
+    const tone = g.createLinearGradient(0, 0, 0, STRIP_H);
+    tone.addColorStop(0, 'rgba(214,190,150,0.16)'); tone.addColorStop(0.12, 'rgba(214,190,150,0)');
+    tone.addColorStop(0.88, 'rgba(214,190,150,0)'); tone.addColorStop(1, 'rgba(214,190,150,0.18)');
+    g.fillStyle = tone; g.fillRect(0, 0, W, STRIP_H);
+    fillGrain(g, 0, 0, W, STRIP_H, s, 0.07, 51);
+    plan.frames.forEach((f, i) => paintPaperFibers(g, i * FRAME_W, 0, FRAME_W, STRIP_H, 500 + i * 13, 0.010));
+    punchPaperHoles(g, plan, 77);
+    // 종이 가장자리 단면
+    g.fillStyle = 'rgba(150,122,86,0.45)'; g.fillRect(0, 0, W, 0.6); g.fillRect(0, STRIP_H - 0.6, W, 0.6);
+    plan.frames.forEach((f, i) => paperCell(g, f, i, s));
+  }
+
+  /* B: 아날로그 사진 필름 — 칸 안까지 반투명 호박색 필름, 그 위에 같은 잉크로 기록 */
+  function paintB(g, plan, s) {
+    paintFilmBase(g, plan, s, {
+      baseStops: [[0, 'rgba(150,82,30,0.58)'], [0.08, 'rgba(162,92,36,0.52)'], [0.5, 'rgba(170,100,42,0.44)'],
+                  [0.92, 'rgba(162,92,36,0.52)'], [1, 'rgba(150,82,30,0.58)']],
+      grain: 0.16, seed: 23, holeEdge: 0.8,
+      holeShade: 'rgba(60,32,10,0.55)', holeLight: 'rgba(255,236,206,0.55)',
+      edge: 'rgba(78,42,14,0.62)', edgeLight: 'rgba(255,226,186,0.35)'
+    });
+    plan.frames.forEach((f, i) => {
+      const c = cellRect(i);
+      const r = mulberry32(1000 + i * 37);
+      // 칸 = 필름 안에서 농도가 조금 옅은 노출 면(종이처럼 불투명하게 덮지 않는다)
+      g.save();
+      g.filter = 'blur(0.6px)';
+      roundRect(g, c.x + 0.5, c.y + 0.5, c.w - 1, c.h - 1, 2);
+      g.fillStyle = f.day == null ? 'rgba(255,238,210,0.30)' : 'rgba(255,236,206,0.26)';
+      g.fill();
+      g.restore();
+      roundRect(g, c.x + 0.5, c.y + 0.5, c.w - 1, c.h - 1, 2);
+      g.save(); g.clip();
+      const ox = c.x + c.w * (0.3 + r() * 0.4), oy = c.y + c.h * (0.25 + r() * 0.35);
+      const e = g.createRadialGradient(ox, oy, 2, ox, oy, c.w * (0.55 + r() * 0.2));
+      e.addColorStop(0, 'rgba(255,240,214,0.22)'); e.addColorStop(1, 'rgba(255,240,214,0)');
+      g.fillStyle = e; g.fillRect(c.x, c.y, c.w, c.h);
+      const v = g.createRadialGradient(c.x + c.w / 2, c.y + c.h / 2, c.w * 0.3, c.x + c.w / 2, c.y + c.h / 2, c.h * 0.7);
+      v.addColorStop(0, 'rgba(120,64,20,0)'); v.addColorStop(1, 'rgba(120,64,20,0.16)');
+      g.fillStyle = v; g.fillRect(c.x, c.y, c.w, c.h);
+      fillGrain(g, c.x, c.y, c.w, c.h, s, 0.08, 29);
+      const dots = 2 + Math.floor(r() * 3);
+      for (let d = 0; d < dots; d++) {
+        g.fillStyle = r() < 0.5 ? 'rgba(80,44,16,0.16)' : 'rgba(255,244,222,0.45)';
+        g.beginPath(); g.arc(c.x + r() * c.w, c.y + r() * c.h, 0.35 + r() * 0.5, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+      drawFrameText(g, f, i);
+    });
+  }
+
+  /* C: 종이·필름 혼합 — 위아래 천공 띠는 호박색 필름, 가운데 기록 영역은 아이보리 종이 */
+  function paintC(g, plan, s) {
+    const n = plan.frames.length, W = n * FRAME_W;
+    paintFilmBase(g, plan, s, {
+      baseStops: [[0, 'rgba(150,90,36,0.50)'], [0.06, 'rgba(160,100,42,0.42)'], [0.5, 'rgba(160,100,42,0.42)'],
+                  [0.94, 'rgba(160,100,42,0.42)'], [1, 'rgba(150,90,36,0.50)']],
+      grain: 0.14, seed: 37, holeEdge: 0.7,
+      holeShade: 'rgba(64,36,12,0.50)', holeLight: 'rgba(255,236,206,0.55)',
+      edge: 'rgba(84,48,18,0.58)', edgeLight: 'rgba(255,230,192,0.38)'
+    });
+    // 필름 위에 붙은 종이 기록 띠(위아래 띠 안쪽 경계 = 칸 위아래와 같은 높이)
+    const py = BAND, ph = CELL_H;
+    g.save();
+    g.filter = 'blur(0.8px)';
+    g.fillStyle = 'rgba(70,40,14,0.28)';
+    g.fillRect(0, py + 0.6, W, ph);              // 종이가 필름 위에 얹힌 얕은 그늘
+    g.restore();
+    g.fillStyle = COL.surface; g.fillRect(0, py, W, ph);
+    fillGrain(g, 0, py, W, ph, s, 0.06, 53);
+    plan.frames.forEach((f, i) => paintPaperFibers(g, i * FRAME_W, py, FRAME_W, ph, 700 + i * 13, 0.009));
+    g.fillStyle = 'rgba(150,122,86,0.40)'; g.fillRect(0, py, W, 0.5); g.fillRect(0, py + ph - 0.5, W, 0.5);
+    plan.frames.forEach((f, i) => paperCell(g, f, i, s));
+  }
+
+  const PAINTERS = { base: paintBase, A: paintA, B: paintB, C: paintC };
+
+  /* 정적 필름 캐시: 시안·상황·배율마다 1회 */
+  const stripCache = new Map();
+  function getStrip(variant, scenarioKey, plan, s) {
+    const key = variant + '|' + scenarioKey + '|' + s;
+    if (stripCache.has(key)) return stripCache.get(key);
+    const W = plan.frames.length * FRAME_W;
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(W * s); c.height = Math.ceil(STRIP_H * s);
+    const g = c.getContext('2d');
+    g.scale(s, s);
+    PAINTERS[variant](g, plan, s);
+    stripCache.set(key, c);
+    return c;
+  }
+
+  /* ---------- 손 이미지 ---------- */
+  const hand = new Image();
+  let handReady = false;
+  hand.onload = () => { handReady = true; };
+  hand.src = '../../../app/src/main/res/drawable-nodpi/seal_stamp_hand.png';
+
+  /* ---------- 상태 ---------- */
+  const state = {
+    layout: 'all', scenario: 'one', playing: true, speed: 1, zoom: 1, bg: 'app', t: 0
+  };
+  let plan = buildPlan(state.scenario), tl = timeline(plan);
+  const TAIL = 500;
+  const ZOOM_VIEW_H = Math.ceil(STRIP_H * 2 + 40);
+
+  const stage = document.getElementById('stage');
+  let phones = [];
+
+  function buildStage() {
+    stage.innerHTML = '';
+    const list = state.layout === 'all' ? ['base', 'A', 'B', 'C'] : [state.layout];
+    // 네 안을 한 줄에 놓을 수 있게 화면 표시 크기만 줄인다(그리는 좌표·비율은 그대로).
+    const avail = stage.clientWidth || window.innerWidth - 56;
+    const fit = list.length > 1 ? Math.min(1, (avail - 26 * (list.length - 1)) / (list.length * SCREEN.w)) : 1;
+    const dpr = (window.devicePixelRatio || 1) * fit;
+    phones = list.map(v => {
+      const wrap = document.createElement('div'); wrap.className = 'phone-wrap';
+      const title = document.createElement('div'); title.className = 'phone-title'; title.textContent = VARIANTS[v].title;
+      const sub = document.createElement('div'); sub.className = 'phone-sub'; sub.textContent = VARIANTS[v].sub;
+      const ph = document.createElement('div'); ph.className = 'phone';
+      // 2배 확대는 필름 부분만 잘라 보여준다(폭 384dp 화면의 가운데 영역).
+      const cssW = SCREEN.w, cssH = state.zoom === 1 ? SCREEN.h : ZOOM_VIEW_H;
+      const cv = document.createElement('canvas');
+      // 필름 캐시는 화면 배율 × 확대 배율로 그려 확대해도 기기 픽셀 단위 그레인이 유지된다.
+      const s = dpr * state.zoom;
+      cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+      cv.style.width = cssW * fit + 'px'; cv.style.height = cssH * fit + 'px';
+      ph.style.width = cssW * fit + 'px'; ph.style.height = cssH * fit + 'px';
+      ph.appendChild(cv);
+      wrap.append(title, sub, ph);
+      stage.appendChild(wrap);
+      return { v, cv, g: cv.getContext('2d'), dpr, s };
+    });
+  }
+
+  /* ---------- 한 프레임 그리기 ---------- */
+  function drawPhone(p, t) {
+    const { g, cv, dpr, s, v } = p;
+    const zoom = state.zoom;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // 확대 모드: 필름 가운데를 기준으로 2배
+    const colH = 16 + 12 + STRIP_H + 14 + 15;
+    const colTop = (SCREEN.h - colH) / 2;
+    const stripY = colTop + 16 + 12;
+    if (zoom !== 1) {
+      const viewH = ZOOM_VIEW_H;
+      g.translate(SCREEN.w / 2, viewH / 2);
+      g.scale(zoom, zoom);
+      g.translate(-SCREEN.w / 2, -(stripY + STRIP_H / 2));
+    }
+
+    const bg = state.bg === 'dark' ? '#3B332B' : COL.canvas;
+    g.fillStyle = bg; g.fillRect(-SCREEN.w, -SCREEN.h, SCREEN.w * 3, SCREEN.h * 3);
+
+    // 갤러리로 크로스페이드
+    const cf = clamp01((t - tl.finish) / T.crossfade);
+    const introAlpha = 1 - fastOutSlowIn(cf);
+    if (cf > 0) {
+      g.save(); g.globalAlpha = fastOutSlowIn(cf);
+      drawGalleryHint(g);
+      g.restore();
+    }
+    if (introAlpha <= 0) return;
+
+    g.save();
+    g.globalAlpha = introAlpha;
+    const textCol = state.bg === 'dark' ? '#E9DFCD' : COL.ink2;
+
+    // 상단 문구
+    g.fillStyle = textCol;
+    g.font = `400 12px system-ui, "Noto Sans KR", sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText('오늘의 엽서함', SCREEN.w / 2, colTop);
+
+    // 필름
+    const appear = fastOutSlowIn(clamp01(t / T.appear));
+    let progress = 1;
+    if (plan.stamp === 'HAND') progress = moveEase(clamp01((t - tl.moveStart) / plan.moveMs));
+    const pos = plan.startIndex + (plan.todayIndex - plan.startIndex) * progress;
+    const tx = SCREEN.w / 2 - FRAME_W * (pos + 0.5);
+
+    g.save();
+    g.beginPath(); g.rect(0, stripY, SCREEN.w, STRIP_H); g.clip();
+    g.globalAlpha *= appear;
+    const strip = getStrip(v, state.scenario, plan, s);
+    // 앱과 같이 기기 픽셀 경계에 맞추지 않고 그대로 옮긴다(graphicsLayer translationX).
+    g.drawImage(strip, tx, stripY, strip.width / s, strip.height / s);
+
+    // 오늘 소인(필름 좌표)
+    const cx = tx + plan.todayIndex * FRAME_W + FRAME_W / 2;
+    const cy = stripY + BAND + CELL_H - 9 - STAMP / 2;
+    let press = null;
+    if (plan.stamp === 'INKED') press = 1;
+    else if (t >= tl.contact) press = stampSpring(t - tl.contact);
+    if (press != null) {
+      const a = clamp01(press * 2.2);
+      drawPostmark(g, cx, cy, STAMP, iso(TODAY), a, -7 * press, 1 + 0.45 * (1 - press));
+    }
+    g.restore();
+
+    // 방문 수
+    const showCount = plan.stamp === 'INKED' || t >= tl.contact;
+    if (showCount) {
+      g.fillStyle = textCol;
+      g.font = `400 11px system-ui, "Noto Sans KR", sans-serif`;
+      g.fillText('42번째 방문', SCREEN.w / 2, stripY + STRIP_H + 14);
+    }
+
+    // 손 도장
+    if (plan.stamp === 'HAND' && handReady && t >= tl.handStart && t < tl.handEnd) {
+      const ht = t - tl.handStart;
+      let travel, pr = 0;
+      if (ht < T.handEnter) travel = 1 - handEnterEase(ht / T.handEnter);
+      else if (ht < T.handEnter + T.pressIn + T.pressHold + T.pressOut) {
+        travel = 0;
+        const k = ht - T.handEnter;
+        if (k < T.pressIn) pr = k / T.pressIn;
+        else if (k < T.pressIn + T.pressHold) pr = 1;
+        else pr = 1 - (k - T.pressIn - T.pressHold) / T.pressOut;
+      } else travel = handExitEase((ht - T.handEnter - T.pressIn - T.pressHold - T.pressOut) / T.handExit);
+      const side = 300, ax = 0.459 * side, ay = 0.431 * side;
+      const scale = 1 + 0.12 * travel - 0.015 * pr;
+      const hidden = (SCREEN.h - cy) + ay * 1.12 + 24;
+      g.save();
+      g.translate(SCREEN.w / 2 + 0.12 * side * travel, cy + hidden * travel);
+      g.rotate(4 * travel * Math.PI / 180);
+      g.scale(scale, scale);
+      g.drawImage(hand, -ax, -ay, side, side);
+      g.restore();
+    }
+    g.restore();
+  }
+
+  function drawGalleryHint(g) {
+    g.fillStyle = COL.canvas; g.fillRect(0, 0, SCREEN.w, SCREEN.h);
+    g.fillStyle = COL.ink2; g.font = `700 15px system-ui, "Noto Sans KR", sans-serif`;
+    g.textAlign = 'left'; g.textBaseline = 'top';
+    g.fillText('갤러리', 16, 44);
+    const gap = 8, w = (SCREEN.w - 32 - gap * 2) / 3;
+    g.fillStyle = 'rgba(219,203,176,0.55)';
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) g.fillRect(16 + c * (w + gap), 90 + r * (w * 1.3 + gap), w, w * 1.3);
+  }
+
+  /* ---------- 루프 ---------- */
+  const scrub = document.getElementById('scrub');
+  const timeLabel = document.getElementById('timeLabel');
+  const playBtn = document.getElementById('playBtn');
+  let last = performance.now();
+  function total() { return tl.end + TAIL; }
+  function syncScrub() {
+    scrub.max = String(Math.round(total()));
+    scrub.value = String(Math.round(state.t));
+    timeLabel.textContent = Math.round(state.t) + ' / ' + Math.round(tl.end) + ' ms';
+  }
+  function tick(now) {
+    const dt = now - last; last = now;
+    if (state.playing) {
+      state.t += dt * state.speed;
+      if (state.t > total()) state.t = 0;
+    }
+    phones.forEach(p => drawPhone(p, state.t));
+    syncScrub();
+    requestAnimationFrame(tick);
+  }
+
+  function setPressed(segId, v) {
+    document.querySelectorAll('#' + segId + ' button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  }
+  function bindSeg(segId, fn) {
+    document.getElementById(segId).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      fn(b.dataset.v);
+    });
+  }
+  bindSeg('layoutSeg', v => { state.layout = v; setPressed('layoutSeg', v); buildStage(); });
+  bindSeg('scenarioSeg', v => {
+    state.scenario = v; setPressed('scenarioSeg', v);
+    plan = buildPlan(v); tl = timeline(plan); state.t = 0;
+  });
+  bindSeg('speedSeg', v => { state.speed = Number(v); setPressed('speedSeg', v); });
+  bindSeg('zoomSeg', v => { state.zoom = Number(v); setPressed('zoomSeg', v); buildStage(); });
+  bindSeg('bgSeg', v => { state.bg = v; setPressed('bgSeg', v); });
+  bindSeg('jumpSeg', v => {
+    if (plan.stamp !== 'HAND') { state.t = v === 'mid' ? 0 : tl.finish - 1; }
+    else if (v === 'mid') state.t = tl.moveStart + plan.moveMs * 0.35;
+    else if (v === 'settle') state.t = tl.moveEnd + 60;
+    else state.t = tl.handEnd + 100;
+    state.playing = false; playBtn.textContent = '재생';
+  });
+  playBtn.addEventListener('click', () => {
+    state.playing = !state.playing;
+    playBtn.textContent = state.playing ? '일시 정지' : '재생';
+  });
+  document.getElementById('restartBtn').addEventListener('click', () => {
+    state.t = 0; state.playing = true; playBtn.textContent = '일시 정지';
+  });
+  scrub.addEventListener('input', () => {
+    state.t = Number(scrub.value); state.playing = false; playBtn.textContent = '재생';
+  });
+
+  // 주소 끝에 #t=1500 처럼 쓰면 그 시점에 멈춘 화면으로 열린다(비교 캡처용). #s=three 로 상황도 고를 수 있다.
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.has('s') && ['one', 'three', 'same', 'reduced'].includes(hash.get('s'))) {
+    state.scenario = hash.get('s'); setPressed('scenarioSeg', state.scenario);
+    plan = buildPlan(state.scenario); tl = timeline(plan);
+  }
+  if (hash.has('z')) { state.zoom = 2; setPressed('zoomSeg', '2'); }
+  if (hash.has('dark')) { state.bg = 'dark'; setPressed('bgSeg', 'dark'); }
+  if (hash.has('t')) { state.t = Number(hash.get('t')) || 0; state.playing = false; playBtn.textContent = '재생'; }
+
+  buildStage();
+  window.addEventListener('resize', () => buildStage());
+  requestAnimationFrame(t => { last = t; tick(t); });
+})();
+</script>
+</body>
+</html>
