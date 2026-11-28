@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>146일차 B — 꾸미기 도구 UI 비교 (대화창 · 테이프 선택)</title>
+<style>
+  :root {
+    --canvas:#F4ECDE; --tray:#E8DCC6; --surface:#FFFBF3; --field:#FAF4E9; --divider:#DBCBB0;
+    --ink:#1A1324; --ink2:#5B5046; --gold:#8C5F00; --danger:#C0392B; --coral:#FF7F8E;
+    --fs:1;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#2b2622; color:#efe7da; font-family:system-ui,"Noto Sans KR","Malgun Gothic",sans-serif; }
+  header { padding:14px 20px; position:sticky; top:0; background:#2b2622ee; z-index:5; border-bottom:1px solid #4a4038; }
+  header h1 { font-size:16px; margin:0 0 8px; font-weight:600; }
+  .controls { display:flex; flex-wrap:wrap; gap:14px; font-size:13px; align-items:center; }
+  .controls label { display:flex; gap:6px; align-items:center; }
+  .controls select, .controls button { font:inherit; }
+  section { padding:18px 20px 26px; border-bottom:1px solid #4a4038; }
+  section > h2 { font-size:15px; margin:0 0 4px; }
+  section > p.note { font-size:12.5px; color:#cfc3b2; margin:0 0 12px; line-height:1.55; max-width:1100px; }
+  .row { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+  .col { display:flex; flex-direction:column; gap:6px; }
+  .col > .cap { font-size:12.5px; color:#efe7da; font-weight:600; }
+  .col > .sub { font-size:11.5px; color:#b9ad9b; max-width:330px; line-height:1.45; }
+
+  /* phone */
+  .phone { width:330px; height:640px; background:var(--canvas); border-radius:22px; position:relative; overflow:hidden;
+           box-shadow:0 0 0 6px #120f0d, 0 6px 22px #000a; }
+  .phone .topbar { height:48px; display:flex; align-items:center; padding:0 14px; color:var(--ink); font-size:14px; font-weight:600; }
+  .phone .card { margin:4px auto 0; width:290px; height:290px; background:#FFFBF7; position:relative; box-shadow:0 1px 2px #0002; }
+  .phone .card .ph { position:absolute; left:83px; top:40px; width:124px; height:124px; background:linear-gradient(140deg,#9bb8c9,#d9c29b 60%,#7d8f62); }
+  .phone .card .msg { position:absolute; left:31px; right:31px; top:215px; height:34px; border-radius:5px; background:#fffcf7de; }
+  .phone .dock { position:absolute; left:0; right:0; bottom:0; height:120px; background:var(--canvas); border-top:1px solid #0000; }
+  .phone .dock .tabs { position:absolute; bottom:14px; left:14px; right:14px; display:flex; justify-content:space-between; font-size:10px; color:var(--ink2); }
+  .phone .scrim { position:absolute; inset:0; background:#00000052; }
+  .phone .kbd { position:absolute; left:0; right:0; bottom:0; height:232px; background:#d9d3cb; display:none;
+                font-size:11px; color:#5d5650; align-items:center; justify-content:center; }
+  body.kbd .phone .kbd { display:flex; }
+  .dlgwrap { position:absolute; left:0; right:0; top:0; bottom:0; display:flex; align-items:center; justify-content:center; }
+  body.kbd .dlgwrap { bottom:232px; align-items:flex-end; padding-bottom:8px; }
+  .dlg { width:286px; max-height:100%; overflow:hidden; color:var(--ink); font-size:calc(14px*var(--fs)); }
+  .dlg .t { font-size:calc(18px*var(--fs)); font-weight:600; }
+  .dlg .h { font-size:calc(13px*var(--fs)); font-weight:600; }
+  .dlg .hint { font-size:calc(14px*var(--fs)); color:var(--ink2); }
+  .dlg .btns { display:flex; justify-content:flex-end; gap:4px; }
+  .dlg .btn { padding:10px 12px; font-size:calc(14px*var(--fs)); }
+  .dlg .btn.ok { color:var(--gold); font-weight:700; }
+  .dlg .btn.no { color:var(--ink2); font-weight:500; }
+
+  /* color picker reproduction (PostcardCustomColorPicker) */
+  .cp .sv { height:96px; position:relative; background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,hsl(18,90%,55%)); }
+  .cp .sv i { position:absolute; left:68%; top:28%; width:14px; height:14px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #0006; transform:translate(-50%,-50%); }
+  .cp .hue { height:22px; margin-top:6px; background:linear-gradient(to right,red,#ff0,lime,cyan,blue,#f0f,red); position:relative; }
+  .cp .hue i { position:absolute; left:5%; top:-2px; bottom:-2px; width:4px; background:#fff; box-shadow:0 0 0 1px #0006; }
+  .cp .sel { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:calc(12px*var(--fs)); color:var(--ink2); }
+  .cp .sel b { width:34px; height:34px; border-radius:50%; background:#e86a3a; display:block; border:1px solid var(--divider); }
+
+  /* — baseline: AlertDialog 20dp, field 14dp — */
+  .v-base .dlg { background:var(--surface); border-radius:20px; padding:22px 22px 12px; box-shadow:0 8px 24px #0003; }
+  .v-base .field { border:1px solid var(--divider); background:var(--field); border-radius:14px; padding:14px 14px; min-height:48px; }
+  .v-base .field.focus { border:2px solid var(--gold); }
+  .v-base .cp .sv, .v-base .cp .hue { border-radius:10px; }
+  /* — A: same structure, 4dp — */
+  .v-a .dlg { background:var(--surface); border-radius:4px; padding:22px 22px 12px; box-shadow:0 8px 24px #0003; }
+  .v-a .field { border:1px solid var(--divider); background:var(--field); border-radius:4px; padding:14px 14px; min-height:48px; }
+  .v-a .field.focus { border:2px solid var(--gold); }
+  .v-a .cp .sv, .v-a .cp .hue { border-radius:2px; }
+  /* — B: paper tool — */
+  .v-b .dlg { background:var(--surface); border-radius:2px; padding:18px 20px 6px; box-shadow:0 1px 1px #0002, 0 10px 22px #0002;
+              background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .36  0 0 0 0 .24  0 0 0 .06 0'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>"); }
+  .v-b .dlg .t { padding-bottom:10px; border-bottom:1px solid var(--divider); }
+  .v-b .field { border:0; border-bottom:1.5px solid var(--ink2); background:transparent; border-radius:0; padding:12px 2px 8px; min-height:44px; }
+  .v-b .field.focus { border-bottom:2px solid var(--gold); }
+  .v-b .sep { border-top:1px solid var(--divider); margin:12px 0 10px; }
+  .v-b .cp .sv, .v-b .cp .hue { border-radius:0; }
+  .v-b .btns { border-top:1px solid var(--divider); margin-top:12px; }
+  /* — C: workbench (docked panel, editor-control grammar) — */
+  .v-c .dlgwrap { align-items:flex-end; }
+  .v-c .dlg { width:100%; background:var(--canvas); border-radius:0; padding:14px 18px 10px; border-top:1px solid var(--divider);
+              box-shadow:0 -6px 16px #0000001f; }
+  .v-c .dlg .t { font-size:calc(15px*var(--fs)); }
+  .v-c .field { border:0; border-bottom:1.5px solid var(--ink2); background:transparent; border-radius:0; padding:10px 2px 6px; min-height:40px; }
+  .v-c .field.focus { border-bottom:2px solid var(--gold); }
+  .v-c .cp .sv { height:64px; border-radius:0; }
+  .v-c .cp .hue { border-radius:0; }
+  .v-c .btns { justify-content:center; gap:0; margin-top:8px; }
+  .v-c .btns .btn + .btn { border-left:1px solid var(--divider); }
+  .v-c .scrim { background:#00000014; }
+
+  /* tape chips */
+  .chipbox { width:330px; background:var(--surface); color:var(--ink); padding:16px 16px 14px; border-radius:6px; }
+  .chipbox .h { font-size:13px; font-weight:600; margin:0 0 8px; }
+  .chips { display:flex; gap:8px; overflow:hidden; }
+  .chip { flex:0 0 auto; font-size:11px; color:var(--ink); }
+  .k-base .chip { padding:6px 10px; background:var(--field); border:1px solid var(--divider); border-radius:8px; font-weight:500; }
+  .k-base .chips.edge .chip { padding:8px 12px; border-radius:10px; font-size:12px; }
+  .k-base .chip.on { background:#8C5F0029; font-weight:700; }
+  .k-a .chips { gap:14px; }
+  .k-a .chip { padding:6px 0 5px; font-weight:500; color:var(--ink2); border-bottom:2px solid transparent; }
+  .k-a .chips.edge .chip { font-size:12px; }
+  .k-a .chip.on { color:var(--gold); font-weight:700; border-bottom-color:var(--gold); }
+  .k-b .chips { gap:10px; }
+  .k-b .chip { display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--ink2); font-weight:500; }
+  .k-b .chip canvas { display:block; }
+  .k-b .chip span { padding-bottom:2px; border-bottom:2px solid transparent; }
+  .k-b .chip.on { color:var(--gold); font-weight:700; }
+  .k-b .chip.on span { border-bottom-color:var(--gold); }
+  .k-c .chips { flex-direction:column; gap:0; }
+  .k-c .chip { display:flex; align-items:center; gap:10px; padding:8px 2px; font-size:12.5px; border-bottom:1px solid #DBCBB080; }
+  .k-c .chip i { width:14px; height:14px; border:1.5px solid var(--ink2); display:inline-block; position:relative; }
+  .k-c .chip.on i { border-color:var(--gold); background:var(--gold); }
+  .k-c .chip.on i::after { content:""; position:absolute; left:3.5px; top:0.5px; width:4px; height:8px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
+  .k-c .chip.on { font-weight:700; }
+  .k-c .cols { display:flex; gap:16px; }
+  .k-c .cols > div { flex:1; }
+
+  /* save result dialog */
+  .srd { width:300px; padding:24px 24px 10px; color:var(--ink); }
+  .srd .t { font-size:22px; font-weight:600; margin-bottom:14px; }
+  .srd .b { font-size:14px; color:#49454F; line-height:1.45; }
+  .srd .btns { display:flex; justify-content:flex-end; padding-top:14px; }
+  .srd .btns span { padding:10px 12px; font-weight:600; font-size:14px; }
+  table.eval { border-collapse:collapse; font-size:12.5px; margin-top:12px; max-width:1100px; }
+  table.eval th, table.eval td { border:1px solid #4a4038; padding:6px 9px; text-align:left; vertical-align:top; line-height:1.45; }
+  table.eval th { background:#3a322b; }
+  .tag { font-size:11px; padding:1px 6px; border:1px solid #8a7b67; border-radius:3px; color:#d8ccb9; margin-left:6px; font-weight:400; }
+</style>
+</head>
+<body>
+<header>
+  <h1>146일차 B — 꾸미기 도구 UI 비교 (HTML 재현 · 실제 앱 캡처 아님)</h1>
+  <div class="controls">
+    <label>대화창 <select id="dlgKind">
+      <option value="text">텍스트 스티커 추가</option>
+      <option value="message">글귀 남기기</option>
+      <option value="tape">마스킹테이프 편집</option>
+    </select></label>
+    <label><input type="checkbox" id="kbd"> 키보드 올라온 상태</label>
+    <label><input type="checkbox" id="big"> 큰 글자(1.3배)</label>
+    <label>테이프 문구 <select id="copy">
+      <option value="now">현재 표기</option>
+      <option value="new">개선 표기 후보</option>
+    </select></label>
+  </div>
+</header>
+
+<section>
+  <h2>① 꾸미기 대화창 — 기준안 / A / B / C</h2>
+  <p class="note">기준안은 코드 값 그대로야: AlertDialog 반경 20dp·종이 흰색(#FFFBF3)·제목 18sp, 입력칸 반경 14dp·#FAF4E9 바탕·#DBCBB0 테두리·포커스 금갈색 2dp, 버튼은 오른쪽 "취소(잉크2)·추가(금갈색 굵게)".
+  색 고르기는 PostcardCustomColorPicker(색상판·색상 계열 막대 30dp·선택한 색상 원)를 단순화해 그렸어. 대상 대화창 10개(글귀·텍스트 2·라벨 2·테이프 3·도장 1·직접 고르기 1)는 모두 개별 구현이고 같은 값(20/14dp)을 각자 적고 있어.</p>
+  <div class="row" id="dlgRow"></div>
+</section>
+
+<section>
+  <h2>② 테이프 커스텀·편집 대화창의 선택 칩 — 기준안 / A / B / C</h2>
+  <p class="note">기준안: 무늬 칩 반경 8dp·가장자리 칩 반경 10dp, #FAF4E9 상자 + 1dp #DBCBB0 테두리, 선택은 금갈색 16% 틴트 + 굵게. 저장되는 값(enum 이름)은 어느 안이든 그대로고 바뀌는 건 화면 표시뿐이야.
+  견본(B안)은 앱의 실제 테이프 도형 규칙(모서리 자름 비율 0.42/0.20, 찢김 고정 좌표 7점, 무늬 간격 0.42)을 그대로 축소해 그렸어.</p>
+  <div class="row" id="chipRow"></div>
+  <table class="eval">
+    <tr><th>현재 표기</th><th>개선 후보</th><th>실제 모양</th><th>구분</th></tr>
+    <tr><td>무늬없음</td><td>무늬 없음</td><td>도안 없이 옅은 종이결 선 2줄</td><td>띄어쓰기만</td></tr>
+    <tr><td>모서리컷</td><td>모서리 자름</td><td>왼쪽 위·오른쪽 아래 두 모서리만 비스듬히 잘림(기본값)</td><td>명칭 변경(외래어 → 우리말). 저장값 NOTCHED_BOTH 유지</td></tr>
+    <tr><td>한쪽찢김</td><td>한쪽 찢김</td><td>오른쪽 끝만 들쭉날쭉, 왼쪽은 일자</td><td>띄어쓰기만</td></tr>
+    <tr><td>양쪽찢김</td><td>양쪽 찢김</td><td>양 끝 모두 들쭉날쭉</td><td>띄어쓰기만</td></tr>
+    <tr><td>일자 · 격자 · 도트 · 별 · 하트 · 사선</td><td>그대로</td><td>—</td><td>변경 없음</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>③ 저장 실패 창 제목 — 이번에 실제로 고친 것 <span class="tag">앱 코드 반영됨 · 실기기 미확인</span></h2>
+  <p class="note">편집 화면 저장 실패 창 3곳(갤러리 저장·배경·레이아웃)의 제목색을 코랄 #FF7F8E → DangerRed #C0392B로 바꿨어. 문구·동작은 그대로야.
+  참고: 이 창(SaveResultAlertDialog)만 바탕색·모서리를 지정하지 않아서 Material 기본값(바탕 surfaceContainerHigh, 모서리 28dp)을 쓰는 걸로 보여. 테마가 그 색을 따로 정하지 않아 Material 기본 연보라 회색(#ECE6F0)일 가능성이 커 — 코드 기반 추정이라 ③-오른쪽은 그 추정대로 그렸어. 바탕을 다른 꾸미기 창처럼 종이색으로 맞출지는 ① 결정과 함께 정하면 돼(이번엔 안 바꿨어).</p>
+  <div class="row">
+    <div class="col"><div class="cap">수정 전 (코랄 제목, 대비 약 2.0:1 추정 바탕 기준)</div>
+      <div class="srd" style="background:#ECE6F0;border-radius:28px"><div class="t" style="color:var(--coral)">저장하지 못했어</div><div class="b">사진 파일을 찾지 못했어. 다시 시도해 줘.</div><div class="btns"><span style="color:var(--ink)">확인</span></div></div></div>
+    <div class="col"><div class="cap">수정 후 (DangerRed, 대비 약 4.4:1 · 큰 제목 기준 3:1 충족)</div>
+      <div class="srd" style="background:#ECE6F0;border-radius:28px"><div class="t" style="color:var(--danger)">저장하지 못했어</div><div class="b">사진 파일을 찾지 못했어. 다시 시도해 줘.</div><div class="btns"><span style="color:var(--ink)">확인</span></div></div></div>
+    <div class="col"><div class="cap">참고 후보 (바탕까지 종이색 · 미적용)</div>
+      <div class="srd" style="background:var(--surface);border-radius:4px"><div class="t" style="color:var(--danger)">저장하지 못했어</div><div class="b" style="color:var(--ink)">사진 파일을 찾지 못했어. 다시 시도해 줘.</div><div class="btns"><span style="color:var(--ink)">확인</span></div></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>평가표</h2>
+  <table class="eval">
+    <tr><th>안</th><th>무엇이 바뀌나</th><th>장점</th><th>주의점</th><th>구현 범위</th></tr>
+    <tr><td>기준안</td><td>—</td><td>익숙함</td><td>최근 화면(갤러리·책갈피 4dp, 저울 직각)과 모서리 문법이 다름</td><td>—</td></tr>
+    <tr><td>A 최소 변경</td><td>대화창·입력칸·색상판 모서리만 4dp</td><td>위험 최저, 배치·터치 영역 그대로</td><td>모서리만 바꿔 "개선"이라 부르기엔 변화가 작음</td><td>대화창 10곳 shape 값</td></tr>
+    <tr><td>B 종이 편집 도구</td><td>직각 종이 패널 + 옅은 섬유, 제목 아래·버튼 위 가는 선, 입력은 밑줄(필기선)</td><td>엽서·종이 라벨 문법과 가장 잘 이어짐, 상자 중첩 제거</td><td>밑줄 입력칸은 입력 영역 경계가 약해 보일 수 있음(밑줄 굵기·포커스 금갈색으로 보완)</td><td>대화창 10곳 + 입력칸 색 정의, 종이결은 기존 종이 타일 재사용 검토</td></tr>
+    <tr><td>C 편집 작업대</td><td>가운데 뜨는 창 대신 하단 편집 영역 위에 붙는 패널, 버튼은 "취소 | 추가" 구분선 문법</td><td>편집 화면과 한 몸처럼 보임, 엽서를 가리지 않음</td><td>키보드와 색상판이 겹쳐 세로 공간이 가장 빠듯함(키보드 켜 봐), 대화창→패널 구조 변경이라 범위 큼</td><td>대화창 10곳 구조 변경, 뒤로가기·바깥 탭 처리 재검토</td></tr>
+  </table>
+</section>
+
+<script>
+const LABEL = {
+  now: { pattern:["격자","도트","별","하트","사선","무늬없음"], edge:["모서리컷","일자","한쪽찢김","양쪽찢김"] },
+  new: { pattern:["격자","도트","별","하트","사선","무늬 없음"], edge:["모서리 자름","일자","한쪽 찢김","양쪽 찢김"] }
+};
+const PATTERN_KIND = ["GRID","DOT","STAR","HEART","STRIPE","PLAIN"];
+const EDGE_KIND = ["NOTCHED_BOTH","STRAIGHT","TORN_ONE_SIDE","JAGGED_BOTH"];
+
+function dialogBody(kind){
+  if (kind === "message") return `
+    <div class="t">글귀 남기기</div>
+    <div style="height:14px"></div>
+    <div class="field focus" style="min-height:96px;color:var(--ink2)">오늘의 순간을 남겨봐</div>
+    <div class="btns" style="margin-top:12px"><span class="btn no">취소</span><span class="btn ok">저장</span></div>`;
+  if (kind === "tape") return `
+    <div class="t">마스킹테이프 편집</div>
+    <div class="sep"></div>
+    <div class="h" style="margin:12px 0 8px">가장자리 모양</div>
+    <div class="miniChips"></div>
+    <div style="height:14px"></div>
+    ${["길이","굵기","회전"].map((l,i)=>`<div style="display:flex;justify-content:space-between;font-size:calc(13px*var(--fs))"><span>${l}</span><span style="color:var(--ink2);font-size:calc(12px*var(--fs))">${["100%","100%","0°"][i]}</span></div>
+      <div style="height:4px;background:var(--tray);margin:8px 0 12px;position:relative"><i style="position:absolute;left:0;width:${[30,30,50][i]}%;height:4px;background:var(--gold)"></i><b style="position:absolute;left:${[30,30,50][i]}%;top:-6px;width:16px;height:16px;border-radius:50%;background:var(--gold);transform:translateX(-50%)"></b></div>`).join("")}
+    <div class="btns"><span class="btn no">취소</span><span class="btn ok">저장</span></div>`;
+  return `
+    <div class="t">텍스트 스티커</div>
+    <div class="hint" style="margin:10px 0 12px">붙이고 싶은 말을 적어봐.</div>
+    <div class="field focus" style="color:var(--ink)">오늘도 수고했어</div>
+    <div class="sep"></div>
+    <div class="h" style="margin:14px 0 8px">테두리색</div>
+    <div class="cp"><div class="sv"><i></i></div><div class="hue"><i></i></div><div class="sel"><b></b>선택한 색상</div></div>
+    <div class="btns" style="margin-top:6px"><span class="btn no">취소</span><span class="btn ok">추가</span></div>`;
+}
+
+function phone(variant, kind){
+  return `<div class="phone v-${variant}">
+    <div class="topbar">← 엽서 편집</div>
+    <div class="card"><div class="ph"></div><div class="msg"></div></div>
+    <div class="dock"><div class="tabs">${["사진","배경","글귀","스티커","테이프","도장","낙서"].map(t=>`<span>${t}</span>`).join("")}</div></div>
+    <div class="scrim"></div>
+    <div class="kbd">키보드 (높이 약 232px 가정)</div>
+    <div class="dlgwrap"><div class="dlg">${dialogBody(kind)}</div></div>
+  </div>`;
+}
+
+const DLG_VARIANTS = [
+  ["base","기준안 — 현재","반경 20dp / 입력칸 14dp, 상자 안에 상자"],
+  ["a","A안 — 최소 변경형","같은 배치, 모서리만 4dp"],
+  ["b","B안 — 종이 편집 도구형","직각 종이 + 가는 구분선, 입력은 필기 밑줄"],
+  ["c","C안 — 편집 작업대형","하단 편집 영역 위에 붙는 패널, 취소 | 추가"]
+];
+
+function renderDialogs(){
+  const kind = document.getElementById("dlgKind").value;
+  document.getElementById("dlgRow").innerHTML = DLG_VARIANTS.map(([v,cap,sub]) =>
+    `<div class="col"><div class="cap">${cap}</div><div class="sub">${sub}</div>${phone(v,kind)}</div>`).join("");
+  // tape dialog mini chips follow each variant's chip grammar
+  document.querySelectorAll("#dlgRow .phone").forEach((ph, i) => {
+    const holder = ph.querySelector(".miniChips"); if (!holder) return;
+    const k = ["base","a","b","c"][i];
+    holder.innerHTML = `<div class="k-${k}" style="background:transparent">${chipList("edge", 0, k)}</div>`;
+    drawSwatches(holder);
+  });
+}
+
+/* ---- tape drawing (MaskingTapeShapes.kt 규칙 축소판) ---- */
+const TORN_Y = [0,0.18,0.36,0.52,0.7,0.86,1], TORN_X = [0,-0.22,0.16,-0.28,0.20,-0.12,0];
+function outline(w,h,edge){
+  const nA=h*0.42, nB=h*0.20;
+  const jag=(bx,mir)=>TORN_Y.map((y,i)=>[bx+(mir?-1:1)*TORN_X[i]*h, y*h]);
+  switch(edge){
+    case "STRAIGHT": return [[0,0],[w,0],[w,h],[0,h]];
+    case "NOTCHED_BOTH": return [[nA,0],[w,0],[w,h-nB],[w-nB,h],[0,h],[0,nA]];
+    case "TORN_ONE_SIDE": return [[0,0],...jag(w,false),[0,h]];
+    case "JAGGED_BOTH": return [...jag(w,false),...jag(0,true).reverse()];
+  }
+}
+function drawTape(ctx,w,h,edge,patt,base="#DDF5EE",pc="#6FBFA0",alpha=.78){
+  const pts=outline(w,h,edge); ctx.save(); ctx.beginPath(); pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.closePath(); ctx.clip();
+  ctx.globalAlpha=alpha; ctx.fillStyle=base; ctx.fillRect(-5,-5,w+10,h+10); ctx.globalAlpha=1;
+  const pitch=h*0.42; ctx.fillStyle=ctx.strokeStyle=pc; ctx.globalAlpha=.55;
+  if(patt==="GRID"){ ctx.lineWidth=h*0.045; for(let x=pitch/2;x<w;x+=pitch){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();} for(let y=pitch/2;y<h;y+=pitch){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();} }
+  else if(patt==="STRIPE"){ ctx.lineWidth=h*0.10; for(let o=-h;o<w+h;o+=h*0.38){ctx.beginPath();ctx.moveTo(o,0);ctx.lineTo(o+h,h);ctx.stroke();} }
+  else if(patt==="PLAIN"){ ctx.globalAlpha=.18; ctx.lineWidth=h*0.03; [0.32,0.68].forEach(r=>{ctx.beginPath();ctx.moveTo(w*.08,h*r);ctx.lineTo(w*.92,h*r);ctx.stroke();}); }
+  else { let row=0; for(let y=pitch/2;y<h;y+=pitch,row++){ for(let x=pitch/2+(row%2?pitch/2:0);x<w;x+=pitch){
+      if(patt==="DOT"){ctx.beginPath();ctx.arc(x,y,h*0.09,0,7);ctx.fill();}
+      else if(patt==="STAR"){const s=h*0.22,hf=s/2,d=hf*.6;ctx.lineCap="round";ctx.lineWidth=s*.16;[[x-hf,y,x+hf,y],[x,y-hf,x,y+hf]].forEach(l=>{ctx.beginPath();ctx.moveTo(l[0],l[1]);ctx.lineTo(l[2],l[3]);ctx.stroke();});ctx.lineWidth=s*.112;[[x-d,y-d,x+d,y+d],[x-d,y+d,x+d,y-d]].forEach(l=>{ctx.beginPath();ctx.moveTo(l[0],l[1]);ctx.lineTo(l[2],l[3]);ctx.stroke();});}
+      else if(patt==="HEART"){const hs=h*0.30/2,top=y-hs*.5;ctx.beginPath();ctx.moveTo(x,y+hs);ctx.bezierCurveTo(x-hs*1.3,y,x-hs*.6,top-hs*.6,x,top);ctx.bezierCurveTo(x+hs*.6,top-hs*.6,x+hs*1.3,y,x,y+hs);ctx.fill();}
+  }}}
+  ctx.restore();
+}
+function chipList(group, selected, k){
+  const lab = LABEL[document.getElementById("copy").value][group];
+  const kinds = group==="edge"?EDGE_KIND:PATTERN_KIND;
+  const items = lab.map((t,i)=> k==="b"
+    ? `<div class="chip ${i===selected?"on":""}"><canvas data-group="${group}" data-kind="${kinds[i]}" width="${group==="edge"?92:72}" height="${group==="edge"?40:32}" style="width:${group==="edge"?46:36}px;height:${group==="edge"?20:16}px"></canvas><span>${t}</span></div>`
+    : k==="c" ? `<div class="chip ${i===selected?"on":""}"><i></i>${t}</div>`
+    : `<div class="chip ${i===selected?"on":""}">${t}</div>`);
+  return `<div class="chips ${group}">${items.join("")}</div>`;
+}
+function drawSwatches(root){
+  root.querySelectorAll("canvas[data-group]").forEach(cv=>{
+    const ctx=cv.getContext("2d"); const g=cv.dataset.group, kd=cv.dataset.kind;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    if(g==="edge"){ ctx.translate(8,8); drawTape(ctx,cv.width-16,cv.height-16,kd,"PLAIN","#E0CDAE","#9C7B4F",.95); }
+    else { drawTape(ctx,cv.width,cv.height,"STRAIGHT",kd,"#DDF5EE","#3f8f71",.95); }
+    ctx.setTransform(1,0,0,1,0,0);
+  });
+}
+const CHIP_VARIANTS = [
+  ["base","기준안 — 테두리 상자","상자 + 1dp 테두리 + 금갈색 틴트"],
+  ["a","A안 — 종이 라벨 선택형","하단 탭·종이 라벨 막대와 같은 금갈색 글자 + 2dp 밑줄, 상자 없음"],
+  ["b","B안 — 실제 견본 선택형","작은 테이프 견본 + 이름, 선택은 금갈색 밑줄"],
+  ["c","C안 — 최소 선택 목록형","레이아웃 선택과 같은 사각 체크 목록(두 줄로 나눠 세로 길이 절약)"]
+];
+function renderChips(){
+  document.getElementById("chipRow").innerHTML = CHIP_VARIANTS.map(([k,cap,sub]) => {
+    const body = k==="c"
+      ? `<div class="cols"><div><div class="h">무늬</div>${chipList("pattern",0,k)}</div><div><div class="h">가장자리 모양</div>${chipList("edge",0,k)}</div></div>`
+      : `<div class="h">무늬</div>${chipList("pattern",0,k)}<div style="height:16px"></div><div class="h">가장자리 모양</div>${chipList("edge",0,k)}`;
+    return `<div class="col"><div class="cap">${cap}</div><div class="sub">${sub}</div><div class="chipbox k-${k}">${body}</div></div>`;
+  }).join("");
+  drawSwatches(document.getElementById("chipRow"));
+}
+function apply(){
+  document.body.classList.toggle("kbd", document.getElementById("kbd").checked);
+  document.documentElement.style.setProperty("--fs", document.getElementById("big").checked ? 1.3 : 1);
+  renderDialogs(); renderChips();
+}
+["dlgKind","kbd","big","copy"].forEach(id=>document.getElementById(id).addEventListener("change",apply));
+// hash: #kind=tape&kbd&big&copy=new
+(function(){ const h=new URLSearchParams(location.hash.slice(1));
+  if(h.get("kind")) document.getElementById("dlgKind").value=h.get("kind");
+  if(h.has("kbd")) document.getElementById("kbd").checked=true;
+  if(h.has("big")) document.getElementById("big").checked=true;
+  if(h.get("copy")) document.getElementById("copy").value=h.get("copy"); })();
+apply();
+</script>
+</body>
+</html>

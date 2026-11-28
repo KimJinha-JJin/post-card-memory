@@ -195,7 +195,6 @@ import com.postcardmemory.ui.futuremail.materialDatePickerUtcMillisToLocalStartO
 import com.postcardmemory.ui.futuremail.startOfDayMillis
 import com.postcardmemory.ui.gallery.rememberTodayDate
 import com.postcardmemory.ui.theme.BrutalBlack
-import com.postcardmemory.ui.theme.BrutalCoral
 import com.postcardmemory.ui.theme.SunsetGold
 import com.postcardmemory.ui.theme.GalleryDangerRed
 import com.postcardmemory.ui.theme.GalleryPaperWhite
@@ -6893,7 +6892,7 @@ fun DetailScreen(
 
         SaveResultAlertDialog(
             title = "저장하지 못했어",
-            titleColor = BrutalCoral,
+            titleColor = GalleryDangerRed,
             body = exportError.message,
             onAcknowledge = { viewModel.resetExportState() }
         )
@@ -6906,7 +6905,7 @@ fun DetailScreen(
 
             SaveResultAlertDialog(
                 title = "배경을 저장하지 못했어",
-                titleColor = BrutalCoral,
+                titleColor = GalleryDangerRed,
                 body = backgroundError.message,
                 onAcknowledge = { viewModel.resetBackgroundUpdateState() }
             )
@@ -6919,7 +6918,7 @@ fun DetailScreen(
 
             SaveResultAlertDialog(
                 title = "레이아웃을 저장하지 못했어",
-                titleColor = BrutalCoral,
+                titleColor = GalleryDangerRed,
                 body = layoutError.message,
                 onAcknowledge = { viewModel.resetLayoutUpdateState() }
             )

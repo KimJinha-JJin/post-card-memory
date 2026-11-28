@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>146일차 B — 엽서 위 결과물 비교 (글귀 · 날짜 · 테이프 · 낙서 · 배경 테두리)</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:#2b2622; color:#efe7da; font-family:system-ui,"Noto Sans KR","Malgun Gothic",sans-serif; }
+  header { padding:12px 20px; position:sticky; top:0; background:#2b2622f2; z-index:5; border-bottom:1px solid #4a4038; }
+  header h1 { font-size:16px; margin:0 0 8px; font-weight:600; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:13px; align-items:center; }
+  .controls label { display:flex; gap:6px; align-items:center; }
+  .controls select { font:inherit; }
+  nav { display:flex; gap:10px; flex-wrap:wrap; font-size:12.5px; margin-top:8px; }
+  nav a { color:#e6c98a; }
+  body.light { background:#e9e2d6; color:#2a221c; }
+  body.light header { background:#e9e2d6f2; border-color:#cdbfa9; }
+  body.light section { border-color:#cdbfa9; }
+  body.light p.note, body.light .sub { color:#5b5046; }
+  body.light table.eval th { background:#d9cfbf; } body.light table.eval th, body.light table.eval td { border-color:#cdbfa9; }
+  section { padding:18px 20px 26px; border-bottom:1px solid #4a4038; }
+  section > h2 { font-size:15px; margin:0 0 4px; }
+  p.note { font-size:12.5px; color:#cfc3b2; margin:0 0 12px; line-height:1.55; max-width:1180px; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+  .col { display:flex; flex-direction:column; gap:5px; }
+  .cap { font-size:12.5px; font-weight:600; }
+  .sub { font-size:11.5px; color:#b9ad9b; max-width:300px; line-height:1.45; min-height:32px; }
+  canvas.card { width:300px; height:300px; display:block; box-shadow:0 2px 10px #0006; }
+  body.zoom canvas.card { width:440px; height:440px; }
+  canvas.strip { display:block; }
+  table.eval { border-collapse:collapse; font-size:12.5px; margin-top:12px; max-width:1180px; }
+  table.eval th, table.eval td { border:1px solid #4a4038; padding:6px 9px; text-align:left; vertical-align:top; line-height:1.45; }
+  table.eval th { background:#3a322b; }
+  .tag { font-size:11px; padding:1px 6px; border:1px solid #8a7b67; border-radius:3px; margin-left:6px; font-weight:400; }
+  .combo { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+  .combo canvas.big { width:520px; height:520px; box-shadow:0 2px 12px #0007; }
+  .combo .pick { display:grid; grid-template-columns:auto auto; gap:8px 10px; font-size:13px; align-content:start; }
+</style>
+</head>
+<body>
+<header>
+  <h1>146일차 B — 엽서 위 결과물 비교 (HTML 재현 · 실제 앱 캡처 아님 · 가상 사진/글귀)</h1>
+  <div class="controls">
+    <label>엽서 배경 <select id="bg">
+      <option value="light">밝은 기본 (#FFFBF7)</option>
+      <option value="peach">살구 + 땡땡이 (#FFE8D6)</option>
+      <option value="mint">민트 + 잔꽃무늬 (#DDF5EE)</option>
+      <option value="dark">어두운 (#2E2638)</option>
+      <option value="check">하늘 + 체크 (#DDEFFF)</option>
+    </select></label>
+    <label>글귀 <select id="msg">
+      <option value="short">짧은 글귀</option>
+      <option value="long">긴 글귀</option>
+      <option value="multi">여러 줄 글귀</option>
+      <option value="mixed">한글+숫자</option>
+    </select></label>
+    <label>레이아웃 <select id="layout">
+      <option value="STAMP">우표</option>
+      <option value="LETTER">편지지</option>
+    </select></label>
+    <label><input type="checkbox" id="extras" checked> 사진·스티커·테이프 함께</label>
+    <label><input type="checkbox" id="zoom"> 크게 보기</label>
+    <label><input type="checkbox" id="pagelight"> 밝은 페이지 바탕</label>
+  </div>
+  <nav><a href="#s-msg">① 글귀 패널</a><a href="#s-date">② 날짜 패널</a><a href="#s-combo">③ 한 엽서 조합</a><a href="#s-tape">④ 마스킹테이프</a><a href="#s-doodle">⑤ 낙서·형광펜</a><a href="#s-border">⑥ 배경 안쪽 테두리</a><a href="#s-impact">⑦ 기존 엽서 영향</a></nav>
+</header>
+
+<section id="s-msg">
+  <h2>① 글귀 패널 — 기준안 / A / B / C</h2>
+  <p class="note">기준안은 PostcardRenderSpec.drawMessage 값 그대로야(논리 2048px 기준): 흰 판 rgba(255,252,247,222/255)·반경 34, 번짐 없는 그림자 (+12,+14) rgba(20,14,26,55/255),
+  명조, 글자색 rgb(47,37,43), 글자 크기 길이별 62/56/50/44, 가운데 정렬, 최대 4줄, 오른쪽 아래 "▼" 표시. 우표 레이아웃 판 위치 (220,1505)–(1828,1748), 편지지 (96,1352)–(1952,1840).
+  모든 안에서 판 위치·글자 크기·정렬·줄 수는 그대로 두고 표면만 바꿨어. "▼"는 기준안 정체성이라 A안은 남기고, B·C안은 뺀 모습이야(아래 체크로 비교).</p>
+  <label style="font-size:13px"><input type="checkbox" id="keepArrow"> B·C안에도 ▼ 남기기</label>
+  <div class="row" id="msgRow" style="margin-top:10px"></div>
+</section>
+
+<section id="s-date">
+  <h2>② 날짜 패널 — 기준안 / A / B / C</h2>
+  <p class="note">기준안: 흰 판 rgba(255,252,247,205/255)·반경 28, 명조 34, 글자색 rgb(70,58,68)=#463A44(자주빛 회색), yyyy-MM-dd 가운데. 우표 레이아웃 (544,1846)–(1504,1932).
+  글귀 패널은 기준안으로 고정하고 날짜만 바꿨어. A안 잉크는 아래에서 고를 수 있어.</p>
+  <label style="font-size:13px">A안 잉크 <select id="dateInk"><option value="#46392E">#46392E (인트로 날짜 잉크)</option><option value="#5B5046">#5B5046 (InkSecondary)</option></select></label>
+  <div class="row" id="dateRow" style="margin-top:10px"></div>
+</section>
+
+<section id="s-combo">
+  <h2>③ 한 엽서에서 조합해 보기</h2>
+  <p class="note">고른 글귀·날짜·테이프·낙서·테두리 안을 한 장의 가상 엽서에 함께 얹어 봐. 글귀와 날짜가 꼭 같은 형태일 필요는 없어(글귀는 기억의 내용, 날짜는 기록 정보).</p>
+  <div class="combo">
+    <canvas class="big" id="comboCv" width="1040" height="1040"></canvas>
+    <div class="pick">
+      <span>글귀</span><select id="cMsg"><option value="base">기준안</option><option value="a">A 절제된 종이 패널</option><option value="b">B 직접 기록</option><option value="c">C 얇은 메모지</option></select>
+      <span>날짜</span><select id="cDate"><option value="base">기준안</option><option value="a">A 잉크 정비</option><option value="b">B 인쇄 날짜</option><option value="c">C 작은 종이 라벨</option></select>
+      <span>테이프</span><select id="cTape"><option value="base">기준안</option><option value="a">A 화지</option><option value="b">B 반투명 접착</option><option value="c">C 손으로 찢은</option></select>
+      <span>낙서</span><select id="cPen"><option value="base">기준안</option><option value="a">A 곡선 보간</option><option value="b">B 곡선+획 끝</option></select>
+      <span>형광펜</span><select id="cHl"><option value="base">기준안</option><option value="a">A 평평한 끝</option><option value="b">B 사각 펜촉</option></select>
+      <span>안쪽 테두리</span><select id="cBorder"><option value="keep">현재 유지</option><option value="soft">옅게·얇게</option><option value="none">없음</option></select>
+    </div>
+  </div>
+</section>
+
+<section id="s-tape">
+  <h2>④ 마스킹테이프 재질 — 기준안 / A / B / C</h2>
+  <p class="note">모든 안에서 길이·폭·색·무늬·회전·가장자리 모양·위치가 같아. 기준안: 외곽선으로 자른 단색 판(알파 0.78, 크라프트 0.82, 아이보리 0.70, 사진 0.85) + 무늬(알파 0.55). 그림자·결 없음.
+  엽서 안 배치: 사진 모서리(민트 체크·모서리 자름), 빈 곳(크라프트·일자), 겹침(라벤더 도트·양쪽 찢김 위에 연분홍 하트·한쪽 찢김), 어두운 커스텀(남색+별), 사진 테이프. 아래 띠는 가장자리 4종을 2배로 확대한 거야.
+  질감은 테이프마다 고정 시드로 한 번 만들고 테이프 자기 좌표에 붙어서 같이 움직이는 방식으로 그렸어(달력 테이프와 같은 원리, 크기만 엽서 테이프에 맞춤).</p>
+  <div class="row" id="tapeRow"></div>
+  <div class="row" id="tapeStripRow" style="margin-top:14px"></div>
+</section>
+
+<section id="s-doodle">
+  <h2>⑤ 낙서 · 형광펜 · 점선 — 같은 점 좌표로 비교 <span class="tag">후순위</span></h2>
+  <p class="note">같은 가상 필기(점 간격은 빠르게 그은 구간일수록 넓어지게 흉내)를 기준안/개선안으로 그렸어. 기준안: 점을 직선으로 잇기, 둥근 끝·둥근 이음, 굵기 일정(얇게 16·중간 30·굵게 50), 형광펜은 굵기×1.9·알파 96, 점선은 [0.1, 굵기×2.2] 대시.
+  A안은 저장된 점을 그대로 지나가는 중점 곡선이라 새 획을 만들지 않지만, 꺾인 모서리가 둥글게 바뀌어 기존 낙서도 모양이 조금 달라져. B안의 획 끝 가늘어짐은 필압을 지어내는 것에 가까워서 신중해야 해.
+  아래 회색 점은 저장된 실제 점 위치야.</p>
+  <label style="font-size:13px"><input type="checkbox" id="showPts" checked> 저장된 점 표시</label>
+  <div class="row" id="doodleRow" style="margin-top:10px"></div>
+</section>
+
+<section id="s-border">
+  <h2>⑥ 배경 안쪽 흰 테두리 — 현재 / 옅게 / 없음</h2>
+  <p class="note">현재 drawBackground가 모든 엽서(모든 레이아웃·모든 배경)에 안쪽 32px 위치, 굵기 8px, 흰색 알파 115/255 사각선을 그려. 7/3 커밋 688dd5b부터 있었고(7/2 첫 백업 c1c4fce 이후), 의도를 적은 기록은 찾지 못했어.
+  밝은 배경에선 거의 안 보이고 어두운·진한 배경에서 액자처럼 드러나. 현재 단계에선 제거하지 않아.</p>
+  <div class="row" id="borderRow"></div>
+</section>
+
+<section id="s-impact">
+  <h2>⑦ 기존 엽서 영향 · 난이도 · 성능</h2>
+  <table class="eval">
+    <tr><th>항목</th><th>저장 방식</th><th>렌더러만 바꾸면</th><th>새 엽서에만 적용하려면</th><th>난이도·성능</th></tr>
+    <tr><td>글귀 패널</td><td>Postcard 행의 message·messageFont·messageTextScale 값, 열 때마다 다시 그림(화면·저장 같은 drawBaseContent)</td><td>과거 모든 엽서의 글귀 모양이 바뀜(이미 갤러리에 저장된 JPG는 그대로)</td><td>엽서마다 "글귀 표현 버전" 같은 값이 필요 → Room 컬럼 추가 = schema 21·migration (별도 승인)</td><td>쉬움. 판 하나 그리기라 비용 차이 거의 없음. C안 종이결은 고정 타일 1회 생성</td></tr>
+    <tr><td>날짜 패널</td><td>capturedAt·dateFormat·dateTextScale, 같은 렌더러</td><td>과거 엽서 날짜 모양이 바뀜</td><td>위와 같음(같은 버전 값으로 묶을 수 있음)</td><td>쉬움</td></tr>
+    <tr><td>마스킹테이프</td><td>꾸미기 줄(탭 구분 텍스트)에 style 이름·색·가장자리·좌표 저장, 화면(Compose)·저장(Exporter) 렌더러가 따로</td><td>과거 테이프도 새 재질로 보임</td><td>테이프 줄 끝에 필드 하나(예: 재질 버전) 추가 — 기존 줄은 없으면 기준안으로 복원(이미 lengthScale·thicknessScale을 이 방식으로 늘렸음). Room 변경은 없지만 저장 형식 변경이라 별도 승인</td><td>중간. 화면·저장 두 곳을 같은 규칙으로 맞춰야 함(공용 질감 계산 함수 1개 + 각자 그리기). 섬유 선 수십 개 수준이라 프레임 비용 작음, 테이프별 캐시 필요</td></tr>
+    <tr><td>낙서</td><td>점 좌표·색·굵기·도구 저장, 화면·저장 같은 drawDoodleStrokes</td><td>과거 낙서 모서리가 둥글어지고 형광펜 끝 모양이 바뀜(좌표 데이터는 그대로)</td><td>획에 표현 버전 필드 추가(꾸미기 줄 형식 변경, 별도 승인)</td><td>A안 쉬움, B안 중간(가변 굵기 경로). 지우개 판정은 점·굵기 기준이라 영향 없음</td></tr>
+    <tr><td>안쪽 테두리</td><td>저장값 없음, 모든 엽서에 무조건</td><td>모든 과거 엽서 테두리가 바뀜</td><td>버전 값 필요(글귀와 같은 묶음 가능)</td><td>아주 쉬움</td></tr>
+    <tr><td>테이프 선택 칩·문구, 대화창</td><td>화면 UI뿐</td><td>엽서 모양 영향 없음</td><td>필요 없음</td><td>쉬움~중간</td></tr>
+  </table>
+</section>
+
+<script>
+/* ---------------- 공통 ---------------- */
+const L = 2048;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+const BG = {
+  light:{c:"#FFFBF7",p:"NONE"}, peach:{c:"#FFE8D6",p:"DOTS"}, mint:{c:"#DDF5EE",p:"HEISEI"},
+  dark:{c:"#2E2638",p:"NONE"}, check:{c:"#DDEFFF",p:"CHECKER"}
+};
+const MSG = {
+  short:"오늘도 고마웠어",
+  long:"바닷가 끝까지 걸어가서 해 지는 걸 끝까지 봤던 날, 바람이 차가웠는데 하나도 춥지 않았어",
+  multi:"아침엔 비\n점심엔 무지개\n저녁엔 너랑 국수",
+  mixed:"2026년 11월 28일 오후 3시 14분, 37번 버스 창가 자리"
+};
+const DATE_TEXT = "2026-11-28";
+const LAYOUT = {
+  STAMP:{msg:[220,1505,1828,1748], date:[544,1846,1504,1932], photo:"stamp"},
+  LETTER:{msg:[96,1352,1952,1840], date:[1300,1868,1952,1952], photo:"letter"}
+};
+function hexRgb(h){const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];}
+function brightness(h){const[r,g,b]=hexRgb(h);return(r*.299+g*.587+b*.114)/255;}
+function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+
+/* 가상 사진: 노을 바다 그라디언트(사용자 사진 아님) */
+let PHOTO=null;
+function photoCanvas(){
+  if(PHOTO) return PHOTO;
+  const c=document.createElement("canvas"); c.width=c.height=512; const g=c.getContext("2d");
+  let gr=g.createLinearGradient(0,0,0,512); gr.addColorStop(0,"#f3b78a"); gr.addColorStop(.45,"#e9926e"); gr.addColorStop(.46,"#5f8fa6"); gr.addColorStop(1,"#2f5b70");
+  g.fillStyle=gr; g.fillRect(0,0,512,512);
+  g.fillStyle="#fde4b8"; g.beginPath(); g.arc(300,220,46,0,7); g.fill();
+  const rnd=mulberry32(5); g.strokeStyle="#ffffff55"; g.lineWidth=3;
+  for(let i=0;i<40;i++){const y=250+rnd()*250,x=rnd()*512;g.beginPath();g.moveTo(x,y);g.lineTo(x+20+rnd()*40,y);g.stroke();}
+  return PHOTO=c;
+}
+
+/* ---------------- 배경 ---------------- */
+function drawBackground(ctx,bgKey,border="keep"){
+  const bg=BG[bgKey]; ctx.fillStyle=bg.c; ctx.fillRect(0,0,L,L);
+  const pc = brightness(bg.c)<.48 ? "rgba(255,255,255,"+(87/255)+")" : "rgba(61,41,88,"+(46/255)+")";
+  ctx.fillStyle=pc;
+  if(bg.p==="DOTS"){const cs=260;for(let r=-1;r<=L/cs+3;r++){const so=r%2?cs/2:0;for(let c=-1;c<=L/cs+3;c++){ctx.beginPath();ctx.arc(c*cs+so,r*cs,((r+c)%2===0)?13:8,0,7);ctx.fill();}}}
+  if(bg.p==="CHECKER"){const t=175;for(let r=0;r<=L/t+2;r++)for(let c=0;c<=L/t+2;c++)if((r+c)%2===0)ctx.fillRect(c*t,r*t,t,t);}
+  if(bg.p==="HEISEI"){const cs=300,rnd=mulberry32(19990615);for(let r=-1;r<=L/cs+3;r++)for(let c=-1;c<=L/cs+3;c++){const cx=c*cs+cs/2+(rnd()-.5)*cs*.5,cy=r*cs+cs/2+(rnd()-.5)*cs*.5;for(let p=0;p<5;p++){const a=p*72*Math.PI/180;ctx.beginPath();ctx.arc(cx+9*Math.cos(a),cy+9*Math.sin(a),7,0,7);ctx.fill();}ctx.beginPath();ctx.arc(cx,cy,4.9,0,7);ctx.fill();}}
+  if(border!=="none"){ctx.strokeStyle = border==="keep" ? "rgba(255,255,255,"+(115/255)+")" : "rgba(255,255,255,"+(55/255)+")"; ctx.lineWidth = border==="keep"?8:4; ctx.strokeRect(32,32,L-64,L-64);}
+}
+
+/* ---------------- 사진(레이아웃) ---------------- */
+function drawPhoto(ctx,layoutKey){
+  const ph=photoCanvas();
+  if(layoutKey==="STAMP"){
+    const s=1000,x=1024-s/2,y=802.5-s/2;
+    ctx.fillStyle="rgba(18,12,28,"+(18/255)+")"; ctx.fillRect(x+6,y+10,s,s);  // 아주 옅은 접촉 그림자(사용자 선택값)
+    ctx.save(); ctx.beginPath(); ctx.rect(x,y,s,s);
+    const pitch=50,rad=16; for(let t=pitch/2;t<s;t+=pitch){[[x+t,y],[x+t,y+s],[x,y+t],[x+s,y+t]].forEach(([cx,cy])=>{ctx.moveTo(cx+rad,cy);ctx.arc(cx,cy,rad,0,Math.PI*2,true);});}
+    ctx.fillStyle="#fffdf8"; ctx.fill("evenodd"); ctx.restore();
+    ctx.drawImage(ph,x+56,y+56,s-112,s-112);
+  } else {
+    ctx.drawImage(ph,96,140,1856,1140);
+    ctx.strokeStyle="rgba(70,58,68,.35)"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(96,1312); ctx.lineTo(1952,1312); ctx.stroke();
+  }
+}
+
+/* ---------------- 글자 줄바꿈(StaticLayout 근사) ---------------- */
+function wrap(ctx,text,maxW){
+  const out=[]; text.split("\n").forEach(par=>{
+    const words=par.split(" "); let line="";
+    words.forEach(w=>{const t=line?line+" "+w:w; if(ctx.measureText(t).width<=maxW){line=t;}else{ if(line) out.push(line);
+      if(ctx.measureText(w).width>maxW){let cur="";for(const ch of w){if(ctx.measureText(cur+ch).width>maxW){out.push(cur);cur=ch;}else cur+=ch;}line=cur;} else line=w; }});
+    out.push(line);}); return out;
+}
+
+/* 종이결 타일(고정 시드, 한 번만) */
+let FIBER=null;
+function fiberTile(){
+  if(FIBER) return FIBER; const c=document.createElement("canvas"); c.width=c.height=256; const g=c.getContext("2d"); const rnd=mulberry32(146);
+  for(let i=0;i<2600;i++){const a=rnd()*.06;g.fillStyle=`rgba(110,88,60,${a})`;g.fillRect(rnd()*256,rnd()*256,1+rnd()*2,1);}
+  for(let i=0;i<70;i++){const x=rnd()*256,y=rnd()*256,len=8+rnd()*22,ang=rnd()*Math.PI;g.strokeStyle=`rgba(140,112,78,${.05+rnd()*.07})`;g.lineWidth=.6;g.beginPath();g.moveTo(x,y);g.quadraticCurveTo(x+Math.cos(ang)*len*.5+rnd()*4,y+Math.sin(ang)*len*.5,x+Math.cos(ang)*len,y+Math.sin(ang)*len);g.stroke();}
+  return FIBER=c;
+}
+
+/* ---------------- 글귀 패널 ---------------- */
+function drawMessage(ctx,variant,msgKey,layoutKey,bgKey,keepArrow){
+  const [l,t,r,b]=LAYOUT[layoutKey].msg, W=r-l, H=b-t, text=MSG[msgKey].trim();
+  const dark = brightness(BG[bgKey].c)<.48;
+  if(variant==="base"){
+    ctx.fillStyle="rgba(20,14,26,"+(55/255)+")"; rr(ctx,l+12,t+14,W,H,34); ctx.fill();
+    ctx.fillStyle="rgba(255,252,247,"+(222/255)+")"; rr(ctx,l,t,W,H,34); ctx.fill();
+  } else if(variant==="a"){
+    ctx.fillStyle="rgba(18,12,28,"+(18/255)+")"; rr(ctx,l+4,t+8,W,H,8); ctx.fill();
+    ctx.fillStyle="rgba(255,252,247,"+(222/255)+")"; rr(ctx,l,t,W,H,8); ctx.fill();
+  } else if(variant==="b"){
+    // 판 없이 엽서에 직접. 무늬·어두운 배경에선 가장자리로 갈수록 사라지는 아주 옅은 종이 바탕만.
+    if(BG[bgKey].p!=="NONE" || dark){
+      const g=ctx.createRadialGradient(l+W/2,t+H/2,H*.2,l+W/2,t+H/2,W*.55); const base=dark?"46,38,56":"255,252,247";
+      g.addColorStop(0,`rgba(${base},${dark?.0:.72})`); g.addColorStop(1,`rgba(${base},0)`);
+      ctx.save(); ctx.scale(1,1); ctx.fillStyle=g; ctx.fillRect(l-40,t-30,W+80,H+60); ctx.restore();
+    }
+  } else if(variant==="c"){
+    ctx.save(); ctx.shadowColor="rgba(40,28,16,.16)"; ctx.shadowBlur=14; ctx.shadowOffsetY=6;
+    ctx.fillStyle="#FBF6EA"; rr(ctx,l,t,W,H,3); ctx.fill(); ctx.restore();
+    ctx.save(); rr(ctx,l,t,W,H,3); ctx.clip(); ctx.fillStyle=ctx.createPattern(fiberTile(),"repeat"); ctx.globalAlpha=.9; ctx.fillRect(l,t,W,H);
+    ctx.globalAlpha=1; ctx.fillStyle="rgba(120,96,64,.10)"; ctx.fillRect(l,b-5,W,5); ctx.restore();
+  }
+  // 글자(모든 안 같은 크기·정렬·줄 수)
+  const n=text.replace(/\n/g,"").length; const size=(n<=20?62:n<=45?56:n<=75?50:44);
+  ctx.font=`${size}px "Noto Serif KR","Batang","Nanum Myeongjo",serif`;
+  const inkDark = variant==="b" && dark ? "#F4ECDE" : "rgb(47,37,43)";
+  ctx.fillStyle=inkDark; ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+  const lines=wrap(ctx,text,W-130); const lh=size*1.08+10; const maxLines=Math.min(4,Math.max(1,Math.floor((H-16)/lh)));
+  let shown=lines.slice(0,maxLines); if(lines.length>maxLines){let last=shown[maxLines-1];while(ctx.measureText(last+"…").width>W-130&&last.length)last=last.slice(0,-1);shown[maxLines-1]=last+"…";}
+  const total=shown.length*lh; let y=t+H/2-total/2+size*.92;
+  ctx.save(); ctx.beginPath(); ctx.rect(l,t+8,W,H-16); ctx.clip();
+  shown.forEach(s=>{ctx.fillText(s,l+W/2,y);y+=lh;}); ctx.restore();
+  if(variant==="base"||variant==="a"||keepArrow){ctx.font="40px sans-serif";ctx.textAlign="right";ctx.fillStyle=inkDark;ctx.fillText("▼",r-30,b-26);}
+}
+
+/* ---------------- 날짜 패널 ---------------- */
+function drawDate(ctx,variant,layoutKey,bgKey,inkA){
+  const [l,t,r,b]=LAYOUT[layoutKey].date, W=r-l, H=b-t; const dark=brightness(BG[bgKey].c)<.48;
+  ctx.font=`34px "Noto Serif KR","Batang",serif`; ctx.textAlign="center";
+  const tw=ctx.measureText(DATE_TEXT).width; let ink="rgb(70,58,68)";
+  if(variant==="base"||variant==="a"){ ctx.fillStyle="rgba(255,252,247,"+(205/255)+")"; rr(ctx,l,t,W,H,28); ctx.fill(); if(variant==="a") ink=inkA; }
+  else if(variant==="b"){ ink = dark ? "#EFE4D2" : "#46392E"; ctx.font=`34px "Noto Serif KR","Batang",serif`; ctx.letterSpacing="3px"; }
+  else if(variant==="c"){ const pw=tw+64, pl=l+W/2-pw/2;
+    ctx.save(); ctx.shadowColor="rgba(40,28,16,.14)"; ctx.shadowBlur=8; ctx.shadowOffsetY=3; ctx.fillStyle="#FBF6EA"; rr(ctx,pl,t+6,pw,H-12,3); ctx.fill(); ctx.restore();
+    ctx.save(); rr(ctx,pl,t+6,pw,H-12,3); ctx.clip(); ctx.fillStyle=ctx.createPattern(fiberTile(),"repeat"); ctx.fillRect(pl,t,pw,H); ctx.restore(); ink="#46392E"; }
+  ctx.fillStyle=ink; ctx.textBaseline="middle"; ctx.fillText(DATE_TEXT,l+W/2,t+H/2+2); ctx.letterSpacing="0px"; ctx.textBaseline="alphabetic";
+}
+
+/* ---------------- 마스킹테이프 ---------------- */
+const TORN_Y=[0,.18,.36,.52,.7,.86,1], TORN_X=[0,-.22,.16,-.28,.20,-.12,0];
+function tapeOutline(w,h,edge){
+  const nA=h*.42,nB=h*.20, jag=(bx,m)=>TORN_Y.map((y,i)=>[bx+(m?-1:1)*TORN_X[i]*h,y*h]);
+  switch(edge){case"STRAIGHT":return[[0,0],[w,0],[w,h],[0,h]];case"NOTCHED_BOTH":return[[nA,0],[w,0],[w,h-nB],[w-nB,h],[0,h],[0,nA]];
+    case"TORN_ONE_SIDE":return[[0,0],...jag(w,false),[0,h]];case"JAGGED_BOTH":return[...jag(w,false),...jag(0,true).reverse()];}
+}
+function pathOf(ctx,pts){ctx.beginPath();pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();}
+function tapePattern(ctx,w,h,kind,pc){
+  const pitch=h*.42; ctx.save(); ctx.fillStyle=ctx.strokeStyle=pc; ctx.globalAlpha*=.55;
+  if(kind==="GRID"){ctx.lineWidth=h*.045;for(let x=pitch/2;x<w;x+=pitch){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}for(let y=pitch/2;y<h;y+=pitch){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}}
+  else if(kind==="STRIPE"){ctx.lineWidth=h*.10;for(let o=-h;o<w+h;o+=h*.38){ctx.beginPath();ctx.moveTo(o,0);ctx.lineTo(o+h,h);ctx.stroke();}}
+  else if(kind==="PLAIN"){ctx.globalAlpha=.18;ctx.lineWidth=h*.03;[.32,.68].forEach(r=>{ctx.beginPath();ctx.moveTo(w*.08,h*r);ctx.lineTo(w*.92,h*r);ctx.stroke();});}
+  else{let row=0;for(let y=pitch/2;y<h;y+=pitch,row++)for(let x=pitch/2+(row%2?pitch/2:0);x<w;x+=pitch){
+    if(kind==="DOT"){ctx.beginPath();ctx.arc(x,y,h*.09,0,7);ctx.fill();}
+    else if(kind==="STAR"){const s=h*.22,hf=s/2,d=hf*.6;ctx.lineCap="round";ctx.lineWidth=s*.16;ctx.beginPath();ctx.moveTo(x-hf,y);ctx.lineTo(x+hf,y);ctx.moveTo(x,y-hf);ctx.lineTo(x,y+hf);ctx.stroke();ctx.lineWidth=s*.112;ctx.beginPath();ctx.moveTo(x-d,y-d);ctx.lineTo(x+d,y+d);ctx.moveTo(x-d,y+d);ctx.lineTo(x+d,y-d);ctx.stroke();}
+    else if(kind==="HEART"){const hs=h*.15,tp=y-hs*.5;ctx.beginPath();ctx.moveTo(x,y+hs);ctx.bezierCurveTo(x-hs*1.3,y,x-hs*.6,tp-hs*.6,x,tp);ctx.bezierCurveTo(x+hs*.6,tp-hs*.6,x+hs*1.3,y,x,y+hs);ctx.fill();}}}
+  ctx.restore();
+}
+/* 테이프 한 장. 질감은 seed로 테이프 자기 좌표에 고정(이동·회전 시 함께 움직임). */
+function drawTape(ctx,tape,variant){
+  const {x,y,w,h,rot,edge,kind,base,pc,alpha,seed,photo}=tape;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot*Math.PI/180); ctx.translate(-w/2,-h/2);
+  const pts=tapeOutline(w,h,edge); const rnd=mulberry32(seed);
+  if(variant==="b"){ // 아주 얕은 접촉감
+    ctx.save(); ctx.translate(0,h*.03); pathOf(ctx,pts); ctx.fillStyle="rgba(40,30,20,.07)"; ctx.fill(); ctx.restore(); }
+  ctx.save(); pathOf(ctx,pts); ctx.clip();
+  const a = variant==="b" ? alpha*.84 : alpha;
+  if(photo){ ctx.globalAlpha=a; const p=photoCanvas(); for(let tx=0;tx<w+h;tx+=h) ctx.drawImage(p,tx,0,h,h); ctx.globalAlpha=1; }
+  else { ctx.globalAlpha=a; ctx.fillStyle=base; ctx.fillRect(-h,-h,w+2*h,3*h); ctx.globalAlpha=1; tapePattern(ctx,w,h,kind,pc); }
+  const darkTape = brightness(base)<.45;
+  const fib = darkTape ? "255,245,225" : "90,70,45";
+  if(variant==="a"||variant==="c"){ // 화지 섬유결: 길이 방향 옅은 섬유 + 낮은 대비 농도 얼룩
+    for(let i=0;i<Math.round(w/14);i++){const fy=h*(.08+rnd()*.84),fx=rnd()*w,len=h*(.25+rnd()*.9),tilt=(rnd()-.5)*h*.06;
+      ctx.strokeStyle=`rgba(${fib},${.05+rnd()*.07})`;ctx.lineWidth=Math.max(1,h*.012);ctx.beginPath();ctx.moveTo(fx,fy);ctx.quadraticCurveTo(fx+len/2,fy+tilt*1.5,fx+len,fy+tilt);ctx.stroke();}
+    for(let i=0;i<Math.round(w/60);i++){const bx=rnd()*w,by=rnd()*h,br=h*(.25+rnd()*.5);const g=ctx.createRadialGradient(bx,by,0,bx,by,br);
+      g.addColorStop(0,`rgba(${darkTape?"255,250,240":"255,255,255"},${.05+rnd()*.05})`);g.addColorStop(1,"rgba(255,255,255,0)");ctx.fillStyle=g;ctx.fillRect(bx-br,by-br,br*2,br*2);}
+  }
+  if(variant==="b"){ // 끝단 농도 차(양 끝이 조금 더 진함) + 긴 변의 아주 얇은 두께선
+    const eg=ctx.createLinearGradient(0,0,w,0);const ec=darkTape?"10,10,20":"120,95,60";
+    eg.addColorStop(0,`rgba(${ec},.10)`);eg.addColorStop(.07,`rgba(${ec},0)`);eg.addColorStop(.93,`rgba(${ec},0)`);eg.addColorStop(1,`rgba(${ec},.10)`);
+    ctx.fillStyle=eg;ctx.fillRect(-h,0,w+2*h,h);
+    ctx.fillStyle=`rgba(${ec},.10)`;ctx.fillRect(0,0,w,Math.max(1,h*.02));ctx.fillRect(0,h-Math.max(1,h*.02),w,Math.max(1,h*.02));
+  }
+  if(variant==="c"){ // 끝부분 자연스러운 명암
+    const eg=ctx.createLinearGradient(0,0,w,0);eg.addColorStop(0,`rgba(${fib},.08)`);eg.addColorStop(.05,`rgba(${fib},0)`);eg.addColorStop(.95,`rgba(${fib},0)`);eg.addColorStop(1,`rgba(${fib},.08)`);ctx.fillStyle=eg;ctx.fillRect(-h,0,w+2*h,h);
+  }
+  ctx.restore();
+  if(variant==="c" && (edge==="TORN_ONE_SIDE"||edge==="JAGGED_BOTH")){ // 이미 찢긴 끝에만 미세 섬유(새 찢김 추가 없음)
+    const ends = edge==="JAGGED_BOTH" ? [[w,1],[0,-1]] : [[w,1]];
+    ctx.lineCap="round";
+    ends.forEach(([bx,s])=>{for(let i=0;i<14;i++){const ty=rnd()*h, k=Math.min(6,Math.floor(ty/h*6));
+      const ex=bx+s*TORN_X[k]*h+s*(TORN_X[k+1]-TORN_X[k])*h*((ty/h*6)-k);
+      ctx.strokeStyle=`rgba(${darkTape?"230,220,200":"255,252,245"},${.35+rnd()*.3})`;ctx.lineWidth=Math.max(1,h*.012);
+      ctx.beginPath();ctx.moveTo(ex-s*h*.02,ty);ctx.lineTo(ex+s*h*(.02+rnd()*.05),ty+(rnd()-.5)*h*.05);ctx.stroke();}});
+  }
+  ctx.restore();
+}
+const TAPES=[
+  {x:640,y:330,w:740,h:224,rot:-35,edge:"NOTCHED_BOTH",kind:"GRID",base:"#DDF5EE",pc:"#6FBFA0",alpha:.78,seed:11},
+  {x:1600,y:420,w:620,h:224,rot:8,edge:"STRAIGHT",kind:"STRIPE",base:"#E0CDAE",pc:"#9C7B4F",alpha:.82,seed:12},
+  {x:1500,y:1280,w:700,h:224,rot:-6,edge:"JAGGED_BOTH",kind:"DOT",base:"#E8E4FF",pc:"#9285D9",alpha:.78,seed:13},
+  {x:1580,y:1380,w:600,h:200,rot:14,edge:"TORN_ONE_SIDE",kind:"HEART",base:"#FFE2F2",pc:"#E0709F",alpha:.78,seed:14},
+  {x:470,y:1330,w:600,h:200,rot:-10,edge:"NOTCHED_BOTH",kind:"STAR",base:"#2E3A4A",pc:"#E8D6A8",alpha:.78,seed:15},
+  {x:1690,y:1880,w:620,h:170,rot:-4,edge:"STRAIGHT",kind:"PLAIN",base:"#FFFBF3",pc:"#D8CBB0",alpha:.85,seed:16,photo:true}
+];
+
+/* ---------------- 낙서 ---------------- */
+function samplePoints(){ // 가상 필기: 빠른 구간은 점 간격이 넓음
+  const pts=[]; let t=0; const f=t=>[300+t*1350+Math.sin(t*22)*60, 1500+Math.cos(t*17)*120-Math.sin(t*5)*80];
+  while(t<=1){pts.push(f(t)); const sp=.5+.5*Math.abs(Math.sin(t*9)); t+=.004+sp*.010;} return pts;
+}
+const PEN_PTS = samplePoints();
+const HL_A = (()=>{const p=[];for(let t=0;t<=1;t+=.05)p.push([260+t*1500,1700+Math.sin(t*3)*14]);return p;})();
+const HL_B = (()=>{const p=[];for(let t=0;t<=1;t+=.05)p.push([700+t*900,1660+t*90]);return p;})();
+const DOT_PTS = (()=>{const p=[];let t=0;while(t<=1){p.push([320+t*1300,1880-Math.sin(t*Math.PI)*120]);t+=.02+.03*Math.abs(Math.sin(t*7));}return p;})();
+function polyline(ctx,pts){ctx.beginPath();ctx.moveTo(...pts[0]);for(let i=1;i<pts.length;i++)ctx.lineTo(...pts[i]);}
+function smooth(ctx,pts){ctx.beginPath();ctx.moveTo(...pts[0]);for(let i=1;i<pts.length-1;i++){const mx=(pts[i][0]+pts[i+1][0])/2,my=(pts[i][1]+pts[i+1][1])/2;ctx.quadraticCurveTo(pts[i][0],pts[i][1],mx,my);}ctx.lineTo(...pts[pts.length-1]);}
+function drawPen(ctx,v,pts,color,w){
+  ctx.save(); ctx.strokeStyle=color; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.lineWidth=w;
+  if(v==="base"){polyline(ctx,pts);ctx.stroke();}
+  else if(v==="a"){smooth(ctx,pts);ctx.stroke();}
+  else { // 곡선 + 양 끝 짧게 가늘어짐(가운데 굵기 = 저장된 굵기)
+    const n=pts.length; for(let i=1;i<n-1;i++){const e=Math.min(i,n-1-i)/Math.max(3,n*.06);ctx.lineWidth=w*(.45+.55*Math.min(1,e));
+      const a=[(pts[i-1][0]+pts[i][0])/2,(pts[i-1][1]+pts[i][1])/2], c=[(pts[i][0]+pts[i+1][0])/2,(pts[i][1]+pts[i+1][1])/2];
+      ctx.beginPath();ctx.moveTo(...(i===1?pts[0]:a));ctx.quadraticCurveTo(pts[i][0],pts[i][1],...(i===n-2?pts[n-1]:c));ctx.stroke();}
+  }
+  ctx.restore();
+}
+function drawHighlighter(ctx,v,strokes,color,w){
+  // 한 획 안에서는 겹쳐도 진해지지 않고(앱과 같음), 획끼리는 겹치면 진해짐
+  strokes.forEach(pts=>{
+    const off=document.createElement("canvas"); off.width=off.height=L; const o=off.getContext("2d"); o.strokeStyle=o.fillStyle=color;
+    if(v==="base"){o.lineCap="round";o.lineJoin="round";o.lineWidth=w;polyline(o,pts);o.stroke();}
+    else if(v==="a"){o.lineCap="butt";o.lineJoin="miter";o.lineWidth=w;smooth(o,pts);o.stroke();}
+    else { // 비스듬한 사각 펜촉(약 30°)을 경로를 따라 찍음
+      const ang=-30*Math.PI/180, nw=w, nh=w*.32; for(let i=0;i<pts.length-1;i++){const [x0,y0]=pts[i],[x1,y1]=pts[i+1];const d=Math.hypot(x1-x0,y1-y0);const steps=Math.max(1,Math.ceil(d/3));
+        for(let s=0;s<=steps;s++){const x=x0+(x1-x0)*s/steps,y=y0+(y1-y0)*s/steps;o.save();o.translate(x,y);o.rotate(ang);o.fillRect(-nh/2,-nw/2,nh,nw);o.restore();}}
+    }
+    ctx.save(); ctx.globalAlpha=96/255; if(v==="b") ctx.globalCompositeOperation="multiply"; ctx.drawImage(off,0,0); ctx.restore();
+  });
+}
+function drawDotted(ctx,v,pts,color,w){
+  ctx.save(); ctx.strokeStyle=color; ctx.lineCap="round"; ctx.lineWidth=w; ctx.setLineDash([0.1, w*2.2]);
+  if(v==="base") polyline(ctx,pts); else smooth(ctx,pts); ctx.stroke(); ctx.restore();
+}
+function drawPts(ctx,pts){ if(!document.getElementById("showPts").checked) return; ctx.fillStyle="rgba(120,120,120,.75)"; pts.forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();}); }
+
+/* ---------------- 카드 조립 ---------------- */
+function card(cv,opt){
+  const ctx=cv.getContext("2d"); const s=cv.width/L; ctx.setTransform(s,0,0,s,0,0); ctx.clearRect(0,0,L,L);
+  const bgKey=val("bg"), lay=val("layout"), extras=document.getElementById("extras").checked;
+  drawBackground(ctx,bgKey,opt.border||"keep");
+  drawPhoto(ctx,lay);
+  drawMessage(ctx,opt.msg||"base",val("msg"),lay,bgKey,document.getElementById("keepArrow").checked);
+  drawDate(ctx,opt.date||"base",lay,bgKey,val("dateInk"));
+  if(opt.doodle){ drawHighlighter(ctx,opt.hl||"base",[HL_A,HL_B],"#F2C94C",30*1.9); drawPen(ctx,opt.pen||"base",PEN_PTS,"#30415F",16); drawDotted(ctx,opt.pen||"base",DOT_PTS,"#B33A32",16); }
+  if(extras||opt.forceTapes){ (opt.tapes||TAPES.slice(0,2)).forEach(t=>drawTape(ctx,t,opt.tape||"base")); }
+  ctx.setTransform(1,0,0,1,0,0);
+}
+const val=id=>document.getElementById(id).value;
+function makeCol(row,cap,sub,draw,size=600){
+  const col=document.createElement("div"); col.className="col";
+  col.innerHTML=`<div class="cap">${cap}</div><div class="sub">${sub}</div>`;
+  const cv=document.createElement("canvas"); cv.className="card"; cv.width=cv.height=size; col.appendChild(cv); row.appendChild(col); draw(cv);
+}
+function render(){
+  document.body.classList.toggle("zoom",document.getElementById("zoom").checked);
+  document.body.classList.toggle("light",document.getElementById("pagelight").checked);
+  const R=id=>{const e=document.getElementById(id);e.innerHTML="";return e;};
+  let row=R("msgRow");
+  [["base","기준안 — 현재","둥근 흰 판(34) + 번짐 없는 진한 옆 그림자 + ▼"],
+   ["a","A안 — 절제된 종이 패널","반경 8, 사진과 같은 아주 옅은 접촉 그림자(알파 18), 명조·배치·▼ 유지"],
+   ["b","B안 — 엽서에 직접 기록","판·그림자 없음. 무늬·어두운 배경에선 가장자리로 사라지는 옅은 종이 바탕만, 어두운 배경은 밝은 잉크"],
+   ["c","C안 — 얇은 메모지","아이보리 #FBF6EA, 미세 종이결, 낮은 번진 그림자, 아래 단면 한 줄, 반경 3"]]
+   .forEach(([v,c,s])=>makeCol(row,c,s,cv=>card(cv,{msg:v})));
+  row=R("dateRow");
+  [["base","기준안 — 현재","흰 판(28) + 자주빛 회색 #463A44"],
+   ["a","A안 — 잉크 정비형","형태·배치 그대로, 잉크만 갈색 계열"],
+   ["b","B안 — 인쇄 날짜형","판 없이 엽서에 찍힌 날짜(#46392E, 자간 약간)"],
+   ["c","C안 — 작은 종이 기록 라벨","글자 폭에 맞춘 직각에 가까운 작은 종이 라벨"]]
+   .forEach(([v,c,s])=>makeCol(row,c,s,cv=>card(cv,{date:v})));
+  card(document.getElementById("comboCv"),{msg:val("cMsg"),date:val("cDate"),tape:val("cTape"),pen:val("cPen"),hl:val("cHl"),border:val("cBorder"),doodle:true,forceTapes:true});
+  row=R("tapeRow");
+  [["base","기준안 — 현재","단색 반투명 판 + 무늬"],
+   ["a","A안 — 절제된 화지 테이프","길이 방향 옅은 섬유결 + 낮은 대비 농도 얼룩, 무늬 그대로"],
+   ["b","B안 — 반투명 접착 테이프","조금 더 비치는 바탕, 양 끝 얕은 농도 차, 긴 변 얇은 두께선, 아주 얕은 접촉"],
+   ["c","C안 — 손으로 찢은 아날로그","A안 결 + 끝 명암, 이미 찢긴 끝(한쪽·양쪽 찢김)에만 미세 섬유. 모서리 자름·일자엔 섬유 안 붙임"]]
+   .forEach(([v,c,s])=>makeCol(row,c,s,cv=>card(cv,{tape:v,tapes:TAPES,forceTapes:true})));
+  row=R("tapeStripRow");
+  ["base","a","b","c"].forEach((v,i)=>{const col=document.createElement("div");col.className="col";col.innerHTML=`<div class="cap">${["기준안","A","B","C"][i]} — 가장자리 4종 ×2</div>`;
+    const cv=document.createElement("canvas");cv.className="strip";cv.width=600;cv.height=560;cv.style.width="300px";cv.style.height="280px";col.appendChild(cv);row.appendChild(col);
+    const ctx=cv.getContext("2d");ctx.fillStyle=BG[val("bg")].c;ctx.fillRect(0,0,600,560);
+    ["NOTCHED_BOTH","STRAIGHT","TORN_ONE_SIDE","JAGGED_BOTH"].forEach((e,k)=>drawTape(ctx,{x:300,y:70+k*138,w:440,h:110,rot:0,edge:e,kind:["GRID","DOT","HEART","STAR"][k],base:["#DDF5EE","#E8E4FF","#FFE2F2","#FFF1C7"][k],pc:["#6FBFA0","#9285D9","#E0709F","#DDA82C"][k],alpha:.78,seed:40+k},v));});
+  row=R("doodleRow");
+  [["base","펜·형광펜·점선 기준안","직선 연결 · 둥근 끝 · 굵기 일정"],
+   ["a","A안 — 곡선 보간 / 평평한 형광펜 끝","저장된 점을 지나는 중점 곡선, 형광펜은 평평한 끝·각진 이음"],
+   ["b","B안 — 곡선 + 획 끝 / 사각 펜촉 형광펜","끝이 짧게 가늘어지는 펜, 비스듬한 사각 펜촉, 다른 획과 겹치면 진해짐"]]
+   .forEach(([v,c,s])=>makeCol(row,c,s,cv=>{const ctx=cv.getContext("2d");const sc=cv.width/L;ctx.setTransform(sc,0,0,sc,0,0);
+     drawBackground(ctx,val("bg"),"keep"); drawPhoto(ctx,val("layout"));
+     drawHighlighter(ctx,v,[HL_A,HL_B],"#F2C94C",30*1.9); drawPen(ctx,v,PEN_PTS,"#30415F",16); drawDotted(ctx,v==="base"?"base":"a",DOT_PTS,"#B33A32",16);
+     drawPts(ctx,PEN_PTS); drawPts(ctx,DOT_PTS); ctx.setTransform(1,0,0,1,0,0);}));
+  row=R("borderRow");
+  [["keep","현재 유지","흰색 알파 115, 8px, 안쪽 32px"],["soft","옅게·얇게","흰색 알파 55, 4px"],["none","없음","테두리 제거"]]
+   .forEach(([v,c,s])=>makeCol(row,c,s,cv=>card(cv,{border:v})));
+}
+["bg","msg","layout","extras","zoom","pagelight","keepArrow","dateInk","cMsg","cDate","cTape","cPen","cHl","cBorder","showPts"].forEach(id=>document.getElementById(id).addEventListener("change",render));
+(function(){const h=new URLSearchParams(location.hash.slice(1));["bg","msg","layout","cMsg","cDate","cTape","cPen","cHl","cBorder","dateInk"].forEach(k=>{if(h.get(k))document.getElementById(k).value=h.get(k);});
+  if(h.has("noextras"))document.getElementById("extras").checked=false; if(h.has("zoom"))document.getElementById("zoom").checked=true;})();
+render();
+if(location.hash.includes("jump=")){const j=new URLSearchParams(location.hash.slice(1)).get("jump");document.getElementById(j)?.scrollIntoView();}
+</script>
+</body>
+</html>

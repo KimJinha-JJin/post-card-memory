@@ -157,7 +157,7 @@ class SaveErrorDialogStructureTest {
         assertSingleCallSite("exportError", block)
         assertOnAcknowledgeCallsReset("exportError", block, "resetExportState")
         assertTitle("exportError", block, "저장하지 못했어")
-        assertTitleColor("exportError", block, "BrutalCoral")
+        assertTitleColor("exportError", block, "GalleryDangerRed")
         assertTrue(
             "[exportError] 본문이 exportError.message를 그대로 노출해야 함",
             block.contains("body = exportError.message")
@@ -170,7 +170,7 @@ class SaveErrorDialogStructureTest {
         assertSingleCallSite("backgroundError", block)
         assertOnAcknowledgeCallsReset("backgroundError", block, "resetBackgroundUpdateState")
         assertTitle("backgroundError", block, "배경을 저장하지 못했어")
-        assertTitleColor("backgroundError", block, "BrutalCoral")
+        assertTitleColor("backgroundError", block, "GalleryDangerRed")
         assertTrue(
             "[backgroundError] 본문이 backgroundError.message를 그대로 노출해야 함",
             block.contains("body = backgroundError.message")
@@ -183,7 +183,7 @@ class SaveErrorDialogStructureTest {
         assertSingleCallSite("layoutError", block)
         assertOnAcknowledgeCallsReset("layoutError", block, "resetLayoutUpdateState")
         assertTitle("layoutError", block, "레이아웃을 저장하지 못했어")
-        assertTitleColor("layoutError", block, "BrutalCoral")
+        assertTitleColor("layoutError", block, "GalleryDangerRed")
         assertTrue(
             "[layoutError] 본문이 layoutError.message를 그대로 노출해야 함",
             block.contains("body = layoutError.message")

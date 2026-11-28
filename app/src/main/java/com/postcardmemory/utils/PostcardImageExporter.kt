@@ -81,8 +81,6 @@ object PostcardImageExporter {
         16f / 120f
     /** TextStickerContent와 같은 두 겹(흰 STROKE → 컬러 FILL) 그리기 기법에서 쓰는 외곽선 두께 비율. */
     private const val TEXT_STICKER_OUTLINE_WIDTH_RATIO = 0.14f
-    private const val STICKER_BORDER_WIDTH_RATIO =
-        3f / 120f
 
     data class StickerOverlay(
         val uri: Uri,
@@ -616,54 +614,11 @@ object PostcardImageExporter {
                         flipVertical = stickerOverlay.flipVertical
                     )
                 } else {
-                    val stickerPath =
-                        Path().apply {
-                            addRoundRect(
-                                stickerBounds,
-                                cornerRadius,
-                                cornerRadius,
-                                Path.Direction.CW
-                            )
-                        }
-
-                    canvas.save()
-                    try {
-                        canvas.clipPath(stickerPath)
-
-                        drawCenterCroppedBitmap(
-                            canvas = canvas,
-                            bitmap = stickerBitmap,
-                            destinationRect = stickerBounds
-                        )
-                    } finally {
-                        canvas.restore()
-                    }
-
-                    val borderWidth =
-                        stickerSize *
-                                STICKER_BORDER_WIDTH_RATIO
-                    val borderBounds =
-                        RectF(stickerBounds).apply {
-                            inset(
-                                borderWidth / 2f,
-                                borderWidth / 2f
-                            )
-                        }
-                    val borderRadius =
-                        (cornerRadius - borderWidth / 2f)
-                            .coerceAtLeast(0f)
-                    val borderPaint =
-                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = Color.BLACK
-                            style = Paint.Style.STROKE
-                            strokeWidth = borderWidth
-                        }
-
-                    canvas.drawRoundRect(
-                        borderBounds,
-                        borderRadius,
-                        borderRadius,
-                        borderPaint
+                    drawDefaultPhotoSticker(
+                        canvas = canvas,
+                        bitmap = stickerBitmap,
+                        stickerBounds = stickerBounds,
+                        cornerRadius = cornerRadius
                     )
                 }
             } finally {
@@ -673,6 +628,41 @@ object PostcardImageExporter {
             if (!stickerBitmap.isRecycled) {
                 stickerBitmap.recycle()
             }
+        }
+    }
+
+    /**
+     * 기본(DEFAULT) 사진 스티커. 캔버스는 이미 회전·대칭된 상태다. 편집 화면과 같이 둥근 모서리로
+     * 사진만 잘라 그리고 외곽선은 그리지 않는다 — 7/4(`7f7e647`)에 화면의 검은 3dp 테두리를 걷어낼 때
+     * 저장 쪽 테두리가 남아 화면과 저장 이미지가 달랐다(146일차 B에서 정리).
+     */
+    internal fun drawDefaultPhotoSticker(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        stickerBounds: RectF,
+        cornerRadius: Float
+    ) {
+        val stickerPath =
+            Path().apply {
+                addRoundRect(
+                    stickerBounds,
+                    cornerRadius,
+                    cornerRadius,
+                    Path.Direction.CW
+                )
+            }
+
+        canvas.save()
+        try {
+            canvas.clipPath(stickerPath)
+
+            drawCenterCroppedBitmap(
+                canvas = canvas,
+                bitmap = bitmap,
+                destinationRect = stickerBounds
+            )
+        } finally {
+            canvas.restore()
         }
     }
 
