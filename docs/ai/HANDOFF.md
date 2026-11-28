@@ -1,3 +1,20 @@
+# HANDOFF — 2026-11-28 146일차: 인트로 필름 B안(아날로그 사진 필름) 재질
+
+- **현재 승인:** 사용자가 [비교 목업](mockups/intro-film-texture-day146.html)에서 B안을 고르고, 실기기 정지 화면과 날짜 잉크 `#46392E`를 승인했어. 작업 브랜치 commit·push·PR·필수 CI까지 승인, **main 병합은 147일차 동적 모션 QA와 별도 병합 승인 전 금지**.
+- **시작 Git:** `main` = `origin/main` = `68260cfc78661ba418e6a4c72bf885b761a50539`(PR #41 병합), 추적 변경 0. `feature/day146-intro-film-texture` 생성. 새 worktree 없음, 과거 `7b4c2bf` 보조 worktree는 건드리지 않음. 민감정보 훅 활성 확인.
+- **조사(앱 실제 구조):** 인트로 필름은 사진 필름이 아니라 아이보리 종이 기록지였어(칸 `PaperSurface`, 기록 칸 `PaperField`+1dp `PaperDivider`, 천공은 `PaperTray` 원을 그린 점). Row drawBehind의 위아래 1dp 선은 칸 배경에 가려 실제로 보이지 않았어. 모션·시간표는 `IntroFilmPlan.kt`(280ms 대기·한 칸 720ms·+45%/칸·최대 2.6배·cubic(.40,0,.12,1)·140ms·손 720ms·260ms·Crossfade 180ms), 같은 날 650ms·모션0 800ms 정지. 시스템 SplashScreen API 없음(창 배경색만). 실제 준비 뒤 인트로가 불필요하게 기다리는 구조는 찾지 못했어(인트로는 고정 시간표로만 끝남).
+- **구현:** 신규 `ui/intro/IntroFilmMaterial.kt`가 칸 한 개의 B안 재질만 그려(목업 색·투명도·두께 그대로): 반투명 호박색 세로 농도, 짝홀 Path로 실제로 뚫은 천공과 위 그늘/아래 밝은 단면, 얇은 가장자리 짙은선·밝은선, 칸 노출 면, 칸 번호 고정 시드(목업 mulberry32 이식) 노출 흔적·비네트·먼지, 그레인 타일 2장. `AppIntroScreen.kt`는 칸의 종이 배경·그려진 천공·회색 테두리·가려진 선을 이 재질로 바꾸고, 필름 날짜 잉크만 `#5B5046`→`#46392E`(사용자 선택). 소인·문구·손 도장·모션·배치·전환 코드는 그대로야. 새 이미지·dependency·Gradle·Room 변경 없음.
+- **목업과의 차이(사용자 확인):** 칸 가장자리 blur(0.6px)는 반투명 1.2dp 테로 대체. 그레인은 타일 1픽셀=1dp(목업 PC 실제 크기 보기와 비슷하게; 기기 픽셀 그대로면 거의 안 보임). 정지 화면으로 승인받았어.
+- **가독성:** 기기 캡처 날짜 주변 실측과 칸 16개 노출 계산 기준, 기존 잉크 대비 3.43~3.88:1 → `#46392E` 4.88~5.52:1. 승인 후 폰에서 진해진 날짜를 확인했어.
+- **로컬 자동검증 — 실행/통과:** `testDebugUnitTest assembleDebug --no-daemon --max-workers=1`(Gradle 9.9.1/Zulu17) 성공. XML **1354/1354·148 suites·실패/오류/skip 0**, Debug APK 성공. 신규 `IntroFilmMaterialTest` 7건(TEST-COVERAGE-MAP 146일차 절).
+- **실기기 — 실행(SM-S936N, 사용자 승인 `install -r --no-streaming` 2회, 같은 package·서명·schema20):** 두 번 모두 직전/직후 내부 166개 파일 해시 변화 0, 설치 APK와 로컬 빌드 SHA-256 일치. 정지 인트로(같은 날 재실행)·천공 투과·가장자리·갤러리 진입·홈 복귀 정상, 크래시 로그 0. 기기 설정(animator 1.0·font 0.9)은 바꾸지 않았어.
+- **성능(같은 기기, 백그라운드 `am kill` 후 `am start -W`, 각 5회):** Cold 중앙 484ms(465~498)→486ms(483~512), Hot 48→41ms. 시작 후 2.5초(인트로+갤러리 첫 화면) 끊긴 프레임 평균 3.3%→3.9%, p99 93~113→105~150ms. PSS 1회 355→368MB. 인트로만 분리한 프레임과 인트로 실제 표시 시간은 미측정. 지시대로 추가 최적화는 안 했어.
+- **데이터/보호:** 앱 데이터 삭제·초기화·force-stop·uninstall 없음. QA 뒤 바뀐 내부 파일은 실행 표식(`profileInstalled`·ActivityThread prefs)뿐, DB 해시 동일. 날짜 조작·방문 기록 수정 없음. SAFE 38/38은 `docs/ai/privacy-rewrite/protected-baseline.json` 기준 일치, 기존 미추적 48/48은 145일차 세션 시작 때 저장한 로컬 기준 JSON과 일치(그 이후 145일차 안의 변화는 이 기준으로 알 수 없음). 새 미추적은 이번 작업 파일뿐이고 함께 commit해.
+- **147일차로 이월(미검증):** 11/28은 이미 방문 기록이 있어 손 도장 이송을 못 봤어. 11/29 첫 실행에서 실제 필름 이송, 필름·질감 이동 일체감, 손 도장 진입·접촉, 소인 정착, 갤러리 전환, 시스템 애니메이션 끄기, 큰 글자, 가능한 범위의 인트로 구간 성능을 확인해. 날짜 조작·방문 기록 삭제·DB 수정 금지. TalkBack 음성·저사양 기기 미검증. instrumentation 미실행(해당 없음), CONDITIONAL/FORBIDDEN 실행 불가, emulator 미사용.
+- **Git 마감:** 이 절은 commit 전 작성이야. PR 번호·head SHA·CI 결과는 대화 완료보고에서 확인해. main 병합은 147일차 QA 뒤 사용자 승인 대기.
+
+---
+
 # HANDOFF — 2026-11-27 145일차: 기억 저울 B안 질감(오래된 우체국) 적용
 
 - **현재 승인:** 사용자가 질감 비교 [목업](mockups/memory-scale-texture-day145.html)의 B안을 고르고, 실기기 확인 뒤 하단 영어 문구 `MEMORY POST OFFICE` 제거를 조건으로 최종 승인했어. 추가 디자인 탐색은 하지 않아. 작업 브랜치 commit·push·PR #41 갱신까지 승인, **main 병합은 별도 승인 전 금지**.
